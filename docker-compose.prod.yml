@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: jobfinder
+      POSTGRES_USER: jobfinder
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobfinder"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://jobfinder:${DB_PASSWORD}@postgres:5432/jobfinder
+      REDIS_URL: redis://redis:6379
+#      OLLAMA_URL: http://localhost:11434
+      JOBSPY_URL: http://jobspy-sidecar:8000
+      DOCUMENTS_DIR: /data/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - documents:/data/documents
+    ports:
+      - "3000:3000" # dev convenience; dashboard nginx proxies /api in normal use
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    depends_on: [api]
+    ports:
+      - "8080:80"
+
+  jobspy-sidecar:
+    build: apps/jobspy-sidecar
+    # internal only, no host port
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    profiles: [scraping-extras]
+
+volumes:
+  pgdata: {}
+  documents: {}

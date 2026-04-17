@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; line-height: 1.45; }
+  h1 { font-size: 20pt; letter-spacing: 0.5px; }
+  h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 1.5px; color: #2c5777; border-bottom: 1.5px solid #2c5777; padding-bottom: 3px; margin: 14px 0 8px; }
+  .label { font-size: 12pt; color: #444; margin-top: 2px; }
+  .contact { margin-top: 6px; font-size: 9.5pt; color: #555; }
+  .contact span + span::before { content: "  ·  "; }
+  .summary { margin-top: 10px; }
+  .entry { margin-bottom: 9px; page-break-inside: avoid; }
+  .entry-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .entry-title { font-weight: 600; }
+  .entry-dates { font-size: 9pt; color: #666; white-space: nowrap; }
+  .entry-sub { font-style: italic; color: #444; font-size: 9.5pt; }
+  ul { margin: 3px 0 0 16px; }
+  li { margin-bottom: 2px; }
+  .skills-row { margin-bottom: 3px; }
+  .skills-row b { color: #2c5777; }
+</style>
+</head>
+<body>
+  <h1>{{r.basics.name}}</h1>
+  {{#if r.basics.label}}<div class="label">{{r.basics.label}}</div>{{/if}}
+  <div class="contact">
+    {{#if r.basics.email}}<span>{{r.basics.email}}</span>{{/if}}
+    {{#if r.basics.phone}}<span>{{r.basics.phone}}</span>{{/if}}
+    {{#if r.basics.url}}<span>{{r.basics.url}}</span>{{/if}}
+    {{#if r.basics.location.city}}<span>{{r.basics.location.city}}{{#if r.basics.location.countryCode}}, {{r.basics.location.countryCode}}{{/if}}</span>{{/if}}
+  </div>
+  {{#if r.basics.summary}}<p class="summary">{{r.basics.summary}}</p>{{/if}}
+
+  {{#if r.skills.length}}
+  <h2>Skills</h2>
+  {{#each r.skills}}
+  <div class="skills-row"><b>{{this.name}}</b>{{#if this.keywords.length}}: {{#each this.keywords}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}{{/if}}</div>
+  {{/each}}
+  {{/if}}
+
+  {{#if r.work.length}}
+  <h2>Experience</h2>
+  {{#each r.work}}
+  <div class="entry">
+    <div class="entry-head">
+      <span class="entry-title">{{this.position}} — {{this.name}}</span>
+      <span class="entry-dates">{{this.startDate}}{{#if this.endDate}} – {{this.endDate}}{{else}} – present{{/if}}</span>
+    </div>
+    {{#if this.summary}}<div class="entry-sub">{{this.summary}}</div>{{/if}}
+    {{#if this.highlights.length}}
+    <ul>{{#each this.highlights}}<li>{{this}}</li>{{/each}}</ul>
+    {{/if}}
+  </div>
+  {{/each}}
+  {{/if}}
+
+  {{#if r.projects.length}}
+  <h2>Projects</h2>
+  {{#each r.projects}}
+  <div class="entry">
+    <div class="entry-head">
+      <span class="entry-title">{{this.name}}</span>
+      {{#if this.url}}<span class="entry-dates">{{this.url}}</span>{{/if}}
+    </div>
+    {{#if this.description}}<div>{{this.description}}</div>{{/if}}
+    {{#if this.highlights.length}}
+    <ul>{{#each this.highlights}}<li>{{this}}</li>{{/each}}</ul>
+    {{/if}}
+  </div>
+  {{/each}}
+  {{/if}}
+
+  {{#if r.education.length}}
+  <h2>Education</h2>
+  {{#each r.education}}
+  <div class="entry">
+    <div class="entry-head">
+      <span class="entry-title">{{this.institution}}</span>
+      <span class="entry-dates">{{this.startDate}}{{#if this.endDate}} – {{this.endDate}}{{/if}}</span>
+    </div>
+    <div class="entry-sub">{{this.studyType}}{{#if this.area}}, {{this.area}}{{/if}}</div>
+  </div>
+  {{/each}}
+  {{/if}}
+
+  {{#if r.languages.length}}
+  <h2>Languages</h2>
+  <div>{{#each r.languages}}{{this.language}}{{#if this.fluency}} ({{this.fluency}}){{/if}}{{#unless @last}}, {{/unless}}{{/each}}</div>
+  {{/if}}
+</body>
+</html>
