@@ -17,6 +17,9 @@ import (
 	"github.com/job-finder/api-go/internal/config"
 	"github.com/job-finder/api-go/internal/db"
 	"github.com/job-finder/api-go/internal/httpapi"
+	"github.com/job-finder/api-go/internal/jobsources"
+	"github.com/job-finder/api-go/internal/jobsources/adapters"
+	"github.com/job-finder/api-go/internal/scraping"
 )
 
 func main() {
@@ -48,7 +51,24 @@ func run() error {
 	}
 	defer database.Close()
 
-	router := httpapi.NewRouter()
+	scrapingSvc := scraping.New()
+	defer scrapingSvc.Close()
+
+	registry := jobsources.NewRegistry(
+		adapters.AdzunaAdapter{},
+		adapters.RemotiveAdapter{},
+		adapters.ArbeitnowAdapter{},
+		adapters.DjinniAdapter{Scraping: scrapingSvc},
+		adapters.DouAdapter{Scraping: scrapingSvc},
+		adapters.JobSpyAdapter{},
+	)
+	sourcesSvc := jobsources.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
+	if err := sourcesSvc.Seed(ctx); err != nil {
+		return err
+	}
+	sourcesHandler := &httpapi.SourcesHandler{Sources: sourcesSvc}
+
+	router := httpapi.NewRouter(sourcesHandler.Mount)
 
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.Port),

@@ -15,9 +15,10 @@ import (
 
 var startTime = time.Now()
 
-// NewRouter builds the top-level chi router. Additional route groups are
-// mounted onto the returned router by later phases (searches, jobs, ...).
-func NewRouter() *chi.Mux {
+// NewRouter builds the top-level chi router. Each mount function registers
+// its routes onto the /api subrouter — one per controller-equivalent
+// (sources, searches, jobs, profiles, applications, documents, ...).
+func NewRouter(mounts ...func(chi.Router)) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -32,6 +33,9 @@ func NewRouter() *chi.Mux {
 
 	r.Route("/api", func(api chi.Router) {
 		api.Get("/health", healthHandler)
+		for _, mount := range mounts {
+			mount(api)
+		}
 	})
 
 	return r
