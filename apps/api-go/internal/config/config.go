@@ -13,7 +13,9 @@ import (
 type Config struct {
 	Port int `env:"PORT" envDefault:"3000"`
 
-	DatabaseURL string `env:"DATABASE_URL,required"`
+	// Not `,required` at the struct level: some binaries (e.g. cmd/llmsmoke)
+	// don't touch the database. cmd/server validates this is set before use.
+	DatabaseURL string `env:"DATABASE_URL"`
 	RedisURL    string `env:"REDIS_URL" envDefault:"redis://localhost:6379"`
 
 	// LLM

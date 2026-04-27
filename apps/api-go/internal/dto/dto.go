@@ -42,8 +42,8 @@ func IsValidApplicationStatus(s string) bool {
 type DocumentType string
 
 const (
-	DocumentTypeResume       DocumentType = "resume"
-	DocumentTypeCoverLetter  DocumentType = "cover_letter"
+	DocumentTypeResume      DocumentType = "resume"
+	DocumentTypeCoverLetter DocumentType = "cover_letter"
 )
 
 // ---------------------------------------------------------------------------
@@ -174,22 +174,22 @@ type MatchResultDto struct {
 }
 
 type JobDto struct {
-	ID          string           `json:"id"`
-	DedupeKey   string           `json:"dedupeKey"`
-	SourceKey   string           `json:"sourceKey"`
-	Title       string           `json:"title"`
-	Company     string           `json:"company"`
-	Location    *string          `json:"location"`
-	Remote      bool             `json:"remote"`
-	SalaryRaw   *string          `json:"salaryRaw"`
-	URL         string           `json:"url"`
-	Description string           `json:"description"`
-	PostedAt    *string          `json:"postedAt"`
-	IngestedAt  string           `json:"ingestedAt"`
-	Status      string           `json:"status"` // ApplicationStatus | 'hidden'
-	MatchResult *MatchResultDto  `json:"matchResult,omitempty"`
+	ID          string                 `json:"id"`
+	DedupeKey   string                 `json:"dedupeKey"`
+	SourceKey   string                 `json:"sourceKey"`
+	Title       string                 `json:"title"`
+	Company     string                 `json:"company"`
+	Location    *string                `json:"location"`
+	Remote      bool                   `json:"remote"`
+	SalaryRaw   *string                `json:"salaryRaw"`
+	URL         string                 `json:"url"`
+	Description string                 `json:"description"`
+	PostedAt    *string                `json:"postedAt"`
+	IngestedAt  string                 `json:"ingestedAt"`
+	Status      string                 `json:"status"` // ApplicationStatus | 'hidden'
+	MatchResult *MatchResultDto        `json:"matchResult,omitempty"`
 	Documents   []GeneratedDocumentDto `json:"documents,omitempty"`
-	Application *ApplicationDto  `json:"application,omitempty"`
+	Application *ApplicationDto        `json:"application,omitempty"`
 }
 
 type JobListResponse struct {
@@ -265,11 +265,11 @@ type ApplicationDto struct {
 }
 
 type StatsDto struct {
-	JobsTotal    int64            `json:"jobsTotal"`
-	JobsLast24h  int64            `json:"jobsLast24h"`
-	HighFit      int64            `json:"highFit"`
-	Pipeline     map[string]int64 `json:"pipeline"`
-	RecentRuns   []SourceRunDto   `json:"recentRuns"`
+	JobsTotal   int64            `json:"jobsTotal"`
+	JobsLast24h int64            `json:"jobsLast24h"`
+	HighFit     int64            `json:"highFit"`
+	Pipeline    map[string]int64 `json:"pipeline"`
+	RecentRuns  []SourceRunDto   `json:"recentRuns"`
 }
 
 type GenerateRequestDto struct {
