@@ -14,11 +14,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hibiken/asynq"
+
 	"github.com/job-finder/api-go/internal/config"
 	"github.com/job-finder/api-go/internal/db"
 	"github.com/job-finder/api-go/internal/httpapi"
+	"github.com/job-finder/api-go/internal/ingestion"
 	"github.com/job-finder/api-go/internal/jobsources"
 	"github.com/job-finder/api-go/internal/jobsources/adapters"
+	"github.com/job-finder/api-go/internal/queue"
 	"github.com/job-finder/api-go/internal/scraping"
 )
 
@@ -68,13 +72,32 @@ func run() error {
 	}
 	sourcesHandler := &httpapi.SourcesHandler{Sources: sourcesSvc}
 
-	router := httpapi.NewRouter(sourcesHandler.Mount)
+	redisOpt, err := queue.RedisOpt(cfg.RedisURL)
+	if err != nil {
+		return err
+	}
+	asynqClient := asynq.NewClient(redisOpt)
+	defer asynqClient.Close()
+
+	ingestionSvc := ingestion.NewService(database.Queries, registry, asynqClient)
+	ingestionHandler := ingestion.NewHandler(database.Queries, registry, sourcesSvc, asynqClient)
+	scheduler := ingestion.NewScheduler(database.Queries, ingestionSvc)
+	searchesHandler := &httpapi.SearchesHandler{Ingestion: ingestionSvc}
+
+	router := httpapi.NewRouter(sourcesHandler.Mount, searchesHandler.Mount)
 
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.Port),
 		Handler:           router,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(queue.TypeIngest, ingestionHandler.ProcessTask)
+	asynqSrv := asynq.NewServer(redisOpt, asynq.Config{
+		Concurrency: 5,
+		Queues:      map[string]int{"default": 1},
+	})
 
 	go func() {
 		slog.Info("API listening", "port", cfg.Port)
@@ -83,8 +106,17 @@ func run() error {
 		}
 	}()
 
+	go func() {
+		if err := asynqSrv.Run(mux); err != nil {
+			slog.Error("asynq worker error", "error", err)
+		}
+	}()
+
+	go scheduler.Run(ctx)
+
 	<-ctx.Done()
 	slog.Info("shutting down")
+	asynqSrv.Shutdown()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
