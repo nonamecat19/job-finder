@@ -22,6 +22,9 @@ import (
 	"github.com/job-finder/api-go/internal/ingestion"
 	"github.com/job-finder/api-go/internal/jobsources"
 	"github.com/job-finder/api-go/internal/jobsources/adapters"
+	"github.com/job-finder/api-go/internal/llm"
+	"github.com/job-finder/api-go/internal/matching"
+	"github.com/job-finder/api-go/internal/profile"
 	"github.com/job-finder/api-go/internal/queue"
 	"github.com/job-finder/api-go/internal/scraping"
 )
@@ -84,6 +87,14 @@ func run() error {
 	scheduler := ingestion.NewScheduler(database.Queries, ingestionSvc)
 	searchesHandler := &httpapi.SearchesHandler{Ingestion: ingestionSvc}
 
+	llmProvider, err := llm.New(cfg)
+	if err != nil {
+		return err
+	}
+	profileSvc := profile.NewService(database.Queries, llmProvider, cfg.EmbedModel)
+	matchingSvc := matching.NewService(database.Queries, profileSvc, llmProvider, cfg.MatchSimilarityThreshold)
+	matchingHandler := matching.NewHandler(matchingSvc)
+
 	router := httpapi.NewRouter(sourcesHandler.Mount, searchesHandler.Mount)
 
 	srv := &http.Server{
@@ -94,8 +105,12 @@ func run() error {
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(queue.TypeIngest, ingestionHandler.ProcessTask)
+	mux.HandleFunc(queue.TypeMatch, matchingHandler.ProcessTask)
 	asynqSrv := asynq.NewServer(redisOpt, asynq.Config{
-		Concurrency: 5,
+		// ingest processor.concurrency=2, match processor.concurrency=1 in the
+		// TS BullMQ setup; asynq has one worker pool, so we run two queues at
+		// those relative weights instead of separate concurrency knobs.
+		Concurrency: 3,
 		Queues:      map[string]int{"default": 1},
 	})
 
