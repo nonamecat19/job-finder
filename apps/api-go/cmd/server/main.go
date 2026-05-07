@@ -16,11 +16,13 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"github.com/job-finder/api-go/internal/applications"
 	"github.com/job-finder/api-go/internal/config"
 	"github.com/job-finder/api-go/internal/db"
 	"github.com/job-finder/api-go/internal/generation"
 	"github.com/job-finder/api-go/internal/httpapi"
 	"github.com/job-finder/api-go/internal/ingestion"
+	"github.com/job-finder/api-go/internal/jobs"
 	"github.com/job-finder/api-go/internal/jobsources"
 	"github.com/job-finder/api-go/internal/jobsources/adapters"
 	"github.com/job-finder/api-go/internal/llm"
@@ -105,7 +107,16 @@ func run() error {
 	generationHandler := generation.NewHandler(generationSvc)
 	documentsHandler := &httpapi.DocumentsHandler{Generation: generationSvc}
 
-	router := httpapi.NewRouter(sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount)
+	profilesHandler := &httpapi.ProfilesHandler{Profiles: profileSvc}
+	jobsSvc := jobs.NewService(database.Queries, asynqClient)
+	jobsHandler := &httpapi.JobsHandler{Jobs: jobsSvc, Generation: generationSvc}
+	applicationsSvc := applications.NewService(database.Queries)
+	applicationsHandler := &httpapi.ApplicationsHandler{Applications: applicationsSvc}
+
+	router := httpapi.NewRouter(
+		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
+		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
+	)
 
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.Port),

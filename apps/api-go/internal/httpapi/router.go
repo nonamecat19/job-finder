@@ -71,3 +71,17 @@ func decodeJSON(r *http.Request, dst any) error {
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(dst)
 }
+
+// reencode round-trips a generic decoded value (map[string]any/[]any/...)
+// through JSON into a concrete type T. Used when a handler first decodes the
+// body into a map (to distinguish "field absent" from "field null"), then
+// needs one sub-field as a typed struct.
+func reencode[T any](v any) T {
+	var out T
+	b, err := json.Marshal(v)
+	if err != nil {
+		return out
+	}
+	_ = json.Unmarshal(b, &out)
+	return out
+}
