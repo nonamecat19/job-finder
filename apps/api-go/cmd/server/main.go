@@ -18,6 +18,7 @@ import (
 
 	"github.com/job-finder/api-go/internal/config"
 	"github.com/job-finder/api-go/internal/db"
+	"github.com/job-finder/api-go/internal/generation"
 	"github.com/job-finder/api-go/internal/httpapi"
 	"github.com/job-finder/api-go/internal/ingestion"
 	"github.com/job-finder/api-go/internal/jobsources"
@@ -95,7 +96,16 @@ func run() error {
 	matchingSvc := matching.NewService(database.Queries, profileSvc, llmProvider, cfg.MatchSimilarityThreshold)
 	matchingHandler := matching.NewHandler(matchingSvc)
 
-	router := httpapi.NewRouter(sourcesHandler.Mount, searchesHandler.Mount)
+	htmlRenderer, err := generation.NewHtmlPdfRenderer(scrapingSvc, cfg.DocumentsDir)
+	if err != nil {
+		return err
+	}
+	rendercvRenderer := generation.NewRenderCvRenderer(cfg.DocumentsDir, cfg.RendercvBin)
+	generationSvc := generation.NewService(database.Queries, profileSvc, htmlRenderer, rendercvRenderer, llmProvider, cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
+	generationHandler := generation.NewHandler(generationSvc)
+	documentsHandler := &httpapi.DocumentsHandler{Generation: generationSvc}
+
+	router := httpapi.NewRouter(sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount)
 
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.Port),
@@ -106,6 +116,7 @@ func run() error {
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(queue.TypeIngest, ingestionHandler.ProcessTask)
 	mux.HandleFunc(queue.TypeMatch, matchingHandler.ProcessTask)
+	mux.HandleFunc(queue.TypeGenerate, generationHandler.ProcessTask)
 	asynqSrv := asynq.NewServer(redisOpt, asynq.Config{
 		// ingest processor.concurrency=2, match processor.concurrency=1 in the
 		// TS BullMQ setup; asynq has one worker pool, so we run two queues at

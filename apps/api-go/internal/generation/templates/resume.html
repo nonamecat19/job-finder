@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; line-height: 1.45; }
+  h1 { font-size: 20pt; letter-spacing: 0.5px; }
+  h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 1.5px; color: #2c5777; border-bottom: 1.5px solid #2c5777; padding-bottom: 3px; margin: 14px 0 8px; }
+  .label { font-size: 12pt; color: #444; margin-top: 2px; }
+  .contact { margin-top: 6px; font-size: 9.5pt; color: #555; }
+  .contact span + span::before { content: "  ·  "; }
+  .summary { margin-top: 10px; }
+  .entry { margin-bottom: 9px; page-break-inside: avoid; }
+  .entry-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .entry-title { font-weight: 600; }
+  .entry-dates { font-size: 9pt; color: #666; white-space: nowrap; }
+  .entry-sub { font-style: italic; color: #444; font-size: 9.5pt; }
+  ul { margin: 3px 0 0 16px; }
+  li { margin-bottom: 2px; }
+  .skills-row { margin-bottom: 3px; }
+  .skills-row b { color: #2c5777; }
+</style>
+</head>
+<body>
+  <h1>{{.Name}}</h1>
+  {{if .Label}}<div class="label">{{.Label}}</div>{{end}}
+  <div class="contact">
+    {{if .Email}}<span>{{.Email}}</span>{{end}}
+    {{if .Phone}}<span>{{.Phone}}</span>{{end}}
+    {{if .URL}}<span>{{.URL}}</span>{{end}}
+    {{if .Location}}<span>{{.Location}}</span>{{end}}
+  </div>
+  {{if .Summary}}<p class="summary">{{.Summary}}</p>{{end}}
+
+  {{if .Skills}}
+  <h2>Skills</h2>
+  {{range .Skills}}
+  <div class="skills-row"><b>{{.Name}}</b>{{if .Keywords}}: {{range $i, $k := .Keywords}}{{if $i}}, {{end}}{{$k}}{{end}}{{end}}</div>
+  {{end}}
+  {{end}}
+
+  {{if .Work}}
+  <h2>Experience</h2>
+  {{range .Work}}
+  <div class="entry">
+    <div class="entry-head">
+      <span class="entry-title">{{.Position}} — {{.Name}}</span>
+      <span class="entry-dates">{{.StartDate}}{{if .EndDate}} – {{.EndDate}}{{else}} – present{{end}}</span>
+    </div>
+    {{if .Summary}}<div class="entry-sub">{{.Summary}}</div>{{end}}
+    {{if .Highlights}}
+    <ul>{{range .Highlights}}<li>{{.}}</li>{{end}}</ul>
+    {{end}}
+  </div>
+  {{end}}
+  {{end}}
+
+  {{if .Projects}}
+  <h2>Projects</h2>
+  {{range .Projects}}
+  <div class="entry">
+    <div class="entry-head">
+      <span class="entry-title">{{.Name}}</span>
+      {{if .URL}}<span class="entry-dates">{{.URL}}</span>{{end}}
+    </div>
+    {{if .Description}}<div>{{.Description}}</div>{{end}}
+    {{if .Highlights}}
+    <ul>{{range .Highlights}}<li>{{.}}</li>{{end}}</ul>
+    {{end}}
+  </div>
+  {{end}}
+  {{end}}
+
+  {{if .Education}}
+  <h2>Education</h2>
+  {{range .Education}}
+  <div class="entry">
+    <div class="entry-head">
+      <span class="entry-title">{{.Institution}}</span>
+      <span class="entry-dates">{{.StartDate}}{{if .EndDate}} – {{.EndDate}}{{end}}</span>
+    </div>
+    <div class="entry-sub">{{.StudyType}}{{if .Area}}, {{.Area}}{{end}}</div>
+  </div>
+  {{end}}
+  {{end}}
+
+  {{if .Languages}}
+  <h2>Languages</h2>
+  <div>{{range $i, $l := .Languages}}{{if $i}}, {{end}}{{$l.Language}}{{if $l.Fluency}} ({{$l.Fluency}}){{end}}{{end}}</div>
+  {{end}}
+</body>
+</html>
