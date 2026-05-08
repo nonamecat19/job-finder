@@ -77,7 +77,15 @@ func (s *Service) BrowserContext(ctx context.Context) (context.Context, error) {
 		}
 	}
 
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), chromedp.DefaultExecAllocatorOptions[:]...)
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		// The container image runs as root with no user namespace, and
+		// Chromium refuses to start as root without this flag ("Running as
+		// root without --no-sandbox is not supported", crbug.com/638180).
+		// Safe here: chromedp only ever renders our own locally-generated
+		// resume/cover-letter HTML, never third-party/untrusted content.
+		chromedp.Flag("no-sandbox", true),
+	)
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 	// Force the browser process to actually start so failures surface here,
 	// not on the first render call.
