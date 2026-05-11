@@ -191,7 +191,8 @@ func (s *Service) RunSearch(ctx context.Context, searchID string) ([]string, err
 			return nil, err
 		}
 		// attempts: 1 (no retry), matching ingestQueue.add's { attempts: 1 }.
-		if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload), asynq.MaxRetry(0)); err != nil {
+		if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
+			asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)); err != nil {
 			return nil, fmt.Errorf("ingestion: enqueue %s: %w", key, err)
 		}
 	}

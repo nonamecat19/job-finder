@@ -209,7 +209,8 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	if err != nil {
 		return nil, err
 	}
-	info, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload), asynq.MaxRetry(0))
+	info, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload),
+		asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate))
 	if err != nil {
 		return nil, err
 	}

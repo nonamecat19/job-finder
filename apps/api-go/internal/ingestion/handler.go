@@ -148,7 +148,8 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob) (bool, 
 		return true, err
 	}
 	// attempts: 2 with exponential backoff, matching matchQueue.add's options.
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload), asynq.MaxRetry(1)); err != nil {
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload),
+		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
 		return true, fmt.Errorf("ingestion: enqueue match: %w", err)
 	}
 	return true, nil

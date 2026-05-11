@@ -124,16 +124,33 @@ func run() error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	mux := asynq.NewServeMux()
-	mux.HandleFunc(queue.TypeIngest, ingestionHandler.ProcessTask)
-	mux.HandleFunc(queue.TypeMatch, matchingHandler.ProcessTask)
-	mux.HandleFunc(queue.TypeGenerate, generationHandler.ProcessTask)
-	asynqSrv := asynq.NewServer(redisOpt, asynq.Config{
-		// ingest processor.concurrency=2, match processor.concurrency=1 in the
-		// TS BullMQ setup; asynq has one worker pool, so we run two queues at
-		// those relative weights instead of separate concurrency knobs.
-		Concurrency: 3,
-		Queues:      map[string]int{"default": 1},
+	// Each task type gets its own asynq.Server (own worker pool + own queue),
+	// so its Concurrency is a hard per-queue cap rather than a weight shared
+	// across task types — matching the BullMQ setup's separate queues:
+	// ingest processor.concurrency=2 (ingestion.processor.ts), match and
+	// generate concurrency=1 each ("local LLM handles one request at a time
+	// comfortably" — matching.processor.ts, generation.processor.ts). A
+	// single asynq.Server's Queues map only sets priority *weights* within
+	// one shared pool, which can't reproduce a hard cap of 1.
+	ingestMux := asynq.NewServeMux()
+	ingestMux.HandleFunc(queue.TypeIngest, ingestionHandler.ProcessTask)
+	ingestSrv := asynq.NewServer(redisOpt, asynq.Config{
+		Concurrency: 2,
+		Queues:      map[string]int{queue.QueueIngest: 1},
+	})
+
+	matchMux := asynq.NewServeMux()
+	matchMux.HandleFunc(queue.TypeMatch, matchingHandler.ProcessTask)
+	matchSrv := asynq.NewServer(redisOpt, asynq.Config{
+		Concurrency: 1,
+		Queues:      map[string]int{queue.QueueMatch: 1},
+	})
+
+	generateMux := asynq.NewServeMux()
+	generateMux.HandleFunc(queue.TypeGenerate, generationHandler.ProcessTask)
+	generateSrv := asynq.NewServer(redisOpt, asynq.Config{
+		Concurrency: 1,
+		Queues:      map[string]int{queue.QueueGenerate: 1},
 	})
 
 	go func() {
@@ -144,8 +161,18 @@ func run() error {
 	}()
 
 	go func() {
-		if err := asynqSrv.Run(mux); err != nil {
-			slog.Error("asynq worker error", "error", err)
+		if err := ingestSrv.Run(ingestMux); err != nil {
+			slog.Error("asynq ingest worker error", "error", err)
+		}
+	}()
+	go func() {
+		if err := matchSrv.Run(matchMux); err != nil {
+			slog.Error("asynq match worker error", "error", err)
+		}
+	}()
+	go func() {
+		if err := generateSrv.Run(generateMux); err != nil {
+			slog.Error("asynq generate worker error", "error", err)
 		}
 	}()
 
@@ -153,7 +180,9 @@ func run() error {
 
 	<-ctx.Done()
 	slog.Info("shutting down")
-	asynqSrv.Shutdown()
+	ingestSrv.Shutdown()
+	matchSrv.Shutdown()
+	generateSrv.Shutdown()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)

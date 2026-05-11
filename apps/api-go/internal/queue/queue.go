@@ -17,6 +17,21 @@ const (
 	TypeGenerate = "generate"
 )
 
+// Queue names each task type is routed to. These are deliberately separate
+// asynq *queues* (not just task type names) so each can run on its own
+// dedicated asynq.Server with its own Concurrency cap — mirroring the BullMQ
+// setup where ingest/match/generate were three separate queues with
+// concurrency 2/1/1 respectively (ingestion.processor.ts, matching.processor.ts,
+// generation.processor.ts). A single asynq.Server's `Queues` map only
+// controls priority weighting *within* one shared worker pool, not a hard
+// per-queue concurrency ceiling, so one server can't reproduce "match never
+// runs more than 1 at a time" on its own.
+const (
+	QueueIngest   = TypeIngest
+	QueueMatch    = TypeMatch
+	QueueGenerate = TypeGenerate
+)
+
 // IngestPayload mirrors IngestJobData.
 type IngestPayload struct {
 	SearchID  *string `json:"searchId"`
