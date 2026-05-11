@@ -185,8 +185,13 @@ func (r *HtmlPdfRenderer) htmlToPDF(ctx context.Context, html string, outName st
 			return page.SetDocumentContent(tree.Frame.ID, html).Do(ctx)
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
+			// TS used page.pdf({ format: 'A4', ... }); CDP's PrintToPDF has no
+			// named-format shortcut and defaults to US Letter (8.5x11in), so
+			// the paper size must be set explicitly to match (A4 = 210x297mm).
 			buf, _, err := page.PrintToPDF().
 				WithPrintBackground(true).
+				WithPaperWidth(mmToInches(210)).
+				WithPaperHeight(mmToInches(297)).
 				WithMarginTop(mmToInches(14)).
 				WithMarginBottom(mmToInches(14)).
 				WithMarginLeft(mmToInches(14)).
