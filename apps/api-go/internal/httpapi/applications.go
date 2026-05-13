@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -57,6 +58,13 @@ func (h *ApplicationsHandler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := h.Applications.Update(r.Context(), id, in)
 	if err != nil {
+		// Not-found (bad/missing id) is 404; anything else (invalid status
+		// value) is 400 — mirrors NotFoundException vs BadRequestException
+		// in applications.service.ts.
+		if errors.Is(err, applications.ErrNotFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -5,6 +5,7 @@ package applications
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +15,12 @@ import (
 	"github.com/job-finder/api-go/internal/dbutil"
 	"github.com/job-finder/api-go/internal/dto"
 )
+
+// ErrNotFound is a sentinel so callers (the HTTP layer) can distinguish
+// "no such application" (404) from other Update failures like an invalid
+// status value (400) — mirrors NestJS's NotFoundException vs
+// BadRequestException split in applications.service.ts:25,28.
+var ErrNotFound = errors.New("application not found")
 
 type Service struct {
 	q *sqlcgen.Queries
@@ -51,7 +58,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 	}
 	existing, err := s.q.GetApplicationByID(ctx, uid)
 	if err != nil {
-		return dto.ApplicationDto{}, fmt.Errorf("application %s not found", id)
+		return dto.ApplicationDto{}, fmt.Errorf("application %s not found: %w", id, ErrNotFound)
 	}
 	if in.Status != nil && !dto.IsValidApplicationStatus(string(*in.Status)) {
 		return dto.ApplicationDto{}, fmt.Errorf("invalid status '%s'", *in.Status)
