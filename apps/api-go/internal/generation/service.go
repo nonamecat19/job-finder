@@ -17,6 +17,7 @@ import (
 	"github.com/job-finder/api-go/internal/dto"
 	"github.com/job-finder/api-go/internal/llm"
 	"github.com/job-finder/api-go/internal/profile"
+	"github.com/job-finder/api-go/internal/strutil"
 )
 
 const groundingAttempts = 2 // matches GROUNDING_ATTEMPTS in generation.service.ts
@@ -241,16 +242,16 @@ func (s *Service) tailorResume(ctx context.Context, master dto.JsonResume, extra
 		"- You may drop irrelevant entries, reorder, and rephrase highlights to emphasize what the job asks for.\n" +
 		"- Copy employer names, institution names, project names and all dates EXACTLY as written in the master profile.\n" +
 		"- Keep basics (name, email, phone, url, location) exactly as in the master profile.\n\n" +
-		"MASTER PROFILE (JSON Resume):\n" + truncate(string(masterJSON), 12000) + "\n\n"
+		"MASTER PROFILE (JSON Resume):\n" + strutil.Truncate(string(masterJSON), 12000) + "\n\n"
 	if extraNotes != nil && *extraNotes != "" {
-		prompt += "EXTRA CANDIDATE NOTES:\n" + truncate(*extraNotes, 2000) + "\n\n"
+		prompt += "EXTRA CANDIDATE NOTES:\n" + strutil.Truncate(*extraNotes, 2000) + "\n\n"
 	}
 	prompt += fmt.Sprintf("TARGET JOB:\nTitle: %s\nCompany: %s\n", job.Title, job.Company)
 	if len(matchedSkills) > 0 {
 		ms, _ := json.Marshal(matchedSkills)
 		prompt += "Matched skills: " + string(ms) + "\n"
 	}
-	prompt += "Description:\n" + truncate(job.Description, 6000)
+	prompt += "Description:\n" + strutil.Truncate(job.Description, 6000)
 
 	var lastViolations []string
 	for attempt := 0; attempt < groundingAttempts; attempt++ {
@@ -281,11 +282,11 @@ func (s *Service) writeCoverLetter(ctx context.Context, master dto.JsonResume, e
 		`STRICT RULES: mention only experience present in the profile below; no invented facts, ` +
 		`no clichés like "I am writing to express". Plain text, no salutation placeholders like [Hiring Manager] — ` +
 		`use "Hello," if needed.` + "\n\n" +
-		"CANDIDATE PROFILE:\n" + truncate(string(masterJSON), 8000) + "\n\n"
+		"CANDIDATE PROFILE:\n" + strutil.Truncate(string(masterJSON), 8000) + "\n\n"
 	if extraNotes != nil && *extraNotes != "" {
-		prompt += "EXTRA NOTES:\n" + truncate(*extraNotes, 1500) + "\n\n"
+		prompt += "EXTRA NOTES:\n" + strutil.Truncate(*extraNotes, 1500) + "\n\n"
 	}
-	prompt += fmt.Sprintf("JOB:\nTitle: %s\nCompany: %s\nDescription:\n%s", job.Title, job.Company, truncate(job.Description, 4000))
+	prompt += fmt.Sprintf("JOB:\nTitle: %s\nCompany: %s\nDescription:\n%s", job.Title, job.Company, strutil.Truncate(job.Description, 4000))
 
 	result, err := llm.CompleteStructured[coverLetterResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You write concise, concrete, honest cover letters.",
@@ -378,13 +379,6 @@ func basicsName(b *dto.ResumeBasics) *string {
 		return nil
 	}
 	return b.Name
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
 }
 
 func toDocumentDto(r sqlcgen.GeneratedDocument) dto.GeneratedDocumentDto {

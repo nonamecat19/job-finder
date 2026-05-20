@@ -13,6 +13,7 @@ import (
 	"github.com/job-finder/api-go/internal/dto"
 	"github.com/job-finder/api-go/internal/jobsources"
 	"github.com/job-finder/api-go/internal/scraping"
+	"github.com/job-finder/api-go/internal/strutil"
 )
 
 var djinniRemoteRe = regexp.MustCompile(`(?i)remote|віддалено`)
@@ -67,9 +68,10 @@ func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, config
 		location := strings.TrimSpace(item.Find(`.location-text`).First().Text())
 
 		itemHTML, _ := item.Html()
-		if len(itemHTML) > 4000 {
-			itemHTML = itemHTML[:4000]
-		}
+		// This page's raw HTML routinely contains Cyrillic (Ukrainian job
+		// board); a byte slice can split a multi-byte UTF-8 sequence and
+		// mangle/corrupt the last character, unlike a rune-safe truncate.
+		itemHTML = strutil.Truncate(itemHTML, 4000)
 
 		full, err := url.Parse(href)
 		absURL := href

@@ -14,6 +14,7 @@ import (
 	"github.com/job-finder/api-go/internal/dto"
 	"github.com/job-finder/api-go/internal/llm"
 	"github.com/job-finder/api-go/internal/profile"
+	"github.com/job-finder/api-go/internal/strutil"
 )
 
 type Service struct {
@@ -45,7 +46,7 @@ func (s *Service) MatchJob(ctx context.Context, jobID string) (dto.MatchResultDt
 	}
 	profileID := dbutil.UUIDString(prof.ID)
 
-	jobText := truncate(fmt.Sprintf("%s at %s\n%s", job.Title, job.Company, job.Description), 8000)
+	jobText := strutil.Truncate(fmt.Sprintf("%s at %s\n%s", job.Title, job.Company, job.Description), 8000)
 	jobEmbedding, err := s.llmc.Embed(ctx, jobText)
 	if err != nil {
 		return dto.MatchResultDto{}, err
@@ -70,8 +71,8 @@ func (s *Service) MatchJob(ctx context.Context, jobID string) (dto.MatchResultDt
 
 	var doc dto.JsonResume
 	_ = dbutil.UnmarshalJSONB(prof.Document, &doc)
-	profileText := truncate(profile.ProfileToText(doc, prof.ExtraNotes), 6000)
-	description := truncate(job.Description, 6000)
+	profileText := strutil.Truncate(profile.ProfileToText(doc, prof.ExtraNotes), 6000)
+	description := strutil.Truncate(job.Description, 6000)
 	location := "n/a"
 	if job.Location != nil && *job.Location != "" {
 		location = *job.Location
@@ -189,11 +190,4 @@ func toDto(r sqlcgen.MatchResult) dto.MatchResultDto {
 		Model:         r.Model,
 		CreatedAt:     dbutil.Timestamp(r.CreatedAt),
 	}
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
 }
