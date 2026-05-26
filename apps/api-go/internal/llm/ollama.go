@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/job-finder/api-go/internal/strutil"
 )
 
 // OllamaProvider talks to a local Ollama server (chat + embeddings).
@@ -133,9 +135,7 @@ type ollamaEmbedResponse struct {
 }
 
 func (o *OllamaProvider) Embed(ctx context.Context, text string) ([]float32, error) {
-	if len(text) > 8000 {
-		text = text[:8000]
-	}
+	text = strutil.Truncate(text, 8000)
 	body, err := json.Marshal(ollamaEmbedRequest{Model: o.embedModel, Prompt: text})
 	if err != nil {
 		return nil, err

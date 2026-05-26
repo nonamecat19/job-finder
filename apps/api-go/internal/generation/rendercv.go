@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/job-finder/api-go/internal/strutil"
 )
 
 // RendercvMaster is the hand-tuned rendercv YAML config: theme, templates,
@@ -134,10 +136,7 @@ func buildTailorPrompt(master RendercvMaster, vacancy string, level GroundingLev
 	}
 	currentSummary := strings.Join(stringSliceField(sections, "summary"), " ")
 
-	vac := vacancy
-	if len(vac) > 6000 {
-		vac = vac[:6000]
-	}
+	vac := strutil.Truncate(vacancy, 6000)
 
 	return "Tailor this candidate's resume content to the target vacancy by selecting, reordering and " +
 		"rephrasing what the master profile already contains.\n\n" +
