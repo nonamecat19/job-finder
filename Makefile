@@ -1,5 +1,4 @@
-.PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build \
-        db-migrate db-generate db-studio clean
+.PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean
 
 install:
 	pnpm install
@@ -35,16 +34,6 @@ prod-up:
 
 prod-down:
 	docker compose -f docker-compose.prod.yml down
-
-# --- drizzle (api) ---
-db-generate:
-	pnpm --filter @job-finder/api db:generate
-
-db-migrate:
-	pnpm --filter @job-finder/api db:migrate
-
-db-studio:
-	pnpm --filter @job-finder/api db:studio
 
 clean:
 	docker compose down -v
