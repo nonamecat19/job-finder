@@ -11,3 +11,6 @@ __pycache__/
 /data/
 .idea/
 apps/api/src/generated/
+resume/
+/apps/api/server
+/apps/api/seed

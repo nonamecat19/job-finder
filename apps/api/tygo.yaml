@@ -1,0 +1,5 @@
+packages:
+  - path: "github.com/job-finder/api/internal/dto"
+    output_path: "../../packages/shared/src/generated.ts"
+    type_mappings:
+      "time.Time": "string"
