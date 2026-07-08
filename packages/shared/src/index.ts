@@ -136,6 +136,7 @@ export interface JobDto {
   salaryRaw: string | null;
   url: string;
   description: string;
+  descriptionHtml?: string | null;
   postedAt: string | null;
   ingestedAt: string;
   status: ApplicationStatus | 'hidden';
@@ -185,6 +186,22 @@ export interface SavedSearchDto {
   cron: string;
   enabled: boolean;
   lastRunAt: string | null;
+}
+
+export interface SubscriptionDto {
+  id: string;
+  sourceKey: string;
+  name: string | null;
+  url: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+}
+
+export interface SubscriptionInput {
+  sourceKey: string;
+  url: string;
+  name?: string;
+  enabled?: boolean;
 }
 
 export interface SourceRunDto {
