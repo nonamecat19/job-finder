@@ -1,5 +1,113 @@
 @import 'tailwindcss';
 
+/*
+ * Design tokens. Dark by default; add `.light` on <html> to flip.
+ * `@theme inline` maps Tailwind color utilities (bg-*, text-*, border-*, ring-*)
+ * onto the CSS vars below, so overriding the vars re-themes everything live.
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-overlay: var(--overlay);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+:root {
+  --bg: #0a0b10;
+  --surface: #101219;
+  --elevated: #161923;
+  --overlay: #1c202c;
+  --border: #23262f;
+  --border-strong: #2f3340;
+  --fg: #e8eaf0;
+  --muted: #9aa1b0;
+  --faint: #656b7a;
+
+  --primary: #7c6cff;
+  --primary-fg: #ffffff;
+  --primary-soft: color-mix(in srgb, var(--primary) 16%, transparent);
+  --accent: #22d3ee;
+
+  --success: #34d399;
+  --success-soft: color-mix(in srgb, var(--success) 14%, transparent);
+  --warning: #fbbf24;
+  --warning-soft: color-mix(in srgb, var(--warning) 14%, transparent);
+  --danger: #fb7185;
+  --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
+
+  color-scheme: dark;
+}
+
+:root.light {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --elevated: #ffffff;
+  --overlay: #ffffff;
+  --border: #e6e8ef;
+  --border-strong: #d3d7e0;
+  --fg: #12141c;
+  --muted: #5a6172;
+  --faint: #8a90a0;
+
+  --primary: #6b5bff;
+  --primary-fg: #ffffff;
+  --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+  --accent: #0891b2;
+
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #e11d48;
+
+  color-scheme: light;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-bg text-fg antialiased;
+  font-family: var(--font-sans);
+  background-image:
+    radial-gradient(60rem 40rem at 15% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 60%),
+    radial-gradient(50rem 40rem at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 55%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+/* Themed, thin scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }

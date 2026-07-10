@@ -5,7 +5,11 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --filter @job-finder/dashboard dev",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test": "make test",
+    "test:go": "make test-go",
+    "test:react": "make test-react",
+    "test:python": "make test-python"
   },
   "engines": {
     "node": ">=20"
