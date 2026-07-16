@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { SavedSearchDto } from '@job-finder/shared';
 import { api } from '../api';
-import { Button, Spinner, healthDot } from '../components/ui';
+import { Button, HealthDot, Spinner } from '../components/ui';
 
 const CRON_PRESETS = [
   { label: 'hourly', value: '0 * * * *' },
@@ -103,7 +103,7 @@ export default function SourcesPage() {
             return (
               <li key={s.key} className="rounded-lg border border-slate-200 bg-white p-3">
                 <div className="flex items-center gap-3">
-                  {healthDot(s.healthy)}
+                  <HealthDot healthy={s.healthy} />
                   <b className="w-24">{s.key}</b>
                   <span className="text-xs text-slate-400">{s.kind}</span>
                   <label className="ml-auto flex items-center gap-1 text-sm">

@@ -8,7 +8,7 @@ import {
   EmptyState,
   ErrorState,
   Field,
-  healthDot,
+  HealthDot,
   Input,
   Spinner,
   Surface,
@@ -84,7 +84,7 @@ function SourceRow({
   return (
     <li className="flex flex-col gap-2 rounded-md border border-border bg-elevated/60 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2">
-        {healthDot(source.healthy)}
+        <HealthDot healthy={source.healthy} />
         <span className="font-medium text-fg">{source.key}</span>
         <Chip>{source.kind}</Chip>
         {!source.enabled ? <Chip tone="red">disabled</Chip> : null}

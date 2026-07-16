@@ -87,7 +87,7 @@ export function Button({
   );
 }
 
-export function healthDot(healthy: boolean) {
+export function HealthDot({ healthy }: { healthy: boolean }) {
   return (
     <span
       className={cn(

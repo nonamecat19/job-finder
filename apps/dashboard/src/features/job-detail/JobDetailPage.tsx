@@ -26,12 +26,6 @@ export default function JobDetailPage() {
   const { data: documents } = useJobDocuments(id, !!generating);
   const docCountOfType = (type: DocumentType) => (documents ?? []).filter((d) => d.type === type).length;
 
-  useEffect(() => {
-    if (generating && documents && docCountOfType(generating) > countAtGenerate) {
-      setGenerating(null);
-    }
-  }, [countAtGenerate, documents, generating]);
-
   const generate = useGenerateDocument(id, (type) => {
     setCountAtGenerate(docCountOfType(type));
   });
@@ -39,10 +33,14 @@ export default function JobDetailPage() {
   const saveLetter = useSaveDocument(id, () => setEditingDoc(null));
 
   useEffect(() => {
-    if (generate.isSuccess && generate.variables) {
+    if (generate.isSuccess && generate.variables && generating !== generate.variables) {
       setGenerating(generate.variables);
+      return;
     }
-  }, [generate.isSuccess, generate.variables]);
+    if (generating && documents && docCountOfType(generating) > countAtGenerate) {
+      setGenerating(null);
+    }
+  }, [generate.isSuccess, generate.variables, generating, documents, countAtGenerate]);
 
   if (isLoading || !job) return <Spinner label="loading job…" />;
 
