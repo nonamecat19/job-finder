@@ -63,6 +63,20 @@ export const api = {
         body: JSON.stringify({ text }),
       }),
     pdfUrl: (id: string) => `/api/documents/${id}/pdf`,
+    tailor: (body: {
+      vacancy: string;
+      company?: string;
+      title?: string;
+      groundingLevel?: string;
+      requiredSkills?: string[];
+      niceToHave?: string[];
+      experienceLevel?: string;
+    }) =>
+      request<{ resume: GeneratedDocumentDto; coverLetter: GeneratedDocumentDto }>('/documents/tailor', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    listAdHoc: () => request<GeneratedDocumentDto[]>('/documents/ad-hoc'),
   },
   profiles: {
     list: () => request<ProfileDto[]>('/profiles'),

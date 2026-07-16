@@ -33,4 +33,7 @@ export const queryKeys = {
     all: ['activity'] as const,
     list: (limit?: number) => ['activity', 'list', limit ?? null] as const,
   },
+  documents: {
+    adHoc: ['documents', 'ad-hoc'] as const,
+  },
 };

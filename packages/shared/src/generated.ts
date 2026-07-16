@@ -162,12 +162,15 @@ export interface JobListResponse {
 }
 export interface GeneratedDocumentDto {
   id: string;
-  jobId: string;
+  jobId?: string;
   type: string;
   version: number /* int */;
   content: any;
   pdfPath?: string;
   model: string;
+  company?: string;
+  title?: string;
+  vacancy?: string;
   createdAt: string;
 }
 export interface RendercvSummaryExperience {

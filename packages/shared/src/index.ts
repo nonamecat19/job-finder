@@ -152,12 +152,15 @@ export interface JobListResponse {
 
 export interface GeneratedDocumentDto {
   id: string;
-  jobId: string;
+  jobId: string | null;
   type: DocumentType;
   version: number;
   content: unknown;
   pdfPath: string | null;
   model: string;
+  company?: string | null;
+  title?: string | null;
+  vacancy?: string | null;
   createdAt: string;
 }
 
