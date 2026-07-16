@@ -234,6 +234,7 @@ type ProfileDto struct {
 	Name           string           `json:"name"`
 	HasConfig      bool             `json:"hasConfig"`
 	RendercvConfig *RendercvSummary `json:"rendercvConfig,omitempty"`
+	RendercvFull   any              `json:"rendercvFull,omitempty"`
 	ExtraNotes     *string          `json:"extraNotes"`
 	UpdatedAt      string           `json:"updatedAt"`
 }

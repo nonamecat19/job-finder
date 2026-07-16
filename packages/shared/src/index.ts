@@ -181,6 +181,7 @@ export interface ProfileDto {
   name: string;
   hasConfig: boolean;
   rendercvConfig?: RendercvSummary | null;
+  rendercvFull?: Record<string, unknown> | null;
   extraNotes: string | null;
   updatedAt: string;
 }

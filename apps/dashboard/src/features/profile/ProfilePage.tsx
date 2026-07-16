@@ -58,6 +58,7 @@ export default function ProfilePage() {
 function ProfileCard({ profile }: { profile: ProfileDto }) {
   const remove = useDeleteProfile();
   const summary = profile.rendercvConfig;
+  const full = profile.rendercvFull;
 
   return (
     <Surface>
@@ -77,35 +78,56 @@ function ProfileCard({ profile }: { profile: ProfileDto }) {
         <p className="mt-2 text-sm text-danger">No valid config uploaded yet.</p>
       ) : null}
 
-      {summary ? (
-        <div className="mt-3 space-y-3">
-          {summary.skillGroups?.length ? (
-            <div>
-              <SectionTitle>skills</SectionTitle>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {summary.skillGroups.map((s: string) => (
-                  <span key={s} className="rounded bg-overlay px-1.5 py-0.5 text-xs text-muted">
-                    {s}
-                  </span>
-                ))}
+      {full ? (
+        <div className="mt-3 space-y-3 text-sm">
+          {Object.entries(full).map(([key, value]) => (
+            <div key={key}>
+              <SectionTitle>{key}</SectionTitle>
+              <div className="mt-1 text-muted">
+                <DataValue value={value} />
               </div>
             </div>
-          ) : null}
-
-          {summary.experience?.length ? (
-            <div>
-              <SectionTitle>experience</SectionTitle>
-              <ul className="mt-1 space-y-1 text-sm text-muted">
-                {summary.experience.map((e: { company: string; highlightCount: number }) => (
-                  <li key={e.company}>
-                    {e.company} — {e.highlightCount} highlight{e.highlightCount === 1 ? '' : 's'}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          ))}
         </div>
       ) : null}
     </Surface>
   );
+}
+
+function DataValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === '') return null;
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    return (
+      <ul className="ml-3 list-disc space-y-1 marker:text-faint">
+        {value.map((item, i) => (
+          <li key={i}>{isPlainObject(item) || Array.isArray(item) ? <DataValue value={item} /> : String(item)}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (isPlainObject(value)) {
+    const entries = Object.entries(value).filter(
+      ([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0),
+    );
+    if (entries.length === 0) return null;
+    return (
+      <dl className="ml-3 space-y-1">
+        {entries.map(([k, v]) => (
+          <div key={k} className="flex gap-1">
+            <dt className="shrink-0 text-faint">{k}:</dt>
+            <dd className="flex-1">{isPlainObject(v) || Array.isArray(v) ? <DataValue value={v} /> : String(v)}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+
+  return <>{String(value)}</>;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

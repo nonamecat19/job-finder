@@ -340,6 +340,7 @@ func (s *Service) toDto(p sqlcgen.Profile) dto.ProfileDto {
 			}
 
 			out.RendercvConfig = summary
+			out.RendercvFull = map[string]any(master)
 		}
 	}
 	return out

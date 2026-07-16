@@ -188,6 +188,7 @@ export interface ProfileDto {
   name: string;
   hasConfig: boolean;
   rendercvConfig?: RendercvSummary;
+  rendercvFull?: any;
   extraNotes?: string;
   updatedAt: string;
 }
