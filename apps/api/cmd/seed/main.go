@@ -63,6 +63,7 @@ func run() error {
 		adapters.ArbeitnowAdapter{},
 		adapters.DjinniAdapter{},
 		adapters.DouAdapter{},
+		adapters.WorkUaAdapter{},
 		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
 	)

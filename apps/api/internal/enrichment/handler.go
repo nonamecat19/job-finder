@@ -21,16 +21,33 @@ import (
 )
 
 type Handler struct {
-	q       *sqlcgen.Queries
-	sources *jobsources.Service
-	djinni  adapters.DjinniAdapter
-	dou     adapters.DouAdapter
-	client  *asynq.Client
-	delay   time.Duration
+	q            *sqlcgen.Queries
+	sources      *jobsources.Service
+	djinni       adapters.DjinniAdapter
+	dou          adapters.DouAdapter
+	workua       adapters.WorkUaAdapter
+	client       *asynq.Client
+	defaultDelay time.Duration
+	delays       map[string]time.Duration
 }
 
-func NewHandler(q *sqlcgen.Queries, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, client *asynq.Client, delay time.Duration) *Handler {
-	return &Handler{q: q, sources: sources, djinni: djinni, dou: dou, client: client, delay: delay}
+func NewHandler(q *sqlcgen.Queries, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, client *asynq.Client, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
+	return &Handler{
+		q: q, sources: sources,
+		djinni: djinni, dou: dou, workua: workua,
+		client: client,
+		defaultDelay: defaultDelay,
+		delays:       delays,
+	}
+}
+
+func (h *Handler) delayFor(sourceKey string) time.Duration {
+	if h.delays != nil {
+		if d, ok := h.delays[sourceKey]; ok {
+			return d
+		}
+	}
+	return h.defaultDelay
 }
 
 func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
@@ -84,6 +101,9 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	case "dou":
 		err = h.enrichDOU(ctx, payload, uid, job)
 		return err
+	case "workua":
+		err = h.enrichWorkUa(ctx, payload, uid, job)
+		return err
 	default:
 		return nil
 	}
@@ -96,8 +116,8 @@ func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload,
 	}
 	config := h.sources.DecryptConfig(source.Config)
 
-	if h.delay > 0 {
-		time.Sleep(h.delay)
+	if delay := h.delayFor("djinni"); delay > 0 {
+		time.Sleep(delay)
 	}
 
 	patch, err := h.djinni.FetchDetail(ctx, job.Url, config)
@@ -128,8 +148,8 @@ func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload,
 }
 
 func (h *Handler) enrichDOU(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
-	if h.delay > 0 {
-		time.Sleep(h.delay)
+	if delay := h.delayFor("dou"); delay > 0 {
+		time.Sleep(delay)
 	}
 
 	patch, err := h.dou.FetchDetail(ctx, job.Url, nil)
@@ -166,6 +186,40 @@ func (h *Handler) enrichDOU(ctx context.Context, payload queue.EnrichPayload, ui
 
 	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: dou complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichWorkUa(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	delay := h.delayFor("workua")
+	if delay < adapters.WorkUaMinDelay {
+		delay = adapters.WorkUaMinDelay
+	}
+	time.Sleep(delay)
+
+	patch, err := h.workua.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: workua fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    patch.Location,
+		Remote:      patch.Remote,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update workua job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	slog.Info("enrichment: workua complete", "job", payload.JobID)
 	return nil
 }
 

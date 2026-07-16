@@ -43,6 +43,10 @@ type Config struct {
 	// enrich queue (concurrency 1), to avoid rate-limiting/banning the
 	// authenticated djinni account.
 	DjinniDetailDelayMs int `env:"DJINNI_DETAIL_DELAY_MS" envDefault:"1500"`
+	// WorkUaDetailDelayMs is the pause before each work.ua detail-page fetch.
+	// 2000 matches work.ua's published Crawl-delay: 2; adapters.WorkUaMinDelay
+	// clamps it so a misconfigured env var cannot go below the floor.
+	WorkUaDetailDelayMs int `env:"WORKUA_DETAIL_DELAY_MS" envDefault:"2000"`
 
 	// Sidecar / optional services
 	JobspyURL       string `env:"JOBSPY_URL" envDefault:"http://localhost:8000"`

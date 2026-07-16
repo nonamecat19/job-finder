@@ -68,12 +68,14 @@ func run() error {
 
 	djinniAdapter := adapters.DjinniAdapter{Scraping: scrapingSvc}
 	douAdapter := adapters.DouAdapter{Scraping: scrapingSvc}
+	workuaAdapter := adapters.WorkUaAdapter{Scraping: scrapingSvc}
 	registry := jobsources.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
 		adapters.ArbeitnowAdapter{},
 		djinniAdapter,
 		douAdapter,
+		workuaAdapter,
 		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
 	)
@@ -118,7 +120,10 @@ func run() error {
 	subsHandler := &httpapi.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
 
 	enrichDelay := time.Duration(cfg.DjinniDetailDelayMs) * time.Millisecond
-	enrichHandler := enrichment.NewHandler(database.Queries, sourcesSvc, djinniAdapter, douAdapter, asynqClient, enrichDelay)
+	enrichDelays := map[string]time.Duration{
+		"workua": time.Duration(cfg.WorkUaDetailDelayMs) * time.Millisecond,
+	}
+	enrichHandler := enrichment.NewHandler(database.Queries, sourcesSvc, djinniAdapter, douAdapter, workuaAdapter, asynqClient, enrichDelay, enrichDelays)
 	sourcesHandler.Enrichment = enrichHandler
 
 	activityHandler := httpapi.NewActivityHandler(database.Queries)
