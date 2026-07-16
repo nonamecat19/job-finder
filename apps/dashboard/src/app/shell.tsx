@@ -23,10 +23,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ShellLink key={item.to} {...item} />
             ))}
           </nav>
-          <div className="mt-auto rounded-xl border border-border bg-elevated/60 p-3 text-xs text-muted">
-            <p className="font-semibold text-fg">Career operations desk</p>
-            <p className="mt-1 leading-relaxed">Track, match and apply — all from one board.</p>
-          </div>
         </aside>
 
         <div className="min-w-0">
