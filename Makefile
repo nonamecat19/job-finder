@@ -83,6 +83,10 @@ test-e2e: test-db-setup
 
 test-lint: test-go test-react test-python
 
+# --- Go API server ---
+run:
+	cd apps/api && go run ./cmd/server
+
 # --- go seed data ---
 seed:
 	cd apps/api && go run ./cmd/seed

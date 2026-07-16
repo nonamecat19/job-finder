@@ -76,6 +76,7 @@ func run() error {
 		djinniAdapter,
 		douAdapter,
 		workuaAdapter,
+		adapters.RobotaAdapter{},
 		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
 	)
