@@ -9,9 +9,13 @@
     "test": "make test",
     "test:go": "make test-go",
     "test:react": "make test-react",
-    "test:python": "make test-python"
+    "test:python": "make test-python",
+    "doctor": "npx react-doctor@latest"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "react-doctor": "^0.7.8"
   }
 }
