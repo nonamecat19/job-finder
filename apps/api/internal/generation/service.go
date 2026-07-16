@@ -24,18 +24,12 @@ const groundingAttempts = 2
 
 var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 
-type RendercvFromTextInput struct {
+type AdHocInput struct {
 	Vacancy        string
 	Company        string
 	Title          string
 	GroundingLevel *GroundingLevel
 	Hints          *VacancyHints
-}
-
-type RendercvFromTextResult struct {
-	YamlPath       string
-	PdfPath        string
-	GroundingLevel GroundingLevel
 }
 
 type coverLetterResult struct {
@@ -95,19 +89,21 @@ func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMas
 	return RendercvMaster(NormalizeYAMLMap(master).(map[string]any)), nil
 }
 
-func (s *Service) GenerateRendercvFromText(ctx context.Context, in RendercvFromTextInput) (*RendercvFromTextResult, error) {
+// GenerateAdHoc tailors a resume and writes a cover letter from pasted
+// vacancy text with no backing Job row, persisting both as GeneratedDocument
+// rows with jobId NULL so they show up in the ad-hoc history list.
+func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, coverLetterDoc dto.GeneratedDocumentDto, err error) {
 	level := s.defaultLevel
 	if in.GroundingLevel != nil {
 		level = *in.GroundingLevel
 	}
 	master, err := s.masterFor(ctx, nil)
 	if err != nil {
-		return nil, err
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
 	}
-
-	merged, err := s.tailorRendercvResume(ctx, master, in.Vacancy, level, in.Hints, nil)
-	if err != nil {
-		return nil, err
+	var extraNotes *string
+	if prof, profErr := s.profiles.GetDefault(ctx); profErr == nil {
+		extraNotes = prof.ExtraNotes
 	}
 
 	company := in.Company
@@ -118,13 +114,70 @@ func (s *Service) GenerateRendercvFromText(ctx context.Context, in RendercvFromT
 	if title == "" {
 		title = "resume"
 	}
-	stem := sanitize(company+"-"+title) + "-" + strconv.FormatInt(time.Now().UnixMilli(), 10)
+	baseName := sanitize(company + "-" + title)
 
-	yamlPath, pdfPath, err := s.rendercv.Render(ctx, merged, stem)
+	merged, err := s.tailorRendercvResume(ctx, master, in.Vacancy, level, in.Hints, nil)
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+	}
+	resumeContent, err := json.Marshal(merged)
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+	}
+	_, resumePdfPath, err := s.rendercv.Render(ctx, merged, baseName+"-resume-"+strconv.FormatInt(time.Now().UnixMilli(), 10))
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+	}
+	resumeRow, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
+		Type: string(dto.DocumentTypeResume), Version: 1, Content: resumeContent, PdfPath: &resumePdfPath, Model: s.llmc.ModelName(),
+		Company: &company, Title: &title, Vacancy: &in.Vacancy,
+	})
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+	}
+
+	profileText := RendercvToText(master)
+	letter, err := s.writeCoverLetter(ctx, profileText, extraNotes, company, title, in.Vacancy)
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+	}
+	coverContent, err := json.Marshal(map[string]string{"text": letter})
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+	}
+	var namePtr *string
+	if basics, _ := master["cv"].(map[string]any); basics != nil {
+		if n, _ := basics["name"].(string); n != "" {
+			namePtr = &n
+		}
+	}
+	coverPdfPath, err := s.htmlRenderer.RenderCoverLetter(ctx, letter, namePtr, company, title, fmt.Sprintf("%s-cover-%d.pdf", baseName, time.Now().UnixMilli()))
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+	}
+	coverRow, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
+		Type: string(dto.DocumentTypeCoverLetter), Version: 1, Content: coverContent, PdfPath: &coverPdfPath, Model: s.llmc.ModelName(),
+		Company: &company, Title: &title, Vacancy: &in.Vacancy,
+	})
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+	}
+
+	return toDocumentDto(resumeRow), toDocumentDto(coverRow), nil
+}
+
+// ListAdHocDocuments returns all documents generated from pasted vacancy
+// text (jobId NULL), newest first.
+func (s *Service) ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocumentDto, error) {
+	rows, err := s.q.ListAdHocDocuments(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &RendercvFromTextResult{YamlPath: yamlPath, PdfPath: pdfPath, GroundingLevel: level}, nil
+	out := make([]dto.GeneratedDocumentDto, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toDocumentDto(r))
+	}
+	return out, nil
 }
 
 func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaster, vacancy string, level GroundingLevel, hints *VacancyHints, rec *activity.Recorder) (RendercvMaster, error) {
@@ -223,7 +276,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		if rec != nil {
 			rec.Step(ctx, "writing cover letter (LLM)", nil)
 		}
-		letter, err := s.writeCoverLetter(ctx, profileText, prof.ExtraNotes, job)
+		letter, err := s.writeCoverLetter(ctx, profileText, prof.ExtraNotes, job.Company, job.Title, job.Description)
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}
@@ -313,7 +366,7 @@ func (s *Service) tailorResume(ctx context.Context, master RendercvMaster, profi
 	return dto.JsonResume{}, fmt.Errorf("tailored resume failed grounding check: %s", strings.Join(lastViolations, "; "))
 }
 
-func (s *Service) writeCoverLetter(ctx context.Context, profileText string, extraNotes *string, job sqlcgen.Job) (string, error) {
+func (s *Service) writeCoverLetter(ctx context.Context, profileText string, extraNotes *string, company, title, vacancyText string) (string, error) {
 	prompt := "Write a short cover letter (maximum 150 words, exactly 3 paragraphs separated by blank lines) " +
 		"for this application.\n\n" +
 		"Structure: (1) hook referencing the company and role, (2) 2-3 concrete matching experiences " +
@@ -325,7 +378,7 @@ func (s *Service) writeCoverLetter(ctx context.Context, profileText string, extr
 	if extraNotes != nil && *extraNotes != "" {
 		prompt += "EXTRA NOTES:\n" + strutil.Truncate(*extraNotes, 1500) + "\n\n"
 	}
-	prompt += fmt.Sprintf("JOB:\nTitle: %s\nCompany: %s\nDescription:\n%s", job.Title, job.Company, strutil.Truncate(job.Description, 4000))
+	prompt += fmt.Sprintf("JOB:\nTitle: %s\nCompany: %s\nDescription:\n%s", title, company, strutil.Truncate(vacancyText, 4000))
 
 	result, err := llm.CompleteStructured[coverLetterResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You write concise, concrete, honest cover letters.",
@@ -380,9 +433,20 @@ func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.Gene
 	if doc.Type != string(dto.DocumentTypeCoverLetter) || text == "" {
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("only cover_letter text is editable")
 	}
-	job, err := s.q.GetJobByID(ctx, doc.JobId)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, fmt.Errorf("job %s not found", dbutil.UUIDString(doc.JobId))
+	company, title := "", ""
+	if doc.JobId.Valid {
+		job, err := s.q.GetJobByID(ctx, doc.JobId)
+		if err != nil {
+			return dto.GeneratedDocumentDto{}, fmt.Errorf("job %s not found", dbutil.UUIDString(doc.JobId))
+		}
+		company, title = job.Company, job.Title
+	} else {
+		if doc.Company != nil {
+			company = *doc.Company
+		}
+		if doc.Title != nil {
+			title = *doc.Title
+		}
 	}
 	prof, err := s.profiles.GetDefault(ctx)
 	if err != nil {
@@ -396,14 +460,14 @@ func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.Gene
 		return dto.GeneratedDocumentDto{}, err
 	}
 
-	baseName := sanitize(job.Company + "-" + job.Title)
+	baseName := sanitize(company + "-" + title)
 	var namePtr *string
 	if basics, _ := master["cv"].(map[string]any); basics != nil {
 		if n, _ := basics["name"].(string); n != "" {
 			namePtr = &n
 		}
 	}
-	pdfPath, err := s.htmlRenderer.RenderCoverLetter(ctx, text, namePtr, job.Company, job.Title, fmt.Sprintf("%s-cover-v%d.pdf", baseName, doc.Version))
+	pdfPath, err := s.htmlRenderer.RenderCoverLetter(ctx, text, namePtr, company, title, fmt.Sprintf("%s-cover-v%d.pdf", baseName, doc.Version))
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
@@ -423,12 +487,15 @@ func toDocumentDto(r sqlcgen.GeneratedDocument) dto.GeneratedDocumentDto {
 	_ = dbutil.UnmarshalJSONB(r.Content, &content)
 	return dto.GeneratedDocumentDto{
 		ID:        dbutil.UUIDString(r.ID),
-		JobID:     dbutil.UUIDString(r.JobId),
+		JobID:     dbutil.UUIDStringPtr(r.JobId),
 		Type:      r.Type,
 		Version:   int(r.Version),
 		Content:   content,
 		PdfPath:   r.PdfPath,
 		Model:     r.Model,
+		Company:   r.Company,
+		Title:     r.Title,
+		Vacancy:   r.Vacancy,
 		CreatedAt: dbutil.Timestamp(r.CreatedAt),
 	}
 }

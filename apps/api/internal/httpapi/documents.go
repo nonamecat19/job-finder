@@ -15,7 +15,8 @@ import (
 
 // DocumentGenerator is the interface DocumentsHandler needs from the generation service.
 type DocumentGenerator interface {
-	GenerateRendercvFromText(ctx context.Context, in generation.RendercvFromTextInput) (*generation.RendercvFromTextResult, error)
+	GenerateAdHoc(ctx context.Context, in generation.AdHocInput) (resume, coverLetter dto.GeneratedDocumentDto, err error)
+	ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocumentDto, error)
 	GetDocumentDto(ctx context.Context, id string) (dto.GeneratedDocumentDto, error)
 	UpdateDocument(ctx context.Context, id, text string) (dto.GeneratedDocumentDto, error)
 	GetDocument(ctx context.Context, id string) (sqlcgen.GeneratedDocument, error)
@@ -28,6 +29,7 @@ type DocumentsHandler struct {
 
 func (h *DocumentsHandler) Mount(r chi.Router) {
 	r.Post("/documents/tailor", h.tailor)
+	r.Get("/documents/ad-hoc", h.listAdHoc)
 	r.Get("/documents/{id}", h.get)
 	r.Put("/documents/{id}", h.update)
 	r.Get("/documents/{id}/pdf", h.pdf)
@@ -66,7 +68,7 @@ func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 			hints.ExperienceLevel = *body.ExperienceLevel
 		}
 	}
-	result, err := h.Generation.GenerateRendercvFromText(r.Context(), generation.RendercvFromTextInput{
+	resume, coverLetter, err := h.Generation.GenerateAdHoc(r.Context(), generation.AdHocInput{
 		Vacancy: body.Vacancy, Company: body.Company, Title: body.Title, GroundingLevel: level, Hints: hints,
 	})
 	if err != nil {
@@ -74,10 +76,18 @@ func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"yamlPath":       result.YamlPath,
-		"pdfPath":        result.PdfPath,
-		"groundingLevel": result.GroundingLevel,
+		"resume":      resume,
+		"coverLetter": coverLetter,
 	})
+}
+
+func (h *DocumentsHandler) listAdHoc(w http.ResponseWriter, r *http.Request) {
+	out, err := h.Generation.ListAdHocDocuments(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h *DocumentsHandler) get(w http.ResponseWriter, r *http.Request) {

@@ -320,8 +320,9 @@ func documentDto(r sqlcgen.GeneratedDocument) dto.GeneratedDocumentDto {
 	var content any
 	_ = dbutil.UnmarshalJSONB(r.Content, &content)
 	return dto.GeneratedDocumentDto{
-		ID: dbutil.UUIDString(r.ID), JobID: dbutil.UUIDString(r.JobId), Type: r.Type, Version: int(r.Version),
-		Content: content, PdfPath: r.PdfPath, Model: r.Model, CreatedAt: dbutil.Timestamp(r.CreatedAt),
+		ID: dbutil.UUIDString(r.ID), JobID: dbutil.UUIDStringPtr(r.JobId), Type: r.Type, Version: int(r.Version),
+		Content: content, PdfPath: r.PdfPath, Model: r.Model, Company: r.Company, Title: r.Title, Vacancy: r.Vacancy,
+		CreatedAt: dbutil.Timestamp(r.CreatedAt),
 	}
 }
 

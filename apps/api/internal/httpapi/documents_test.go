@@ -17,12 +17,13 @@ type fakeDocGenerator struct {
 	doc sqlcgen.GeneratedDocument
 }
 
-func (f *fakeDocGenerator) GenerateRendercvFromText(ctx context.Context, in generation.RendercvFromTextInput) (*generation.RendercvFromTextResult, error) {
-	return &generation.RendercvFromTextResult{
-		YamlPath:       "/tmp/test.yaml",
-		PdfPath:        "/tmp/test.pdf",
-		GroundingLevel: generation.GroundingModerate,
-	}, nil
+func (f *fakeDocGenerator) GenerateAdHoc(ctx context.Context, in generation.AdHocInput) (dto.GeneratedDocumentDto, dto.GeneratedDocumentDto, error) {
+	return dto.GeneratedDocumentDto{ID: "resume-1", Type: "resume"},
+		dto.GeneratedDocumentDto{ID: "cover-1", Type: "cover_letter"}, nil
+}
+
+func (f *fakeDocGenerator) ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocumentDto, error) {
+	return nil, nil
 }
 
 func (f *fakeDocGenerator) GetDocumentDto(ctx context.Context, id string) (dto.GeneratedDocumentDto, error) {

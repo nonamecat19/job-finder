@@ -205,12 +205,15 @@ type JobListResponse struct {
 
 type GeneratedDocumentDto struct {
 	ID        string  `json:"id"`
-	JobID     string  `json:"jobId"`
+	JobID     *string `json:"jobId"`
 	Type      string  `json:"type"`
 	Version   int     `json:"version"`
 	Content   any     `json:"content"`
 	PdfPath   *string `json:"pdfPath"`
 	Model     string  `json:"model"`
+	Company   *string `json:"company,omitempty"`
+	Title     *string `json:"title,omitempty"`
+	Vacancy   *string `json:"vacancy,omitempty"`
 	CreatedAt string  `json:"createdAt"`
 }
 
