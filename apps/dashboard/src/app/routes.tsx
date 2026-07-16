@@ -5,6 +5,7 @@ import JobDetailPage from '../features/job-detail/JobDetailPage';
 import ProfilePage from '../features/profile/ProfilePage';
 import SourcesPage from '../features/sources/SourcesPage';
 import StatusPage from '../features/status/StatusPage';
+import TailorPage from '../features/tailor/TailorPage';
 import TrackerPage from '../features/tracker/TrackerPage';
 
 export function AppRoutes() {
@@ -27,6 +28,7 @@ export function AppRoutes() {
         }
       />
       <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/tailor" element={<TailorPage />} />
       <Route path="/sources" element={<SourcesPage />} />
       <Route path="/status" element={<StatusPage />} />
       <Route
