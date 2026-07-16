@@ -4,14 +4,19 @@ FROM "GeneratedDocument"
 WHERE "jobId" = $1 AND "type" = $2;
 
 -- name: InsertGeneratedDocument :one
-INSERT INTO "GeneratedDocument" ("jobId", "type", "version", "content", "pdfPath", "model")
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO "GeneratedDocument" ("jobId", "type", "version", "content", "pdfPath", "model", "company", "title", "vacancy")
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: ListDocumentsForJob :many
 SELECT * FROM "GeneratedDocument"
 WHERE "jobId" = $1
 ORDER BY "type" ASC, "version" DESC;
+
+-- name: ListAdHocDocuments :many
+SELECT * FROM "GeneratedDocument"
+WHERE "jobId" IS NULL
+ORDER BY "createdAt" DESC;
 
 -- name: GetDocumentByID :one
 SELECT * FROM "GeneratedDocument" WHERE "id" = $1;

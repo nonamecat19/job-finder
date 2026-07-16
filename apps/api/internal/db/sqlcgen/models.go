@@ -46,6 +46,9 @@ type GeneratedDocument struct {
 	PdfPath   *string          `json:"pdfPath"`
 	Model     string           `json:"model"`
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
+	Company   *string          `json:"company"`
+	Title     *string          `json:"title"`
+	Vacancy   *string          `json:"vacancy"`
 }
 
 type Job struct {

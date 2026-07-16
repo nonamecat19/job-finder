@@ -12,7 +12,7 @@ import (
 )
 
 const getDocumentByID = `-- name: GetDocumentByID :one
-SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt" FROM "GeneratedDocument" WHERE "id" = $1
+SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy FROM "GeneratedDocument" WHERE "id" = $1
 `
 
 func (q *Queries) GetDocumentByID(ctx context.Context, id pgtype.UUID) (GeneratedDocument, error) {
@@ -27,14 +27,17 @@ func (q *Queries) GetDocumentByID(ctx context.Context, id pgtype.UUID) (Generate
 		&i.PdfPath,
 		&i.Model,
 		&i.CreatedAt,
+		&i.Company,
+		&i.Title,
+		&i.Vacancy,
 	)
 	return i, err
 }
 
 const insertGeneratedDocument = `-- name: InsertGeneratedDocument :one
-INSERT INTO "GeneratedDocument" ("jobId", "type", "version", "content", "pdfPath", "model")
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, "jobId", type, version, content, "pdfPath", model, "createdAt"
+INSERT INTO "GeneratedDocument" ("jobId", "type", "version", "content", "pdfPath", "model", "company", "title", "vacancy")
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy
 `
 
 type InsertGeneratedDocumentParams struct {
@@ -44,6 +47,9 @@ type InsertGeneratedDocumentParams struct {
 	Content []byte      `json:"content"`
 	PdfPath *string     `json:"pdfPath"`
 	Model   string      `json:"model"`
+	Company *string     `json:"company"`
+	Title   *string     `json:"title"`
+	Vacancy *string     `json:"vacancy"`
 }
 
 func (q *Queries) InsertGeneratedDocument(ctx context.Context, arg InsertGeneratedDocumentParams) (GeneratedDocument, error) {
@@ -54,6 +60,9 @@ func (q *Queries) InsertGeneratedDocument(ctx context.Context, arg InsertGenerat
 		arg.Content,
 		arg.PdfPath,
 		arg.Model,
+		arg.Company,
+		arg.Title,
+		arg.Vacancy,
 	)
 	var i GeneratedDocument
 	err := row.Scan(
@@ -65,12 +74,53 @@ func (q *Queries) InsertGeneratedDocument(ctx context.Context, arg InsertGenerat
 		&i.PdfPath,
 		&i.Model,
 		&i.CreatedAt,
+		&i.Company,
+		&i.Title,
+		&i.Vacancy,
 	)
 	return i, err
 }
 
+const listAdHocDocuments = `-- name: ListAdHocDocuments :many
+SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy FROM "GeneratedDocument"
+WHERE "jobId" IS NULL
+ORDER BY "createdAt" DESC
+`
+
+func (q *Queries) ListAdHocDocuments(ctx context.Context) ([]GeneratedDocument, error) {
+	rows, err := q.db.Query(ctx, listAdHocDocuments)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GeneratedDocument
+	for rows.Next() {
+		var i GeneratedDocument
+		if err := rows.Scan(
+			&i.ID,
+			&i.JobId,
+			&i.Type,
+			&i.Version,
+			&i.Content,
+			&i.PdfPath,
+			&i.Model,
+			&i.CreatedAt,
+			&i.Company,
+			&i.Title,
+			&i.Vacancy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDocumentsForJob = `-- name: ListDocumentsForJob :many
-SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt" FROM "GeneratedDocument"
+SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy FROM "GeneratedDocument"
 WHERE "jobId" = $1
 ORDER BY "type" ASC, "version" DESC
 `
@@ -93,6 +143,9 @@ func (q *Queries) ListDocumentsForJob(ctx context.Context, jobid pgtype.UUID) ([
 			&i.PdfPath,
 			&i.Model,
 			&i.CreatedAt,
+			&i.Company,
+			&i.Title,
+			&i.Vacancy,
 		); err != nil {
 			return nil, err
 		}
@@ -125,7 +178,7 @@ func (q *Queries) MaxDocumentVersion(ctx context.Context, arg MaxDocumentVersion
 const updateDocumentContent = `-- name: UpdateDocumentContent :one
 UPDATE "GeneratedDocument" SET "content" = $2, "pdfPath" = $3
 WHERE "id" = $1
-RETURNING id, "jobId", type, version, content, "pdfPath", model, "createdAt"
+RETURNING id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy
 `
 
 type UpdateDocumentContentParams struct {
@@ -146,6 +199,9 @@ func (q *Queries) UpdateDocumentContent(ctx context.Context, arg UpdateDocumentC
 		&i.PdfPath,
 		&i.Model,
 		&i.CreatedAt,
+		&i.Company,
+		&i.Title,
+		&i.Vacancy,
 	)
 	return i, err
 }
