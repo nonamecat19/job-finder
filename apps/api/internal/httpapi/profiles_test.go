@@ -20,7 +20,7 @@ func (f *fakeProfileProvider) GetDto(ctx context.Context, id string) (dto.Profil
 	return dto.ProfileDto{ID: id, Name: "Default"}, nil
 }
 
-func (f *fakeProfileProvider) Create(ctx context.Context, name string, document dto.JsonResume, extraNotes *string) (dto.ProfileDto, error) {
+func (f *fakeProfileProvider) Create(ctx context.Context, name string, rendercvYaml string, extraNotes *string) (dto.ProfileDto, error) {
 	return dto.ProfileDto{ID: "p-new", Name: name}, nil
 }
 
@@ -36,8 +36,8 @@ func (f *fakeProfileProvider) Remove(ctx context.Context, id string) error {
 	return nil
 }
 
-func (f *fakeProfileProvider) ImportPdf(ctx context.Context, data []byte) (*profile.ImportResult, error) {
-	return &profile.ImportResult{TextLength: len(data)}, nil
+func (f *fakeProfileProvider) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileDto, error) {
+	return dto.ProfileDto{ID: "p-new", Name: "Uploaded Profile", HasConfig: true}, nil
 }
 
 func TestProfilesList(t *testing.T) {
@@ -70,8 +70,8 @@ func TestProfilesCreate(t *testing.T) {
 	r := testutil.SetupRouter(h.Mount)
 
 	w := testutil.DoRequestJSON(r, "POST", "/api/profiles", map[string]any{
-		"name":     "My Profile",
-		"document": map[string]any{},
+		"name":         "My Profile",
+		"rendercvYaml": "cv:\n  name: Test User",
 	}, nil)
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d", w.Code)

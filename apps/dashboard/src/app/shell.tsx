@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, ClipboardList, Rss, Settings2, UserRound } from 'lucide-react';
+import { Activity, BriefcaseBusiness, ClipboardList, Rss, Settings2, UserRound } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { ReactNode } from 'react';
 import { cn } from '../lib/utils';
@@ -6,6 +6,7 @@ import { cn } from '../lib/utils';
 const navItems = [
   { to: '/', label: 'Feed', icon: Rss },
   { to: '/tracker', label: 'Tracker', icon: ClipboardList },
+  { to: '/status', label: 'Status', icon: Activity },
   { to: '/sources', label: 'Sources', icon: Settings2 },
   { to: '/profile', label: 'Profile', icon: UserRound },
 ];

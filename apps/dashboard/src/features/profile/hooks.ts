@@ -9,19 +9,17 @@ export function useProfiles() {
   });
 }
 
-export function useCreateProfile() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: { name: string; document: import('@job-finder/shared').JsonResume; extraNotes?: string }) =>
-      api.profiles.create(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.profiles.all }),
+export function useConfigStatus() {
+  return useQuery({
+    queryKey: queryKeys.profiles.configStatus,
+    queryFn: api.profiles.configStatus,
   });
 }
 
 export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { name?: string; document?: import('@job-finder/shared').JsonResume; extraNotes?: string | null } }) =>
+    mutationFn: ({ id, body }: { id: string; body: { name?: string; extraNotes?: string | null } }) =>
       api.profiles.update(id, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.profiles.all }),
   });
@@ -31,14 +29,20 @@ export function useDeleteProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.profiles.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.profiles.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.profiles.all });
+      qc.invalidateQueries({ queryKey: queryKeys.profiles.configStatus });
+    },
   });
 }
 
-export function useImportProfile() {
+export function useUploadConfig() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => api.profiles.import(file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.profiles.all }),
+    mutationFn: (file: File) => api.profiles.uploadConfig(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.profiles.all });
+      qc.invalidateQueries({ queryKey: queryKeys.profiles.configStatus });
+    },
   });
 }

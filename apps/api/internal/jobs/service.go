@@ -11,6 +11,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
@@ -202,10 +203,42 @@ func (s *Service) Hide(ctx context.Context, id string) (dto.JobDto, error) {
 // 202-style payload; the dashboard polls documents. Matches
 // JobsService.enqueueGeneration.
 func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, profileID *string) (map[string]any, error) {
-	if _, err := s.Get(ctx, id); err != nil {
+	jobDto, err := s.Get(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-	payload, err := json.Marshal(queue.GeneratePayload{JobID: id, Type: docType, ProfileID: profileID})
+
+	var profID string
+	if profileID != nil && *profileID != "" {
+		profID = *profileID
+	} else {
+		p, err := s.q.GetDefaultProfile(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("precondition failed: no profile exists yet")
+		}
+		profID = dbutil.UUIDString(p.ID)
+	}
+	uid, err := dbutil.ParseUUID(profID)
+	if err != nil {
+		return nil, err
+	}
+	has, err := s.q.ProfileHasConfig(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	b, _ := has.(bool)
+	if !b {
+		return nil, fmt.Errorf("precondition failed: profile has no RenderCV config")
+	}
+
+	rec := activity.New(ctx, s.q, "generate", fmt.Sprintf("%s — %s", jobDto.Company, jobDto.Title), &id, nil, "")
+	var actID *string
+	if rec != nil {
+		idStr := dbutil.UUIDString(rec.ID())
+		actID = &idStr
+	}
+
+	payload, err := json.Marshal(queue.GeneratePayload{JobID: id, Type: docType, ProfileID: profileID, ActivityID: actID})
 	if err != nil {
 		return nil, err
 	}

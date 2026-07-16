@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -124,6 +125,10 @@ func (h *JobsHandler) generate(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := h.Jobs.EnqueueGeneration(r.Context(), id, body.Type, body.ProfileID)
 	if err != nil {
+		if strings.Contains(err.Error(), "precondition failed") || strings.Contains(err.Error(), "no RenderCV config") || strings.Contains(err.Error(), "no profile") {
+			writeError(w, http.StatusPreconditionFailed, err.Error())
+			return
+		}
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}

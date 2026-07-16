@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron/v3"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -50,6 +51,11 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		if _, err := s.service.RunSearch(ctx, dbutil.UUIDString(search.ID)); err != nil {
 			slog.Error("scheduler: run search failed", "search", search.Name, "error", err)
 		}
+	}
+
+	cutoff := pgtype.Timestamp{Time: now.AddDate(0, 0, -7), Valid: true}
+	if err := s.q.DeleteActivityRunsBefore(ctx, cutoff); err != nil {
+		slog.Error("scheduler: activity retention sweep failed", "error", err)
 	}
 }
 

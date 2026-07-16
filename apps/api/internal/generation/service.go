@@ -10,31 +10,41 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/strutil"
+
+	"gopkg.in/yaml.v3"
 )
 
-const groundingAttempts = 2 // matches GROUNDING_ATTEMPTS in generation.service.ts
+const groundingAttempts = 2
 
 var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 
-// coverLetterResult mirrors the zod `coverLetterSchema = z.object({ letter: z.string() })`.
+type RendercvFromTextInput struct {
+	Vacancy        string
+	Company        string
+	Title          string
+	GroundingLevel *GroundingLevel
+	Hints          *VacancyHints
+}
+
+type RendercvFromTextResult struct {
+	YamlPath       string
+	PdfPath        string
+	GroundingLevel GroundingLevel
+}
+
 type coverLetterResult struct {
 	Letter string `json:"letter"`
 }
 
-// Service ports GenerationService: tailorResume + writeCoverLetter with
-// grounding verify+retry, versioned GeneratedDocument persistence, and the
-// ad-hoc RenderCV tailoring path.
 type Service struct {
 	q            *sqlcgen.Queries
-	profiles     *profile.Service
+	profiles     ProfileStore
 	htmlRenderer *HtmlPdfRenderer
 	rendercv     *RenderCvRenderer
 	llmc         llm.Provider
@@ -42,7 +52,7 @@ type Service struct {
 	defaultLevel GroundingLevel
 }
 
-func NewService(q *sqlcgen.Queries, profiles *profile.Service, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, masterPath, defaultLevel string) *Service {
+func NewService(q *sqlcgen.Queries, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, masterPath, defaultLevel string) *Service {
 	if masterPath == "" {
 		masterPath = "./resume/resume.yaml"
 	}
@@ -61,22 +71,28 @@ func sanitize(s string) string {
 	return out
 }
 
-// ---------------------------------------------------------------------------
-// Ad-hoc RenderCV path (documents.controller.ts POST /documents/tailor)
-// ---------------------------------------------------------------------------
+func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMaster, error) {
+	var prof sqlcgen.Profile
+	var err error
+	if profileID != nil && *profileID != "" {
+		prof, err = s.profiles.Get(ctx, *profileID)
+	} else {
+		prof, err = s.profiles.GetDefault(ctx)
+	}
+	if err == nil && prof.RendercvConfig != nil {
+		return MasterFromProfile(prof)
+	}
 
-type RendercvFromTextInput struct {
-	Vacancy        string
-	Company        string
-	Title          string
-	GroundingLevel *GroundingLevel
-	Hints          *VacancyHints // optional structured vacancy data from the caller
-}
-
-type RendercvFromTextResult struct {
-	YamlPath       string
-	PdfPath        string
-	GroundingLevel GroundingLevel
+	// Dev fallback to masterPath if no profile exists
+	data, err := os.ReadFile(s.masterPath)
+	if err != nil {
+		return nil, fmt.Errorf("generation: read master resume from %s: %w", s.masterPath, err)
+	}
+	var master map[string]any
+	if err := yaml.Unmarshal(data, &master); err != nil {
+		return nil, fmt.Errorf("generation: parse master resume: %w", err)
+	}
+	return RendercvMaster(NormalizeYAMLMap(master).(map[string]any)), nil
 }
 
 func (s *Service) GenerateRendercvFromText(ctx context.Context, in RendercvFromTextInput) (*RendercvFromTextResult, error) {
@@ -84,17 +100,12 @@ func (s *Service) GenerateRendercvFromText(ctx context.Context, in RendercvFromT
 	if in.GroundingLevel != nil {
 		level = *in.GroundingLevel
 	}
-	data, err := os.ReadFile(s.masterPath)
+	master, err := s.masterFor(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("generation: read master resume: %w", err)
+		return nil, err
 	}
-	var master map[string]any
-	if err := yaml.Unmarshal(data, &master); err != nil {
-		return nil, fmt.Errorf("generation: parse master resume: %w", err)
-	}
-	master = normalizeYAMLMap(master).(map[string]any)
 
-	merged, err := s.tailorRendercvResume(ctx, RendercvMaster(master), in.Vacancy, level, in.Hints)
+	merged, err := s.tailorRendercvResume(ctx, master, in.Vacancy, level, in.Hints, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -116,16 +127,20 @@ func (s *Service) GenerateRendercvFromText(ctx context.Context, in RendercvFromT
 	return &RendercvFromTextResult{YamlPath: yamlPath, PdfPath: pdfPath, GroundingLevel: level}, nil
 }
 
-func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaster, vacancy string, level GroundingLevel, hints *VacancyHints) (RendercvMaster, error) {
-	// Step 1: Analyze vacancy → structured requirements
+func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaster, vacancy string, level GroundingLevel, hints *VacancyHints, rec *activity.Recorder) (RendercvMaster, error) {
+	if rec != nil {
+		rec.Step(ctx, "analyzing vacancy", nil)
+	}
 	analysis, err := analyzeVacancy(ctx, s.llmc, vacancy, hints)
 	if err != nil {
 		return nil, fmt.Errorf("vacancy analysis: %w", err)
 	}
 
-	// Step 2: Select & tailor content with grounding retry
 	var lastViolations []string
 	for attempt := 0; attempt < groundingAttempts; attempt++ {
+		if rec != nil {
+			rec.Step(ctx, fmt.Sprintf("tailoring resume (LLM) (attempt %d/%d)", attempt+1, groundingAttempts), nil)
+		}
 		payload, err := selectAndTailor(ctx, s.llmc, master, analysis, level, lastViolations)
 		if err != nil {
 			return nil, err
@@ -133,6 +148,9 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaste
 		merged, err := mergeTailored(master, payload)
 		if err != nil {
 			return nil, err
+		}
+		if rec != nil {
+			rec.Step(ctx, fmt.Sprintf("grounding check (attempt %d/%d)", attempt+1, groundingAttempts), nil)
 		}
 		lastViolations = verifyRendercvGrounding(master, merged, level)
 		if len(lastViolations) == 0 {
@@ -142,11 +160,11 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaste
 	return nil, fmt.Errorf("tailored rendercv resume failed grounding check: %s", strings.Join(lastViolations, "; "))
 }
 
-// ---------------------------------------------------------------------------
-// Job-backed generation (generation.processor.ts / jobs.controller.ts generate)
-// ---------------------------------------------------------------------------
+func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID *string, rec *activity.Recorder) (dto.GeneratedDocumentDto, error) {
+	if rec != nil {
+		rec.Step(ctx, "loading profile & match", nil)
+	}
 
-func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID *string) (dto.GeneratedDocumentDto, error) {
 	jid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
@@ -155,7 +173,6 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("job %s not found", jobID)
 	}
-	matchResult, _ := s.q.GetMatchResultByJobID(ctx, jid) // ignore not-found; matchedSkills stays nil
 
 	var prof sqlcgen.Profile
 	if profileID != nil {
@@ -166,8 +183,14 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
-	var master dto.JsonResume
-	_ = dbutil.UnmarshalJSONB(prof.Document, &master)
+	if prof.RendercvConfig == nil {
+		return dto.GeneratedDocumentDto{}, fmt.Errorf("precondition failed: profile has no RenderCV config — upload one first")
+	}
+	master, err := MasterFromProfile(prof)
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, err
+	}
+	profileText := RendercvToText(master)
 
 	maxVersion, err := s.q.MaxDocumentVersion(ctx, sqlcgen.MaxDocumentVersionParams{JobId: jid, Type: docType})
 	if err != nil {
@@ -180,9 +203,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	var pdfPath string
 
 	if docType == string(dto.DocumentTypeResume) {
-		var matchedSkills []string
-		_ = dbutil.UnmarshalJSONB(matchResult.MatchedSkills, &matchedSkills)
-		tailored, err := s.tailorResume(ctx, master, prof.ExtraNotes, job, matchedSkills)
+		tailored, err := s.tailorRendercvResume(ctx, master, job.Description, s.defaultLevel, nil, rec)
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}
@@ -190,13 +211,19 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}
-		p, err := s.htmlRenderer.RenderResume(ctx, tailored, fmt.Sprintf("%s-resume-v%d.pdf", baseName, version))
+		if rec != nil {
+			rec.Step(ctx, "rendering PDF", nil)
+		}
+		_, p, err := s.rendercv.Render(ctx, tailored, fmt.Sprintf("%s-resume-v%d", baseName, version))
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}
 		pdfPath = p
 	} else {
-		letter, err := s.writeCoverLetter(ctx, master, prof.ExtraNotes, job)
+		if rec != nil {
+			rec.Step(ctx, "writing cover letter (LLM)", nil)
+		}
+		letter, err := s.writeCoverLetter(ctx, profileText, prof.ExtraNotes, job)
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}
@@ -204,7 +231,16 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}
-		p, err := s.htmlRenderer.RenderCoverLetter(ctx, letter, basicsName(master.Basics), job.Company, job.Title, fmt.Sprintf("%s-cover-v%d.pdf", baseName, version))
+		var namePtr *string
+		if basics, _ := master["cv"].(map[string]any); basics != nil {
+			if n, _ := basics["name"].(string); n != "" {
+				namePtr = &n
+			}
+		}
+		if rec != nil {
+			rec.Step(ctx, "rendering PDF", nil)
+		}
+		p, err := s.htmlRenderer.RenderCoverLetter(ctx, letter, namePtr, job.Company, job.Title, fmt.Sprintf("%s-cover-v%d.pdf", baseName, version))
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}
@@ -230,11 +266,14 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		}
 	}
 
+	if rec != nil {
+		rec.Ok(ctx, dbutil.UUIDString(doc.ID), map[string]any{"version": version})
+	}
+
 	return toDocumentDto(doc), nil
 }
 
-func (s *Service) tailorResume(ctx context.Context, master dto.JsonResume, extraNotes *string, job sqlcgen.Job, matchedSkills []string) (dto.JsonResume, error) {
-	masterJSON, _ := json.Marshal(master)
+func (s *Service) tailorResume(ctx context.Context, master RendercvMaster, profileText string, extraNotes *string, job sqlcgen.Job, matchedSkills []string) (dto.JsonResume, error) {
 	prompt := "Create a tailored resume for this job application by selecting, reordering and rephrasing " +
 		"content from the candidate's master profile.\n\n" +
 		"STRICT RULES:\n" +
@@ -243,7 +282,7 @@ func (s *Service) tailorResume(ctx context.Context, master dto.JsonResume, extra
 		"- You may drop irrelevant entries, reorder, and rephrase highlights to emphasize what the job asks for.\n" +
 		"- Copy employer names, institution names, project names and all dates EXACTLY as written in the master profile.\n" +
 		"- Keep basics (name, email, phone, url, location) exactly as in the master profile.\n\n" +
-		"MASTER PROFILE (JSON Resume):\n" + strutil.Truncate(string(masterJSON), 12000) + "\n\n"
+		"MASTER PROFILE:\n" + strutil.Truncate(profileText, 12000) + "\n\n"
 	if extraNotes != nil && *extraNotes != "" {
 		prompt += "EXTRA CANDIDATE NOTES:\n" + strutil.Truncate(*extraNotes, 2000) + "\n\n"
 	}
@@ -266,7 +305,7 @@ func (s *Service) tailorResume(ctx context.Context, master dto.JsonResume, extra
 		if err != nil {
 			return dto.JsonResume{}, err
 		}
-		lastViolations = verifyGrounding(master, tailored)
+		lastViolations = verifyGroundingFromRendercv(master, tailored)
 		if len(lastViolations) == 0 {
 			return tailored, nil
 		}
@@ -274,8 +313,7 @@ func (s *Service) tailorResume(ctx context.Context, master dto.JsonResume, extra
 	return dto.JsonResume{}, fmt.Errorf("tailored resume failed grounding check: %s", strings.Join(lastViolations, "; "))
 }
 
-func (s *Service) writeCoverLetter(ctx context.Context, master dto.JsonResume, extraNotes *string, job sqlcgen.Job) (string, error) {
-	masterJSON, _ := json.Marshal(master)
+func (s *Service) writeCoverLetter(ctx context.Context, profileText string, extraNotes *string, job sqlcgen.Job) (string, error) {
 	prompt := "Write a short cover letter (maximum 150 words, exactly 3 paragraphs separated by blank lines) " +
 		"for this application.\n\n" +
 		"Structure: (1) hook referencing the company and role, (2) 2-3 concrete matching experiences " +
@@ -283,7 +321,7 @@ func (s *Service) writeCoverLetter(ctx context.Context, master dto.JsonResume, e
 		`STRICT RULES: mention only experience present in the profile below; no invented facts, ` +
 		`no clichés like "I am writing to express". Plain text, no salutation placeholders like [Hiring Manager] — ` +
 		`use "Hello," if needed.` + "\n\n" +
-		"CANDIDATE PROFILE:\n" + strutil.Truncate(string(masterJSON), 8000) + "\n\n"
+		"CANDIDATE PROFILE:\n" + strutil.Truncate(profileText, 8000) + "\n\n"
 	if extraNotes != nil && *extraNotes != "" {
 		prompt += "EXTRA NOTES:\n" + strutil.Truncate(*extraNotes, 1500) + "\n\n"
 	}
@@ -297,10 +335,6 @@ func (s *Service) writeCoverLetter(ctx context.Context, master dto.JsonResume, e
 	}
 	return strings.TrimSpace(result.Letter), nil
 }
-
-// ---------------------------------------------------------------------------
-// Document retrieval / edit (documents.controller.ts)
-// ---------------------------------------------------------------------------
 
 func (s *Service) ListDocuments(ctx context.Context, jobID string) ([]dto.GeneratedDocumentDto, error) {
 	jid, err := dbutil.ParseUUID(jobID)
@@ -338,8 +372,6 @@ func (s *Service) GetDocumentDto(ctx context.Context, id string) (dto.GeneratedD
 	return toDocumentDto(row), nil
 }
 
-// UpdateDocument edits cover-letter text, then re-renders its PDF in place
-// (same version), matching GenerationService.updateDocument.
 func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.GeneratedDocumentDto, error) {
 	doc, err := s.GetDocument(ctx, id)
 	if err != nil {
@@ -356,11 +388,22 @@ func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.Gene
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
-	var master dto.JsonResume
-	_ = dbutil.UnmarshalJSONB(prof.Document, &master)
+	if prof.RendercvConfig == nil {
+		return dto.GeneratedDocumentDto{}, fmt.Errorf("profile has no RenderCV config")
+	}
+	master, err := MasterFromProfile(prof)
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, err
+	}
 
 	baseName := sanitize(job.Company + "-" + job.Title)
-	pdfPath, err := s.htmlRenderer.RenderCoverLetter(ctx, text, basicsName(master.Basics), job.Company, job.Title, fmt.Sprintf("%s-cover-v%d.pdf", baseName, doc.Version))
+	var namePtr *string
+	if basics, _ := master["cv"].(map[string]any); basics != nil {
+		if n, _ := basics["name"].(string); n != "" {
+			namePtr = &n
+		}
+	}
+	pdfPath, err := s.htmlRenderer.RenderCoverLetter(ctx, text, namePtr, job.Company, job.Title, fmt.Sprintf("%s-cover-v%d.pdf", baseName, doc.Version))
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
@@ -373,13 +416,6 @@ func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.Gene
 		return dto.GeneratedDocumentDto{}, err
 	}
 	return toDocumentDto(updated), nil
-}
-
-func basicsName(b *dto.ResumeBasics) *string {
-	if b == nil {
-		return nil
-	}
-	return b.Name
 }
 
 func toDocumentDto(r sqlcgen.GeneratedDocument) dto.GeneratedDocumentDto {

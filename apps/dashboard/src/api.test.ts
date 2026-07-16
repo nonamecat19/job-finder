@@ -111,7 +111,7 @@ describe('api.profiles', () => {
   it('create sends POST', async () => {
     mockFetch.mockResolvedValue(jsonResponse({}))
 
-    await api.profiles.create({ name: 'Test', document: { basics: { name: 'Test' } } })
+    await api.profiles.create({ name: 'Test', rendercvYaml: 'cv:\n  name: Test\n' })
 
     const [url, opts] = mockFetch.mock.calls[0]
     expect(url).toBe('/api/profiles')

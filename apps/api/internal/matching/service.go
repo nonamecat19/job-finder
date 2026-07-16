@@ -3,19 +3,24 @@ package matching
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pgvector/pgvector-go"
 
+	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/strutil"
 )
+
+var ErrNoProfileConfig = errors.New("no profile config")
 
 type Service struct {
 	q         *sqlcgen.Queries
@@ -30,7 +35,7 @@ func NewService(q *sqlcgen.Queries, profiles *profile.Service, llmc llm.Provider
 
 // MatchJob runs stage 1 (embedding prefilter) + stage 2 (LLM analysis) for
 // one job, mirroring MatchingService.matchJob.
-func (s *Service) MatchJob(ctx context.Context, jobID string) (dto.MatchResultDto, error) {
+func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Recorder) (dto.MatchResultDto, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
 		return dto.MatchResultDto{}, err
@@ -44,7 +49,19 @@ func (s *Service) MatchJob(ctx context.Context, jobID string) (dto.MatchResultDt
 	if err != nil {
 		return dto.MatchResultDto{}, err
 	}
+	if prof.RendercvConfig == nil {
+		summary := "no profile config"
+		res, err := s.saveResult(ctx, uid, 0, nil, nil, nil, &summary, nil, "")
+		if err != nil {
+			return dto.MatchResultDto{}, err
+		}
+		return res, ErrNoProfileConfig
+	}
 	profileID := dbutil.UUIDString(prof.ID)
+
+	if rec != nil {
+		rec.Step(ctx, "embedding", nil)
+	}
 
 	jobText := strutil.Truncate(fmt.Sprintf("%s at %s\n%s", job.Title, job.Company, job.Description), 8000)
 	jobEmbedding, err := s.llmc.Embed(ctx, jobText)
@@ -60,18 +77,32 @@ func (s *Service) MatchJob(ctx context.Context, jobID string) (dto.MatchResultDt
 		_ = s.profiles.RefreshEmbedding(ctx, profileID)
 	}
 
+	if rec != nil {
+		rec.Step(ctx, "prefilter (similarity)", nil)
+	}
+
 	similarity, err := s.profiles.Similarity(ctx, profileID, jobEmbedding)
 	if err != nil {
 		similarity = 0
 	}
 
 	if similarity < s.threshold {
-		return s.saveResult(ctx, uid, similarity, nil, nil, nil, nil, nil, "")
+		res, err := s.saveResult(ctx, uid, similarity, nil, nil, nil, nil, nil, "")
+		if err == nil && rec != nil {
+			rec.Ok(ctx, "", map[string]any{"similarity": similarity})
+		}
+		return res, err
 	}
 
-	var doc dto.JsonResume
-	_ = dbutil.UnmarshalJSONB(prof.Document, &doc)
-	profileText := strutil.Truncate(profile.ProfileToText(doc, prof.ExtraNotes), 6000)
+	master, err := generation.MasterFromProfile(prof)
+	if err != nil {
+		return dto.MatchResultDto{}, err
+	}
+	var extraNotes string
+	if prof.ExtraNotes != nil {
+		extraNotes = *prof.ExtraNotes
+	}
+	profileText := strutil.Truncate(generation.RendercvToText(master)+"\n"+extraNotes, 6000)
 	description := strutil.Truncate(job.Description, 6000)
 	location := "n/a"
 	if job.Location != nil && *job.Location != "" {
@@ -92,6 +123,10 @@ func (s *Service) MatchJob(ctx context.Context, jobID string) (dto.MatchResultDt
 		profileText, job.Title, job.Company, location, job.Remote, description,
 	)
 
+	if rec != nil {
+		rec.Step(ctx, "LLM fit analysis", nil)
+	}
+
 	fit, err := llm.CompleteStructured[FitResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You are a precise technical recruiter. Judge only from the given profile and job text.",
 	})
@@ -100,7 +135,11 @@ func (s *Service) MatchJob(ctx context.Context, jobID string) (dto.MatchResultDt
 	}
 
 	score := int(math.Round(fit.Score))
-	return s.saveResult(ctx, uid, similarity, &score, fit.MatchedSkills, fit.MissingSkills, &fit.Summary, fit.RedFlags, s.llmc.ModelName())
+	res, err := s.saveResult(ctx, uid, similarity, &score, fit.MatchedSkills, fit.MissingSkills, &fit.Summary, fit.RedFlags, s.llmc.ModelName())
+	if err == nil && rec != nil {
+		rec.Ok(ctx, "", map[string]any{"score": score, "similarity": similarity})
+	}
+	return res, err
 }
 
 func (s *Service) saveResult(

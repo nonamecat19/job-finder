@@ -51,6 +51,11 @@ export interface SearchQuery {
   country?: string;
   sources?: string[];
   site?: string; // 'linkedin' | 'indeed' | 'glassdoor'
+  /**
+   * SubscriptionURL, when set, tells an adapter to scrape this saved-filter
+   * URL (e.g. a djinni subs page) instead of running a keyword search.
+   */
+  subscriptionUrl?: string;
 }
 export interface ResumeLocation {
   city?: string;
@@ -141,6 +146,7 @@ export interface JobDto {
   salaryRaw?: string;
   url: string;
   description: string;
+  descriptionHtml?: string;
   postedAt?: string;
   ingestedAt: string;
   status: string; // ApplicationStatus | 'hidden'
@@ -164,10 +170,21 @@ export interface GeneratedDocumentDto {
   model: string;
   createdAt: string;
 }
+export interface RendercvSummaryExperience {
+  company: string;
+  highlightCount: number /* int */;
+}
+export interface RendercvSummary {
+  name: string;
+  headline: string;
+  skillGroups: string[];
+  experience: RendercvSummaryExperience[];
+}
 export interface ProfileDto {
   id: string;
   name: string;
-  document: JsonResume;
+  hasConfig: boolean;
+  rendercvConfig?: RendercvSummary;
   extraNotes?: string;
   updatedAt: string;
 }
@@ -184,6 +201,19 @@ export interface SavedSearchDto {
   name: string;
   query: SearchQuery;
   cron: string;
+  enabled: boolean;
+  lastRunAt?: string;
+}
+/**
+ * SubscriptionDto is a URL-based subscription attached to a job source: a
+ * saved-filter URL on the site itself (e.g. a djinni subs page or a dou
+ * category listing). Fetching the URL is deferred; this is CRUD + enable only.
+ */
+export interface SubscriptionDto {
+  id: string;
+  sourceKey: string;
+  name?: string;
+  url: string;
   enabled: boolean;
   lastRunAt?: string;
 }
@@ -222,4 +252,28 @@ export interface StatsDto {
 export interface GenerateRequestDto {
   type: DocumentType;
   profileId?: string;
+}
+/**
+ * ActivityRunDto is one row of under-the-hood async task activity (ingest,
+ * match, generate, enrich), live progress and recent history alike.
+ */
+export interface ActivityRunDto {
+  id: string;
+  op: string;
+  state: string;
+  label: string;
+  step?: string;
+  jobId?: string;
+  sourceKey?: string;
+  refId?: string;
+  error?: string;
+  meta: { [key: string]: any};
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  elapsedMs?: number /* int64 */;
+}
+export interface ActivityListResponse {
+  active: ActivityRunDto[];
+  recent: ActivityRunDto[];
 }

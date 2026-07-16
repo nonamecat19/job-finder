@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from './test/test-utils'
 import { api } from './api'
@@ -16,7 +16,14 @@ vi.mock('./api', () => ({
     },
     sources: { list: vi.fn(), update: vi.fn(), test: vi.fn(), enrich: vi.fn() },
     searches: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), run: vi.fn(), recentRuns: vi.fn() },
-    profiles: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), import: vi.fn() },
+    profiles: {
+      list: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      remove: vi.fn(),
+      uploadConfig: vi.fn(),
+      configStatus: vi.fn(),
+    },
     documents: { update: vi.fn(), pdfUrl: vi.fn() },
     subscriptions: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), run: vi.fn() },
     applications: { list: vi.fn(), update: vi.fn() },
@@ -30,6 +37,7 @@ beforeEach(() => {
   vi.mocked(api.searches.list).mockResolvedValue([])
   vi.mocked(api.searches.recentRuns).mockResolvedValue([])
   vi.mocked(api.profiles.list).mockResolvedValue([])
+  vi.mocked(api.profiles.configStatus).mockResolvedValue({ hasConfig: true })
   vi.mocked(api.subscriptions.list).mockResolvedValue([])
   vi.mocked(api.applications.list).mockResolvedValue([])
 })
@@ -43,9 +51,11 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Profile' })).toBeInTheDocument()
   })
 
-  it('defaults to FeedPage', () => {
+  it('defaults to FeedPage', async () => {
     renderWithProviders(<App />)
-    expect(screen.getByPlaceholderText('Search title/company…')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Search title/company…')).toBeInTheDocument()
+    })
   })
 
   it('navigates to Sources page on click', async () => {
@@ -66,6 +76,6 @@ describe('App', () => {
     const user = userEvent.setup()
     renderWithProviders(<App />)
     await user.click(screen.getByRole('link', { name: 'Profile' }))
-    expect(screen.getByRole('heading', { name: 'Master profile' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   })
 })

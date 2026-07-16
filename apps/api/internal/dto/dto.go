@@ -214,12 +214,25 @@ type GeneratedDocumentDto struct {
 	CreatedAt string  `json:"createdAt"`
 }
 
+type RendercvSummaryExperience struct {
+	Company        string `json:"company"`
+	HighlightCount int    `json:"highlightCount"`
+}
+
+type RendercvSummary struct {
+	Name        string                      `json:"name"`
+	Headline    string                      `json:"headline"`
+	SkillGroups []string                    `json:"skillGroups"`
+	Experience  []RendercvSummaryExperience `json:"experience"`
+}
+
 type ProfileDto struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	Document   JsonResume `json:"document"`
-	ExtraNotes *string    `json:"extraNotes"`
-	UpdatedAt  string     `json:"updatedAt"`
+	ID             string           `json:"id"`
+	Name           string           `json:"name"`
+	HasConfig      bool             `json:"hasConfig"`
+	RendercvConfig *RendercvSummary `json:"rendercvConfig,omitempty"`
+	ExtraNotes     *string          `json:"extraNotes"`
+	UpdatedAt      string           `json:"updatedAt"`
 }
 
 type JobSourceDto struct {
@@ -291,4 +304,28 @@ type StatsDto struct {
 type GenerateRequestDto struct {
 	Type      DocumentType `json:"type"`
 	ProfileID *string      `json:"profileId,omitempty"`
+}
+
+// ActivityRunDto is one row of under-the-hood async task activity (ingest,
+// match, generate, enrich), live progress and recent history alike.
+type ActivityRunDto struct {
+	ID         string         `json:"id"`
+	Op         string         `json:"op"`
+	State      string         `json:"state"`
+	Label      string         `json:"label"`
+	Step       *string        `json:"step"`
+	JobID      *string        `json:"jobId"`
+	SourceKey  *string        `json:"sourceKey"`
+	RefID      *string        `json:"refId"`
+	Error      *string        `json:"error"`
+	Meta       map[string]any `json:"meta"`
+	CreatedAt  string         `json:"createdAt"`
+	StartedAt  *string        `json:"startedAt"`
+	FinishedAt *string        `json:"finishedAt"`
+	ElapsedMs  *int64         `json:"elapsedMs"`
+}
+
+type ActivityListResponse struct {
+	Active []ActivityRunDto `json:"active"`
+	Recent []ActivityRunDto `json:"recent"`
 }

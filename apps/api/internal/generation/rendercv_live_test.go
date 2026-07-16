@@ -25,7 +25,7 @@ func TestLive_RenderCvRenderer_ProducesRealPDF(t *testing.T) {
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		t.Fatalf("unmarshal fixture: %v", err)
 	}
-	master := RendercvMaster(normalizeYAMLMap(m).(map[string]any))
+	master := RendercvMaster(NormalizeYAMLMap(m).(map[string]any))
 
 	outDir := t.TempDir()
 	r := NewRenderCvRenderer(outDir, "")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -15,10 +16,10 @@ import (
 type ProfileProvider interface {
 	List(ctx context.Context) ([]dto.ProfileDto, error)
 	GetDto(ctx context.Context, id string) (dto.ProfileDto, error)
-	Create(ctx context.Context, name string, document dto.JsonResume, extraNotes *string) (dto.ProfileDto, error)
+	Create(ctx context.Context, name string, rendercvYaml string, extraNotes *string) (dto.ProfileDto, error)
 	Update(ctx context.Context, id string, in profile.UpdateInput) (dto.ProfileDto, error)
 	Remove(ctx context.Context, id string) error
-	ImportPdf(ctx context.Context, data []byte) (*profile.ImportResult, error)
+	SaveConfig(ctx context.Context, yamlText string) (dto.ProfileDto, error)
 }
 
 // ProfilesHandler wires /api/profiles, mirroring profiles.controller.ts.
@@ -32,7 +33,8 @@ func (h *ProfilesHandler) Mount(r chi.Router) {
 	r.Post("/profiles", h.create)
 	r.Put("/profiles/{id}", h.update)
 	r.Delete("/profiles/{id}", h.remove)
-	r.Post("/profiles/import", h.importPdf)
+	r.Post("/profiles/config", h.uploadConfig)
+	r.Get("/profiles/config/status", h.configStatus)
 }
 
 func (h *ProfilesHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -55,9 +57,9 @@ func (h *ProfilesHandler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 type createProfileBody struct {
-	Name       string         `json:"name"`
-	Document   dto.JsonResume `json:"document"`
-	ExtraNotes *string        `json:"extraNotes"`
+	Name         string  `json:"name"`
+	RendercvYaml string  `json:"rendercvYaml"`
+	ExtraNotes   *string `json:"extraNotes"`
 }
 
 func (h *ProfilesHandler) create(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +68,7 @@ func (h *ProfilesHandler) create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	out, err := h.Profiles.Create(r.Context(), body.Name, body.Document, body.ExtraNotes)
+	out, err := h.Profiles.Create(r.Context(), body.Name, body.RendercvYaml, body.ExtraNotes)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -88,9 +90,10 @@ func (h *ProfilesHandler) update(w http.ResponseWriter, r *http.Request) {
 			in.Name = &s
 		}
 	}
-	if v, ok := raw["document"]; ok {
-		doc := reencode[dto.JsonResume](v)
-		in.Document = &doc
+	if v, ok := raw["rendercvYaml"]; ok {
+		if s, ok := v.(string); ok {
+			in.RendercvYaml = &s
+		}
 	}
 	if v, ok := raw["extraNotes"]; ok {
 		var notes *string
@@ -117,28 +120,66 @@ func (h *ProfilesHandler) remove(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
 
-// importPdf accepts a multipart/form-data upload with field "file" (PDF),
-// mirroring @UseInterceptors(FileInterceptor('file')).
-func (h *ProfilesHandler) importPdf(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(20 << 20); err != nil {
-		writeError(w, http.StatusBadRequest, `multipart field "file" (PDF) is required`)
+func (h *ProfilesHandler) uploadConfig(w http.ResponseWriter, r *http.Request) {
+	var yamlText string
+
+	// Check if it's multipart/form-data
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			writeError(w, http.StatusBadRequest, "failed to parse multipart form")
+			return
+		}
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "multipart field 'file' is required")
+			return
+		}
+		defer file.Close()
+		data, err := io.ReadAll(file)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "failed to read uploaded file")
+			return
+		}
+		yamlText = string(data)
+	} else {
+		// Read raw body
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "failed to read body")
+			return
+		}
+		yamlText = string(data)
+	}
+
+	if strings.TrimSpace(yamlText) == "" {
+		writeError(w, http.StatusBadRequest, "yaml content is empty")
 		return
 	}
-	file, _, err := r.FormFile("file")
+
+	// Process the config
+	out, err := h.Profiles.SaveConfig(r.Context(), yamlText)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, `multipart field "file" (PDF) is required`)
+		// If validation/render fails, reject with 422
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	defer file.Close()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "could not read uploaded file")
+
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *ProfilesHandler) configStatus(w http.ResponseWriter, r *http.Request) {
+	profiles, err := h.Profiles.List(r.Context())
+	if err != nil || len(profiles) == 0 {
+		writeJSON(w, http.StatusOK, map[string]bool{"hasConfig": false})
 		return
 	}
-	result, err := h.Profiles.ImportPdf(r.Context(), data)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+	// Since we got at least one profile, check if hasConfig is true
+	has := false
+	for _, p := range profiles {
+		if p.HasConfig {
+			has = true
+			break
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"draft": result.Draft, "textLength": result.TextLength})
+	writeJSON(w, http.StatusOK, map[string]bool{"hasConfig": has})
 }

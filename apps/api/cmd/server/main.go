@@ -96,7 +96,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	profileSvc := profile.NewService(database.Queries, llmProvider, cfg.EmbedModel)
+	profileSvc := profile.NewService(database.Queries, llmProvider, cfg.EmbedModel, cfg.RendercvBin)
 	matchingSvc := matching.NewService(database.Queries, profileSvc, llmProvider, cfg.MatchSimilarityThreshold)
 	matchingHandler := matching.NewHandler(matchingSvc)
 
@@ -121,10 +121,12 @@ func run() error {
 	enrichHandler := enrichment.NewHandler(database.Queries, sourcesSvc, djinniAdapter, douAdapter, asynqClient, enrichDelay)
 	sourcesHandler.Enrichment = enrichHandler
 
+	activityHandler := httpapi.NewActivityHandler(database.Queries)
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
-		subsHandler.Mount,
+		subsHandler.Mount, activityHandler.Mount,
 	)
 
 	srv := &http.Server{

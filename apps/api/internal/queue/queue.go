@@ -41,16 +41,19 @@ type IngestPayload struct {
 	SearchID       *string `json:"searchId"`
 	SubscriptionID *string `json:"subscriptionId,omitempty"`
 	SourceKey      string  `json:"sourceKey"`
+	ActivityID     *string `json:"activityId,omitempty"`
 }
 
 // MatchPayload mirrors MatchJobData.
 type MatchPayload struct {
-	JobID string `json:"jobId"`
+	JobID      string  `json:"jobId"`
+	ActivityID *string `json:"activityId,omitempty"`
 }
 
 // EnrichPayload carries the job to fetch full detail for.
 type EnrichPayload struct {
-	JobID string `json:"jobId"`
+	JobID      string  `json:"jobId"`
+	ActivityID *string `json:"activityId,omitempty"`
 }
 
 // GeneratePayload mirrors GenerateJobData.
@@ -58,6 +61,7 @@ type GeneratePayload struct {
 	JobID     string  `json:"jobId"`
 	Type      string  `json:"type"` // "resume" | "cover_letter"
 	ProfileID *string `json:"profileId,omitempty"`
+	ActivityID *string `json:"activityId,omitempty"`
 }
 
 // RedisOpt parses a redis:// URL into asynq's client/server connection

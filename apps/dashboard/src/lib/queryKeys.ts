@@ -19,6 +19,7 @@ export const queryKeys = {
   profiles: {
     all: ['profiles'] as const,
     list: ['profiles', 'list'] as const,
+    configStatus: ['profiles', 'configStatus'] as const,
   },
   applications: {
     all: ['applications'] as const,
@@ -27,5 +28,9 @@ export const queryKeys = {
   subscriptions: {
     all: ['subscriptions'] as const,
     list: ['subscriptions', 'list'] as const,
+  },
+  activity: {
+    all: ['activity'] as const,
+    list: (limit?: number) => ['activity', 'list', limit ?? null] as const,
   },
 };

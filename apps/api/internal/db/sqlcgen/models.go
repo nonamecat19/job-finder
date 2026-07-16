@@ -9,6 +9,23 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
+type ActivityRun struct {
+	ID          pgtype.UUID      `json:"id"`
+	Op          string           `json:"op"`
+	State       string           `json:"state"`
+	Label       string           `json:"label"`
+	Step        *string          `json:"step"`
+	JobId       pgtype.UUID      `json:"jobId"`
+	SourceKey   *string          `json:"sourceKey"`
+	QueueTaskId *string          `json:"queueTaskId"`
+	RefId       *string          `json:"refId"`
+	Error       *string          `json:"error"`
+	Meta        []byte           `json:"meta"`
+	CreatedAt   pgtype.Timestamp `json:"createdAt"`
+	StartedAt   pgtype.Timestamp `json:"startedAt"`
+	FinishedAt  pgtype.Timestamp `json:"finishedAt"`
+}
+
 type Application struct {
 	ID        pgtype.UUID      `json:"id"`
 	JobId     pgtype.UUID      `json:"jobId"`
@@ -74,14 +91,16 @@ type MatchResult struct {
 }
 
 type Profile struct {
-	ID         pgtype.UUID      `json:"id"`
-	Name       string           `json:"name"`
-	Document   []byte           `json:"document"`
-	ExtraNotes *string          `json:"extraNotes"`
-	Embedding  *pgvector.Vector `json:"embedding"`
-	EmbedModel *string          `json:"embedModel"`
-	UpdatedAt  pgtype.Timestamp `json:"updatedAt"`
-	CreatedAt  pgtype.Timestamp `json:"createdAt"`
+	ID             pgtype.UUID      `json:"id"`
+	Name           string           `json:"name"`
+	Document       []byte           `json:"document"`
+	ExtraNotes     *string          `json:"extraNotes"`
+	Embedding      *pgvector.Vector `json:"embedding"`
+	EmbedModel     *string          `json:"embedModel"`
+	UpdatedAt      pgtype.Timestamp `json:"updatedAt"`
+	CreatedAt      pgtype.Timestamp `json:"createdAt"`
+	RendercvConfig []byte           `json:"rendercvConfig"`
+	RendercvYaml   *string          `json:"rendercvYaml"`
 }
 
 type SavedSearch struct {

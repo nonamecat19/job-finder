@@ -13,19 +13,27 @@ import (
 )
 
 const createProfile = `-- name: CreateProfile :one
-INSERT INTO "Profile" ("name", "document", "extraNotes")
-VALUES ($1, $2, $3)
-RETURNING id, name, document, "extraNotes", embedding, "embedModel", "updatedAt", "createdAt"
+INSERT INTO "Profile" ("name", "document", "extraNotes", "rendercvConfig", "rendercvYaml")
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, document, "extraNotes", embedding, "embedModel", "updatedAt", "createdAt", "rendercvConfig", "rendercvYaml"
 `
 
 type CreateProfileParams struct {
-	Name       string  `json:"name"`
-	Document   []byte  `json:"document"`
-	ExtraNotes *string `json:"extraNotes"`
+	Name           string  `json:"name"`
+	Document       []byte  `json:"document"`
+	ExtraNotes     *string `json:"extraNotes"`
+	RendercvConfig []byte  `json:"rendercvConfig"`
+	RendercvYaml   *string `json:"rendercvYaml"`
 }
 
 func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (Profile, error) {
-	row := q.db.QueryRow(ctx, createProfile, arg.Name, arg.Document, arg.ExtraNotes)
+	row := q.db.QueryRow(ctx, createProfile,
+		arg.Name,
+		arg.Document,
+		arg.ExtraNotes,
+		arg.RendercvConfig,
+		arg.RendercvYaml,
+	)
 	var i Profile
 	err := row.Scan(
 		&i.ID,
@@ -36,6 +44,8 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (P
 		&i.EmbedModel,
 		&i.UpdatedAt,
 		&i.CreatedAt,
+		&i.RendercvConfig,
+		&i.RendercvYaml,
 	)
 	return i, err
 }
@@ -50,7 +60,7 @@ func (q *Queries) DeleteProfile(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getDefaultProfile = `-- name: GetDefaultProfile :one
-SELECT id, name, document, "extraNotes", embedding, "embedModel", "updatedAt", "createdAt" FROM "Profile" ORDER BY "updatedAt" DESC LIMIT 1
+SELECT id, name, document, "extraNotes", embedding, "embedModel", "updatedAt", "createdAt", "rendercvConfig", "rendercvYaml" FROM "Profile" ORDER BY "updatedAt" DESC LIMIT 1
 `
 
 func (q *Queries) GetDefaultProfile(ctx context.Context) (Profile, error) {
@@ -65,12 +75,14 @@ func (q *Queries) GetDefaultProfile(ctx context.Context) (Profile, error) {
 		&i.EmbedModel,
 		&i.UpdatedAt,
 		&i.CreatedAt,
+		&i.RendercvConfig,
+		&i.RendercvYaml,
 	)
 	return i, err
 }
 
 const getProfile = `-- name: GetProfile :one
-SELECT id, name, document, "extraNotes", embedding, "embedModel", "updatedAt", "createdAt" FROM "Profile" WHERE "id" = $1
+SELECT id, name, document, "extraNotes", embedding, "embedModel", "updatedAt", "createdAt", "rendercvConfig", "rendercvYaml" FROM "Profile" WHERE "id" = $1
 `
 
 func (q *Queries) GetProfile(ctx context.Context, id pgtype.UUID) (Profile, error) {
@@ -85,12 +97,30 @@ func (q *Queries) GetProfile(ctx context.Context, id pgtype.UUID) (Profile, erro
 		&i.EmbedModel,
 		&i.UpdatedAt,
 		&i.CreatedAt,
+		&i.RendercvConfig,
+		&i.RendercvYaml,
 	)
 	return i, err
 }
 
+const getProfileConfig = `-- name: GetProfileConfig :one
+SELECT "rendercvConfig", "rendercvYaml" FROM "Profile" WHERE "id" = $1
+`
+
+type GetProfileConfigRow struct {
+	RendercvConfig []byte  `json:"rendercvConfig"`
+	RendercvYaml   *string `json:"rendercvYaml"`
+}
+
+func (q *Queries) GetProfileConfig(ctx context.Context, id pgtype.UUID) (GetProfileConfigRow, error) {
+	row := q.db.QueryRow(ctx, getProfileConfig, id)
+	var i GetProfileConfigRow
+	err := row.Scan(&i.RendercvConfig, &i.RendercvYaml)
+	return i, err
+}
+
 const listProfiles = `-- name: ListProfiles :many
-SELECT id, name, document, "extraNotes", embedding, "embedModel", "updatedAt", "createdAt" FROM "Profile" ORDER BY "updatedAt" DESC
+SELECT id, name, document, "extraNotes", embedding, "embedModel", "updatedAt", "createdAt", "rendercvConfig", "rendercvYaml" FROM "Profile" ORDER BY "updatedAt" DESC
 `
 
 func (q *Queries) ListProfiles(ctx context.Context) ([]Profile, error) {
@@ -111,6 +141,8 @@ func (q *Queries) ListProfiles(ctx context.Context) ([]Profile, error) {
 			&i.EmbedModel,
 			&i.UpdatedAt,
 			&i.CreatedAt,
+			&i.RendercvConfig,
+			&i.RendercvYaml,
 		); err != nil {
 			return nil, err
 		}
@@ -120,6 +152,17 @@ func (q *Queries) ListProfiles(ctx context.Context) ([]Profile, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const profileHasConfig = `-- name: ProfileHasConfig :one
+SELECT ("rendercvConfig" IS NOT NULL) AS has FROM "Profile" WHERE "id" = $1
+`
+
+func (q *Queries) ProfileHasConfig(ctx context.Context, id pgtype.UUID) (interface{}, error) {
+	row := q.db.QueryRow(ctx, profileHasConfig, id)
+	var has interface{}
+	err := row.Scan(&has)
+	return has, err
 }
 
 const profileHasEmbedding = `-- name: ProfileHasEmbedding :one
@@ -153,18 +196,28 @@ const updateProfile = `-- name: UpdateProfile :exec
 UPDATE "Profile" SET
   "name" = COALESCE($1, "name"),
   "document" = COALESCE($2, "document"),
+  "rendercvConfig" = COALESCE($3, "rendercvConfig"),
+  "rendercvYaml" = COALESCE($4, "rendercvYaml"),
   "updatedAt" = now()
-WHERE "id" = $3
+WHERE "id" = $5
 `
 
 type UpdateProfileParams struct {
-	Name     *string     `json:"name"`
-	Document []byte      `json:"document"`
-	ID       pgtype.UUID `json:"id"`
+	Name           *string     `json:"name"`
+	Document       []byte      `json:"document"`
+	RendercvConfig []byte      `json:"rendercvConfig"`
+	RendercvYaml   *string     `json:"rendercvYaml"`
+	ID             pgtype.UUID `json:"id"`
 }
 
 func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) error {
-	_, err := q.db.Exec(ctx, updateProfile, arg.Name, arg.Document, arg.ID)
+	_, err := q.db.Exec(ctx, updateProfile,
+		arg.Name,
+		arg.Document,
+		arg.RendercvConfig,
+		arg.RendercvYaml,
+		arg.ID,
+	)
 	return err
 }
 

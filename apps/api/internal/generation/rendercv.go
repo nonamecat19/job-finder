@@ -112,7 +112,7 @@ var protectedSections = map[string]bool{
 	"skills":    true,
 }
 
-func cvSections(master RendercvMaster) map[string]any {
+func CvSections(master RendercvMaster) map[string]any {
 	cv, _ := master["cv"].(map[string]any)
 	if cv == nil {
 		return nil
@@ -121,7 +121,7 @@ func cvSections(master RendercvMaster) map[string]any {
 	return sections
 }
 
-func asSliceOfMaps(v any) []map[string]any {
+func AsSliceOfMaps(v any) []map[string]any {
 	raw, _ := v.([]any)
 	out := make([]map[string]any, 0, len(raw))
 	for _, r := range raw {
@@ -132,7 +132,7 @@ func asSliceOfMaps(v any) []map[string]any {
 	return out
 }
 
-func stringField(m map[string]any, key string) string {
+func StringField(m map[string]any, key string) string {
 	if v, ok := m[key]; ok {
 		if s, ok := v.(string); ok {
 			return s
@@ -141,7 +141,7 @@ func stringField(m map[string]any, key string) string {
 	return ""
 }
 
-func stringSliceField(m map[string]any, key string) []string {
+func StringSliceField(m map[string]any, key string) []string {
 	raw, _ := m[key].([]any)
 	out := make([]string, 0, len(raw))
 	for _, r := range raw {
@@ -225,9 +225,9 @@ func analyzeVacancy(ctx context.Context, lc llm.Provider, vacancy string, hints 
 // analysis from Step 1 and the full master resume content, and asks the LLM
 // to select, reorder, rephrase and optionally drop content.
 func buildSelectPrompt(master RendercvMaster, analysis VacancyAnalysis, level GroundingLevel, prevViolations []string) string {
-	sections := cvSections(master)
-	skills := asSliceOfMaps(sections["skills"])
-	experience := asSliceOfMaps(sections["experience"])
+	sections := CvSections(master)
+	skills := AsSliceOfMaps(sections["skills"])
+	experience := AsSliceOfMaps(sections["experience"])
 	sectionKeys := sectionKeys(sections)
 
 	// Format vacancy analysis
@@ -253,21 +253,21 @@ func buildSelectPrompt(master RendercvMaster, analysis VacancyAnalysis, level Gr
 	// Format skill groups
 	var skillLines []string
 	for i, s := range skills {
-		skillLines = append(skillLines, fmt.Sprintf("  [%d] %s: %s", i, stringField(s, "label"), stringField(s, "details")))
+		skillLines = append(skillLines, fmt.Sprintf("  [%d] %s: %s", i, StringField(s, "label"), StringField(s, "details")))
 	}
 
 	// Format experience
 	var expLines []string
 	for _, e := range experience {
-		line := "  - company: " + stringField(e, "company")
-		if pos := stringField(e, "position"); pos != "" {
+		line := "  - company: " + StringField(e, "company")
+		if pos := StringField(e, "position"); pos != "" {
 			line += " (" + pos + ")"
 		}
-		if loc := stringField(e, "location"); loc != "" {
+		if loc := StringField(e, "location"); loc != "" {
 			line += " | " + loc
 		}
 		expLines = append(expLines, line)
-		for _, h := range stringSliceField(e, "highlights") {
+		for _, h := range StringSliceField(e, "highlights") {
 			expLines = append(expLines, "      • "+h)
 		}
 	}
@@ -355,9 +355,9 @@ func tokens(details string) []string {
 // masterSkillTokens is the union of every skill token in the master (all groups).
 func masterSkillTokens(master RendercvMaster) map[string]bool {
 	set := map[string]bool{}
-	sections := cvSections(master)
-	for _, g := range asSliceOfMaps(sections["skills"]) {
-		for _, t := range tokens(stringField(g, "details")) {
+	sections := CvSections(master)
+	for _, g := range AsSliceOfMaps(sections["skills"]) {
+		for _, t := range tokens(StringField(g, "details")) {
 			set[t] = true
 		}
 	}
@@ -375,31 +375,31 @@ func deepCloneYAML(master RendercvMaster) (RendercvMaster, error) {
 	if err := yaml.Unmarshal(b, &out); err != nil {
 		return nil, err
 	}
-	return normalizeYAMLMap(out).(map[string]any), nil
+	return NormalizeYAMLMap(out).(map[string]any), nil
 }
 
-// normalizeYAMLMap recursively converts map[any]any / map[string]any produced
+// NormalizeYAMLMap recursively converts map[any]any / map[string]any produced
 // by yaml.v3 (which can yield either depending on key types) into
 // map[string]any so later type assertions (`.(map[string]any)`) succeed
 // uniformly, matching plain-JSON-object semantics used everywhere else.
-func normalizeYAMLMap(v any) any {
+func NormalizeYAMLMap(v any) any {
 	switch t := v.(type) {
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[k] = normalizeYAMLMap(val)
+			out[k] = NormalizeYAMLMap(val)
 		}
 		return out
 	case map[any]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[toStringKey(k)] = normalizeYAMLMap(val)
+			out[toStringKey(k)] = NormalizeYAMLMap(val)
 		}
 		return out
 	case []any:
 		out := make([]any, len(t))
 		for i, val := range t {
-			out[i] = normalizeYAMLMap(val)
+			out[i] = NormalizeYAMLMap(val)
 		}
 		return out
 	default:
@@ -432,7 +432,7 @@ func mergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 	if err != nil {
 		return nil, err
 	}
-	sections := cvSections(merged)
+	sections := CvSections(merged)
 	if sections == nil {
 		return merged, nil
 	}
@@ -441,7 +441,7 @@ func mergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 	sections["summary"] = []any{strings.TrimSpace(payload.Summary)}
 
 	// 2. Replace skill details (preserve group order, only change content)
-	skills := asSliceOfMaps(sections["skills"])
+	skills := AsSliceOfMaps(sections["skills"])
 	for _, s := range payload.Skills {
 		if s.Index >= 0 && s.Index < len(skills) {
 			skills[s.Index]["details"] = strings.TrimSpace(s.Details)
@@ -449,10 +449,10 @@ func mergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 	}
 
 	// 3. Apply experience changes: highlights, drops, reorder
-	experience := asSliceOfMaps(sections["experience"])
+	experience := AsSliceOfMaps(sections["experience"])
 	byCompany := map[string]map[string]any{}
 	for _, e := range experience {
-		byCompany[norm(stringField(e, "company"))] = e
+		byCompany[norm(StringField(e, "company"))] = e
 	}
 
 	// Apply highlight replacements and mark drops
@@ -494,7 +494,7 @@ func mergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 		}
 		// Append remaining entries not in ExperienceOrder
 		for _, e := range kept {
-			if !seen[norm(stringField(e, "company"))] {
+			if !seen[norm(StringField(e, "company"))] {
 				ordered = append(ordered, e)
 			}
 		}

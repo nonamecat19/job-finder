@@ -161,10 +161,23 @@ export interface GeneratedDocumentDto {
   createdAt: string;
 }
 
+export interface RendercvSummaryExperience {
+  company: string;
+  highlightCount: number;
+}
+
+export interface RendercvSummary {
+  name: string;
+  headline: string;
+  skillGroups: string[];
+  experience: RendercvSummaryExperience[];
+}
+
 export interface ProfileDto {
   id: string;
   name: string;
-  document: JsonResume;
+  hasConfig: boolean;
+  rendercvConfig?: RendercvSummary | null;
   extraNotes: string | null;
   updatedAt: string;
 }
@@ -238,4 +251,32 @@ export interface StatsDto {
 export interface GenerateRequestDto {
   type: DocumentType;
   profileId?: string;
+}
+
+export const ACTIVITY_OPS = ['ingest', 'match', 'generate', 'enrich'] as const;
+export type ActivityOp = (typeof ACTIVITY_OPS)[number];
+
+export const ACTIVITY_STATES = ['queued', 'running', 'succeeded', 'failed'] as const;
+export type ActivityState = (typeof ACTIVITY_STATES)[number];
+
+export interface ActivityRunDto {
+  id: string;
+  op: ActivityOp;
+  state: ActivityState;
+  label: string;
+  step: string | null;
+  jobId: string | null;
+  sourceKey: string | null;
+  refId: string | null;
+  error: string | null;
+  meta: Record<string, unknown>;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  elapsedMs: number | null;
+}
+
+export interface ActivityListResponse {
+  active: ActivityRunDto[];
+  recent: ActivityRunDto[];
 }

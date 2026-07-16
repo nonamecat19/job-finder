@@ -11,6 +11,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
@@ -189,7 +190,19 @@ func (s *Service) RunSearch(ctx context.Context, searchID string) ([]string, err
 	}
 
 	for _, key := range keys {
-		payload, err := json.Marshal(queue.IngestPayload{SearchID: &searchID, SourceKey: key})
+		label := key + " scrape"
+		if search.Name != "" {
+			label = search.Name + " — " + key
+		}
+		rec := activity.New(ctx, s.q, "ingest", label, nil, &key, "")
+
+		var activityID *string
+		if rec != nil {
+			id := dbutil.UUIDString(rec.ID())
+			activityID = &id
+		}
+
+		payload, err := json.Marshal(queue.IngestPayload{SearchID: &searchID, SourceKey: key, ActivityID: activityID})
 		if err != nil {
 			return nil, err
 		}
@@ -222,7 +235,14 @@ func (s *Service) RunSource(ctx context.Context, sourceKey string) error {
 		return fmt.Errorf("source '%s' is disabled", sourceKey)
 	}
 
-	payload, err := json.Marshal(queue.IngestPayload{SourceKey: sourceKey})
+	rec := activity.New(ctx, s.q, "ingest", sourceKey+" scrape", nil, &sourceKey, "")
+	var activityID *string
+	if rec != nil {
+		id := dbutil.UUIDString(rec.ID())
+		activityID = &id
+	}
+
+	payload, err := json.Marshal(queue.IngestPayload{SourceKey: sourceKey, ActivityID: activityID})
 	if err != nil {
 		return err
 	}
@@ -261,7 +281,18 @@ func (s *Service) RunSubscription(ctx context.Context, subscriptionID string) er
 		return fmt.Errorf("source '%s' is disabled", sub.SourceKey)
 	}
 
-	payload, err := json.Marshal(queue.IngestPayload{SubscriptionID: &subscriptionID, SourceKey: sub.SourceKey})
+	label := sub.SourceKey + " scrape"
+	if sub.Name != nil && *sub.Name != "" {
+		label = *sub.Name + " — " + sub.SourceKey
+	}
+	rec := activity.New(ctx, s.q, "ingest", label, nil, &sub.SourceKey, "")
+	var activityID *string
+	if rec != nil {
+		id := dbutil.UUIDString(rec.ID())
+		activityID = &id
+	}
+
+	payload, err := json.Marshal(queue.IngestPayload{SubscriptionID: &subscriptionID, SourceKey: sub.SourceKey, ActivityID: activityID})
 	if err != nil {
 		return err
 	}

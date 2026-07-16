@@ -1,12 +1,11 @@
-// Package profile ports modules/profile/*: CRUD, PDF import -> LLM
-// structured draft, and the profile-to-text serialization used by matching
-// and generation for embeddings and prompts.
 package profile
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/pgvector/pgvector-go"
@@ -14,20 +13,22 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/llm"
 )
 
 type Service struct {
-	q          *sqlcgen.Queries
-	llmc       llm.Provider
-	embedModel string
+	q           *sqlcgen.Queries
+	llmc        llm.Provider
+	embedModel  string
+	rendercvBin string
 }
 
-func NewService(q *sqlcgen.Queries, llmc llm.Provider, embedModel string) *Service {
+func NewService(q *sqlcgen.Queries, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
 	if embedModel == "" {
 		embedModel = "nomic-embed-text"
 	}
-	return &Service{q: q, llmc: llmc, embedModel: embedModel}
+	return &Service{q: q, llmc: llmc, embedModel: embedModel, rendercvBin: rendercvBin}
 }
 
 func (s *Service) List(ctx context.Context) ([]dto.ProfileDto, error) {
@@ -35,9 +36,9 @@ func (s *Service) List(ctx context.Context) ([]dto.ProfileDto, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]dto.ProfileDto, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, toDto(r))
+	out := make([]dto.ProfileDto, len(rows))
+	for i, r := range rows {
+		out[i] = s.toDto(r)
 	}
 	return out, nil
 }
@@ -59,11 +60,9 @@ func (s *Service) GetDto(ctx context.Context, id string) (dto.ProfileDto, error)
 	if err != nil {
 		return dto.ProfileDto{}, err
 	}
-	return toDto(row), nil
+	return s.toDto(row), nil
 }
 
-// GetDefault returns the most-recently-updated profile — the single-user
-// default for matching/generation, matching ProfileService.getDefault.
 func (s *Service) GetDefault(ctx context.Context) (sqlcgen.Profile, error) {
 	row, err := s.q.GetDefaultProfile(ctx)
 	if err != nil {
@@ -72,30 +71,42 @@ func (s *Service) GetDefault(ctx context.Context) (sqlcgen.Profile, error) {
 	return row, nil
 }
 
-func (s *Service) Create(ctx context.Context, name string, document dto.JsonResume, extraNotes *string) (dto.ProfileDto, error) {
+func (s *Service) Create(ctx context.Context, name string, rendercvYaml string, extraNotes *string) (dto.ProfileDto, error) {
 	if name == "" {
 		return dto.ProfileDto{}, fmt.Errorf("name is required")
 	}
-	doc, err := json.Marshal(document)
+	if rendercvYaml == "" {
+		return dto.ProfileDto{}, fmt.Errorf("rendercv yaml is required")
+	}
+	master, err := generation.ParseRendercv(rendercvYaml)
 	if err != nil {
 		return dto.ProfileDto{}, err
 	}
-	row, err := s.q.CreateProfile(ctx, sqlcgen.CreateProfileParams{Name: name, Document: doc, ExtraNotes: extraNotes})
+	configJSON, err := json.Marshal(master)
+	if err != nil {
+		return dto.ProfileDto{}, err
+	}
+	row, err := s.q.CreateProfile(ctx, sqlcgen.CreateProfileParams{
+		Name:           name,
+		RendercvYaml:   &rendercvYaml,
+		RendercvConfig: configJSON,
+		ExtraNotes:     extraNotes,
+	})
 	if err != nil {
 		return dto.ProfileDto{}, err
 	}
 	id := dbutil.UUIDString(row.ID)
 	if err := s.RefreshEmbedding(ctx, id); err != nil {
-		// best-effort, matches the TS .catch(warn) — profile still gets created
 		_ = err
 	}
-	return s.GetDto(ctx, id)
+	row, _ = s.Get(ctx, id)
+	return s.toDto(row), nil
 }
 
 type UpdateInput struct {
-	Name       *string
-	Document   *dto.JsonResume
-	ExtraNotes **string // outer pointer = "field present in request"; inner = new value (nil clears)
+	Name         *string
+	RendercvYaml *string
+	ExtraNotes   **string
 }
 
 func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.ProfileDto, error) {
@@ -111,12 +122,17 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Pr
 	if in.Name != nil {
 		params.Name = in.Name
 	}
-	if in.Document != nil {
-		doc, err := json.Marshal(*in.Document)
+	if in.RendercvYaml != nil {
+		master, err := generation.ParseRendercv(*in.RendercvYaml)
+		if err != nil {
+			return dto.ProfileDto{}, fmt.Errorf("invalid rendercv yaml: %w", err)
+		}
+		configJSON, err := json.Marshal(master)
 		if err != nil {
 			return dto.ProfileDto{}, err
 		}
-		params.Document = doc
+		params.RendercvYaml = in.RendercvYaml
+		params.RendercvConfig = configJSON
 	}
 	if err := s.q.UpdateProfile(ctx, params); err != nil {
 		return dto.ProfileDto{}, err
@@ -126,8 +142,90 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Pr
 			return dto.ProfileDto{}, err
 		}
 	}
-	_ = s.RefreshEmbedding(ctx, id) // best-effort
-	return s.GetDto(ctx, id)
+	if in.RendercvYaml != nil {
+		_ = s.RefreshEmbedding(ctx, id)
+	}
+	row, _ := s.Get(ctx, id)
+	return s.toDto(row), nil
+}
+
+func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileDto, error) {
+	master, err := generation.ParseRendercv(yamlText)
+	if err != nil {
+		return dto.ProfileDto{}, err
+	}
+
+	// Render smoke test in a temp directory
+	tempDir, err := os.MkdirTemp("", "rendercv-smoke-*")
+	if err != nil {
+		return dto.ProfileDto{}, fmt.Errorf("failed to create temp dir for smoke test: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	smokeRenderer := generation.NewRenderCvRenderer(tempDir, s.rendercvBin)
+	_, _, err = smokeRenderer.Render(ctx, master, "smoke_test")
+	if err != nil {
+		return dto.ProfileDto{}, fmt.Errorf("smoke test render failed: %w", err)
+	}
+
+	// Parsing and rendering succeeded!
+	// Get the name from cv block
+	cv, _ := master["cv"].(map[string]any)
+	name := "Default Profile"
+	if cv != nil {
+		if n, ok := cv["name"].(string); ok && strings.TrimSpace(n) != "" {
+			name = n
+		}
+	}
+
+	configJSON, err := json.Marshal(master)
+	if err != nil {
+		return dto.ProfileDto{}, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Check if a default profile exists to update
+	var profileRow sqlcgen.Profile
+	defaultProf, err := s.GetDefault(ctx)
+	if err == nil {
+		// Update existing profile
+		params := sqlcgen.UpdateProfileParams{
+			ID:             defaultProf.ID,
+			Name:           &name,
+			RendercvYaml:   &yamlText,
+			RendercvConfig: configJSON,
+		}
+		if err := s.q.UpdateProfile(ctx, params); err != nil {
+			return dto.ProfileDto{}, fmt.Errorf("failed to update profile: %w", err)
+		}
+		profileRow, err = s.Get(ctx, dbutil.UUIDString(defaultProf.ID))
+		if err != nil {
+			return dto.ProfileDto{}, err
+		}
+	} else {
+		// Create a new profile
+		profileRow, err = s.q.CreateProfile(ctx, sqlcgen.CreateProfileParams{
+			Name:           name,
+			RendercvYaml:   &yamlText,
+			RendercvConfig: configJSON,
+		})
+		if err != nil {
+			return dto.ProfileDto{}, fmt.Errorf("failed to create profile: %w", err)
+		}
+	}
+
+	// Refresh embedding
+	id := dbutil.UUIDString(profileRow.ID)
+	if err := s.RefreshEmbedding(ctx, id); err != nil {
+		slog.Error("failed to refresh embedding after config upload", "error", err)
+	}
+
+	// Get fresh row
+	profileRow, err = s.Get(ctx, id)
+	if err != nil {
+		return dto.ProfileDto{}, err
+	}
+
+	return s.toDto(profileRow), nil
 }
 
 func (s *Service) Remove(ctx context.Context, id string) error {
@@ -138,7 +236,6 @@ func (s *Service) Remove(ctx context.Context, id string) error {
 	return s.q.DeleteProfile(ctx, uid)
 }
 
-// HasEmbedding reports whether the profile already has a stored embedding.
 func (s *Service) HasEmbedding(ctx context.Context, id string) (bool, error) {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
@@ -152,8 +249,19 @@ func (s *Service) HasEmbedding(ctx context.Context, id string) (bool, error) {
 	return b, nil
 }
 
-// Similarity computes 1 - cosine_distance(profile.embedding, jobEmbedding)
-// via pgvector's <=> operator, matching matching.service.ts's cosineDistance usage.
+func (s *Service) HasConfig(ctx context.Context, id string) (bool, error) {
+	uid, err := dbutil.ParseUUID(id)
+	if err != nil {
+		return false, err
+	}
+	has, err := s.q.ProfileHasConfig(ctx, uid)
+	if err != nil {
+		return false, err
+	}
+	b, _ := has.(bool)
+	return b, nil
+}
+
 func (s *Service) Similarity(ctx context.Context, id string, jobEmbedding []float32) (float64, error) {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
@@ -163,16 +271,19 @@ func (s *Service) Similarity(ctx context.Context, id string, jobEmbedding []floa
 	return s.q.ProfileSimilarity(ctx, sqlcgen.ProfileSimilarityParams{ID: uid, Embedding: &vec})
 }
 
-// RefreshEmbedding serializes the profile to text and stores its embedding —
-// matches ProfileService.refreshEmbedding.
 func (s *Service) RefreshEmbedding(ctx context.Context, id string) error {
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	var doc dto.JsonResume
-	_ = dbutil.UnmarshalJSONB(row.Document, &doc)
-	text := ProfileToText(doc, row.ExtraNotes)
+	if row.RendercvConfig == nil {
+		return fmt.Errorf("profile %s has no rendercv config", id)
+	}
+	var master generation.RendercvMaster
+	if err := json.Unmarshal(row.RendercvConfig, &master); err != nil {
+		return err
+	}
+	text := generation.RendercvToText(master)
 	embedding, err := s.llmc.Embed(ctx, text)
 	if err != nil {
 		return err
@@ -183,65 +294,53 @@ func (s *Service) RefreshEmbedding(ctx context.Context, id string) error {
 	return s.q.UpdateProfileEmbedding(ctx, sqlcgen.UpdateProfileEmbeddingParams{ID: uid, Embedding: &vec, EmbedModel: &model})
 }
 
-// ProfileToText mirrors ProfileService.profileToText.
-func ProfileToText(doc dto.JsonResume, extraNotes *string) string {
-	var parts []string
-	if doc.Basics != nil {
-		if doc.Basics.Label != nil && *doc.Basics.Label != "" {
-			parts = append(parts, *doc.Basics.Label)
-		}
-		if doc.Basics.Summary != nil && *doc.Basics.Summary != "" {
-			parts = append(parts, *doc.Basics.Summary)
-		}
+func (s *Service) toDto(p sqlcgen.Profile) dto.ProfileDto {
+	out := dto.ProfileDto{
+		ID:         dbutil.UUIDString(p.ID),
+		Name:       p.Name,
+		ExtraNotes: p.ExtraNotes,
+		UpdatedAt:  dbutil.Timestamp(p.UpdatedAt),
 	}
-	for _, w := range doc.Work {
-		fields := []string{}
-		if w.Position != nil {
-			fields = append(fields, *w.Position)
-		}
-		fields = append(fields, "at", w.Name, "—")
-		if w.Summary != nil {
-			fields = append(fields, *w.Summary)
-		}
-		fields = append(fields, w.Highlights...)
-		parts = append(parts, joinNonEmpty(fields))
-	}
-	for _, sk := range doc.Skills {
-		fields := append([]string{sk.Name}, sk.Keywords...)
-		parts = append(parts, strings.Join(fields, " "))
-	}
-	for _, p := range doc.Projects {
-		fields := []string{p.Name}
-		if p.Description != nil {
-			fields = append(fields, *p.Description)
-		}
-		fields = append(fields, p.Keywords...)
-		parts = append(parts, joinNonEmpty(fields))
-	}
-	if extraNotes != nil && *extraNotes != "" {
-		parts = append(parts, *extraNotes)
-	}
-	return strings.Join(parts, "\n")
-}
+	if p.RendercvConfig != nil {
+		var master generation.RendercvMaster
+		if err := json.Unmarshal(p.RendercvConfig, &master); err == nil {
+			out.HasConfig = true
 
-func joinNonEmpty(fields []string) string {
-	out := make([]string, 0, len(fields))
-	for _, f := range fields {
-		if f != "" {
-			out = append(out, f)
+			summary := &dto.RendercvSummary{}
+
+			cv, _ := master["cv"].(map[string]any)
+			if cv != nil {
+				if n, ok := cv["name"].(string); ok {
+					summary.Name = n
+				}
+				if h, ok := cv["headline"].(string); ok {
+					summary.Headline = h
+				}
+			}
+
+			sections := generation.CvSections(master)
+			if sections != nil {
+				if skillsRaw, ok := sections["skills"]; ok {
+					for _, g := range generation.AsSliceOfMaps(skillsRaw) {
+						if label := generation.StringField(g, "label"); label != "" {
+							summary.SkillGroups = append(summary.SkillGroups, label)
+						}
+					}
+				}
+				if expRaw, ok := sections["experience"]; ok {
+					for _, e := range generation.AsSliceOfMaps(expRaw) {
+						company := generation.StringField(e, "company")
+						highlights := generation.StringSliceField(e, "highlights")
+						summary.Experience = append(summary.Experience, dto.RendercvSummaryExperience{
+							Company:        company,
+							HighlightCount: len(highlights),
+						})
+					}
+				}
+			}
+
+			out.RendercvConfig = summary
 		}
 	}
-	return strings.Join(out, " ")
-}
-
-func toDto(r sqlcgen.Profile) dto.ProfileDto {
-	var doc dto.JsonResume
-	_ = dbutil.UnmarshalJSONB(r.Document, &doc)
-	return dto.ProfileDto{
-		ID:         dbutil.UUIDString(r.ID),
-		Name:       r.Name,
-		Document:   doc,
-		ExtraNotes: r.ExtraNotes,
-		UpdatedAt:  dbutil.Timestamp(r.UpdatedAt),
-	}
+	return out
 }

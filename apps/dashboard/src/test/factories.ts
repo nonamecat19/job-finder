@@ -74,7 +74,8 @@ export function mockProfile(overrides: Partial<ProfileDto> = {}): ProfileDto {
   return {
     id: 'profile-1',
     name: 'My profile',
-    document: { basics: { name: 'John Doe' }, skills: [], work: [] },
+    hasConfig: true,
+    rendercvConfig: { name: 'John Doe', headline: 'Software Engineer', skillGroups: [], experience: [] },
     extraNotes: null,
     updatedAt: '2025-01-15T12:00:00Z',
     ...overrides,

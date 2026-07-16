@@ -1,11 +1,11 @@
 import type {
+  ActivityListResponse,
   ApplicationDto,
   DocumentType,
   GeneratedDocumentDto,
   JobDto,
   JobListResponse,
   JobSourceDto,
-  JsonResume,
   ProfileDto,
   SavedSearchDto,
   SearchQuery,
@@ -66,19 +66,17 @@ export const api = {
   },
   profiles: {
     list: () => request<ProfileDto[]>('/profiles'),
-    create: (body: { name: string; document: JsonResume; extraNotes?: string }) =>
+    create: (body: { name: string; rendercvYaml: string; extraNotes?: string }) =>
       request<ProfileDto>('/profiles', { method: 'POST', body: JSON.stringify(body) }),
-    update: (id: string, body: { name?: string; document?: JsonResume; extraNotes?: string | null }) =>
+    update: (id: string, body: { name?: string; rendercvYaml?: string; extraNotes?: string | null }) =>
       request<ProfileDto>(`/profiles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
     remove: (id: string) => request(`/profiles/${id}`, { method: 'DELETE' }),
-    import: (file: File) => {
+    uploadConfig: (file: File) => {
       const fd = new FormData();
       fd.append('file', file);
-      return request<{ draft: JsonResume; textLength: number }>('/profiles/import', {
-        method: 'POST',
-        body: fd,
-      });
+      return request<ProfileDto>('/profiles/config', { method: 'POST', body: fd });
     },
+    configStatus: () => request<{ hasConfig: boolean }>('/profiles/config/status'),
   },
   sources: {
     list: () => request<JobSourceDto[]>('/sources'),
@@ -117,5 +115,9 @@ export const api = {
       request<{ deleted: boolean }>(`/subscriptions/${id}`, { method: 'DELETE' }),
     run: (id: string) =>
       request<{ queued: boolean }>(`/subscriptions/${id}/run`, { method: 'POST' }),
+  },
+  activity: {
+    list: (limit?: number) =>
+      request<ActivityListResponse>(`/activity${limit ? `?limit=${limit}` : ''}`),
   },
 };

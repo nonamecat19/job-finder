@@ -58,7 +58,7 @@ func loadSampleMaster(t *testing.T) RendercvMaster {
 	if err := yaml.Unmarshal([]byte(sampleMasterYAML), &m); err != nil {
 		t.Fatalf("unmarshal sample master: %v", err)
 	}
-	return RendercvMaster(normalizeYAMLMap(m).(map[string]any))
+	return RendercvMaster(NormalizeYAMLMap(m).(map[string]any))
 }
 
 // ---------------------------------------------------------------------------
@@ -86,31 +86,31 @@ func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 		t.Fatalf("expected design.theme preserved, got %v", design["theme"])
 	}
 
-	sections := cvSections(merged)
-	summary := stringSliceField(sections, "summary")
+	sections := CvSections(merged)
+	summary := StringSliceField(sections, "summary")
 	if len(summary) != 1 || summary[0] != "New tailored summary." {
 		t.Fatalf("summary not replaced correctly: %v", summary)
 	}
 
-	skills := asSliceOfMaps(sections["skills"])
-	if stringField(skills[0], "details") != "Go, Kubernetes" {
+	skills := AsSliceOfMaps(sections["skills"])
+	if StringField(skills[0], "details") != "Go, Kubernetes" {
 		t.Fatalf("skill[0].details not replaced: %v", skills[0])
 	}
-	if stringField(skills[1], "label") != "Frontend" || stringField(skills[1], "details") != "React, TypeScript" {
+	if StringField(skills[1], "label") != "Frontend" || StringField(skills[1], "details") != "React, TypeScript" {
 		t.Fatalf("skill[1] should be untouched: %v", skills[1])
 	}
 
-	exp := asSliceOfMaps(sections["experience"])
-	if stringField(exp[0], "start_date") != "2020-01" || stringField(exp[0], "end_date") != "present" {
+	exp := AsSliceOfMaps(sections["experience"])
+	if StringField(exp[0], "start_date") != "2020-01" || StringField(exp[0], "end_date") != "present" {
 		t.Fatalf("experience dates must be preserved verbatim: %v", exp[0])
 	}
-	highlights := stringSliceField(exp[0], "highlights")
+	highlights := StringSliceField(exp[0], "highlights")
 	if len(highlights) != 2 || highlights[0] != "Shipped feature X" {
 		t.Fatalf("highlights not replaced correctly: %v", highlights)
 	}
 
-	origSections := cvSections(master)
-	origSummary := stringSliceField(origSections, "summary")
+	origSections := CvSections(master)
+	origSummary := StringSliceField(origSections, "summary")
 	if origSummary[0] != "Old summary line." {
 		t.Fatalf("mergeTailored must not mutate the master profile, got %v", origSummary)
 	}
@@ -136,16 +136,16 @@ func TestMergeTailored_ReordersExperience(t *testing.T) {
 		t.Fatalf("mergeTailored: %v", err)
 	}
 
-	sections := cvSections(merged)
-	exp := asSliceOfMaps(sections["experience"])
+	sections := CvSections(merged)
+	exp := AsSliceOfMaps(sections["experience"])
 	if len(exp) != 2 {
 		t.Fatalf("expected 2 experience entries, got %d", len(exp))
 	}
-	if stringField(exp[0], "company") != "StartupX" {
-		t.Fatalf("expected StartupX first after reorder, got %s", stringField(exp[0], "company"))
+	if StringField(exp[0], "company") != "StartupX" {
+		t.Fatalf("expected StartupX first after reorder, got %s", StringField(exp[0], "company"))
 	}
-	if stringField(exp[1], "company") != "Acme Corp" {
-		t.Fatalf("expected Acme Corp second after reorder, got %s", stringField(exp[1], "company"))
+	if StringField(exp[1], "company") != "Acme Corp" {
+		t.Fatalf("expected Acme Corp second after reorder, got %s", StringField(exp[1], "company"))
 	}
 }
 
@@ -168,13 +168,13 @@ func TestMergeTailored_DropsExperience(t *testing.T) {
 		t.Fatalf("mergeTailored: %v", err)
 	}
 
-	sections := cvSections(merged)
-	exp := asSliceOfMaps(sections["experience"])
+	sections := CvSections(merged)
+	exp := AsSliceOfMaps(sections["experience"])
 	if len(exp) != 1 {
 		t.Fatalf("expected 1 experience entry after drop, got %d", len(exp))
 	}
-	if stringField(exp[0], "company") != "Acme Corp" {
-		t.Fatalf("expected Acme Corp to remain, got %s", stringField(exp[0], "company"))
+	if StringField(exp[0], "company") != "Acme Corp" {
+		t.Fatalf("expected Acme Corp to remain, got %s", StringField(exp[0], "company"))
 	}
 }
 
@@ -197,7 +197,7 @@ func TestMergeTailored_DropsSections(t *testing.T) {
 		t.Fatalf("mergeTailored: %v", err)
 	}
 
-	sections := cvSections(merged)
+	sections := CvSections(merged)
 	for _, key := range []string{"patents", "invited_talks", "publications", "projects"} {
 		if _, ok := sections[key]; ok {
 			t.Errorf("expected section %q to be dropped", key)
@@ -226,7 +226,7 @@ func TestMergeTailored_ProtectedSectionsNeverDropped(t *testing.T) {
 		t.Fatalf("mergeTailored: %v", err)
 	}
 
-	sections := cvSections(merged)
+	sections := CvSections(merged)
 	for _, key := range []string{"summary", "experience", "education", "skills"} {
 		if _, ok := sections[key]; !ok {
 			t.Errorf("protected section %q was incorrectly dropped", key)
@@ -244,8 +244,8 @@ func TestVerifyRendercvGrounding_RejectsFabricatedCompany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clone: %v", err)
 	}
-	sections := cvSections(merged)
-	exp := asSliceOfMaps(sections["experience"])
+	sections := CvSections(merged)
+	exp := AsSliceOfMaps(sections["experience"])
 	exp[0]["company"] = "Fabricated Co"
 
 	violations := verifyRendercvGrounding(master, merged, GroundingModerate)
@@ -260,8 +260,8 @@ func TestVerifyRendercvGrounding_StrictRejectsUnlistedSkill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clone: %v", err)
 	}
-	sections := cvSections(merged)
-	skills := asSliceOfMaps(sections["skills"])
+	sections := CvSections(merged)
+	skills := AsSliceOfMaps(sections["skills"])
 	skills[0]["details"] = "Go, Rust, Kubernetes"
 
 	violations := verifyRendercvGrounding(master, merged, GroundingStrict)
@@ -281,7 +281,7 @@ func TestVerifyRendercvGrounding_RejectsAddedSection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clone: %v", err)
 	}
-	sections := cvSections(merged)
+	sections := CvSections(merged)
 	sections["custom_section"] = []any{"some content"}
 
 	violations := verifyRendercvGrounding(master, merged, GroundingModerate)
@@ -341,4 +341,21 @@ func containsAll(s string, subs ...string) bool {
 		}
 	}
 	return true
+}
+
+func TestRendercvToText_ExtractsExperienceHighlights(t *testing.T) {
+	master := loadSampleMaster(t)
+	text := RendercvToText(master)
+	expectedTexts := []string{
+		"Jane Doe",
+		"Backend Go, Postgres, Docker",
+		"Frontend React, TypeScript",
+		"Senior Engineer at Acme Corp",
+		"Did a thing",
+		"Junior Dev at StartupX",
+		"Built a prototype",
+	}
+	if !containsAll(text, expectedTexts...) {
+		t.Fatalf("RendercvToText missing expected elements. Got:\n%s", text)
+	}
 }

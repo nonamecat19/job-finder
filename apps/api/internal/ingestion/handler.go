@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
@@ -33,14 +34,26 @@ func NewHandler(q *sqlcgen.Queries, registry *jobsources.Registry, sources *jobs
 	return &Handler{q: q, registry: registry, sources: sources, client: client}
 }
 
-func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
+func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	var payload queue.IngestPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("ingestion: invalid payload: %w", err)
 	}
 
+	var rec *activity.Recorder
+	if payload.ActivityID != nil && *payload.ActivityID != "" {
+		rec = activity.FromID(h.q, *payload.ActivityID)
+	}
+
+	if rec != nil {
+		rec.Start(ctx)
+	}
+
 	source, err := h.sources.GetByKey(ctx, payload.SourceKey)
 	if err != nil {
+		if rec != nil {
+			rec.Fail(ctx, err)
+		}
 		return err
 	}
 
@@ -49,8 +62,26 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		SearchId: payload.SearchID,
 	})
 	if err != nil {
+		if rec != nil {
+			rec.Fail(ctx, err)
+		}
 		return fmt.Errorf("ingestion: insert source run: %w", err)
 	}
+
+	created := 0
+	var jobs []dto.NormalizedJob
+	defer func() {
+		if rec != nil {
+			if err != nil {
+				rec.Fail(ctx, err)
+			} else {
+				rec.Ok(ctx, dbutil.UUIDString(run.ID), map[string]any{
+					"found": len(jobs),
+					"new":   created,
+				})
+			}
+		}
+	}()
 
 	query := dto.SearchQuery{Keywords: ""}
 	if payload.SearchID != nil {
@@ -84,13 +115,20 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	}
 	config := h.sources.DecryptConfig(source.Config)
 
-	jobs, err := adapter.Search(ctx, query, config)
+	if rec != nil {
+		rec.Step(ctx, fmt.Sprintf("scraping %s", payload.SourceKey), nil)
+	}
+
+	jobs, err = adapter.Search(ctx, query, config)
 	if err != nil {
 		h.finishError(ctx, run.ID, source, payload.SourceKey, err)
 		return err
 	}
 
-	created := 0
+	if rec != nil {
+		rec.Step(ctx, fmt.Sprintf("persisting %d found jobs", len(jobs)), nil)
+	}
+
 	for _, j := range jobs {
 		isNew, err := h.persistIfNew(ctx, j)
 		if err != nil {
@@ -163,29 +201,47 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob) (bool, 
 	}
 
 	jobID := dbutil.UUIDString(created.ID)
-	payload, err := json.Marshal(queue.MatchPayload{JobID: jobID})
-	if err != nil {
-		return true, err
-	}
-	// attempts: 2 with exponential backoff, matching matchQueue.add's options.
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload),
-		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
-		return true, fmt.Errorf("ingestion: enqueue match: %w", err)
-	}
+	h.enqueueMatch(ctx, jobID, j)
 
 	if j.SourceKey == "djinni" || j.SourceKey == "dou" {
-		if err := h.enqueueEnrich(ctx, jobID); err != nil {
+		if err := h.enqueueEnrich(ctx, jobID, j); err != nil {
 			return true, err
 		}
 	}
 	return true, nil
 }
 
+func (h *Handler) enqueueMatch(ctx context.Context, jobID string, j dto.NormalizedJob) {
+	var actID *string
+	matchRec := activity.New(ctx, h.q, "match", fmt.Sprintf("%s — %s", j.Company, j.Title), &jobID, nil, "")
+	if matchRec != nil {
+		idStr := dbutil.UUIDString(matchRec.ID())
+		actID = &idStr
+	}
+
+	payload, err := json.Marshal(queue.MatchPayload{JobID: jobID, ActivityID: actID})
+	if err != nil {
+		return
+	}
+	// attempts: 2 with exponential backoff, matching matchQueue.add's options.
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload),
+		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
+		slog.Warn("ingestion: enqueue match failed", "job", jobID, "error", err)
+	}
+}
+
 // enqueueEnrich queues a detail-fetch task for a shallow (list-only) job
 // row. No retry: a fetch failure just leaves detailScrapedAt NULL, and the
 // next backfill sweep (POST /sources/djinni/enrich) picks it up again.
-func (h *Handler) enqueueEnrich(ctx context.Context, jobID string) error {
-	payload, err := json.Marshal(queue.EnrichPayload{JobID: jobID})
+func (h *Handler) enqueueEnrich(ctx context.Context, jobID string, j dto.NormalizedJob) error {
+	var actID *string
+	enrichRec := activity.New(ctx, h.q, "enrich", fmt.Sprintf("%s — %s", j.Company, j.Title), &jobID, &j.SourceKey, "")
+	if enrichRec != nil {
+		idStr := dbutil.UUIDString(enrichRec.ID())
+		actID = &idStr
+	}
+
+	payload, err := json.Marshal(queue.EnrichPayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
 		return err
 	}

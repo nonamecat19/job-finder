@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/jobsources"
@@ -32,11 +33,30 @@ func NewHandler(q *sqlcgen.Queries, sources *jobsources.Service, djinni adapters
 	return &Handler{q: q, sources: sources, djinni: djinni, dou: dou, client: client, delay: delay}
 }
 
-func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
+func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	var payload queue.EnrichPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("enrichment: invalid payload: %w", err)
 	}
+
+	var rec *activity.Recorder
+	if payload.ActivityID != nil && *payload.ActivityID != "" {
+		rec = activity.FromID(h.q, *payload.ActivityID)
+	}
+
+	if rec != nil {
+		rec.Start(ctx)
+	}
+
+	defer func() {
+		if rec != nil {
+			if err != nil {
+				rec.Fail(ctx, err)
+			} else {
+				rec.Ok(ctx, "", nil)
+			}
+		}
+	}()
 
 	uid, err := dbutil.ParseUUID(payload.JobID)
 	if err != nil {
@@ -53,11 +73,17 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		return nil
 	}
 
+	if rec != nil {
+		rec.Step(ctx, fmt.Sprintf("fetching detail (%s)", job.SourceKey), nil)
+	}
+
 	switch job.SourceKey {
 	case "djinni":
-		return h.enrichDjinni(ctx, payload, uid, job)
+		err = h.enrichDjinni(ctx, payload, uid, job)
+		return err
 	case "dou":
-		return h.enrichDOU(ctx, payload, uid, job)
+		err = h.enrichDOU(ctx, payload, uid, job)
+		return err
 	default:
 		return nil
 	}
@@ -96,7 +122,7 @@ func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload,
 		return fmt.Errorf("enrichment: update djinni job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID)
+	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: djinni complete", "job", payload.JobID)
 	return nil
 }
@@ -138,13 +164,20 @@ func (h *Handler) enrichDOU(ctx context.Context, payload queue.EnrichPayload, ui
 		return fmt.Errorf("enrichment: update dou job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID)
+	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: dou complete", "job", payload.JobID)
 	return nil
 }
 
-func (h *Handler) enqueueMatch(ctx context.Context, jobID string) {
-	matchPayload, err := json.Marshal(queue.MatchPayload{JobID: jobID})
+func (h *Handler) enqueueMatch(ctx context.Context, jobID string, job sqlcgen.Job) {
+	var actID *string
+	matchRec := activity.New(ctx, h.q, "match", fmt.Sprintf("%s — %s", job.Company, job.Title), &jobID, nil, "")
+	if matchRec != nil {
+		idStr := dbutil.UUIDString(matchRec.ID())
+		actID = &idStr
+	}
+
+	matchPayload, err := json.Marshal(queue.MatchPayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
 		return
 	}
@@ -161,7 +194,15 @@ func (h *Handler) EnqueueBackfill(ctx context.Context, sourceKey string, limit i
 	}
 	n := 0
 	for _, j := range jobs {
-		payload, err := json.Marshal(queue.EnrichPayload{JobID: dbutil.UUIDString(j.ID)})
+		jobID := dbutil.UUIDString(j.ID)
+		var actID *string
+		enrichRec := activity.New(ctx, h.q, "enrich", fmt.Sprintf("%s — %s", j.Company, j.Title), &jobID, &j.SourceKey, "")
+		if enrichRec != nil {
+			idStr := dbutil.UUIDString(enrichRec.ID())
+			actID = &idStr
+		}
+
+		payload, err := json.Marshal(queue.EnrichPayload{JobID: jobID, ActivityID: actID})
 		if err != nil {
 			continue
 		}
