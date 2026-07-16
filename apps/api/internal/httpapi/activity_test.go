@@ -39,6 +39,7 @@ func TestActivityList(t *testing.T) {
 	_, err = database.Queries.InsertActivityRun(ctx, sqlcgen.InsertActivityRunParams{
 		Op:    "ingest",
 		Label: "test scrape",
+		Meta:  []byte("{}"),
 	})
 	if err != nil {
 		t.Fatalf("insert activity: %v", err)

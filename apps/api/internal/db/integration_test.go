@@ -100,7 +100,6 @@ func mustInsertJob(t *testing.T, sourceKey, dedupeKey, title string) sqlcgen.Job
 
 func TestJobSourceCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	// Insert
@@ -216,7 +215,6 @@ func TestJobSourceCRUD(t *testing.T) {
 
 func TestJobCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-job", "api")
@@ -311,7 +309,6 @@ func TestJobCRUD(t *testing.T) {
 
 func TestJobNeedingDetail(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-need", "api")
@@ -336,7 +333,6 @@ func TestJobNeedingDetail(t *testing.T) {
 
 func TestSavedSearchCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	query, _ := json.Marshal(map[string]string{"q": "golang"})
@@ -437,7 +433,6 @@ func TestSavedSearchCRUD(t *testing.T) {
 
 func TestApplicationCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-app", "api")
@@ -541,7 +536,6 @@ func TestApplicationCRUD(t *testing.T) {
 
 func TestSubscriptionCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-sub", "api")
@@ -644,7 +638,6 @@ func TestSubscriptionCRUD(t *testing.T) {
 
 func TestProfileCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	doc, _ := json.Marshal(map[string]any{
@@ -760,7 +753,6 @@ func TestProfileCRUD(t *testing.T) {
 
 func TestGeneratedDocumentCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-doc", "api")
@@ -878,7 +870,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 
 func TestSourceRunCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	src := mustInsertJobSource(t, "js-run", "api")
@@ -988,7 +979,6 @@ func TestSourceRunCRUD(t *testing.T) {
 
 func TestMatchResultCRUD(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-match", "api")
@@ -1063,7 +1053,6 @@ func TestMatchResultCRUD(t *testing.T) {
 
 func TestStatsQueries(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-stats", "api")
@@ -1077,7 +1066,9 @@ func TestStatsQueries(t *testing.T) {
 		t.Fatalf("expected 1 total job, got %d", total)
 	}
 
-	last24h, err := testDB.Queries.StatsJobsLast24h(ctx, dbutil.NowTimestamp())
+	now := dbutil.NowTimestamp()
+	now.Time = now.Time.Add(-5 * time.Second)
+	last24h, err := testDB.Queries.StatsJobsLast24h(ctx, now)
 	if err != nil {
 		t.Fatalf("stats last 24h: %v", err)
 	}
@@ -1144,7 +1135,6 @@ func TestStatsQueries(t *testing.T) {
 
 func TestJobListQueries(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-list", "api")
@@ -1171,7 +1161,7 @@ func TestJobListQueries(t *testing.T) {
 	}
 
 	// Count with text search
-	q := "Go"
+	q := "%Go%"
 	count, err = testDB.Queries.CountJobs(ctx, sqlcgen.CountJobsParams{Q: &q})
 	if err != nil {
 		t.Fatalf("count by query: %v", err)
@@ -1207,7 +1197,6 @@ func TestJobListQueries(t *testing.T) {
 
 func TestUUIDIntegration(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-uuid", "api")
@@ -1274,7 +1263,6 @@ func TestUUIDIntegration(t *testing.T) {
 
 func TestCascadeDeletes(t *testing.T) {
 	truncateAll(t)
-	t.Parallel()
 	ctx := context.Background()
 
 	src := mustInsertJobSource(t, "js-cascade", "api")
