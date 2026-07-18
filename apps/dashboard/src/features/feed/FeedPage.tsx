@@ -1,4 +1,4 @@
-import { ExternalLink, EyeOff, Star } from 'lucide-react';
+import { ExternalLink, EyeOff, Star, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { JobDto } from '@job-finder/shared';
@@ -17,7 +17,7 @@ import {
   Spinner,
   Surface,
 } from '../../components/ui';
-import { useFeedSources, useHideJob, useJobs, useShortlistJob } from './hooks';
+import { useClearJobs, useFeedSources, useHideJob, useJobs, useShortlistJob } from './hooks';
 
 export default function FeedPage() {
   const [filters, setFilters] = useState<JobFilters>({ sort: 'score', page: 1 });
@@ -25,14 +25,27 @@ export default function FeedPage() {
   const { data: sources } = useFeedSources();
   const shortlist = useShortlistJob();
   const hide = useHideJob();
+  const clear = useClearJobs();
 
   const set = (patch: Partial<JobFilters>) => setFilters((f) => ({ ...f, ...patch, page: 1 }));
+
+  const onClearAll = () => {
+    if (window.confirm('Delete ALL vacancies and their match results, documents, and applications? This cannot be undone.')) {
+      clear.mutate();
+    }
+  };
 
   return (
     <div>
       <PageHeader
         title="Job feed"
         description="Review fresh matches, filter by source or fit, and move promising roles into the tracker."
+        actions={
+          <Button variant="danger" onClick={onClearAll} disabled={clear.isPending}>
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+            {clear.isPending ? 'clearing…' : 'clear all'}
+          </Button>
+        }
       />
 
       <Surface className="mb-4">

@@ -50,6 +50,7 @@ export const api = {
       request<JobDto & { documents: GeneratedDocumentDto[]; application: ApplicationDto | null }>(
         `/jobs/${id}`,
       ),
+    clear: () => request<{ deleted: number }>(`/jobs`, { method: 'DELETE' }),
     shortlist: (id: string) => request(`/jobs/${id}/shortlist`, { method: 'POST' }),
     hide: (id: string) => request(`/jobs/${id}/hide`, { method: 'POST' }),
     generate: (id: string, type: DocumentType) =>

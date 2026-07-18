@@ -20,6 +20,11 @@ UPDATE "Job" SET "embedding" = $2 WHERE "id" = $1;
 UPDATE "Job" SET "status" = $2 WHERE "id" = $1
 RETURNING *;
 
+-- name: DeleteAllJobs :execrows
+-- Wipes every job. FK "ON DELETE cascade" clears the dependent
+-- Application / GeneratedDocument / MatchResult / Activity rows too.
+DELETE FROM "Job";
+
 -- name: ListJobsNeedingDetail :many
 SELECT * FROM "Job"
 WHERE "sourceKey" = $1 AND "detailScrapedAt" IS NULL

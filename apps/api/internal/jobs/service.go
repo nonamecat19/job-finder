@@ -199,6 +199,12 @@ func (s *Service) Hide(ctx context.Context, id string) (dto.JobDto, error) {
 	return jobToDto(updated), nil
 }
 
+// DeleteAll wipes every job (and, via ON DELETE cascade, its applications,
+// documents, match results, and activity). Returns the number of jobs removed.
+func (s *Service) DeleteAll(ctx context.Context) (int64, error) {
+	return s.q.DeleteAllJobs(ctx)
+}
+
 // EnqueueGeneration enqueues a "generate" asynq task and returns a
 // 202-style payload; the dashboard polls documents. Matches
 // JobsService.enqueueGeneration.

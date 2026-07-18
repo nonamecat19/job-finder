@@ -31,3 +31,11 @@ export function useHideJob() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.jobs.all }),
   });
 }
+
+export function useClearJobs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.jobs.clear(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.jobs.all }),
+  });
+}

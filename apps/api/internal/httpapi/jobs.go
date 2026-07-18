@@ -18,6 +18,7 @@ type JobsProvider interface {
 	Get(ctx context.Context, id string) (dto.JobDto, error)
 	Shortlist(ctx context.Context, id string) (dto.JobDto, error)
 	Hide(ctx context.Context, id string) (dto.JobDto, error)
+	DeleteAll(ctx context.Context) (int64, error)
 	EnqueueGeneration(ctx context.Context, id, docType string, profileID *string) (map[string]any, error)
 }
 
@@ -34,6 +35,7 @@ type JobsHandler struct {
 
 func (h *JobsHandler) Mount(r chi.Router) {
 	r.Get("/jobs", h.list)
+	r.Delete("/jobs", h.deleteAll)
 	r.Get("/jobs/{id}", h.get)
 	r.Post("/jobs/{id}/shortlist", h.shortlist)
 	r.Post("/jobs/{id}/hide", h.hide)
@@ -79,6 +81,15 @@ func (h *JobsHandler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *JobsHandler) deleteAll(w http.ResponseWriter, r *http.Request) {
+	n, err := h.Jobs.DeleteAll(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"deleted": n})
 }
 
 func (h *JobsHandler) get(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,20 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
+const deleteAllJobs = `-- name: DeleteAllJobs :execrows
+DELETE FROM "Job"
+`
+
+// Wipes every job. FK "ON DELETE cascade" clears the dependent
+// Application / GeneratedDocument / MatchResult / Activity rows too.
+func (q *Queries) DeleteAllJobs(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAllJobs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getJobByDedupeKey = `-- name: GetJobByDedupeKey :one
 SELECT "id" FROM "Job" WHERE "dedupeKey" = $1
 `

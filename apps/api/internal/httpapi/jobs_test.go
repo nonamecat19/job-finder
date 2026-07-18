@@ -30,6 +30,12 @@ func (f *fakeJobsProvider) Hide(ctx context.Context, id string) (dto.JobDto, err
 	return dto.JobDto{ID: id, Status: "hidden"}, nil
 }
 
+func (f *fakeJobsProvider) DeleteAll(ctx context.Context) (int64, error) {
+	n := int64(len(f.jobs))
+	f.jobs = nil
+	return n, nil
+}
+
 func (f *fakeJobsProvider) EnqueueGeneration(ctx context.Context, id, docType string, profileID *string) (map[string]any, error) {
 	return map[string]any{"taskId": "task-123"}, nil
 }
@@ -48,6 +54,22 @@ func TestJobsList(t *testing.T) {
 	w := testutil.DoRequest(r, "GET", "/api/jobs", nil, nil)
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestJobsDeleteAll(t *testing.T) {
+	fake := &fakeJobsProvider{jobs: []dto.JobDto{{ID: "1"}, {ID: "2"}}}
+	h := &httpapi.JobsHandler{Jobs: fake, Generation: &fakeDocLister{}}
+	r := testutil.SetupRouter(h.Mount)
+
+	w := testutil.DoRequest(r, "DELETE", "/api/jobs", nil, nil)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var out map[string]int64
+	testutil.ParseJSON(w, &out)
+	if out["deleted"] != 2 {
+		t.Fatalf("expected deleted=2, got %d", out["deleted"])
 	}
 }
 
