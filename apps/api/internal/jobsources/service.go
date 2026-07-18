@@ -149,6 +149,18 @@ func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, 
 	return row, nil
 }
 
+// Config returns the decrypted (unmasked) runtime config for a source,
+// lazily creating its row on first use. Used by components that need real
+// secret values — e.g. the djinni session manager reading the stored cookie —
+// unlike List/Update which mask secrets for the API.
+func (s *Service) Config(ctx context.Context, key string) (map[string]any, error) {
+	row, err := s.GetByKey(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return s.DecryptConfig(row.Config), nil
+}
+
 // Update applies partial changes: enabled flag and/or config merge (masked
 // "••••••" values mean "keep existing", null/"" deletes the key).
 func (s *Service) Update(ctx context.Context, key string, enabled *bool, configPatch map[string]any) (*dto.JobSourceDto, error) {

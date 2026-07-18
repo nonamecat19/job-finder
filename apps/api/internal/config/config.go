@@ -43,8 +43,11 @@ type Config struct {
 	AdzunaAppID         string `env:"ADZUNA_APP_ID"`
 	AdzunaAppKey        string `env:"ADZUNA_APP_KEY"`
 	AdzunaCountry       string `env:"ADZUNA_COUNTRY" envDefault:"gb"`
-	DjinniSessionCookie string `env:"DJINNI_SESSION_COOKIE"`
-	JoobleAPIKey        string `env:"JOOBLE_API_KEY"`
+	// Djinni credentials: the adapter logs in with these and stores the
+	// resulting sessionid cookie in the DB (never in env).
+	DjinniEmail    string `env:"DJINNI_EMAIL"`
+	DjinniPassword string `env:"DJINNI_PASSWORD"`
+	JoobleAPIKey   string `env:"JOOBLE_API_KEY"`
 	// DjinniDetailDelayMs is the pause before each detail-page fetch in the
 	// enrich queue (concurrency 1), to avoid rate-limiting/banning the
 	// authenticated djinni account.

@@ -66,7 +66,11 @@ func run() error {
 	scrapingSvc := scraping.New()
 	defer scrapingSvc.Close()
 
-	djinniAdapter := adapters.DjinniAdapter{Scraping: scrapingSvc}
+	// djinniSession is shared by pointer with every DjinniAdapter copy (registry
+	// + enrichment handler); its Sources back-reference is wired once sourcesSvc
+	// exists (below), breaking the adapter<->service construction cycle.
+	djinniSession := &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"}
+	djinniAdapter := adapters.DjinniAdapter{Scraping: scrapingSvc, Session: djinniSession}
 	douAdapter := adapters.DouAdapter{Scraping: scrapingSvc}
 	workuaAdapter := adapters.WorkUaAdapter{Scraping: scrapingSvc}
 	registry := jobsources.NewRegistry(
@@ -81,6 +85,7 @@ func run() error {
 		adapters.JoobleAdapter{},
 	)
 	sourcesSvc := jobsources.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
+	djinniSession.Sources = sourcesSvc
 
 	redisOpt, err := queue.RedisOpt(cfg.RedisURL)
 	if err != nil {

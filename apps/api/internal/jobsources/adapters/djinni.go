@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,27 +24,86 @@ const djinniMaxSubscriptionPages = 50
 var djinniRemoteRe = regexp.MustCompile(`(?i)remote|віддалено`)
 
 // DjinniAdapter — djinni.co, Ukrainian dev job board, server-rendered HTML.
-// A session cookie (env DJINNI_SESSION_COOKIE or config.sessionCookie)
-// unlocks full listings; selectors are best-effort/defensive, matching
-// djinni.adapter.ts.
+// Session is a login-managed sessionid cookie (credentials in env, cookie in
+// the DB); a nil Session means anonymous access (public /jobs only). Selectors
+// are best-effort/defensive, matching djinni.adapter.ts.
 type DjinniAdapter struct {
 	Scraping *scraping.Service
+	Session  DjinniSessionProvider
+}
+
+// authHeaders builds request headers carrying the current session cookie,
+// logging in on demand when Session is set.
+func (d DjinniAdapter) authHeaders(ctx context.Context) (map[string]string, error) {
+	headers := map[string]string{}
+	if d.Session == nil {
+		return headers, nil
+	}
+	cookie, err := d.Session.Ensure(ctx)
+	if err != nil {
+		return nil, err
+	}
+	setDjinniCookie(headers, cookie)
+	return headers, nil
+}
+
+func setDjinniCookie(headers map[string]string, cookie string) {
+	if cookie != "" {
+		headers["Cookie"] = "sessionid=" + cookie
+	} else {
+		delete(headers, "Cookie")
+	}
+}
+
+// fetchDoc fetches and parses pageURL. If djinni serves its login page (an
+// expired/absent cookie is 302'd to /login, followed to a 200), it re-logs-in
+// once and retries, mutating headers in place with the fresh cookie so callers
+// keep reusing them.
+func (d DjinniAdapter) fetchDoc(ctx context.Context, pageURL string, headers map[string]string) (*goquery.Document, error) {
+	doc, err := d.fetchParse(ctx, pageURL, headers)
+	if err != nil {
+		return nil, err
+	}
+	if !djinniIsLoginPage(doc) {
+		return doc, nil
+	}
+	if d.Session == nil {
+		return nil, fmt.Errorf("djinni requires login but no credentials configured: set DJINNI_EMAIL and DJINNI_PASSWORD")
+	}
+	cookie, err := d.Session.Refresh(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("djinni session expired and re-login failed: %w", err)
+	}
+	setDjinniCookie(headers, cookie)
+
+	doc, err = d.fetchParse(ctx, pageURL, headers)
+	if err != nil {
+		return nil, err
+	}
+	if djinniIsLoginPage(doc) {
+		return nil, fmt.Errorf("djinni still at login after re-login (check DJINNI_EMAIL/DJINNI_PASSWORD)")
+	}
+	return doc, nil
+}
+
+func (d DjinniAdapter) fetchParse(ctx context.Context, pageURL string, headers map[string]string) (*goquery.Document, error) {
+	html, err := d.Scraping.FetchHTML(ctx, pageURL, headers)
+	if err != nil {
+		return nil, err
+	}
+	return goquery.NewDocumentFromReader(strings.NewReader(html))
 }
 
 func (DjinniAdapter) Key() string          { return "djinni" }
 func (DjinniAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
-func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, config map[string]any) ([]dto.NormalizedJob, error) {
-	cookie := jobsources.StringOr(config["sessionCookie"], os.Getenv("DJINNI_SESSION_COOKIE"))
-	headers := map[string]string{}
-	if cookie != "" {
-		headers["Cookie"] = "sessionid=" + cookie
+func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
+	headers, err := d.authHeaders(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if query.SubscriptionURL != "" {
-		if cookie == "" {
-			return nil, fmt.Errorf("djinni subscription %q requires a login session: set DJINNI_SESSION_COOKIE or the source's sessionCookie config", query.SubscriptionURL)
-		}
 		jobs, err := d.scrapeSubscription(ctx, query.SubscriptionURL, headers)
 		if len(jobs) == 0 && err == nil {
 			slog.Warn("djinni subscription returned 0 jobs — markup may have changed", "url", query.SubscriptionURL)
@@ -62,18 +120,13 @@ func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, config
 	}
 	pageURL := "https://djinni.co/jobs/?" + params.Encode()
 
-	html, err := d.Scraping.FetchHTML(ctx, pageURL, headers)
+	doc, err := d.fetchDoc(ctx, pageURL, headers)
 	if err != nil {
 		return nil, err
 	}
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
-	if err != nil {
-		return nil, err
-	}
-
 	jobs := parseDjinniCards(doc)
 	if len(jobs) == 0 {
-		slog.Warn("djinni returned 0 jobs — markup may have changed or session cookie expired")
+		slog.Warn("djinni returned 0 jobs — markup may have changed")
 	}
 	return jobs, nil
 }
@@ -97,21 +150,16 @@ func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, he
 		q.Set("page", strconv.Itoa(page))
 		pageURL.RawQuery = q.Encode()
 
-		html, err := d.Scraping.FetchHTML(ctx, pageURL.String(), headers)
+		doc, err := d.fetchDoc(ctx, pageURL.String(), headers)
 		if err != nil {
+			// The first page failing (login required, re-login failed, or an
+			// unreachable host) is fatal; a later page failing just ends
+			// pagination with whatever was collected.
+			if page == 1 {
+				return nil, err
+			}
 			slog.Warn("djinni subscription page fetch failed, stopping pagination", "url", pageURL.String(), "error", err)
 			break
-		}
-		doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
-		if err != nil {
-			break
-		}
-
-		// An expired/absent session cookie makes djinni 302 the subs URL to
-		// /login (followed to a 200 login page), which parses to 0 cards.
-		// Surface that as a clear error instead of a silent empty result.
-		if djinniIsLoginPage(doc) {
-			return nil, fmt.Errorf("djinni session cookie invalid or expired: subscription %q redirected to login", subURL)
 		}
 
 		cards := parseDjinniCards(doc)
@@ -203,18 +251,12 @@ type DjinniDetailPatch struct {
 // description/salary/location/remote/posted-date. Selectors are best-effort
 // and defensive (unverified against live markup — see plan risk #2): a
 // missing field just stays empty rather than erroring.
-func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, config map[string]any) (DjinniDetailPatch, error) {
-	cookie := jobsources.StringOr(config["sessionCookie"], os.Getenv("DJINNI_SESSION_COOKIE"))
-	headers := map[string]string{}
-	if cookie != "" {
-		headers["Cookie"] = "sessionid=" + cookie
-	}
-
-	html, err := d.Scraping.FetchHTML(ctx, jobURL, headers)
+func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (DjinniDetailPatch, error) {
+	headers, err := d.authHeaders(ctx)
 	if err != nil {
 		return DjinniDetailPatch{}, err
 	}
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	doc, err := d.fetchDoc(ctx, jobURL, headers)
 	if err != nil {
 		return DjinniDetailPatch{}, err
 	}
