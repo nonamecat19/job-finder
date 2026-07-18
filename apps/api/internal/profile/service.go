@@ -18,13 +18,13 @@ import (
 )
 
 type Service struct {
-	q           *sqlcgen.Queries
+	q           Repository
 	llmc        llm.Provider
 	embedModel  string
 	rendercvBin string
 }
 
-func NewService(q *sqlcgen.Queries, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
+func NewService(q Repository, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
 	if embedModel == "" {
 		embedModel = "nomic-embed-text"
 	}
