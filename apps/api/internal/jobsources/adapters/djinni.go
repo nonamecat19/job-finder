@@ -196,7 +196,7 @@ func parseDjinniCards(doc *goquery.Document) []dto.NormalizedJob {
 		}
 
 		company := strings.TrimSpace(item.Find(`a[href^="/company/"], .js-analytics-company, [data-analytics="company_page"]`).First().Text())
-		description := strings.TrimSpace(item.Find(`.js-truncated-text, .js-original-text, .text-card`).First().Text())
+		description := jobsources.SelectionText(item.Find(`.js-truncated-text, .js-original-text, .text-card`).First())
 		salary := strings.TrimSpace(item.Find(`.public-salary-item, .text-success`).First().Text())
 		location := strings.TrimSpace(item.Find(`.location-text`).First().Text())
 
@@ -261,7 +261,7 @@ func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[str
 		return DjinniDetailPatch{}, err
 	}
 
-	description := strings.TrimSpace(doc.Find(`.job-post__description, .job-post-page__description, .js-original-text, [data-qa="job-description"], article`).First().Text())
+	description := jobsources.SelectionText(doc.Find(`.job-post__description, .job-post-page__description, .js-original-text, [data-qa="job-description"], article`).First())
 	salary := strings.TrimSpace(doc.Find(`.public-salary-item, .job-additional-info-item .text-success, .text-success`).First().Text())
 	location := strings.TrimSpace(doc.Find(`.location-text, .job-additional-info-item .location`).First().Text())
 	postedAt, _ := doc.Find(`.job-post__details time, time[datetime]`).First().Attr("datetime")

@@ -3,6 +3,8 @@ package jobsources
 import (
 	"strings"
 	"testing"
+
+	"github.com/PuerkitoBio/goquery"
 )
 
 func TestHTMLToText(t *testing.T) {
@@ -246,5 +248,36 @@ func TestHTMLToTextComplexHTML(t *testing.T) {
 
 	if strings.Contains(result, "<") || strings.Contains(result, ">") {
 		t.Error("result should not contain HTML tags")
+	}
+}
+
+func TestSelectionText_PreservesBlockBoundaries(t *testing.T) {
+	// Reproduces the djinni bug: a heading run straight into the next
+	// paragraph must not fuse into one word ("ResponsibilitiesDesign").
+	// goquery Selection.Text fuses them; SelectionText must not.
+	html := `<div class="desc"><h3>Responsibilities</h3><p>Design, build, and ship features</p><ul><li>React</li><li>TypeScript</li></ul></div>`
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	sel := doc.Find(".desc").First()
+
+	got := SelectionText(sel)
+	for _, fused := range []string{"ResponsibilitiesDesign", "featuresReact", "ReactTypeScript"} {
+		if strings.Contains(got, fused) {
+			t.Errorf("blocks fused, found %q in:\n%s", fused, got)
+		}
+	}
+	for _, want := range []string{"Responsibilities", "Design, build, and ship features", "React", "TypeScript"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestSelectionText_EmptySelection(t *testing.T) {
+	doc, _ := goquery.NewDocumentFromReader(strings.NewReader(`<div></div>`))
+	if got := SelectionText(doc.Find(".nope")); got != "" {
+		t.Errorf("empty selection = %q, want empty", got)
 	}
 }
