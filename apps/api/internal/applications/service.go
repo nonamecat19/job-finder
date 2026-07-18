@@ -23,10 +23,10 @@ import (
 var ErrNotFound = errors.New("application not found")
 
 type Service struct {
-	q *sqlcgen.Queries
+	q Repository
 }
 
-func NewService(q *sqlcgen.Queries) *Service {
+func NewService(q Repository) *Service {
 	return &Service{q: q}
 }
 
