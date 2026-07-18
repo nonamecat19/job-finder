@@ -43,9 +43,12 @@ func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, config
 	}
 
 	if query.SubscriptionURL != "" {
+		if cookie == "" {
+			return nil, fmt.Errorf("djinni subscription %q requires a login session: set DJINNI_SESSION_COOKIE or the source's sessionCookie config", query.SubscriptionURL)
+		}
 		jobs, err := d.scrapeSubscription(ctx, query.SubscriptionURL, headers)
 		if len(jobs) == 0 && err == nil {
-			slog.Warn("djinni subscription returned 0 jobs — markup may have changed or session cookie expired", "url", query.SubscriptionURL)
+			slog.Warn("djinni subscription returned 0 jobs — markup may have changed", "url", query.SubscriptionURL)
 		}
 		return jobs, err
 	}
@@ -104,6 +107,13 @@ func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, he
 			break
 		}
 
+		// An expired/absent session cookie makes djinni 302 the subs URL to
+		// /login (followed to a 200 login page), which parses to 0 cards.
+		// Surface that as a clear error instead of a silent empty result.
+		if djinniIsLoginPage(doc) {
+			return nil, fmt.Errorf("djinni session cookie invalid or expired: subscription %q redirected to login", subURL)
+		}
+
 		cards := parseDjinniCards(doc)
 		if len(cards) == 0 {
 			break
@@ -116,6 +126,13 @@ func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, he
 		jobs = append(jobs, cards...)
 	}
 	return jobs, nil
+}
+
+// djinniIsLoginPage reports whether doc is djinni's /login page (served with a
+// 200 after an auth redirect). The password input is unique to that page and
+// never present on job-listing markup.
+func djinniIsLoginPage(doc *goquery.Document) bool {
+	return doc.Find(`input[name="password"]`).Length() > 0
 }
 
 // parseDjinniCards extracts job cards from a djinni listing page (shared by
