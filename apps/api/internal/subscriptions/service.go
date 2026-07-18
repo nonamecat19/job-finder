@@ -16,20 +16,13 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// SourceEnsurer validates a source key against the code-defined adapter
-// registry and lazily materializes its JobSource row (needed to satisfy the
-// Subscription -> JobSource FK). Source identity is hardcoded in the registry,
-// not seeded in the db, so this is the single point that turns a key into a row.
-type SourceEnsurer interface {
-	GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, error)
-}
-
+// SourceEnsurer and Repository ports live in ports.go.
 type Service struct {
-	q       *sqlcgen.Queries
+	q       Repository
 	sources SourceEnsurer
 }
 
-func NewService(q *sqlcgen.Queries, sources SourceEnsurer) *Service {
+func NewService(q Repository, sources SourceEnsurer) *Service {
 	return &Service{q: q, sources: sources}
 }
 
