@@ -1,7 +1,7 @@
 # job-finder
 
 Self-hosted, modular AI job-search platform. Discovers jobs across multiple sources, scores
-them against your master profile with a local LLM (Ollama), generates grounded tailored
+them against your master profile with Ollama (local or Ollama Cloud), generates grounded tailored
 resumes + cover letters as PDFs, and tracks applications on a kanban. You apply manually —
 no auto-apply, ever. Design docs live in [`plan/`](plan/00-overview.md).
 
@@ -24,7 +24,11 @@ docker compose up --build  # first run pulls Ollama models (~10 GB for qwen2.5:1
 
 Dashboard: http://localhost:8080 · API: http://localhost:3000/api/health
 
-GPU strongly recommended for Ollama (uncomment the `deploy` block in docker-compose.yml).
+GPU strongly recommended for local Ollama (uncomment the `deploy` block in docker-compose.yml).
+To use **Ollama Cloud** instead, set `OLLAMA_URL=https://ollama.com` + `OLLAMA_KEY=<key>` and
+`-cloud` model tags. Cloud has no embedding models, so point `EMBED_URL` at a local Ollama.
+Chat models are per-task: `LLM_MODEL_MATCH` (fit scoring), `LLM_MODEL_GENERATION` (resume/cover),
+`LLM_MODEL` as fallback; embeddings use `EMBED_MODEL`.
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 
 ## Dev workflow (api/dashboard on host)
