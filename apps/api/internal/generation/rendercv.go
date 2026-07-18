@@ -210,10 +210,11 @@ func buildAnalyzePrompt(vacancy string, hints *VacancyHints) string {
 
 // analyzeVacancy calls the LLM to produce a VacancyAnalysis from the raw
 // vacancy text (optionally enriched with caller-provided hints).
-func analyzeVacancy(ctx context.Context, lc llm.Provider, vacancy string, hints *VacancyHints) (VacancyAnalysis, error) {
+func analyzeVacancy(ctx context.Context, lc llm.Provider, model, vacancy string, hints *VacancyHints) (VacancyAnalysis, error) {
 	prompt := buildAnalyzePrompt(vacancy, hints)
 	return llm.CompleteStructured[VacancyAnalysis](ctx, lc, prompt, &llm.CompleteOptions{
 		System: "You are a job-market analyst who extracts structured requirements from vacancy descriptions. Be precise and concise.",
+		Model:  model,
 	})
 }
 
@@ -328,11 +329,12 @@ func sectionKeys(sections map[string]any) []string {
 
 // selectAndTailor calls the LLM to produce a TailoredSections from the master
 // resume content and the vacancy analysis.
-func selectAndTailor(ctx context.Context, lc llm.Provider, master RendercvMaster, analysis VacancyAnalysis, level GroundingLevel, prevViolations []string) (TailoredSections, error) {
+func selectAndTailor(ctx context.Context, lc llm.Provider, model string, master RendercvMaster, analysis VacancyAnalysis, level GroundingLevel, prevViolations []string) (TailoredSections, error) {
 	prompt := buildSelectPrompt(master, analysis, level, prevViolations)
 	return llm.CompleteStructured[TailoredSections](ctx, lc, prompt, &llm.CompleteOptions{
 		System: "You are an expert resume writer who never fabricates information. " +
 			"You select, reorder and rephrase existing content to match a specific vacancy.",
+		Model: model,
 	})
 }
 

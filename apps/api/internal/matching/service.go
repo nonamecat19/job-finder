@@ -23,14 +23,24 @@ import (
 var ErrNoProfileConfig = errors.New("no profile config")
 
 type Service struct {
-	q         *sqlcgen.Queries
-	profiles  *profile.Service
-	llmc      llm.Provider
-	threshold float64
+	q          *sqlcgen.Queries
+	profiles   *profile.Service
+	llmc       llm.Provider
+	threshold  float64
+	matchModel string
 }
 
-func NewService(q *sqlcgen.Queries, profiles *profile.Service, llmc llm.Provider, threshold float64) *Service {
-	return &Service{q: q, profiles: profiles, llmc: llmc, threshold: threshold}
+func NewService(q *sqlcgen.Queries, profiles *profile.Service, llmc llm.Provider, threshold float64, matchModel string) *Service {
+	return &Service{q: q, profiles: profiles, llmc: llmc, threshold: threshold, matchModel: matchModel}
+}
+
+// fitModel returns the model used for fit scoring, falling back to the
+// provider default when no task-specific model is configured.
+func (s *Service) fitModel() string {
+	if s.matchModel != "" {
+		return s.matchModel
+	}
+	return s.llmc.ModelName()
 }
 
 // MatchJob runs stage 1 (embedding prefilter) + stage 2 (LLM analysis) for
@@ -129,13 +139,14 @@ func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Reco
 
 	fit, err := llm.CompleteStructured[FitResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You are a precise technical recruiter. Judge only from the given profile and job text.",
+		Model:  s.matchModel,
 	})
 	if err != nil {
 		return dto.MatchResultDto{}, err
 	}
 
 	score := int(math.Round(fit.Score))
-	res, err := s.saveResult(ctx, uid, similarity, &score, fit.MatchedSkills, fit.MissingSkills, &fit.Summary, fit.RedFlags, s.llmc.ModelName())
+	res, err := s.saveResult(ctx, uid, similarity, &score, fit.MatchedSkills, fit.MissingSkills, &fit.Summary, fit.RedFlags, s.fitModel())
 	if err == nil && rec != nil {
 		rec.Ok(ctx, "", map[string]any{"score": score, "similarity": similarity})
 	}

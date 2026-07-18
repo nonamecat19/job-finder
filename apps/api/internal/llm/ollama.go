@@ -13,18 +13,26 @@ import (
 	"github.com/job-finder/api/internal/strutil"
 )
 
-// OllamaProvider talks to a local Ollama server (chat + embeddings).
-// Mirrors ollama.provider.ts.
+// OllamaProvider talks to an Ollama server (chat + embeddings), either local
+// or Ollama Cloud (https://ollama.com). When apiKey is set it authenticates
+// with an Authorization: Bearer header. Mirrors ollama.provider.ts.
 type OllamaProvider struct {
 	http       *http.Client
 	baseURL    string
+	apiKey     string
+	embedURL   string
 	modelName  string
 	embedModel string
 }
 
-func NewOllama(baseURL, modelName, embedModel string) *OllamaProvider {
+// NewOllama builds a provider. embedURL empty falls back to baseURL; apiKey
+// empty means no auth header (local server). Chat and embeddings share apiKey.
+func NewOllama(baseURL, apiKey, modelName, embedModel, embedURL string) *OllamaProvider {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
+	}
+	if embedURL == "" {
+		embedURL = baseURL
 	}
 	if modelName == "" {
 		modelName = "qwen2.5:14b"
@@ -35,12 +43,22 @@ func NewOllama(baseURL, modelName, embedModel string) *OllamaProvider {
 	return &OllamaProvider{
 		http:       &http.Client{Timeout: 300 * time.Second}, // local models are slow
 		baseURL:    baseURL,
+		apiKey:     apiKey,
+		embedURL:   embedURL,
 		modelName:  modelName,
 		embedModel: embedModel,
 	}
 }
 
 func (o *OllamaProvider) ModelName() string { return o.modelName }
+
+// setHeaders applies the JSON content type and, when configured, Bearer auth.
+func (o *OllamaProvider) setHeaders(req *http.Request) {
+	req.Header.Set("Content-Type", "application/json")
+	if o.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+o.apiKey)
+	}
+}
 
 type ollamaChatMessage struct {
 	Role    string `json:"role"`
@@ -75,7 +93,7 @@ func (o *OllamaProvider) chat(ctx context.Context, req ollamaChatRequest) (strin
 	if err != nil {
 		return "", err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
+	o.setHeaders(httpReq)
 	res, err := o.http.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("ollama: chat request failed: %w", err)
@@ -106,7 +124,7 @@ func (o *OllamaProvider) Complete(ctx context.Context, prompt string, opts *Comp
 	if opts != nil && opts.MaxTokens != nil {
 		chatOpts.NumPredict = opts.MaxTokens
 	}
-	return o.chat(ctx, ollamaChatRequest{Model: o.modelName, Stream: false, Messages: messages, Options: chatOpts})
+	return o.chat(ctx, ollamaChatRequest{Model: opts.ModelOr(o.modelName), Stream: false, Messages: messages, Options: chatOpts})
 }
 
 func (o *OllamaProvider) CompleteJSON(ctx context.Context, prompt string, opts *CompleteOptions) (string, error) {
@@ -117,7 +135,7 @@ func (o *OllamaProvider) CompleteJSON(ctx context.Context, prompt string, opts *
 	messages = append(messages, ollamaChatMessage{Role: "user", Content: prompt})
 
 	return o.chat(ctx, ollamaChatRequest{
-		Model:    o.modelName,
+		Model:    opts.ModelOr(o.modelName),
 		Stream:   false,
 		Format:   "json",
 		Messages: messages,
@@ -140,11 +158,11 @@ func (o *OllamaProvider) Embed(ctx context.Context, text string) ([]float32, err
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.baseURL+"/api/embeddings", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.embedURL+"/api/embeddings", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	o.setHeaders(req)
 	res, err := o.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("ollama: embeddings request failed: %w", err)

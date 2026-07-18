@@ -1,6 +1,6 @@
-// Package llm defines the LLM Provider abstraction (Ollama / Cerebras) and
-// the shared structured-output retry loop used by matching, generation and
-// profile import. Mirrors apps/api/src/modules/llm/*.
+// Package llm defines the LLM Provider abstraction (Ollama) and the shared
+// structured-output retry loop used by matching, generation and profile
+// import. Mirrors apps/api/src/modules/llm/*.
 package llm
 
 import (
@@ -22,6 +22,17 @@ type CompleteOptions struct {
 	System      string
 	Temperature *float64
 	MaxTokens   *int
+	// Model overrides the provider's default model for this call (per-task
+	// model selection). Empty uses the provider default.
+	Model string
+}
+
+// ModelOr returns the per-call model override, or def if opts is nil/unset.
+func (o *CompleteOptions) ModelOr(def string) string {
+	if o != nil && o.Model != "" {
+		return o.Model
+	}
+	return def
 }
 
 // Temp resolves the effective temperature: explicit value if set, else def.
@@ -40,11 +51,9 @@ func (o *CompleteOptions) SystemPrompt() string {
 	return o.System
 }
 
-// Provider is the common interface both ollama.go and cerebras.go implement.
-// CompleteJSON is the low-level "ask for JSON, no retry" call; the retry loop
-// (strip fences → parse → validate → retry with error) lives in
-// CompleteStructured below, shared by both providers exactly like the TS code
-// where cerebras.provider.ts and ollama.provider.ts duplicate the same loop.
+// Provider is the interface ollama.go implements. CompleteJSON is the
+// low-level "ask for JSON, no retry" call; the retry loop (strip fences →
+// parse → validate → retry with error) lives in CompleteStructured below.
 type Provider interface {
 	ModelName() string
 	Complete(ctx context.Context, prompt string, opts *CompleteOptions) (string, error)

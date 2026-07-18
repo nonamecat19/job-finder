@@ -44,6 +44,18 @@ func run() error {
 	}
 	fmt.Println("complete:", text)
 
+	// Exercise each per-task model so both tiers are validated in one run.
+	for label, model := range map[string]string{
+		"match":      cfg.ModelOr(cfg.LLMModelMatch),
+		"generation": cfg.ModelOr(cfg.LLMModelGeneration),
+	} {
+		out, err := provider.Complete(ctx, "Reply with the single word: pong", &llm.CompleteOptions{Model: model})
+		if err != nil {
+			return fmt.Errorf("complete[%s=%s]: %w", label, model, err)
+		}
+		fmt.Printf("complete[%s=%s]: %s\n", label, model, out)
+	}
+
 	structured, err := llm.CompleteStructured[smokeSchema](ctx, provider,
 		"TypeScript: what language does it compile to, and is it a compiled language?", nil)
 	if err != nil {

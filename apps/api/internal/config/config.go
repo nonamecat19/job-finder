@@ -18,15 +18,21 @@ type Config struct {
 	DatabaseURL string `env:"DATABASE_URL"`
 	RedisURL    string `env:"REDIS_URL" envDefault:"redis://localhost:6379"`
 
-	// LLM
-	LLMProvider string `env:"LLM_PROVIDER" envDefault:"ollama"`
-	OllamaURL   string `env:"OLLAMA_URL" envDefault:"http://localhost:11434"`
-	LLMModel    string `env:"LLM_MODEL" envDefault:"qwen2.5:14b"`
-	EmbedModel  string `env:"EMBED_MODEL" envDefault:"nomic-embed-text"`
+	// LLM. The only provider is Ollama; OllamaKey authenticates to Ollama Cloud
+	// (https://ollama.com) via a Bearer header, and is empty for a local server.
+	OllamaURL  string `env:"OLLAMA_URL" envDefault:"http://localhost:11434"`
+	OllamaKey  string `env:"OLLAMA_KEY"`
+	LLMModel   string `env:"LLM_MODEL" envDefault:"qwen2.5:14b"`
+	EmbedModel string `env:"EMBED_MODEL" envDefault:"nomic-embed-text"`
 
-	CerebrasAPIKey string `env:"CEREBRAS_API_KEY"`
-	CerebrasModel  string `env:"CEREBRAS_MODEL" envDefault:"gpt-oss-120b"`
-	CerebrasURL    string `env:"CEREBRAS_URL" envDefault:"https://api.cerebras.ai/v1"`
+	// Per-task chat models. Empty falls back to LLMModel via ModelOr.
+	LLMModelMatch      string `env:"LLM_MODEL_MATCH"`
+	LLMModelGeneration string `env:"LLM_MODEL_GENERATION"`
+
+	// EmbedURL is the endpoint for embeddings; empty means "same as OllamaURL".
+	// Ollama Cloud serves no embedding models, so this can point at a local
+	// Ollama (http://localhost:11434) while chat stays on the cloud.
+	EmbedURL string `env:"EMBED_URL"`
 
 	EmbedDims                int     `env:"EMBED_DIMS" envDefault:"768"`
 	MatchSimilarityThreshold float64 `env:"MATCH_SIMILARITY_THRESHOLD" envDefault:"0.35"`
@@ -59,6 +65,15 @@ type Config struct {
 	ResumeMasterPath   string `env:"RESUME_MASTER_PATH" envDefault:"./resume/resume.yaml"`
 	ResumeGroundingLvl string `env:"RESUME_GROUNDING_LEVEL" envDefault:"moderate"`
 	RendercvBin        string `env:"RENDERCV_BIN" envDefault:"rendercv"`
+}
+
+// ModelOr returns m if set, otherwise the default LLMModel. Used to resolve a
+// per-task model env var that is allowed to be empty.
+func (c *Config) ModelOr(m string) string {
+	if m == "" {
+		return c.LLMModel
+	}
+	return m
 }
 
 // Load parses environment variables into a Config, applying defaults for anything unset.

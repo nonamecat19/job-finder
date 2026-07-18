@@ -42,18 +42,28 @@ type Service struct {
 	htmlRenderer *HtmlPdfRenderer
 	rendercv     *RenderCvRenderer
 	llmc         llm.Provider
+	genModel     string
 	masterPath   string
 	defaultLevel GroundingLevel
 }
 
-func NewService(q *sqlcgen.Queries, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, masterPath, defaultLevel string) *Service {
+func NewService(q *sqlcgen.Queries, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, genModel, masterPath, defaultLevel string) *Service {
 	if masterPath == "" {
 		masterPath = "./resume/resume.yaml"
 	}
 	return &Service{
-		q: q, profiles: profiles, htmlRenderer: htmlRenderer, rendercv: rendercv, llmc: llmc,
+		q: q, profiles: profiles, htmlRenderer: htmlRenderer, rendercv: rendercv, llmc: llmc, genModel: genModel,
 		masterPath: masterPath, defaultLevel: ParseGroundingLevel(defaultLevel),
 	}
+}
+
+// docModel returns the model recorded on generated documents, falling back to
+// the provider default when no task-specific generation model is configured.
+func (s *Service) docModel() string {
+	if s.genModel != "" {
+		return s.genModel
+	}
+	return s.llmc.ModelName()
 }
 
 func sanitize(s string) string {
@@ -129,7 +139,7 @@ func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, 
 		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
 	}
 	resumeRow, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
-		Type: string(dto.DocumentTypeResume), Version: 1, Content: resumeContent, PdfPath: &resumePdfPath, Model: s.llmc.ModelName(),
+		Type: string(dto.DocumentTypeResume), Version: 1, Content: resumeContent, PdfPath: &resumePdfPath, Model: s.docModel(),
 		Company: &company, Title: &title, Vacancy: &in.Vacancy,
 	})
 	if err != nil {
@@ -156,7 +166,7 @@ func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, 
 		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
 	}
 	coverRow, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
-		Type: string(dto.DocumentTypeCoverLetter), Version: 1, Content: coverContent, PdfPath: &coverPdfPath, Model: s.llmc.ModelName(),
+		Type: string(dto.DocumentTypeCoverLetter), Version: 1, Content: coverContent, PdfPath: &coverPdfPath, Model: s.docModel(),
 		Company: &company, Title: &title, Vacancy: &in.Vacancy,
 	})
 	if err != nil {
@@ -184,7 +194,7 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaste
 	if rec != nil {
 		rec.Step(ctx, "analyzing vacancy", nil)
 	}
-	analysis, err := analyzeVacancy(ctx, s.llmc, vacancy, hints)
+	analysis, err := analyzeVacancy(ctx, s.llmc, s.genModel, vacancy, hints)
 	if err != nil {
 		return nil, fmt.Errorf("vacancy analysis: %w", err)
 	}
@@ -194,7 +204,7 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaste
 		if rec != nil {
 			rec.Step(ctx, fmt.Sprintf("tailoring resume (LLM) (attempt %d/%d)", attempt+1, groundingAttempts), nil)
 		}
-		payload, err := selectAndTailor(ctx, s.llmc, master, analysis, level, lastViolations)
+		payload, err := selectAndTailor(ctx, s.llmc, s.genModel, master, analysis, level, lastViolations)
 		if err != nil {
 			return nil, err
 		}
@@ -301,7 +311,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	}
 
 	doc, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
-		JobId: jid, Type: docType, Version: version, Content: content, PdfPath: &pdfPath, Model: s.llmc.ModelName(),
+		JobId: jid, Type: docType, Version: version, Content: content, PdfPath: &pdfPath, Model: s.docModel(),
 	})
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
@@ -354,6 +364,7 @@ func (s *Service) tailorResume(ctx context.Context, master RendercvMaster, profi
 		}
 		tailored, err := llm.CompleteStructured[dto.JsonResume](ctx, s.llmc, p, &llm.CompleteOptions{
 			System: "You are an expert resume writer who never fabricates information.",
+			Model:  s.genModel,
 		})
 		if err != nil {
 			return dto.JsonResume{}, err
@@ -382,6 +393,7 @@ func (s *Service) writeCoverLetter(ctx context.Context, profileText string, extr
 
 	result, err := llm.CompleteStructured[coverLetterResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You write concise, concrete, honest cover letters.",
+		Model:  s.genModel,
 	})
 	if err != nil {
 		return "", err

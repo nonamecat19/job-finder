@@ -100,7 +100,7 @@ func run() error {
 		return err
 	}
 	profileSvc := profile.NewService(database.Queries, llmProvider, cfg.EmbedModel, cfg.RendercvBin)
-	matchingSvc := matching.NewService(database.Queries, profileSvc, llmProvider, cfg.MatchSimilarityThreshold)
+	matchingSvc := matching.NewService(database.Queries, profileSvc, llmProvider, cfg.MatchSimilarityThreshold, cfg.ModelOr(cfg.LLMModelMatch))
 	matchingHandler := matching.NewHandler(matchingSvc)
 
 	htmlRenderer, err := generation.NewHtmlPdfRenderer(scrapingSvc, cfg.DocumentsDir)
@@ -108,7 +108,7 @@ func run() error {
 		return err
 	}
 	rendercvRenderer := generation.NewRenderCvRenderer(cfg.DocumentsDir, cfg.RendercvBin)
-	generationSvc := generation.NewService(database.Queries, profileSvc, htmlRenderer, rendercvRenderer, llmProvider, cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
+	generationSvc := generation.NewService(database.Queries, profileSvc, htmlRenderer, rendercvRenderer, llmProvider, cfg.ModelOr(cfg.LLMModelGeneration), cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
 	generationHandler := generation.NewHandler(generationSvc)
 	documentsHandler := &httpapi.DocumentsHandler{Generation: generationSvc}
 

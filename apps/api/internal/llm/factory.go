@@ -1,21 +1,12 @@
 package llm
 
 import (
-	"fmt"
-
 	"github.com/job-finder/api/internal/config"
 )
 
-// New selects the active Provider based on cfg.LLMProvider ("ollama" | "cerebras"),
-// mirroring the useFactory switch in llm.module.ts.
+// New builds the Ollama Provider from config. Ollama is the sole provider;
+// OllamaKey authenticates to Ollama Cloud when set, and EmbedURL lets
+// embeddings run on a different (e.g. local) endpoint than chat.
 func New(cfg *config.Config) (Provider, error) {
-	ollama := NewOllama(cfg.OllamaURL, cfg.LLMModel, cfg.EmbedModel)
-	switch cfg.LLMProvider {
-	case "", "ollama":
-		return ollama, nil
-	case "cerebras":
-		return NewCerebras(cfg.CerebrasURL, cfg.CerebrasAPIKey, cfg.CerebrasModel, ollama)
-	default:
-		return nil, fmt.Errorf("unknown LLM_PROVIDER '%s' — expected 'ollama' or 'cerebras'", cfg.LLMProvider)
-	}
+	return NewOllama(cfg.OllamaURL, cfg.OllamaKey, cfg.LLMModel, cfg.EmbedModel, cfg.EmbedURL), nil
 }
