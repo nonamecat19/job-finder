@@ -18,12 +18,16 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
+// Service is the jobs use-case. It depends on the Repository and Enqueuer
+// ports (see ports.go), not on concrete infrastructure.
 type Service struct {
-	q      *sqlcgen.Queries
-	client *asynq.Client
+	q      Repository
+	client Enqueuer
 }
 
-func NewService(q *sqlcgen.Queries, client *asynq.Client) *Service {
+// NewService wires the use-case to its ports. The concrete *sqlcgen.Queries and
+// *asynq.Client satisfy the interfaces, so callers pass them directly.
+func NewService(q Repository, client Enqueuer) *Service {
 	return &Service{q: q, client: client}
 }
 

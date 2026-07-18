@@ -11,8 +11,19 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 )
 
+// Store is the persistence port activity recording depends on.
+// *sqlcgen.Queries satisfies it, and it lets use-case services expose the same
+// methods through their own repository port so a single value serves both.
+type Store interface {
+	InsertActivityRun(ctx context.Context, arg sqlcgen.InsertActivityRunParams) (sqlcgen.ActivityRun, error)
+	StartActivityRun(ctx context.Context, id pgtype.UUID) error
+	SetActivityStep(ctx context.Context, arg sqlcgen.SetActivityStepParams) error
+	FinishActivityRunOk(ctx context.Context, arg sqlcgen.FinishActivityRunOkParams) error
+	FinishActivityRunError(ctx context.Context, arg sqlcgen.FinishActivityRunErrorParams) error
+}
+
 type Recorder struct {
-	q  *sqlcgen.Queries
+	q  Store
 	id pgtype.UUID
 }
 
@@ -24,7 +35,7 @@ func (r *Recorder) valid() bool {
 	return r != nil && r.q != nil && r.id.Valid
 }
 
-func New(ctx context.Context, q *sqlcgen.Queries, op, label string, jobID *string, sourceKey *string, taskID string) *Recorder {
+func New(ctx context.Context, q Store, op, label string, jobID *string, sourceKey *string, taskID string) *Recorder {
 	var jid pgtype.UUID
 	if jobID != nil {
 		v, err := dbutil.ParseUUID(*jobID)
@@ -57,7 +68,7 @@ func New(ctx context.Context, q *sqlcgen.Queries, op, label string, jobID *strin
 	return &Recorder{q: q, id: row.ID}
 }
 
-func FromID(q *sqlcgen.Queries, id string) *Recorder {
+func FromID(q Store, id string) *Recorder {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
 		slog.Warn("activity: invalid id", "id", id, "error", err)
