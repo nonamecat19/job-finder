@@ -16,12 +16,21 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-type Service struct {
-	q *sqlcgen.Queries
+// SourceEnsurer validates a source key against the code-defined adapter
+// registry and lazily materializes its JobSource row (needed to satisfy the
+// Subscription -> JobSource FK). Source identity is hardcoded in the registry,
+// not seeded in the db, so this is the single point that turns a key into a row.
+type SourceEnsurer interface {
+	GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, error)
 }
 
-func NewService(q *sqlcgen.Queries) *Service {
-	return &Service{q: q}
+type Service struct {
+	q       *sqlcgen.Queries
+	sources SourceEnsurer
+}
+
+func NewService(q *sqlcgen.Queries, sources SourceEnsurer) *Service {
+	return &Service{q: q, sources: sources}
 }
 
 func (s *Service) List(ctx context.Context) ([]dto.SubscriptionDto, error) {
@@ -44,9 +53,9 @@ func (s *Service) Create(ctx context.Context, sourceKey, url string, name *strin
 	if sourceKey == "" || url == "" {
 		return nil, fmt.Errorf("sourceKey and url are required")
 	}
-	// Validate the source exists (FK also enforces this, but this yields a
-	// clearer 400 than a raw constraint violation).
-	if _, err := s.q.GetJobSourceByKey(ctx, sourceKey); err != nil {
+	// Validate the source against the code-defined registry (not the db) and
+	// ensure its JobSource row exists so the FK is satisfied.
+	if _, err := s.sources.GetByKey(ctx, sourceKey); err != nil {
 		return nil, fmt.Errorf("source '%s' not found", sourceKey)
 	}
 	row, err := s.q.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{

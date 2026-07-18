@@ -117,7 +117,7 @@ func run() error {
 	jobsHandler := &httpapi.JobsHandler{Jobs: jobsSvc, Generation: generationSvc}
 	applicationsSvc := applications.NewService(database.Queries)
 	applicationsHandler := &httpapi.ApplicationsHandler{Applications: applicationsSvc}
-	subsSvc := subscriptions.NewService(database.Queries)
+	subsSvc := subscriptions.NewService(database.Queries, sourcesSvc)
 	subsHandler := &httpapi.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
 
 	enrichDelay := time.Duration(cfg.DjinniDetailDelayMs) * time.Millisecond
