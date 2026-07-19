@@ -37,7 +37,7 @@ type coverLetterResult struct {
 }
 
 type Service struct {
-	q            *sqlcgen.Queries
+	q            Repository
 	profiles     ProfileStore
 	htmlRenderer *HtmlPdfRenderer
 	rendercv     *RenderCvRenderer
@@ -47,7 +47,7 @@ type Service struct {
 	defaultLevel GroundingLevel
 }
 
-func NewService(q *sqlcgen.Queries, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, genModel, masterPath, defaultLevel string) *Service {
+func NewService(q Repository, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, genModel, masterPath, defaultLevel string) *Service {
 	if masterPath == "" {
 		masterPath = "./resume/resume.yaml"
 	}
