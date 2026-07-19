@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,11 +13,18 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-type ActivityHandler struct {
-	q *sqlcgen.Queries
+// ActivityProvider is the inbound port the activity handler reads through.
+// *sqlcgen.Queries satisfies it structurally.
+type ActivityProvider interface {
+	ListActiveActivityRuns(ctx context.Context) ([]sqlcgen.ActivityRun, error)
+	ListRecentActivityRuns(ctx context.Context, limit int32) ([]sqlcgen.ActivityRun, error)
 }
 
-func NewActivityHandler(q *sqlcgen.Queries) *ActivityHandler {
+type ActivityHandler struct {
+	q ActivityProvider
+}
+
+func NewActivityHandler(q ActivityProvider) *ActivityHandler {
 	return &ActivityHandler{q: q}
 }
 
