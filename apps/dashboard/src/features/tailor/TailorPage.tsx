@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { GeneratedDocumentDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { Button, EmptyState, Field, Input, Select, Spinner, Surface, Textarea } from '../../components/ui';
+import { useToast } from '../../components/toast';
 import { api } from '../../api';
 import { useAdHocDocuments, useSaveAdHocDocument, useTailorDocuments } from './hooks';
 
@@ -21,12 +22,18 @@ export default function TailorPage() {
   const { data: history } = useAdHocDocuments();
   const tailor = useTailorDocuments();
   const saveLetter = useSaveAdHocDocument(() => setEditingDoc(null));
+  const { success } = useToast();
 
   const submit = () => {
     if (!vacancy.trim()) return;
     tailor.mutate(
       { vacancy, company: company || undefined, title: title || undefined, groundingLevel },
-      { onSuccess: (data) => setResult(data) },
+      {
+        onSuccess: (data) => {
+          setResult(data);
+          success('Documents ready', 'Tailored resume and cover letter generated.');
+        },
+      },
     );
   };
 
