@@ -42,11 +42,12 @@ func NewRenderCvRenderer(outDir, bin string) *RenderCvRenderer {
 // `rendercv render <yaml> -o <outDir> -pdf <baseName>.pdf -nopng -nohtml -nomd`,
 // returning both file paths.
 func (r *RenderCvRenderer) Render(ctx context.Context, master RendercvMaster, baseName string) (yamlPath, pdfPath string, err error) {
-	if err := os.MkdirAll(r.outDir, 0o755); err != nil {
+	outDir, err := ensureOutDir(r.outDir)
+	if err != nil {
 		return "", "", fmt.Errorf("rendercv: mkdir: %w", err)
 	}
-	yamlPath = filepath.Join(r.outDir, baseName+".yaml")
-	pdfPath = filepath.Join(r.outDir, baseName+".pdf")
+	yamlPath = filepath.Join(outDir, baseName+".yaml")
+	pdfPath = filepath.Join(outDir, baseName+".pdf")
 
 	data, err := yaml.Marshal(map[string]any(master))
 	if err != nil {
@@ -58,8 +59,8 @@ func (r *RenderCvRenderer) Render(ctx context.Context, master RendercvMaster, ba
 
 	cmdCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, r.bin, "render", yamlPath, "-o", r.outDir, "-pdf", baseName+".pdf", "-nopng", "-nohtml", "-nomd")
-	cmd.Dir = r.outDir
+	cmd := exec.CommandContext(cmdCtx, r.bin, "render", yamlPath, "-o", outDir, "-pdf", baseName+".pdf", "-nopng", "-nohtml", "-nomd")
+	cmd.Dir = outDir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
