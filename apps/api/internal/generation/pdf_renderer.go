@@ -166,10 +166,11 @@ func (r *HtmlPdfRenderer) RenderCoverLetter(ctx context.Context, text string, na
 }
 
 func (r *HtmlPdfRenderer) htmlToPDF(ctx context.Context, html string, outName string) (string, error) {
-	if err := os.MkdirAll(r.outDir, 0o755); err != nil {
+	outDir, err := ensureOutDir(r.outDir)
+	if err != nil {
 		return "", err
 	}
-	outPath := filepath.Join(r.outDir, outName)
+	outPath := filepath.Join(outDir, outName)
 
 	browserCtx, err := r.scraping.BrowserContext(ctx)
 	if err != nil {
