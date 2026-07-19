@@ -21,17 +21,17 @@ import (
 )
 
 type Handler struct {
-	q            *sqlcgen.Queries
+	q            Repository
 	sources      *jobsources.Service
 	djinni       adapters.DjinniAdapter
 	dou          adapters.DouAdapter
 	workua       adapters.WorkUaAdapter
-	client       *asynq.Client
+	client       Enqueuer
 	defaultDelay time.Duration
 	delays       map[string]time.Duration
 }
 
-func NewHandler(q *sqlcgen.Queries, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, client *asynq.Client, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
+func NewHandler(q Repository, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
 	return &Handler{
 		q: q, sources: sources,
 		djinni: djinni, dou: dou, workua: workua,
