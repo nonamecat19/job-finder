@@ -23,14 +23,14 @@ import (
 var ErrNoProfileConfig = errors.New("no profile config")
 
 type Service struct {
-	q          *sqlcgen.Queries
+	q          Repository
 	profiles   *profile.Service
 	llmc       llm.Provider
 	threshold  float64
 	matchModel string
 }
 
-func NewService(q *sqlcgen.Queries, profiles *profile.Service, llmc llm.Provider, threshold float64, matchModel string) *Service {
+func NewService(q Repository, profiles *profile.Service, llmc llm.Provider, threshold float64, matchModel string) *Service {
 	return &Service{q: q, profiles: profiles, llmc: llmc, threshold: threshold, matchModel: matchModel}
 }
 
