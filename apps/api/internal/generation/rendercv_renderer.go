@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/job-finder/api/internal/storage"
 )
 
 // RenderCvRenderer renders a (tailored) RenderCV master object to PDF by
@@ -21,6 +23,9 @@ import (
 type RenderCvRenderer struct {
 	outDir string
 	bin    string
+	// Store, when set, receives the rendered YAML + PDF so all resume files are
+	// persisted to object storage (MinIO) in addition to the local outDir.
+	Store storage.Blobstore
 }
 
 func NewRenderCvRenderer(outDir, bin string) *RenderCvRenderer {
@@ -62,6 +67,14 @@ func (r *RenderCvRenderer) Render(ctx context.Context, master RendercvMaster, ba
 	}
 	if stderr.Len() > 0 {
 		slog.Debug("rendercv stderr", "output", stderr.String())
+	}
+	if r.Store != nil {
+		if err := r.Store.Upload(ctx, filepath.Base(yamlPath), yamlPath, "application/x-yaml"); err != nil {
+			return "", "", err
+		}
+		if err := r.Store.Upload(ctx, filepath.Base(pdfPath), pdfPath, "application/pdf"); err != nil {
+			return "", "", err
+		}
 	}
 	return yamlPath, pdfPath, nil
 }

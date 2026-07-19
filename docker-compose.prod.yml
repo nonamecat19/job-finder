@@ -31,10 +31,17 @@ services:
 #      OLLAMA_URL: http://localhost:11434
       JOBSPY_URL: http://jobspy-sidecar:8000
       DOCUMENTS_DIR: /data/documents
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-documents}
+      MINIO_USE_SSL: "false"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_started
+      minio:
         condition: service_started
     volumes:
       - documents:/data/documents
@@ -57,6 +64,35 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     profiles: [scraping-extras]
 
+  # MinIO S3-compatible object storage for generated resume/cover-letter files.
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  # One-shot init that creates the documents bucket once MinIO is reachable.
+  createbuckets:
+    image: minio/mc:latest
+    depends_on: [minio]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-documents}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do echo 'waiting for minio'; sleep 1; done;
+      mc mb --ignore-existing local/$$MINIO_BUCKET;
+      exit 0;
+      "
+
 volumes:
   pgdata: {}
   documents: {}
+  miniodata: {}

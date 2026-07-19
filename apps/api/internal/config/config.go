@@ -67,6 +67,14 @@ type Config struct {
 	// Paths
 	DocumentsDir string `mapstructure:"DOCUMENTS_DIR"`
 
+	// MinIO object storage for generated resume/cover-letter files. An empty
+	// MinioEndpoint disables uploads (files stay on DocumentsDir only).
+	MinioEndpoint  string `mapstructure:"MINIO_ENDPOINT"`
+	MinioAccessKey string `mapstructure:"MINIO_ACCESS_KEY"`
+	MinioSecretKey string `mapstructure:"MINIO_SECRET_KEY"`
+	MinioBucket    string `mapstructure:"MINIO_BUCKET"`
+	MinioUseSSL    bool   `mapstructure:"MINIO_USE_SSL"`
+
 	// RenderCV
 	ResumeMasterPath   string `mapstructure:"RESUME_MASTER_PATH"`
 	ResumeGroundingLvl string `mapstructure:"RESUME_GROUNDING_LEVEL"`
@@ -89,6 +97,8 @@ var defaults = map[string]any{
 	"WORKUA_DETAIL_DELAY_MS":     2000,
 	"JOBSPY_URL":                 "http://localhost:8000",
 	"DOCUMENTS_DIR":              "/data/documents",
+	"MINIO_BUCKET":               "documents",
+	"MINIO_USE_SSL":              false,
 	"RESUME_MASTER_PATH":         "./resume/resume.yaml",
 	"RESUME_GROUNDING_LEVEL":     "moderate",
 	"RENDERCV_BIN":               "rendercv",
@@ -101,6 +111,7 @@ var optionalKeys = []string{
 	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
 	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
+	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
 }
 
 // ModelOr returns m if set, otherwise the default LLMModel. Used to resolve a
