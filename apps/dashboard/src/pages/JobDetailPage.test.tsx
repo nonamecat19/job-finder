@@ -102,7 +102,7 @@ describe('JobDetailPage', () => {
   it('renders back to feed link', async () => {
     renderWithProviders(<JobDetailPage />)
     await waitFor(() => {
-      expect(screen.getByText('← back to feed')).toBeInTheDocument()
+      expect(screen.getByText('back to feed')).toBeInTheDocument()
     })
   })
 
@@ -111,5 +111,26 @@ describe('JobDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Documents' })).toBeInTheDocument()
     })
+  })
+
+  it('does not render resume preview when no resume exists', async () => {
+    renderWithProviders(<JobDetailPage />)
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Documents' })).toBeInTheDocument()
+    })
+    expect(screen.queryByTitle('Resume preview')).not.toBeInTheDocument()
+  })
+
+  it('renders resume preview panel from latest resume pdf', async () => {
+    const resume = mockDocument({ id: 'doc-42', type: 'resume', version: 2, pdfPath: '/x.pdf' })
+    vi.mocked(api.jobs.get).mockResolvedValue({ ...jobWithDocs, documents: [resume], application: null })
+    vi.mocked(api.jobs.documents).mockResolvedValue([resume])
+    vi.mocked(api.documents.pdfUrl).mockReturnValue('/api/documents/doc-42/pdf')
+    renderWithProviders(<JobDetailPage />)
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Resume' })).toBeInTheDocument()
+    })
+    const frame = screen.getByTitle('Resume preview') as HTMLIFrameElement
+    expect(frame).toHaveAttribute('src', '/api/documents/doc-42/pdf')
   })
 })
