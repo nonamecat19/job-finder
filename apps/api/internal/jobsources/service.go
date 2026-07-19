@@ -22,12 +22,12 @@ var secretKeyRe = regexp.MustCompile(`(?i)cookie|key|secret|token|password`)
 // identity (key/kind) lives only in the adapter registry; a JobSource row is
 // created lazily, on first real use of a key, not seeded upfront.
 type Service struct {
-	q        *sqlcgen.Queries
+	q        Repository
 	registry *Registry
 	encKey   string // CONFIG_ENCRYPTION_KEY hex; "" disables encryption (dev fallback)
 }
 
-func NewService(q *sqlcgen.Queries, registry *Registry, encKey string) *Service {
+func NewService(q Repository, registry *Registry, encKey string) *Service {
 	return &Service{q: q, registry: registry, encKey: encKey}
 }
 
