@@ -262,7 +262,7 @@ func parseDouCards(doc *goquery.Document, logger *slog.Logger) []dto.NormalizedJ
 		company := strings.TrimSpace(s.Find("a.company").Text())
 		location := strings.TrimSpace(s.Find(".cities").Text())
 		salary := strings.TrimSpace(s.Find("span.salary").Text())
-		shortDesc := strings.TrimSpace(s.Find(".sh-info").Text())
+		shortDesc := strings.TrimSpace(jobsources.SelectionText(s.Find(".sh-info").First()))
 		dateText := strings.TrimSpace(s.Find(".date").Text())
 
 		isRemote := douRemoteRe.MatchString(location)

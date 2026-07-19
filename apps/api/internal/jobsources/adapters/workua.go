@@ -174,7 +174,7 @@ func parseWorkUaCards(doc *goquery.Document) []dto.NormalizedJob {
 			}
 		}
 
-		cardText := strings.TrimSpace(item.Text())
+		cardText := strings.TrimSpace(jobsources.SelectionText(item))
 		descLen := len(cardText)
 		if descLen > 200 {
 			descLen = 200
