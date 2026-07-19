@@ -29,6 +29,10 @@ export default function JobDetailPage() {
   const generate = useGenerateDocument(id, (type) => {
     setCountAtGenerate(docCountOfType(type));
   });
+  const resumeDoc = useMemo(() => {
+    const resumes = (documents ?? []).filter((d) => d.type === 'resume' && d.pdfPath);
+    return resumes.length ? resumes.reduce((a, b) => (b.version > a.version ? b : a)) : null;
+  }, [documents]);
   const markApplied = useMarkJobApplied(id);
   const saveLetter = useSaveDocument(id, () => setEditingDoc(null));
 
@@ -80,18 +84,41 @@ export default function JobDetailPage() {
         onSave={(doc) => saveLetter.mutate(doc)}
       />
 
-      <Surface>
-        <SectionTitle>Job description</SectionTitle>
-        {job.descriptionHtml ? (
-          <div
-            className="prose prose-sm max-w-none text-muted [&_a]:text-accent [&_a:hover]:underline [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 [&_strong]:font-semibold"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.descriptionHtml) }}
-          />
-        ) : (
-          <p className="whitespace-pre-wrap text-sm leading-6 text-muted">{job.description}</p>
-        )}
-      </Surface>
+      <div className={resumeDoc ? 'grid gap-5 lg:grid-cols-2 lg:items-start' : ''}>
+        <Surface>
+          <SectionTitle>Job description</SectionTitle>
+          {job.descriptionHtml ? (
+            <div
+              className="prose prose-sm max-w-none text-muted [&_a]:text-accent [&_a:hover]:underline [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 [&_strong]:font-semibold"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.descriptionHtml) }}
+            />
+          ) : (
+            <p className="whitespace-pre-wrap text-sm leading-6 text-muted">{job.description}</p>
+          )}
+        </Surface>
+        {resumeDoc ? <ResumePreview doc={resumeDoc} /> : null}
+      </div>
     </div>
+  );
+}
+
+function ResumePreview({ doc }: { doc: GeneratedDocumentDto }) {
+  return (
+    <Surface>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <SectionTitle className="mb-0">Resume</SectionTitle>
+        <a href={api.documents.pdfUrl(doc.id)} target="_blank" rel="noreferrer">
+          <Button variant="secondary">
+            open PDF <FileDown className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </a>
+      </div>
+      <iframe
+        title="Resume preview"
+        src={api.documents.pdfUrl(doc.id)}
+        className="h-[75vh] w-full rounded-md border border-border bg-white"
+      />
+    </Surface>
   );
 }
 

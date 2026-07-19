@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { cn } from '../../lib/utils';
 
 export function PageHeader({
   title,
@@ -20,6 +21,6 @@ export function PageHeader({
   );
 }
 
-export function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="mb-3 text-base font-black tracking-tight text-fg">{children}</h2>;
+export function SectionTitle({ children, className }: { children: ReactNode; className?: string }) {
+  return <h2 className={cn('mb-3 text-base font-black tracking-tight text-fg', className)}>{children}</h2>;
 }
