@@ -31,6 +31,7 @@ import (
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/storage"
 	"github.com/job-finder/api/internal/subscriptions"
 )
 
@@ -108,11 +109,31 @@ func run() error {
 	matchingSvc := matching.NewService(database.Queries, profileSvc, llmProvider, cfg.MatchSimilarityThreshold, cfg.ModelOr(cfg.LLMModelMatch))
 	matchingHandler := matching.NewHandler(matchingSvc)
 
+	// MinIO object storage: when configured, every rendered resume/cover-letter
+	// file is uploaded here in addition to the local DocumentsDir.
+	var blobStore storage.Blobstore
+	if cfg.MinioEndpoint != "" {
+		ms, err := storage.NewMinioStore(ctx, storage.Config{
+			Endpoint:  cfg.MinioEndpoint,
+			AccessKey: cfg.MinioAccessKey,
+			SecretKey: cfg.MinioSecretKey,
+			Bucket:    cfg.MinioBucket,
+			UseSSL:    cfg.MinioUseSSL,
+		})
+		if err != nil {
+			return err
+		}
+		blobStore = ms
+		slog.Info("MinIO object storage enabled", "endpoint", cfg.MinioEndpoint, "bucket", cfg.MinioBucket)
+	}
+
 	htmlRenderer, err := generation.NewHtmlPdfRenderer(scrapingSvc, cfg.DocumentsDir)
 	if err != nil {
 		return err
 	}
+	htmlRenderer.Store = blobStore
 	rendercvRenderer := generation.NewRenderCvRenderer(cfg.DocumentsDir, cfg.RendercvBin)
+	rendercvRenderer.Store = blobStore
 	generationSvc := generation.NewService(database.Queries, profileSvc, htmlRenderer, rendercvRenderer, llmProvider, cfg.ModelOr(cfg.LLMModelGeneration), cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
 	generationHandler := generation.NewHandler(generationSvc)
 	documentsHandler := &httpapi.DocumentsHandler{Generation: generationSvc}

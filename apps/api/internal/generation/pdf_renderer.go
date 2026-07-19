@@ -16,6 +16,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/storage"
 )
 
 //go:embed templates/*.html
@@ -33,6 +34,9 @@ type HtmlPdfRenderer struct {
 	outDir    string
 	resumeTpl *template.Template
 	letterTpl *template.Template
+	// Store, when set, receives every rendered PDF so all resume files are
+	// persisted to object storage (MinIO) in addition to the local outDir.
+	Store storage.Blobstore
 }
 
 func NewHtmlPdfRenderer(scrapingSvc *scraping.Service, outDir string) (*HtmlPdfRenderer, error) {
@@ -209,6 +213,11 @@ func (r *HtmlPdfRenderer) htmlToPDF(ctx context.Context, html string, outName st
 	}
 	if err := os.WriteFile(outPath, pdfBuf, 0o644); err != nil {
 		return "", err
+	}
+	if r.Store != nil {
+		if err := r.Store.Upload(ctx, filepath.Base(outPath), outPath, "application/pdf"); err != nil {
+			return "", err
+		}
 	}
 	return outPath, nil
 }
