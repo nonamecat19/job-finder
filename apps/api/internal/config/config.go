@@ -96,7 +96,13 @@ var defaults = map[string]any{
 	"DJINNI_DETAIL_DELAY_MS":     1500,
 	"WORKUA_DETAIL_DELAY_MS":     2000,
 	"JOBSPY_URL":                 "http://localhost:8000",
-	"DOCUMENTS_DIR":              "/data/documents",
+	// "/data/documents" is a container-only path (writable there because the
+	// Dockerfile/compose files run the API as root with a dedicated volume).
+	// On bare-metal dev or `go test`, the host user can't mkdir /data at all
+	// ("mkdir /data: permission denied") — default to a repo-relative dir
+	// instead; docker-compose.yml / docker-compose.prod.yml / Dockerfile all
+	// set DOCUMENTS_DIR=/data/documents explicitly, so containers are unaffected.
+	"DOCUMENTS_DIR":              "./data/documents",
 	"MINIO_BUCKET":               "documents",
 	"MINIO_USE_SSL":              false,
 	"RESUME_MASTER_PATH":         "./resume/resume.yaml",
