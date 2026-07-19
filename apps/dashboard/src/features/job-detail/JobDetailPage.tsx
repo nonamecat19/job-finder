@@ -151,12 +151,12 @@ function FitSummary({ job }: { job: DetailedJob }) {
       {mr.summary ? <p className="mb-2 text-sm leading-6 text-muted">{mr.summary}</p> : null}
       <div className="flex flex-wrap gap-1">
         {(mr.matchedSkills ?? []).map((s: string) => (
-          <Chip key={s} tone="green">
+          <Chip key={`matched-${s}`} tone="green">
             {s}
           </Chip>
         ))}
         {(mr.missingSkills ?? []).map((s: string) => (
-          <Chip key={s} tone="red">
+          <Chip key={`missing-${s}`} tone="red">
             {s}
           </Chip>
         ))}

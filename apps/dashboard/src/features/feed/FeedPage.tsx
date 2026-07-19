@@ -162,12 +162,12 @@ function JobCard({
           <div className="mt-2 flex flex-wrap gap-1">
             <Chip>{job.sourceKey}</Chip>
             {(job.matchResult?.matchedSkills ?? []).slice(0, 3).map((s) => (
-              <Chip key={s} tone="green">
+              <Chip key={`matched-${s}`} tone="green">
                 {s}
               </Chip>
             ))}
             {(job.matchResult?.missingSkills ?? []).slice(0, 3).map((s) => (
-              <Chip key={s} tone="red">
+              <Chip key={`missing-${s}`} tone="red">
                 {s}
               </Chip>
             ))}
