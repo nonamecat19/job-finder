@@ -10,7 +10,7 @@ endif
 install:
 	pnpm install
 
-dev:
+run-frontend:
 	pnpm dev
 
 build:
@@ -84,7 +84,7 @@ test-e2e: test-db-setup
 test-lint: test-go test-react test-python
 
 # --- Go API server ---
-run:
+run-backend:
 	cd apps/api && go run ./cmd/server
 
 # --- go seed data ---
