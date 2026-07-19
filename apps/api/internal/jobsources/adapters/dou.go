@@ -15,6 +15,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/scraping"
 )
 
@@ -392,7 +393,7 @@ func parseDouDetail(doc *goquery.Document, jobURL string) dto.NormalizedJob {
 	if descSel.Length() == 0 {
 		descSel = doc.Find("body")
 	}
-	description := strings.TrimSpace(descSel.First().Text())
+	description := strings.TrimSpace(jobsources.SelectionText(descSel.First()))
 
 	isRemote := douRemoteRe.MatchString(description) || douRemoteRe.MatchString(location)
 

@@ -222,7 +222,7 @@ func (d WorkUaAdapter) FetchDetail(ctx context.Context, jobURL string, config ma
 		return WorkUaDetailPatch{}, err
 	}
 
-	description := strings.TrimSpace(doc.Find("#job-description").First().Text())
+	description := strings.TrimSpace(jobsources.SelectionText(doc.Find("#job-description").First()))
 	company := strings.TrimSpace(doc.Find(`a[href^="/jobs/by-company/"]`).First().Text())
 	salary := strings.TrimSpace(doc.Find("li:has(span.glyphicon-hryvnia-fill)").First().Text())
 	locationText := strings.TrimSpace(doc.Find(`span.glyphicon-map-marker`).First().Parent().Text())
