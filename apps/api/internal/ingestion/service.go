@@ -20,13 +20,13 @@ import (
 )
 
 type Service struct {
-	q        *sqlcgen.Queries
+	q        Repository
 	registry *jobsources.Registry
 	sources  *jobsources.Service
-	client   *asynq.Client
+	client   Enqueuer
 }
 
-func NewService(q *sqlcgen.Queries, registry *jobsources.Registry, sources *jobsources.Service, client *asynq.Client) *Service {
+func NewService(q Repository, registry *jobsources.Registry, sources *jobsources.Service, client Enqueuer) *Service {
 	return &Service{q: q, registry: registry, sources: sources, client: client}
 }
 

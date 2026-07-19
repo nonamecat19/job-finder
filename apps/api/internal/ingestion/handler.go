@@ -24,13 +24,13 @@ const unhealthyAfterConsecutiveFailures = 3
 // Handler processes "ingest" asynq tasks: adapter.Search -> dedupe -> persist
 // -> enqueue match. Mirrors ingestion.processor.ts.
 type Handler struct {
-	q        *sqlcgen.Queries
+	q        Repository
 	registry *jobsources.Registry
 	sources  *jobsources.Service
-	client   *asynq.Client
+	client   Enqueuer
 }
 
-func NewHandler(q *sqlcgen.Queries, registry *jobsources.Registry, sources *jobsources.Service, client *asynq.Client) *Handler {
+func NewHandler(q Repository, registry *jobsources.Registry, sources *jobsources.Service, client Enqueuer) *Handler {
 	return &Handler{q: q, registry: registry, sources: sources, client: client}
 }
 

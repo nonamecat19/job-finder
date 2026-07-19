@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron/v3"
 
-	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 )
 
@@ -21,11 +20,11 @@ import (
 // mathematically equivalent (Next() is the only primitive robfig/cron
 // exposes) — see the derivation in internal/ingestion doc comments.
 type Scheduler struct {
-	q       *sqlcgen.Queries
+	q       Repository
 	service *Service
 }
 
-func NewScheduler(q *sqlcgen.Queries, service *Service) *Scheduler {
+func NewScheduler(q Repository, service *Service) *Scheduler {
 	return &Scheduler{q: q, service: service}
 }
 
