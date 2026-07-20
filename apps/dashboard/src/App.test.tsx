@@ -51,6 +51,16 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Profile' })).toBeInTheDocument()
   })
 
+  it('renders exactly one link per nav label (no duplicate nav DOM)', () => {
+    // Regression guard: shell.tsx used to mount both the desktop sidebar and
+    // the mobile header nav simultaneously, so every label matched twice and
+    // getByRole('link', ...) threw getMultipleElementsFoundError.
+    renderWithProviders(<App />)
+    for (const label of ['Feed', 'Tracker', 'Tailor', 'Status', 'Sources', 'Profile']) {
+      expect(screen.getAllByRole('link', { name: label })).toHaveLength(1)
+    }
+  })
+
   it('defaults to FeedPage', async () => {
     renderWithProviders(<App />)
     await waitFor(() => {
@@ -62,7 +72,7 @@ describe('App', () => {
     const user = userEvent.setup()
     renderWithProviders(<App />)
     await user.click(screen.getByRole('link', { name: 'Sources' }))
-    expect(screen.getByRole('heading', { name: 'Job sources' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Sources & searches' })).toBeInTheDocument()
   })
 
   it('navigates to Tracker page on click', async () => {

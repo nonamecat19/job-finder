@@ -2,6 +2,7 @@ import { Activity, BriefcaseBusiness, ClipboardList, FileEdit, Rss, Settings2, U
 import { NavLink } from 'react-router-dom';
 import { ReactNode } from 'react';
 import { cn } from '../lib/utils';
+import { useMediaQuery } from '../lib/use-media-query';
 
 const navItems = [
   { to: '/', label: 'Feed', icon: Rss },
@@ -13,29 +14,38 @@ const navItems = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // Render a single navigation at a time so each nav link has exactly one
+  // accessible element in the DOM. Falls back to the desktop sidebar when
+  // matchMedia is unavailable (SSR / jsdom tests).
+  const isMobile = useMediaQuery('(max-width: 767.98px)');
+
   return (
     <div className="min-h-screen text-fg">
       <div className="mx-auto grid min-h-screen max-w-[90rem] md:grid-cols-[16rem_1fr]">
-        <aside className="sticky top-0 hidden h-screen flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur-xl md:flex">
-          <Brand />
-          <nav className="mt-8 space-y-1" aria-label="Primary">
-            {navItems.map((item) => (
-              <ShellLink key={item.to} {...item} />
-            ))}
-          </nav>
-        </aside>
+        {!isMobile && (
+          <aside className="sticky top-0 hidden h-screen flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur-xl md:flex">
+            <Brand />
+            <nav className="mt-8 space-y-1" aria-label="Primary">
+              {navItems.map((item) => (
+                <ShellLink key={item.to} {...item} />
+              ))}
+            </nav>
+          </aside>
+        )}
 
         <div className="min-w-0">
-          <header className="sticky top-0 z-20 border-b border-border bg-bg/70 px-4 py-3 backdrop-blur-xl md:hidden">
-            <div className="flex items-center justify-between gap-3">
-              <Brand compact />
-              <nav className="flex gap-1" aria-label="Primary">
-                {navItems.map((item) => (
-                  <ShellLink key={item.to} {...item} compact />
-                ))}
-              </nav>
-            </div>
-          </header>
+          {isMobile && (
+            <header className="sticky top-0 z-20 border-b border-border bg-bg/70 px-4 py-3 backdrop-blur-xl md:hidden">
+              <div className="flex items-center justify-between gap-3">
+                <Brand compact />
+                <nav className="flex gap-1" aria-label="Primary">
+                  {navItems.map((item) => (
+                    <ShellLink key={item.to} {...item} compact />
+                  ))}
+                </nav>
+              </div>
+            </header>
+          )}
           <main className="px-4 py-6 sm:px-6 lg:px-10">{children}</main>
         </div>
       </div>
