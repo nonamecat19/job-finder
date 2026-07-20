@@ -144,7 +144,7 @@ describe('JobDetailPage', () => {
     })
     vi.mocked(api.jobs.get).mockResolvedValue({ ...jobWithDocs, documents: [coverLetter], application: null })
     vi.mocked(api.jobs.documents).mockResolvedValue([coverLetter])
-    vi.mocked(api.documents.update).mockResolvedValue(undefined)
+    vi.mocked(api.documents.update).mockResolvedValue(coverLetter)
 
     renderWithProviders(<JobDetailPage />)
 
