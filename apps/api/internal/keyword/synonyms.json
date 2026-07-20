@@ -1,0 +1,25 @@
+{
+  "synonyms": {
+    "Kubernetes": ["K8s", "kube", "kubernetes cluster", "k8"],
+    "JavaScript": ["JS", "ECMAScript"],
+    "TypeScript": ["TS"],
+    "React": ["React.js", "ReactJS"],
+    "Node.js": ["Node", "NodeJS"],
+    "Continuous Integration": ["CI"],
+    "Continuous Deployment": ["CD"],
+    "Continuous Delivery": ["CD"],
+    "Agile": ["Scrum", "Kanban"],
+    "AWS": ["Amazon Web Services"],
+    "Machine Learning": ["ML"],
+    "Artificial Intelligence": ["AI"],
+    "Infrastructure as Code": ["IaC"],
+    "PostgreSQL": ["Postgres", "PostgresQL"],
+    "Elasticsearch": ["ELK", "Elastic Search"],
+    "Go": ["Golang"],
+    "C++": ["CPP"],
+    "Progressive Web App": ["PWA"],
+    "GraphQL": ["GraphQL API"],
+    "gRPC": ["GRPC"],
+    "Docker": ["containerization", "containerize"]
+  }
+}
