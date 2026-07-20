@@ -310,6 +310,48 @@ type GenerateRequestDto struct {
 	ProfileID *string      `json:"profileId,omitempty"`
 }
 
+// KeywordDiffTermDto is one term in a keyword-diff bucket (008-4). The JSON
+// shape mirrors the persisted KeywordDiff jsonb (spec 008-1 §3) so the wire
+// format and the cache stay identical.
+type KeywordDiffTermDto struct {
+	Term       string `json:"term"`
+	Canonical  string `json:"canonical"`
+	Polarity   string `json:"polarity"` // "required" | "preferred"
+	Normalized string `json:"normalized"`
+	MatchType  string `json:"matchType,omitempty"` // "exact" | "normalized"
+}
+
+// KeywordDiffMetadataDto carries the coverage counters the diff panel renders.
+type KeywordDiffMetadataDto struct {
+	TotalRequired    int     `json:"totalRequired"`
+	TotalPreferred   int     `json:"totalPreferred"`
+	MatchedRequired  int     `json:"matchedRequired"`
+	MatchedPreferred int     `json:"matchedPreferred"`
+	CoveragePct      float64 `json:"coveragePct"`
+}
+
+// KeywordRephraseSuggestionDto is an advisory, truthful rephrase for a missing
+// required term (008-5). Rephrase is null when no honest rephrase is available.
+type KeywordRephraseSuggestionDto struct {
+	Term         string  `json:"term"`
+	Canonical    string  `json:"canonical"`
+	Rephrase     *string `json:"rephrase"`
+	SourceBullet string  `json:"sourceBullet,omitempty"`
+	Reason       string  `json:"reason,omitempty"`
+}
+
+// KeywordDiffDto is the response served by GET /api/jobs/{id}/keyword-diff:
+// the three diff buckets, coverage metadata, and any advisory rephrase
+// suggestions for the missing-required terms.
+type KeywordDiffDto struct {
+	JobID            string                         `json:"jobId"`
+	Matched          []KeywordDiffTermDto           `json:"matched"`
+	MissingRequired  []KeywordDiffTermDto           `json:"missingRequired"`
+	MissingPreferred []KeywordDiffTermDto           `json:"missingPreferred"`
+	Metadata         KeywordDiffMetadataDto         `json:"metadata"`
+	Suggestions      []KeywordRephraseSuggestionDto `json:"suggestions"`
+}
+
 // ActivityRunDto is one row of under-the-hood async task activity (ingest,
 // match, generate, enrich), live progress and recent history alike.
 type ActivityRunDto struct {

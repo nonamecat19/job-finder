@@ -11,6 +11,15 @@ export function useJobDetail(id: string | undefined) {
   });
 }
 
+export function useJobKeywordDiff(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.jobs.keywordDiff(id),
+    queryFn: () => api.jobs.keywordDiff(id!),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
 export function useJobDocuments(id: string | undefined, polling: boolean) {
   return useQuery({
     queryKey: queryKeys.jobs.documents(id),

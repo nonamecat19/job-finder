@@ -258,6 +258,52 @@ export interface GenerateRequestDto {
   profileId?: string;
 }
 /**
+ * KeywordDiffTermDto is one term in a keyword-diff bucket (008-4). The JSON
+ * shape mirrors the persisted KeywordDiff jsonb (spec 008-1 §3) so the wire
+ * format and the cache stay identical.
+ */
+export interface KeywordDiffTermDto {
+  term: string;
+  canonical: string;
+  polarity: string; // "required" | "preferred"
+  normalized: string;
+  matchType?: string; // "exact" | "normalized"
+}
+/**
+ * KeywordDiffMetadataDto carries the coverage counters the diff panel renders.
+ */
+export interface KeywordDiffMetadataDto {
+  totalRequired: number /* int */;
+  totalPreferred: number /* int */;
+  matchedRequired: number /* int */;
+  matchedPreferred: number /* int */;
+  coveragePct: number /* float64 */;
+}
+/**
+ * KeywordRephraseSuggestionDto is an advisory, truthful rephrase for a missing
+ * required term (008-5). Rephrase is null when no honest rephrase is available.
+ */
+export interface KeywordRephraseSuggestionDto {
+  term: string;
+  canonical: string;
+  rephrase?: string;
+  sourceBullet?: string;
+  reason?: string;
+}
+/**
+ * KeywordDiffDto is the response served by GET /api/jobs/{id}/keyword-diff:
+ * the three diff buckets, coverage metadata, and any advisory rephrase
+ * suggestions for the missing-required terms.
+ */
+export interface KeywordDiffDto {
+  jobId: string;
+  matched: KeywordDiffTermDto[];
+  missingRequired: KeywordDiffTermDto[];
+  missingPreferred: KeywordDiffTermDto[];
+  metadata: KeywordDiffMetadataDto;
+  suggestions: KeywordRephraseSuggestionDto[];
+}
+/**
  * ActivityRunDto is one row of under-the-hood async task activity (ingest,
  * match, generate, enrich), live progress and recent history alike.
  */

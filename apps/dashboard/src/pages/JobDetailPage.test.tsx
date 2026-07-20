@@ -19,6 +19,7 @@ vi.mock('../api', () => ({
       hide: vi.fn(),
       generate: vi.fn(),
       documents: vi.fn(),
+      keywordDiff: vi.fn(),
     },
     sources: { list: vi.fn(), update: vi.fn(), test: vi.fn(), enrich: vi.fn() },
     searches: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), run: vi.fn(), recentRuns: vi.fn() },

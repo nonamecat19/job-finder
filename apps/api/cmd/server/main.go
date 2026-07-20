@@ -26,6 +26,7 @@ import (
 	"github.com/job-finder/api/internal/jobs"
 	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/keyword"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/profile"
@@ -155,10 +156,17 @@ func run() error {
 
 	activityHandler := httpapi.NewActivityHandler(database.Queries)
 
+	// Keyword-diff endpoint (008-6): reads the KeywordDiff cache (008-4). The
+	// advisory rephrase suggester (008-5) is not wired here — generating
+	// rephrases synchronously per request means a live LLM call per
+	// missing-required term, so it belongs behind an async/cached path (see
+	// follow-up task). Until then the endpoint returns empty suggestions.
+	keywordHandler := &httpapi.KeywordHandler{Diff: keyword.NewDiffService(database.Queries)}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
-		subsHandler.Mount, activityHandler.Mount,
+		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
 	)
 
 	srv := &http.Server{

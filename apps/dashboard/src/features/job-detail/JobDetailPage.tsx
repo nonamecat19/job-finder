@@ -13,6 +13,7 @@ import {
   useSaveDocument,
 } from './hooks';
 import DOMPurify from 'dompurify';
+import KeywordDiffPanel from './KeywordDiffPanel';
 
 type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
 
@@ -75,6 +76,8 @@ export default function JobDetailPage() {
       />
 
       {job.matchResult ? <FitSummary job={job} /> : null}
+
+      <KeywordDiffPanel jobId={id} />
 
       <DocumentsPanel
         documents={documents ?? []}

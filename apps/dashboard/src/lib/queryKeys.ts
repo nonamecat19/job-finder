@@ -6,6 +6,7 @@ export const queryKeys = {
     list: (filters: JobFilters) => ['jobs', 'list', filters] as const,
     detail: (id: string | undefined) => ['jobs', 'detail', id] as const,
     documents: (id: string | undefined) => ['jobs', 'documents', id] as const,
+    keywordDiff: (id: string | undefined) => ['jobs', 'keyword-diff', id] as const,
   },
   sources: {
     all: ['sources'] as const,

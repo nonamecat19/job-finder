@@ -257,6 +257,47 @@ export interface GenerateRequestDto {
   profileId?: string;
 }
 
+// ---------------------------------------------------------------------------
+// JD-ATS keyword diff (008)
+// ---------------------------------------------------------------------------
+
+export type KeywordPolarity = 'required' | 'preferred';
+
+export interface KeywordDiffTerm {
+  term: string;
+  canonical: string;
+  polarity: KeywordPolarity;
+  normalized: string;
+  matchType?: string; // 'exact' | 'normalized'
+}
+
+export interface KeywordDiffMetadata {
+  totalRequired: number;
+  totalPreferred: number;
+  matchedRequired: number;
+  matchedPreferred: number;
+  coveragePct: number;
+}
+
+/** Advisory, truthful rephrase for a missing-required term. rephrase is null
+ * when no honest rephrase is available (reason explains why). */
+export interface KeywordRephraseSuggestion {
+  term: string;
+  canonical: string;
+  rephrase: string | null;
+  sourceBullet?: string;
+  reason?: string;
+}
+
+export interface KeywordDiffResponse {
+  jobId: string;
+  matched: KeywordDiffTerm[];
+  missingRequired: KeywordDiffTerm[];
+  missingPreferred: KeywordDiffTerm[];
+  metadata: KeywordDiffMetadata;
+  suggestions: KeywordRephraseSuggestion[];
+}
+
 export const ACTIVITY_OPS = ['ingest', 'match', 'generate', 'enrich'] as const;
 export type ActivityOp = (typeof ACTIVITY_OPS)[number];
 
