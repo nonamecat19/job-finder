@@ -236,7 +236,7 @@ function DocumentsPanel({
             {doc.type === 'cover_letter' && editingDoc?.id !== doc.id ? (
               <p className="mt-2 whitespace-pre-wrap text-muted">{(doc.content as { text?: string })?.text}</p>
             ) : null}
-            {editingDoc?.id === doc.id ? (
+            {editingDoc && editingDoc.id === doc.id ? (
               <div className="mt-2">
                 <Textarea
                   className="h-40"
