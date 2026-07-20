@@ -195,7 +195,7 @@ func ExtractResumeTerms(profileText string) []string {
 	out := make([]string, 0, len(phrases))
 	seen := make(map[string]bool, len(phrases))
 	for _, p := range phrases {
-		t := normalizeTerm(p)
+		t := normalizeTerm(p.phrase)
 		if t.Canonical == "" || seen[lowerASCII(t.Canonical)] {
 			continue
 		}

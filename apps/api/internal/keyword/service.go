@@ -71,13 +71,14 @@ func (e *RegexExtractor) Extract(jd string) (*ExtractResult, error) {
 	sections := splitSections(jd)
 	seen := make(map[string]ExtractedTerm)
 	for _, sec := range sections {
-		for _, raw := range extractPhrases(sec.body) {
-			term := normalizeTerm(raw)
+		for _, hit := range extractPhrases(sec.body) {
+			term := normalizeTerm(hit.phrase)
 			if term.Term == "" {
 				continue
 			}
 			term.Polarity = sec.polarity
 			term.Section = sec.header
+			term.Evidence = hit.evidence
 			// Dedup by canonical term: a skill required somewhere in the JD
 			// outranks a preferred-only mention, so required wins on conflict
 			// (the diff should not hide a hard requirement behind a "nice to
@@ -159,11 +160,20 @@ func classifyHeader(h string) Polarity {
 	return PolarityRequired
 }
 
+// phraseHit is a single extracted phrase paired with the raw candidate
+// line/bullet it came from, so downstream steps (the must-have classifier)
+// can inspect the surrounding phrasing.
+type phraseHit struct {
+	phrase   string
+	evidence string
+}
+
 // extractPhrases pulls skill-like phrases out of a section body. It collects
 // bullet items and falls back to sentence fragments, then merges adjacent
 // single tokens into known multi-word terms (synonym map keys) so
 // "machine learning" is not split into "machine" + "learning" (spec §1.4.4).
-func extractPhrases(body string) []string {
+// Each phrase keeps a reference to the candidate line it originated from.
+func extractPhrases(body string) []phraseHit {
 	var candidates []string
 	for _, m := range bulletRe.FindAllStringSubmatch(body, -1) {
 		candidates = append(candidates, m[1])
@@ -177,11 +187,14 @@ func extractPhrases(body string) []string {
 		}
 	}
 
-	var phrases []string
+	var hits []phraseHit
 	for _, c := range candidates {
-		phrases = append(phrases, mergeMultiWord(c)...)
+		evidence := collapseSpace(strings.TrimSpace(c))
+		for _, p := range mergeMultiWord(c) {
+			hits = append(hits, phraseHit{phrase: p, evidence: evidence})
+		}
 	}
-	return phrases
+	return hits
 }
 
 // mergeMultiWord splits a candidate into word tokens, then greedily folds

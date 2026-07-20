@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "term": "Rust",
+      "context": "systems",
+      "adjacent": [
+        {"term": "Go", "proximity": "moderate"},
+        {"term": "C++", "proximity": "moderate"},
+        {"term": "C", "proximity": "distant"}
+      ]
+    },
+    {
+      "term": "Rust",
+      "context": "web-assembly",
+      "adjacent": [
+        {"term": "JavaScript", "proximity": "moderate"},
+        {"term": "TypeScript", "proximity": "distant"}
+      ]
+    },
+    {
+      "term": "Postgres",
+      "context": "any",
+      "adjacent": [
+        {"term": "MySQL", "proximity": "close"},
+        {"term": "SQLite", "proximity": "close"},
+        {"term": "MariaDB", "proximity": "close"},
+        {"term": "SQL Server", "proximity": "moderate"},
+        {"term": "Oracle", "proximity": "distant"}
+      ]
+    },
+    {
+      "term": "AWS",
+      "context": "any",
+      "adjacent": [
+        {"term": "GCP", "proximity": "moderate"},
+        {"term": "Azure", "proximity": "distant"}
+      ]
+    },
+    {
+      "term": "Docker",
+      "context": "any",
+      "adjacent": [
+        {"term": "Podman", "proximity": "close"},
+        {"term": "containerd", "proximity": "moderate"}
+      ]
+    },
+    {
+      "term": "TypeScript",
+      "context": "any",
+      "adjacent": [
+        {"term": "JavaScript", "proximity": "close"}
+      ]
+    },
+    {
+      "term": "React",
+      "context": "any",
+      "adjacent": [
+        {"term": "Vue", "proximity": "moderate"},
+        {"term": "Svelte", "proximity": "distant"}
+      ]
+    },
+    {
+      "term": "Kubernetes",
+      "context": "any",
+      "adjacent": [
+        {"term": "Nomad", "proximity": "distant"},
+        {"term": "Docker Swarm", "proximity": "distant", "symmetric": false}
+      ]
+    },
+    {
+      "term": "gRPC",
+      "context": "any",
+      "adjacent": [
+        {"term": "REST", "proximity": "moderate"}
+      ]
+    },
+    {
+      "term": "GraphQL",
+      "context": "any",
+      "adjacent": [
+        {"term": "REST", "proximity": "moderate"}
+      ]
+    },
+    {
+      "term": "Redis",
+      "context": "any",
+      "adjacent": [
+        {"term": "Memcached", "proximity": "close"},
+        {"term": "KeyDB", "proximity": "close"}
+      ]
+    },
+    {
+      "term": "RabbitMQ",
+      "context": "any",
+      "adjacent": [
+        {"term": "Kafka", "proximity": "moderate"}
+      ]
+    },
+    {
+      "term": "MongoDB",
+      "context": "any",
+      "adjacent": [
+        {"term": "DocumentDB", "proximity": "close"}
+      ]
+    },
+    {
+      "term": "CircleCI",
+      "context": "any",
+      "adjacent": [
+        {"term": "GitHub Actions", "proximity": "close"},
+        {"term": "Jenkins", "proximity": "moderate"}
+      ]
+    },
+    {
+      "term": "Ansible",
+      "context": "any",
+      "adjacent": [
+        {"term": "Terraform", "proximity": "distant"},
+        {"term": "Chef", "proximity": "moderate"},
+        {"term": "Puppet", "proximity": "moderate"}
+      ]
+    }
+  ]
+}

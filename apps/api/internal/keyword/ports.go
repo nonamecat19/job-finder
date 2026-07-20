@@ -25,6 +25,11 @@ type ExtractedTerm struct {
 	Section   string   `json:"source_section"`
 	Canonical string   `json:"canonical"`
 	Stemmed   string   `json:"normalized"`
+	// Evidence is the raw candidate line/bullet this term was extracted from.
+	// It is retained so the must-have classifier (009-2) can inspect the
+	// surrounding phrasing (e.g. "5+ years", "must have") without re-parsing
+	// the JD, and for downstream traceability of why a term was surfaced.
+	Evidence string `json:"evidence,omitempty"`
 }
 
 // ExtractResult is the full output of a single extraction pass over one JD.
