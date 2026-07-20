@@ -96,4 +96,4 @@ seed-clean:
 
 truncate-db:
 	docker compose exec -T postgres psql -U jobfinder -d jobfinder -c \
-		'TRUNCATE TABLE "Application","GeneratedDocument","Job","JobSource","MatchResult","Profile","SavedSearch","SourceRun","Subscription" RESTART IDENTITY CASCADE;'
+		'TRUNCATE TABLE "Application","GeneratedDocument","Job","JobSource","MatchResult","Profile","SalaryCache","SavedSearch","SourceRun","Subscription" RESTART IDENTITY CASCADE;'
