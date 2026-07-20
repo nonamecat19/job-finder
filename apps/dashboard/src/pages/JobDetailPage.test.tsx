@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../test/test-utils'
 import { mockJob, mockDocument } from '../test/factories'
 import { api } from '../api'
@@ -132,5 +133,31 @@ describe('JobDetailPage', () => {
     })
     const frame = screen.getByTitle('Resume preview') as HTMLIFrameElement
     expect(frame).toHaveAttribute('src', '/api/documents/doc-42/pdf')
+  })
+
+  it('renders textarea and saves when editing a cover letter', async () => {
+    const user = userEvent.setup()
+    const coverLetter = mockDocument({
+      id: 'doc-cl-1',
+      type: 'cover_letter',
+      content: { text: 'Cover letter text' },
+    })
+    vi.mocked(api.jobs.get).mockResolvedValue({ ...jobWithDocs, documents: [coverLetter], application: null })
+    vi.mocked(api.jobs.documents).mockResolvedValue([coverLetter])
+    vi.mocked(api.documents.update).mockResolvedValue(undefined)
+
+    renderWithProviders(<JobDetailPage />)
+
+    const editBtn = await screen.findByRole('button', { name: 'edit' })
+    await user.click(editBtn)
+
+    const textarea = screen.getByRole('textbox')
+    expect(textarea).toHaveValue('Cover letter text')
+
+    await user.click(screen.getByRole('button', { name: /save.*re-render/i }))
+
+    await waitFor(() => {
+      expect(api.documents.update).toHaveBeenCalledWith('doc-cl-1', 'Cover letter text')
+    })
   })
 })
