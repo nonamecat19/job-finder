@@ -1,5 +1,5 @@
 import { ArrowLeft, ExternalLink, FileDown } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
@@ -21,6 +21,7 @@ export default function JobDetailPage() {
   const [generating, setGenerating] = useState<DocumentType | null>(null);
   const [countAtGenerate, setCountAtGenerate] = useState(0);
   const [editingDoc, setEditingDoc] = useState<{ id: string; text: string } | null>(null);
+  const handledMutationRef = useRef<DocumentType | null>(null);
 
   const { data: job, isLoading } = useJobDetail(id);
   const { data: documents } = useJobDocuments(id, !!generating);
@@ -37,7 +38,8 @@ export default function JobDetailPage() {
   const saveLetter = useSaveDocument(id, () => setEditingDoc(null));
 
   useEffect(() => {
-    if (generate.isSuccess && generate.variables && generating !== generate.variables) {
+    if (generate.isSuccess && generate.variables && handledMutationRef.current !== generate.variables) {
+      handledMutationRef.current = generate.variables;
       setGenerating(generate.variables);
       return;
     }
