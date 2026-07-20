@@ -45,6 +45,9 @@ func truncateAll(t *testing.T) {
 	ctx := context.Background()
 	tables := []string{
 		`"SourceRun"`,
+		`"KeywordDiff"`,
+		`"NormalizedTerm"`,
+		`"SynonymOverride"`,
 		`"MatchResult"`,
 		`"Application"`,
 		`"GeneratedDocument"`,

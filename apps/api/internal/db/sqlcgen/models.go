@@ -80,6 +80,17 @@ type JobSource struct {
 	Healthy bool        `json:"healthy"`
 }
 
+type KeywordDiff struct {
+	ID               pgtype.UUID      `json:"id"`
+	JobId            pgtype.UUID      `json:"jobId"`
+	Matched          []byte           `json:"matched"`
+	MissingRequired  []byte           `json:"missingRequired"`
+	MissingPreferred []byte           `json:"missingPreferred"`
+	CoveragePct      *float64         `json:"coveragePct"`
+	Model            string           `json:"model"`
+	CreatedAt        pgtype.Timestamp `json:"createdAt"`
+}
+
 type MatchResult struct {
 	ID            pgtype.UUID      `json:"id"`
 	JobId         pgtype.UUID      `json:"jobId"`
@@ -91,6 +102,17 @@ type MatchResult struct {
 	RedFlags      []byte           `json:"redFlags"`
 	Model         string           `json:"model"`
 	CreatedAt     pgtype.Timestamp `json:"createdAt"`
+}
+
+type NormalizedTerm struct {
+	ID        pgtype.UUID      `json:"id"`
+	Source    string           `json:"source"`
+	SourceId  pgtype.UUID      `json:"sourceId"`
+	Original  string           `json:"original"`
+	Canonical string           `json:"canonical"`
+	Stemmed   string           `json:"stemmed"`
+	Category  *string          `json:"category"`
+	CreatedAt pgtype.Timestamp `json:"createdAt"`
 }
 
 type Profile struct {
@@ -135,5 +157,12 @@ type Subscription struct {
 	Url       string           `json:"url"`
 	Enabled   bool             `json:"enabled"`
 	LastRunAt pgtype.Timestamp `json:"lastRunAt"`
+	CreatedAt pgtype.Timestamp `json:"createdAt"`
+}
+
+type SynonymOverride struct {
+	ID        pgtype.UUID      `json:"id"`
+	Alias     string           `json:"alias"`
+	Canonical string           `json:"canonical"`
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
 }
