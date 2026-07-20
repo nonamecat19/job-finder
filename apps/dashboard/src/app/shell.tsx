@@ -2,6 +2,7 @@ import { Activity, BriefcaseBusiness, ClipboardList, FileEdit, Rss, Settings2, U
 import { NavLink } from 'react-router-dom';
 import { ReactNode } from 'react';
 import { cn } from '../lib/utils';
+import { MD_BREAKPOINT_QUERY, useMediaQuery } from '../lib/use-media-query';
 
 const navItems = [
   { to: '/', label: 'Feed', icon: Rss },
@@ -13,29 +14,37 @@ const navItems = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // Only ONE nav is mounted at a time. Rendering both (CSS-hidden) duplicated every
+  // nav link in the accessibility tree and broke `getByRole('link', { name })` queries.
+  const isDesktop = useMediaQuery(MD_BREAKPOINT_QUERY);
+
   return (
     <div className="min-h-screen text-fg">
       <div className="mx-auto grid min-h-screen max-w-[90rem] md:grid-cols-[16rem_1fr]">
-        <aside className="sticky top-0 hidden h-screen flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur-xl md:flex">
-          <Brand />
-          <nav className="mt-8 space-y-1" aria-label="Primary">
-            {navItems.map((item) => (
-              <ShellLink key={item.to} {...item} />
-            ))}
-          </nav>
-        </aside>
+        {isDesktop && (
+          <aside className="sticky top-0 flex h-screen flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur-xl">
+            <Brand />
+            <nav className="mt-8 space-y-1" aria-label="Primary">
+              {navItems.map((item) => (
+                <ShellLink key={item.to} {...item} />
+              ))}
+            </nav>
+          </aside>
+        )}
 
         <div className="min-w-0">
-          <header className="sticky top-0 z-20 border-b border-border bg-bg/70 px-4 py-3 backdrop-blur-xl md:hidden">
-            <div className="flex items-center justify-between gap-3">
-              <Brand compact />
-              <nav className="flex gap-1" aria-label="Primary">
-                {navItems.map((item) => (
-                  <ShellLink key={item.to} {...item} compact />
-                ))}
-              </nav>
-            </div>
-          </header>
+          {!isDesktop && (
+            <header className="sticky top-0 z-20 border-b border-border bg-bg/70 px-4 py-3 backdrop-blur-xl">
+              <div className="flex items-center justify-between gap-3">
+                <Brand compact />
+                <nav className="flex gap-1" aria-label="Primary">
+                  {navItems.map((item) => (
+                    <ShellLink key={item.to} {...item} compact />
+                  ))}
+                </nav>
+              </div>
+            </header>
+          )}
           <main className="px-4 py-6 sm:px-6 lg:px-10">{children}</main>
         </div>
       </div>

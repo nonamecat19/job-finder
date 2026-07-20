@@ -51,6 +51,17 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Profile' })).toBeInTheDocument()
   })
 
+  // Regression guard: AppShell used to render the desktop sidebar nav AND the mobile
+  // header nav simultaneously (hidden only via CSS), duplicating every link in the
+  // accessibility tree and breaking getByRole('link', { name }) queries.
+  it('renders exactly one nav link per label', () => {
+    renderWithProviders(<App />)
+    for (const label of ['Feed', 'Tracker', 'Tailor', 'Status', 'Sources', 'Profile']) {
+      expect(screen.getAllByRole('link', { name: label })).toHaveLength(1)
+    }
+    expect(screen.getAllByRole('navigation')).toHaveLength(1)
+  })
+
   it('defaults to FeedPage', async () => {
     renderWithProviders(<App />)
     await waitFor(() => {
@@ -62,7 +73,9 @@ describe('App', () => {
     const user = userEvent.setup()
     renderWithProviders(<App />)
     await user.click(screen.getByRole('link', { name: 'Sources' }))
-    expect(screen.getByRole('heading', { name: 'Job sources' })).toBeInTheDocument()
+    // Assert the page-level <h1>, not the "Job sources" section title: that section
+    // only renders once api.sources.list returns a non-empty list (mocked empty here).
+    expect(screen.getByRole('heading', { name: 'Sources & searches' })).toBeInTheDocument()
   })
 
   it('navigates to Tracker page on click', async () => {
