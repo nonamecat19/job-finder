@@ -68,6 +68,8 @@ func truncateAll(t *testing.T) {
 		`"Job"`,
 		`"JobSource"`,
 		`"Profile"`,
+		`"CompanySignal"`,
+		`"Company"`,
 	}
 	for _, tbl := range tables {
 		_, err := testDB.Pool.Exec(ctx, "TRUNCATE TABLE "+tbl+" CASCADE")
