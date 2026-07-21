@@ -143,6 +143,7 @@ func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload,
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: djinni complete", "job", payload.JobID)
 	return nil
 }
@@ -185,6 +186,7 @@ func (h *Handler) enrichDOU(ctx context.Context, payload queue.EnrichPayload, ui
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: dou complete", "job", payload.JobID)
 	return nil
 }
@@ -219,6 +221,7 @@ func (h *Handler) enrichWorkUa(ctx context.Context, payload queue.EnrichPayload,
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: workua complete", "job", payload.JobID)
 	return nil
 }
@@ -238,6 +241,17 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, job sqlcgen.Jo
 	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, matchPayload),
 		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
 		slog.Warn("enrichment: enqueue match failed", "job", jobID, "error", err)
+	}
+}
+
+func (h *Handler) enqueueSalaryInfer(ctx context.Context, jobID string) {
+	payload, err := json.Marshal(queue.SalaryInferPayload{JobID: jobID})
+	if err != nil {
+		return
+	}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeSalaryInfer, payload),
+		asynq.MaxRetry(1), asynq.Queue(queue.QueueSalaryInfer)); err != nil {
+		slog.Warn("enrichment: enqueue salary infer failed", "job", jobID, "error", err)
 	}
 }
 

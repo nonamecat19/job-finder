@@ -52,23 +52,28 @@ type GeneratedDocument struct {
 }
 
 type Job struct {
-	ID              pgtype.UUID      `json:"id"`
-	DedupeKey       string           `json:"dedupeKey"`
-	SourceKey       string           `json:"sourceKey"`
-	ExternalId      *string          `json:"externalId"`
-	Title           string           `json:"title"`
-	Company         string           `json:"company"`
-	Location        *string          `json:"location"`
-	Remote          bool             `json:"remote"`
-	SalaryRaw       *string          `json:"salaryRaw"`
-	Url             string           `json:"url"`
-	Description     string           `json:"description"`
-	Raw             []byte           `json:"raw"`
-	PostedAt        pgtype.Timestamp `json:"postedAt"`
-	IngestedAt      pgtype.Timestamp `json:"ingestedAt"`
-	Embedding       *pgvector.Vector `json:"embedding"`
-	Status          string           `json:"status"`
-	DetailScrapedAt pgtype.Timestamp `json:"detailScrapedAt"`
+	ID               pgtype.UUID      `json:"id"`
+	DedupeKey        string           `json:"dedupeKey"`
+	SourceKey        string           `json:"sourceKey"`
+	ExternalId       *string          `json:"externalId"`
+	Title            string           `json:"title"`
+	Company          string           `json:"company"`
+	Location         *string          `json:"location"`
+	Remote           bool             `json:"remote"`
+	SalaryRaw        *string          `json:"salaryRaw"`
+	Url              string           `json:"url"`
+	Description      string           `json:"description"`
+	Raw              []byte           `json:"raw"`
+	PostedAt         pgtype.Timestamp `json:"postedAt"`
+	IngestedAt       pgtype.Timestamp `json:"ingestedAt"`
+	Embedding        *pgvector.Vector `json:"embedding"`
+	Status           string           `json:"status"`
+	DetailScrapedAt  pgtype.Timestamp `json:"detailScrapedAt"`
+	SalaryMin        *int32           `json:"salaryMin"`
+	SalaryMax        *int32           `json:"salaryMax"`
+	SalaryCurrency   *string          `json:"salaryCurrency"`
+	SalaryConfidence *float64         `json:"salaryConfidence"`
+	SalarySource     *string          `json:"salarySource"`
 }
 
 type JobSource struct {
@@ -126,6 +131,17 @@ type Profile struct {
 	CreatedAt      pgtype.Timestamp `json:"createdAt"`
 	RendercvConfig []byte           `json:"rendercvConfig"`
 	RendercvYaml   *string          `json:"rendercvYaml"`
+}
+
+type SalaryCache struct {
+	ID         pgtype.UUID      `json:"id"`
+	Bucket     string           `json:"bucket"`
+	SalaryMin  *int32           `json:"salaryMin"`
+	SalaryMax  *int32           `json:"salaryMax"`
+	Currency   string           `json:"currency"`
+	Source     string           `json:"source"`
+	SampleSize int32            `json:"sampleSize"`
+	UpdatedAt  pgtype.Timestamp `json:"updatedAt"`
 }
 
 type SavedSearch struct {

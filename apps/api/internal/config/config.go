@@ -88,6 +88,10 @@ type Config struct {
 	ResumeMasterPath   string `mapstructure:"RESUME_MASTER_PATH"`
 	ResumeGroundingLvl string `mapstructure:"RESUME_GROUNDING_LEVEL"`
 	RendercvBin        string `mapstructure:"RENDERCV_BIN"`
+
+	// Salary inference
+	LevelsFyiCSV  string `mapstructure:"LEVELS_FYI_CSV"`
+	SalaryFloorUsd int   `mapstructure:"SALARY_FLOOR_USD"`
 }
 
 // defaults holds the code-level default for every key that has one. Keys
@@ -129,6 +133,7 @@ var optionalKeys = []string{
 	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
 	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
+	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD",
 }
 
 // ModelOr returns m if set, otherwise the default LLMModel. Used to resolve a

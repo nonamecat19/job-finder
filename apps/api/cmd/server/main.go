@@ -31,6 +31,7 @@ import (
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/job-finder/api/internal/storage"
 	"github.com/job-finder/api/internal/subscriptions"
@@ -154,6 +155,18 @@ func run() error {
 	enrichHandler := enrichment.NewHandler(database.Queries, sourcesSvc, djinniAdapter, douAdapter, workuaAdapter, asynqClient, enrichDelay, enrichDelays)
 	sourcesHandler.Enrichment = enrichHandler
 
+	levelsFyiLoader := salary.NewLevelsFyiLoader(database.Queries)
+	salaryService := salary.NewService(database.Queries, llmProvider, levelsFyiLoader, cfg.ModelOr(""))
+	salaryHandler := salary.NewHandler(salaryService)
+
+	if cfg.LevelsFyiCSV != "" {
+		if _, err := levelsFyiLoader.LoadCSV(ctx, cfg.LevelsFyiCSV); err != nil {
+			slog.Warn("salary: levels.fyi CSV load failed", "path", cfg.LevelsFyiCSV, "error", err)
+		}
+	} else {
+		slog.Warn("salary: LEVELS_FYI_CSV not set — levels.fyi source disabled")
+	}
+
 	activityHandler := httpapi.NewActivityHandler(database.Queries)
 
 	// Keyword-diff endpoint (008-6): reads the KeywordDiff cache (008-4) and
@@ -221,6 +234,13 @@ func run() error {
 		Queues:      map[string]int{queue.QueueEnrich: 1},
 	})
 
+	salaryMux := asynq.NewServeMux()
+	salaryMux.HandleFunc(queue.TypeSalaryInfer, salaryHandler.ProcessTask)
+	salaryAsynqSrv := asynq.NewServer(redisOpt, asynq.Config{
+		Concurrency: 1,
+		Queues:      map[string]int{queue.QueueSalaryInfer: 1},
+	})
+
 	go func() {
 		slog.Info("API listening", "port", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -248,6 +268,11 @@ func run() error {
 			slog.Error("asynq enrich worker error", "error", err)
 		}
 	}()
+	go func() {
+		if err := salaryAsynqSrv.Run(salaryMux); err != nil {
+			slog.Error("asynq salary worker error", "error", err)
+		}
+	}()
 
 	go scheduler.Run(ctx)
 
@@ -257,6 +282,7 @@ func run() error {
 	matchSrv.Shutdown()
 	generateSrv.Shutdown()
 	enrichSrv.Shutdown()
+	salaryAsynqSrv.Shutdown()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)

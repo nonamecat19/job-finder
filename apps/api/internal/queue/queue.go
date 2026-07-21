@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	TypeIngest   = "ingest"
-	TypeMatch    = "match"
-	TypeGenerate = "generate"
-	TypeEnrich   = "enrich"
+	TypeIngest     = "ingest"
+	TypeMatch      = "match"
+	TypeGenerate   = "generate"
+	TypeEnrich     = "enrich"
+	TypeSalaryInfer = "salary:infer"
 )
 
 // Queue names each task type is routed to. These are deliberately separate
@@ -28,10 +29,11 @@ const (
 // per-queue concurrency ceiling, so one server can't reproduce "match never
 // runs more than 1 at a time" on its own.
 const (
-	QueueIngest   = TypeIngest
-	QueueMatch    = TypeMatch
-	QueueGenerate = TypeGenerate
-	QueueEnrich   = TypeEnrich
+	QueueIngest     = TypeIngest
+	QueueMatch      = TypeMatch
+	QueueGenerate   = TypeGenerate
+	QueueEnrich     = TypeEnrich
+	QueueSalaryInfer = TypeSalaryInfer
 )
 
 // IngestPayload mirrors IngestJobData. Exactly one of SearchID/SubscriptionID
@@ -54,6 +56,11 @@ type MatchPayload struct {
 type EnrichPayload struct {
 	JobID      string  `json:"jobId"`
 	ActivityID *string `json:"activityId,omitempty"`
+}
+
+// SalaryInferPayload carries the job to infer salary for.
+type SalaryInferPayload struct {
+	JobID string `json:"jobId"`
 }
 
 // GeneratePayload mirrors GenerateJobData.
