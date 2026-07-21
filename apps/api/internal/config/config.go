@@ -31,6 +31,15 @@ type Config struct {
 	// Per-task chat models. Empty falls back to LLMModel via ModelOr.
 	LLMModelMatch      string `mapstructure:"LLM_MODEL_MATCH"`
 	LLMModelGeneration string `mapstructure:"LLM_MODEL_GENERATION"`
+	// LLMModelRephrase is the model for the keyword-diff rephrase suggester
+	// (008-5). Empty falls back to LLMModel via ModelOr.
+	LLMModelRephrase string `mapstructure:"LLM_MODEL_REPHRASE"`
+
+	// KeywordRephraseCacheTTLSec is the lifetime, in seconds, of a cached set of
+	// keyword-diff rephrase suggestions. Suggestions are generated async and
+	// cached because each is a live LLM call; a stale entry past this age is
+	// recomputed on the next request.
+	KeywordRephraseCacheTTLSec int `mapstructure:"KEYWORD_REPHRASE_CACHE_TTL_SEC"`
 
 	// EmbedURL is the endpoint for embeddings; empty means "same as OllamaURL".
 	// Ollama Cloud serves no embedding models, so this can point at a local
@@ -85,29 +94,30 @@ type Config struct {
 // without an entry default to the zero value (and, where required, are
 // validated by the consuming binary).
 var defaults = map[string]any{
-	"PORT":                       3000,
-	"REDIS_URL":                  "redis://localhost:6379",
-	"OLLAMA_URL":                 "http://localhost:11434",
-	"LLM_MODEL":                  "qwen2.5:14b",
-	"EMBED_MODEL":                "nomic-embed-text",
-	"EMBED_DIMS":                 768,
-	"MATCH_SIMILARITY_THRESHOLD": 0.35,
-	"ADZUNA_COUNTRY":             "gb",
-	"DJINNI_DETAIL_DELAY_MS":     1500,
-	"WORKUA_DETAIL_DELAY_MS":     2000,
-	"JOBSPY_URL":                 "http://localhost:8000",
+	"PORT":                           3000,
+	"REDIS_URL":                      "redis://localhost:6379",
+	"OLLAMA_URL":                     "http://localhost:11434",
+	"LLM_MODEL":                      "qwen2.5:14b",
+	"EMBED_MODEL":                    "nomic-embed-text",
+	"EMBED_DIMS":                     768,
+	"MATCH_SIMILARITY_THRESHOLD":     0.35,
+	"KEYWORD_REPHRASE_CACHE_TTL_SEC": 900,
+	"ADZUNA_COUNTRY":                 "gb",
+	"DJINNI_DETAIL_DELAY_MS":         1500,
+	"WORKUA_DETAIL_DELAY_MS":         2000,
+	"JOBSPY_URL":                     "http://localhost:8000",
 	// "/data/documents" is a container-only path (writable there because the
 	// Dockerfile/compose files run the API as root with a dedicated volume).
 	// On bare-metal dev or `go test`, the host user can't mkdir /data at all
 	// ("mkdir /data: permission denied") — default to a repo-relative dir
 	// instead; docker-compose.yml / docker-compose.prod.yml / Dockerfile all
 	// set DOCUMENTS_DIR=/data/documents explicitly, so containers are unaffected.
-	"DOCUMENTS_DIR":              "./data/documents",
-	"MINIO_BUCKET":               "documents",
-	"MINIO_USE_SSL":              false,
-	"RESUME_MASTER_PATH":         "./resume/resume.yaml",
-	"RESUME_GROUNDING_LEVEL":     "moderate",
-	"RENDERCV_BIN":               "rendercv",
+	"DOCUMENTS_DIR":          "./data/documents",
+	"MINIO_BUCKET":           "documents",
+	"MINIO_USE_SSL":          false,
+	"RESUME_MASTER_PATH":     "./resume/resume.yaml",
+	"RESUME_GROUNDING_LEVEL": "moderate",
+	"RENDERCV_BIN":           "rendercv",
 }
 
 // keys without a default (optional strings / required-by-consumer). Listed so
@@ -115,6 +125,7 @@ var defaults = map[string]any{
 // viper knows about.
 var optionalKeys = []string{
 	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
+	"LLM_MODEL_REPHRASE",
 	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
 	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",

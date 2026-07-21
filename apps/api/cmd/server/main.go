@@ -156,12 +156,20 @@ func run() error {
 
 	activityHandler := httpapi.NewActivityHandler(database.Queries)
 
-	// Keyword-diff endpoint (008-6): reads the KeywordDiff cache (008-4). The
-	// advisory rephrase suggester (008-5) is not wired here — generating
-	// rephrases synchronously per request means a live LLM call per
-	// missing-required term, so it belongs behind an async/cached path (see
-	// follow-up task). Until then the endpoint returns empty suggestions.
-	keywordHandler := &httpapi.KeywordHandler{Diff: keyword.NewDiffService(database.Queries)}
+	// Keyword-diff endpoint (008-6): reads the KeywordDiff cache (008-4) and
+	// attaches advisory rephrase suggestions (008-5). Each rephrase is a live
+	// LLM call per missing-required term, so it must not run inline on the GET.
+	// keyword.CachedRephraser fronts the Suggester with an async, TTL'd cache:
+	// the first request returns empty suggestions and computes them in the
+	// background; later requests return the cached result. Profile bullets are
+	// the grounding source, so the suggester only reframes existing experience.
+	rephraseModel := keyword.NewProviderRephraseModel(llmProvider, cfg.ModelOr(cfg.LLMModelRephrase))
+	cachedRephraser := keyword.NewCachedRephraser(
+		keyword.NewSuggester(rephraseModel),
+		time.Duration(cfg.KeywordRephraseCacheTTLSec)*time.Second,
+	)
+	diffService := keyword.NewDiffService(database.Queries).WithRephraser(cachedRephraser, profileSvc)
+	keywordHandler := &httpapi.KeywordHandler{Diff: diffService}
 
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
