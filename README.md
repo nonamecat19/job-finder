@@ -49,6 +49,31 @@ pnpm -r typecheck
 pnpm build
 ```
 
+## Database code generation (sqlc)
+
+The Go API's DB layer in `apps/api/internal/db/sqlcgen` is **generated** — never edit it by
+hand. It is derived from the migrations in `apps/api/internal/db/migrations` and the queries in
+`apps/api/internal/db/queries`.
+
+Whenever you add or change a migration or a query file, regenerate and commit the result:
+
+```bash
+make sqlc-generate
+git add apps/api/internal/db/sqlcgen
+```
+
+CI enforces this. The **API CI › sqlc generate is up to date** job
+(`.github/workflows/api-ci.yml`) reruns `sqlc generate` and fails if the working tree changes,
+so stale generated code cannot land on master. Reproduce the check locally with:
+
+```bash
+make sqlc-check
+```
+
+The sqlc version is pinned in `apps/api/.sqlc-version` so local runs and CI emit identical code.
+Install the pinned version with `make sqlc-install`; `make sqlc-check` refuses to run on a
+mismatched version rather than producing a misleading diff.
+
 ## Using it
 
 1. **Profile** page: paste/import (PDF) your master profile — the superset of all your

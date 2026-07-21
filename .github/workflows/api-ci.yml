@@ -1,0 +1,25 @@
+name: API CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  sqlc-drift:
+    name: sqlc generate is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned sqlc version
+        id: sqlc
+        run: echo "version=$(tr -d '[:space:]' < apps/api/.sqlc-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install sqlc
+        uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: ${{ steps.sqlc.outputs.version }}
+
+      - name: Check generated code matches migrations and queries
+        run: ./scripts/sqlc-check.sh

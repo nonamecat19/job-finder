@@ -1,6 +1,6 @@
 .PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean \
 	test test-go test-react test-python test-integration test-e2e test-lint test-db-setup \
-	seed seed-clean truncate-db
+	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install
 
 ifneq (,$(wildcard .env))
 include .env
@@ -86,6 +86,20 @@ test-lint: test-go test-react test-python
 # --- Go API server ---
 run-backend:
 	cd apps/api && go run ./cmd/server
+
+# --- sqlc code generation ---
+# Version is pinned in apps/api/.sqlc-version so local and CI emit identical code.
+SQLC_VERSION := $(shell tr -d '[:space:]' < apps/api/.sqlc-version)
+
+sqlc-install:
+	go install github.com/sqlc-dev/sqlc/cmd/sqlc@v$(SQLC_VERSION)
+
+sqlc-generate:
+	cd apps/api && sqlc generate
+
+# Fails if apps/api/internal/db/sqlcgen is stale. Mirrors the API CI job.
+sqlc-check:
+	./scripts/sqlc-check.sh
 
 # --- go seed data ---
 seed:
