@@ -5,12 +5,15 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
 )
 
@@ -36,6 +39,13 @@ func TestMain(m *testing.M) {
 	}
 	defer testDB.Close()
 
+	// Suites in other packages truncate the same tables; take turns.
+	unlock, err := dbtest.LockSharedDB(context.Background(), testDB.Pool)
+	if err != nil {
+		panic("lock shared db: " + err.Error())
+	}
+	defer unlock()
+
 	os.Exit(m.Run())
 }
 
@@ -49,6 +59,7 @@ func truncateAll(t *testing.T) {
 		`"NormalizedTerm"`,
 		`"SynonymOverride"`,
 		`"MatchResult"`,
+		`"ApplicationOutcome"`,
 		`"Application"`,
 		`"GeneratedDocument"`,
 		`"Subscription"`,
@@ -536,6 +547,203 @@ func TestApplicationCRUD(t *testing.T) {
 	}
 }
 
+// --------------- ApplicationOutcome event log ---------------
+
+// mustInsertApplication creates a job + its application and returns the app.
+func mustInsertApplication(t *testing.T, sourceKey, dedupeKey string) sqlcgen.Application {
+	t.Helper()
+	ctx := context.Background()
+	job := mustInsertJob(t, sourceKey, dedupeKey, "Outcome Test Job")
+	if err := testDB.Queries.UpsertApplicationStatus(ctx, sqlcgen.UpsertApplicationStatusParams{
+		JobId:  job.ID,
+		Status: "shortlisted",
+		Events: []byte(`[]`),
+	}); err != nil {
+		t.Fatalf("upsert application: %v", err)
+	}
+	app, err := testDB.Queries.GetApplicationByJobID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("get application by job ID: %v", err)
+	}
+	return app
+}
+
+func mustInsertOutcome(t *testing.T, appID pgtype.UUID, eventType string, occurredAt time.Time) sqlcgen.ApplicationOutcome {
+	t.Helper()
+	row, err := testDB.Queries.InsertApplicationOutcome(context.Background(), sqlcgen.InsertApplicationOutcomeParams{
+		ApplicationId: appID,
+		EventType:     eventType,
+		OccurredAt:    pgtype.Timestamp{Time: occurredAt, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("insert outcome %s: %v", eventType, err)
+	}
+	return row
+}
+
+// TestApplicationOutcomeWriteAndOrdering covers the core acceptance: events are
+// written, and read back ordered by "occurredAt" oldest-first regardless of the
+// order they were inserted in.
+func TestApplicationOutcomeWriteAndOrdering(t *testing.T) {
+	truncateAll(t)
+	ctx := context.Background()
+
+	mustInsertJobSource(t, "js-outcome", "api")
+	app := mustInsertApplication(t, "js-outcome", "outcome-job-1")
+
+	base := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+
+	// Insert deliberately out of chronological order: rejected (day 10) first,
+	// then applied (day 0), then screen (day 4). Read-back must still be
+	// oldest-first, proving the ORDER BY drives the timeline, not insert order.
+	mustInsertOutcome(t, app.ID, "rejected", base.AddDate(0, 0, 10))
+	applied := mustInsertOutcome(t, app.ID, "applied", base)
+	mustInsertOutcome(t, app.ID, "screen", base.AddDate(0, 0, 4))
+
+	if applied.EventType != "applied" {
+		t.Fatalf("expected eventType applied, got %s", applied.EventType)
+	}
+	if !applied.OccurredAt.Valid {
+		t.Fatal("expected occurredAt to be set")
+	}
+	if !applied.RecordedAt.Valid {
+		t.Fatal("expected recordedAt to default to now()")
+	}
+	if applied.Note != nil {
+		t.Fatalf("expected nil note, got %v", *applied.Note)
+	}
+
+	rows, err := testDB.Queries.ListApplicationOutcomes(ctx, app.ID)
+	if err != nil {
+		t.Fatalf("list outcomes: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 outcome events, got %d", len(rows))
+	}
+	want := []string{"applied", "screen", "rejected"}
+	for i, w := range want {
+		if rows[i].EventType != w {
+			t.Fatalf("event %d: expected %s, got %s", i, w, rows[i].EventType)
+		}
+	}
+	for i := 1; i < len(rows); i++ {
+		if rows[i].OccurredAt.Time.Before(rows[i-1].OccurredAt.Time) {
+			t.Fatalf("events not ordered oldest-first at index %d", i)
+		}
+	}
+
+	count, err := testDB.Queries.CountApplicationOutcomes(ctx, app.ID)
+	if err != nil {
+		t.Fatalf("count outcomes: %v", err)
+	}
+	if count != 3 {
+		t.Fatalf("expected count 3, got %d", count)
+	}
+}
+
+// TestApplicationOutcomeTerminalOnceIdempotency covers the partial unique index:
+// applied/offer/rejected are recorded at most once, viewed/screen may recur.
+func TestApplicationOutcomeTerminalOnceIdempotency(t *testing.T) {
+	truncateAll(t)
+	ctx := context.Background()
+
+	mustInsertJobSource(t, "js-once", "api")
+	app := mustInsertApplication(t, "js-once", "once-job-1")
+
+	base := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+
+	for _, terminal := range []string{"applied", "offer", "rejected"} {
+		mustInsertOutcome(t, app.ID, terminal, base)
+
+		// Second submit at a different instant must be a silent no-op — the
+		// query is ON CONFLICT DO NOTHING, so it returns no row.
+		_, err := testDB.Queries.InsertApplicationOutcome(ctx, sqlcgen.InsertApplicationOutcomeParams{
+			ApplicationId: app.ID,
+			EventType:     terminal,
+			OccurredAt:    pgtype.Timestamp{Time: base.AddDate(0, 0, 1), Valid: true},
+		})
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatalf("duplicate %s: expected pgx.ErrNoRows, got %v", terminal, err)
+		}
+	}
+
+	// Recurring types are outside the unique index predicate.
+	mustInsertOutcome(t, app.ID, "screen", base.AddDate(0, 0, 2))
+	mustInsertOutcome(t, app.ID, "screen", base.AddDate(0, 0, 5))
+	mustInsertOutcome(t, app.ID, "viewed", base.AddDate(0, 0, 3))
+	mustInsertOutcome(t, app.ID, "viewed", base.AddDate(0, 0, 6))
+
+	count, err := testDB.Queries.CountApplicationOutcomes(ctx, app.ID)
+	if err != nil {
+		t.Fatalf("count outcomes: %v", err)
+	}
+	// 3 terminal-once + 2 screen + 2 viewed = 7 (duplicates dropped).
+	if count != 7 {
+		t.Fatalf("expected 7 outcome events, got %d", count)
+	}
+}
+
+// TestApplicationOutcomeConstraints covers the eventType CHECK, the FK, and the
+// ON DELETE cascade from "Application".
+func TestApplicationOutcomeConstraints(t *testing.T) {
+	truncateAll(t)
+	ctx := context.Background()
+
+	mustInsertJobSource(t, "js-constraint", "api")
+	app := mustInsertApplication(t, "js-constraint", "constraint-job-1")
+	now := time.Now().UTC()
+
+	// Unknown eventType is rejected by the CHECK constraint.
+	_, err := testDB.Queries.InsertApplicationOutcome(ctx, sqlcgen.InsertApplicationOutcomeParams{
+		ApplicationId: app.ID,
+		EventType:     "ghosted",
+		OccurredAt:    pgtype.Timestamp{Time: now, Valid: true},
+	})
+	if err == nil || errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expected CHECK violation for eventType 'ghosted', got %v", err)
+	}
+
+	// Unknown applicationId is rejected by the FK.
+	orphan, perr := dbutil.ParseUUID("00000000-0000-0000-0000-0000000000ff")
+	if perr != nil {
+		t.Fatalf("parse uuid: %v", perr)
+	}
+	_, err = testDB.Queries.InsertApplicationOutcome(ctx, sqlcgen.InsertApplicationOutcomeParams{
+		ApplicationId: orphan,
+		EventType:     "applied",
+		OccurredAt:    pgtype.Timestamp{Time: now, Valid: true},
+	})
+	if err == nil || errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expected FK violation for unknown applicationId, got %v", err)
+	}
+
+	// Deleting the application cascades its outcome events away.
+	note := "phone screen with hiring manager"
+	withNote, err := testDB.Queries.InsertApplicationOutcome(ctx, sqlcgen.InsertApplicationOutcomeParams{
+		ApplicationId: app.ID,
+		EventType:     "screen",
+		OccurredAt:    pgtype.Timestamp{Time: now, Valid: true},
+		Note:          &note,
+	})
+	if err != nil {
+		t.Fatalf("insert outcome with note: %v", err)
+	}
+	if withNote.Note == nil || *withNote.Note != note {
+		t.Fatal("expected note to round-trip")
+	}
+
+	if _, err := testDB.Pool.Exec(ctx, `DELETE FROM "Application" WHERE "id" = $1`, app.ID); err != nil {
+		t.Fatalf("delete application: %v", err)
+	}
+	count, err := testDB.Queries.CountApplicationOutcomes(ctx, app.ID)
+	if err != nil {
+		t.Fatalf("count after cascade: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 outcomes after application delete cascade, got %d", count)
+	}
+}
+
 // --------------- Subscription CRUD ---------------
 
 func TestSubscriptionCRUD(t *testing.T) {
@@ -645,8 +853,8 @@ func TestProfileCRUD(t *testing.T) {
 	ctx := context.Background()
 
 	doc, _ := json.Marshal(map[string]any{
-		"name":  "John Doe",
-		"email": "john@example.com",
+		"name":   "John Doe",
+		"email":  "john@example.com",
 		"skills": []string{"go", "postgres", "docker"},
 	})
 

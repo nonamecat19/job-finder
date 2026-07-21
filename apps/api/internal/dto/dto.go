@@ -39,6 +39,54 @@ func IsValidApplicationStatus(s string) bool {
 	return false
 }
 
+// OutcomeEventType is the append-only outcome event log's enum (spec 010,
+// migration 00012_application_outcome.sql). A "response" is any event whose
+// type is not OutcomeApplied — silence (only `applied` recorded) is a
+// non-response, never an exclusion.
+type OutcomeEventType string
+
+const (
+	OutcomeApplied  OutcomeEventType = "applied"
+	OutcomeViewed   OutcomeEventType = "viewed"
+	OutcomeScreen   OutcomeEventType = "screen"
+	OutcomeOffer    OutcomeEventType = "offer"
+	OutcomeRejected OutcomeEventType = "rejected"
+)
+
+var OutcomeEventTypes = []OutcomeEventType{
+	OutcomeApplied, OutcomeViewed, OutcomeScreen, OutcomeOffer, OutcomeRejected,
+}
+
+func IsValidOutcomeEventType(s string) bool {
+	for _, v := range OutcomeEventTypes {
+		if string(v) == s {
+			return true
+		}
+	}
+	return false
+}
+
+// OutcomeEventForStatus maps an application status transition onto the outcome
+// event it records. Statuses before submission (found/shortlisted/
+// docs_generated) record no outcome event — the log holds real observed
+// application outcomes only. OutcomeViewed has no corresponding status: it is
+// defined for ATS/employer view signals and simply never fires until a source
+// can supply it.
+func OutcomeEventForStatus(s ApplicationStatus) (OutcomeEventType, bool) {
+	switch s {
+	case StatusApplied:
+		return OutcomeApplied, true
+	case StatusInterview:
+		return OutcomeScreen, true
+	case StatusOffer:
+		return OutcomeOffer, true
+	case StatusRejected:
+		return OutcomeRejected, true
+	default:
+		return "", false
+	}
+}
+
 type DocumentType string
 
 const (
@@ -284,6 +332,18 @@ type SourceRunDto struct {
 type ApplicationEvent struct {
 	Status string `json:"status"`
 	At     string `json:"at"`
+}
+
+// ApplicationOutcomeDto is one row of the append-only outcome event log.
+// OccurredAt is when the real-world event happened (may be back-dated);
+// RecordedAt is when the row was written and is never back-dated.
+type ApplicationOutcomeDto struct {
+	ID            string           `json:"id"`
+	ApplicationID string           `json:"applicationId"`
+	EventType     OutcomeEventType `json:"eventType"`
+	OccurredAt    string           `json:"occurredAt"`
+	RecordedAt    string           `json:"recordedAt"`
+	Note          *string          `json:"note,omitempty"`
 }
 
 type ApplicationDto struct {

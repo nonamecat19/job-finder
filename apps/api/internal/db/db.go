@@ -45,6 +45,32 @@ func (d *DB) Close() {
 	d.Pool.Close()
 }
 
+// WithinTx runs fn against a *sqlcgen.Queries bound to a single transaction,
+// committing on success and rolling back on any error or panic. Use it when two
+// writes must not diverge — e.g. an application status update and its
+// "ApplicationOutcome" event insert (spec 010).
+//
+// The signature deliberately takes *sqlcgen.Queries rather than a domain port
+// so use-case packages can declare their own structural interface over it
+// without db importing them.
+func (d *DB) WithinTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error {
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("db: begin tx: %w", err)
+	}
+	defer func() {
+		// No-op once the tx is committed; guarantees rollback on panic.
+		_ = tx.Rollback(ctx)
+	}()
+	if err := fn(sqlcgen.New(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("db: commit tx: %w", err)
+	}
+	return nil
+}
+
 // Migrate runs embedded goose migrations up to the latest version. It opens
 // a separate database/sql connection (goose's requirement) over the same
 // DSN pgx uses.

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -23,11 +24,29 @@ import (
 var ErrNotFound = errors.New("application not found")
 
 type Service struct {
-	q Repository
+	q  Repository
+	tx TxRunner
 }
 
-func NewService(q Repository) *Service {
-	return &Service{q: q}
+// NewService builds the use-case. Pass a TxRunner (e.g. *db.DB) to make a
+// status change and the outcome event it records commit atomically; omit it
+// and the writes run sequentially against q, which is what unit-test fakes do.
+func NewService(q Repository, tx ...TxRunner) *Service {
+	s := &Service{q: q}
+	if len(tx) > 0 {
+		s.tx = tx[0]
+	}
+	return s
+}
+
+// inTx runs fn against a transaction-bound Repository when a TxRunner is
+// injected, and against the plain repository otherwise. *sqlcgen.Queries
+// satisfies Repository structurally, so both paths share one fn body.
+func (s *Service) inTx(ctx context.Context, fn func(Repository) error) error {
+	if s.tx == nil {
+		return fn(s.q)
+	}
+	return s.tx.WithinTx(ctx, func(q *sqlcgen.Queries) error { return fn(q) })
 }
 
 func (s *Service) List(ctx context.Context, status *string) ([]dto.ApplicationDto, error) {
@@ -68,8 +87,14 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 	_ = dbutil.UnmarshalJSONB(existing.Events, &events)
 	params := sqlcgen.UpdateApplicationParams{ID: uid}
 
+	// One instant shared by the jsonb annotation, the outcome event's
+	// "occurredAt", and "appliedAt" — the post-age signal reads "appliedAt" and
+	// must see the same moment the `applied` event carries.
+	occurredAt := time.Now().UTC()
+	var outcome *dto.OutcomeEventType
+
 	if in.Status != nil && string(*in.Status) != existing.Status {
-		events = append(events, dto.ApplicationEvent{Status: string(*in.Status), At: time.Now().UTC().Format(time.RFC3339)})
+		events = append(events, dto.ApplicationEvent{Status: string(*in.Status), At: occurredAt.Format(time.RFC3339)})
 		s := string(*in.Status)
 		params.Status = &s
 		eventsJSON, err := json.Marshal(events)
@@ -78,7 +103,10 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 		}
 		params.Events = eventsJSON
 		if *in.Status == dto.StatusApplied && !existing.AppliedAt.Valid {
-			params.AppliedAt = dbutil.NowTimestamp()
+			params.AppliedAt = pgtype.Timestamp{Time: occurredAt, Valid: true}
+		}
+		if et, ok := dto.OutcomeEventForStatus(*in.Status); ok {
+			outcome = &et
 		}
 	} else {
 		// keep existing events unchanged (params.Events must still be a valid
@@ -92,20 +120,69 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 		params.Notes = *in.Notes
 	}
 
-	updated, err := s.q.UpdateApplication(ctx, params)
+	// Status write, outcome-event append, and the mirrored job status all commit
+	// together — the current-state column and the event log must never diverge.
+	var updated sqlcgen.Application
+	err = s.inTx(ctx, func(q Repository) error {
+		var err error
+		if updated, err = q.UpdateApplication(ctx, params); err != nil {
+			return err
+		}
+		if outcome != nil {
+			_, err := q.InsertApplicationOutcome(ctx, sqlcgen.InsertApplicationOutcomeParams{
+				ApplicationId: uid,
+				EventType:     string(*outcome),
+				OccurredAt:    pgtype.Timestamp{Time: occurredAt, Valid: true},
+			})
+			// No row means the partial unique index rejected a duplicate
+			// terminal-once event ('applied'/'offer'/'rejected'). That is the
+			// specified idempotent no-op, not a failure.
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		}
+		if in.Status != nil {
+			if _, err := q.UpdateJobStatus(ctx, sqlcgen.UpdateJobStatusParams{ID: existing.JobId, Status: string(*in.Status)}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return dto.ApplicationDto{}, err
-	}
-	if in.Status != nil {
-		if _, err := s.q.UpdateJobStatus(ctx, sqlcgen.UpdateJobStatusParams{ID: existing.JobId, Status: string(*in.Status)}); err != nil {
-			return dto.ApplicationDto{}, err
-		}
 	}
 
 	out := toDto(updated)
 	if job, err := s.q.GetJobByID(ctx, existing.JobId); err == nil {
 		jd := jobDto(job)
 		out.Job = &jd
+	}
+	return out, nil
+}
+
+// Timeline returns the application's outcome events oldest-first. The log is
+// append-only, so a status that regressed (offer back to screen) still shows
+// every transition in the order it happened rather than a rewritten linear
+// history.
+func (s *Service) Timeline(ctx context.Context, id string) ([]dto.ApplicationOutcomeDto, error) {
+	uid, err := dbutil.ParseUUID(id)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListApplicationOutcomes(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dto.ApplicationOutcomeDto, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, dto.ApplicationOutcomeDto{
+			ID:            dbutil.UUIDString(r.ID),
+			ApplicationID: dbutil.UUIDString(r.ApplicationId),
+			EventType:     dto.OutcomeEventType(r.EventType),
+			OccurredAt:    dbutil.Timestamp(r.OccurredAt),
+			RecordedAt:    dbutil.Timestamp(r.RecordedAt),
+			Note:          r.Note,
+		})
 	}
 	return out, nil
 }

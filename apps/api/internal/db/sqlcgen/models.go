@@ -37,6 +37,16 @@ type Application struct {
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
 }
 
+type ApplicationOutcome struct {
+	ID            pgtype.UUID      `json:"id"`
+	ApplicationId pgtype.UUID      `json:"applicationId"`
+	EventType     string           `json:"eventType"`
+	OccurredAt    pgtype.Timestamp `json:"occurredAt"`
+	RecordedAt    pgtype.Timestamp `json:"recordedAt"`
+	Note          *string          `json:"note"`
+	CreatedAt     pgtype.Timestamp `json:"createdAt"`
+}
+
 type GeneratedDocument struct {
 	ID        pgtype.UUID      `json:"id"`
 	JobId     pgtype.UUID      `json:"jobId"`

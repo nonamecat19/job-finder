@@ -21,6 +21,18 @@ export const StatusApplied: ApplicationStatus = "applied";
 export const StatusInterview: ApplicationStatus = "interview";
 export const StatusOffer: ApplicationStatus = "offer";
 export const StatusRejected: ApplicationStatus = "rejected";
+/**
+ * OutcomeEventType is the append-only outcome event log's enum (spec 010,
+ * migration 00012_application_outcome.sql). A "response" is any event whose
+ * type is not OutcomeApplied — silence (only `applied` recorded) is a
+ * non-response, never an exclusion.
+ */
+export type OutcomeEventType = string;
+export const OutcomeApplied: OutcomeEventType = "applied";
+export const OutcomeViewed: OutcomeEventType = "viewed";
+export const OutcomeScreen: OutcomeEventType = "screen";
+export const OutcomeOffer: OutcomeEventType = "offer";
+export const OutcomeRejected: OutcomeEventType = "rejected";
 export type DocumentType = string;
 export const DocumentTypeResume: DocumentType = "resume";
 export const DocumentTypeCoverLetter: DocumentType = "cover_letter";
@@ -235,6 +247,19 @@ export interface SourceRunDto {
 export interface ApplicationEvent {
   status: string;
   at: string;
+}
+/**
+ * ApplicationOutcomeDto is one row of the append-only outcome event log.
+ * OccurredAt is when the real-world event happened (may be back-dated);
+ * RecordedAt is when the row was written and is never back-dated.
+ */
+export interface ApplicationOutcomeDto {
+  id: string;
+  applicationId: string;
+  eventType: OutcomeEventType;
+  occurredAt: string;
+  recordedAt: string;
+  note?: string;
 }
 export interface ApplicationDto {
   id: string;

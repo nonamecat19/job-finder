@@ -22,4 +22,14 @@ type Repository interface {
 	StatsPipeline(ctx context.Context) ([]sqlcgen.StatsPipelineRow, error)
 	UpdateApplication(ctx context.Context, arg sqlcgen.UpdateApplicationParams) (sqlcgen.Application, error)
 	UpdateJobStatus(ctx context.Context, arg sqlcgen.UpdateJobStatusParams) (sqlcgen.Job, error)
+	InsertApplicationOutcome(ctx context.Context, arg sqlcgen.InsertApplicationOutcomeParams) (sqlcgen.ApplicationOutcome, error)
+	ListApplicationOutcomes(ctx context.Context, applicationID pgtype.UUID) ([]sqlcgen.ApplicationOutcome, error)
+}
+
+// TxRunner is the optional atomicity port. *db.DB satisfies it structurally.
+// When one is injected, a status change and the "ApplicationOutcome" event it
+// records commit together or not at all (spec 010); without one the service
+// degrades to sequential writes, which is what the unit-test fakes use.
+type TxRunner interface {
+	WithinTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error
 }

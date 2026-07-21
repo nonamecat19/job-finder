@@ -10,6 +10,7 @@ import (
 
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 )
@@ -34,6 +35,13 @@ func TestAdHocDocuments_NullJobId(t *testing.T) {
 		t.Fatalf("db open: %v", err)
 	}
 	defer testDB.Close()
+
+	// Other integration suites truncate these same tables in parallel; take turns.
+	unlock, err := dbtest.LockSharedDB(ctx, testDB.Pool)
+	if err != nil {
+		t.Fatalf("lock shared db: %v", err)
+	}
+	defer unlock()
 
 	for _, tbl := range []string{"GeneratedDocument", "Job", "JobSource"} {
 		if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "`+tbl+`" CASCADE`); err != nil {

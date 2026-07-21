@@ -143,7 +143,9 @@ func run() error {
 	profilesHandler := &httpapi.ProfilesHandler{Profiles: profileSvc}
 	jobsSvc := jobs.NewService(database.Queries, asynqClient)
 	jobsHandler := &httpapi.JobsHandler{Jobs: jobsSvc, Generation: generationSvc}
-	applicationsSvc := applications.NewService(database.Queries)
+	// database (not database.Queries) is passed as the TxRunner so a status
+	// change and its "ApplicationOutcome" event commit atomically.
+	applicationsSvc := applications.NewService(database.Queries, database)
 	applicationsHandler := &httpapi.ApplicationsHandler{Applications: applicationsSvc}
 	subsSvc := subscriptions.NewService(database.Queries, sourcesSvc)
 	subsHandler := &httpapi.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
