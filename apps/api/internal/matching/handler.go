@@ -10,6 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -17,11 +18,12 @@ import (
 // (concurrency 1: local LLM handles one request at a time comfortably —
 // enforced by the asynq server's queue concurrency configuration in main).
 type Handler struct {
-	svc *Service
+	svc      *Service
+	notifier *notifier.Service
 }
 
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, notifier *notifier.Service) *Handler {
+	return &Handler{svc: svc, notifier: notifier}
 }
 
 func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
@@ -60,5 +62,10 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		return err
 	}
 	slog.Info("matching complete", "jobId", payload.JobID, "score", result.Score, "similarity", result.Similarity)
+
+	if result.Score != nil {
+		h.notifier.MaybeNotify(ctx, payload.JobID, result.ID, *result.Score)
+	}
+
 	return nil
 }

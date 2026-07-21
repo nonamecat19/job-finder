@@ -47,6 +47,16 @@ type ApplicationOutcome struct {
 	CreatedAt     pgtype.Timestamp `json:"createdAt"`
 }
 
+type FreshMatchNotification struct {
+	ID            pgtype.UUID      `json:"id"`
+	JobId         pgtype.UUID      `json:"jobId"`
+	MatchResultId pgtype.UUID      `json:"matchResultId"`
+	ProfileId     pgtype.UUID      `json:"profileId"`
+	Fresh         bool             `json:"fresh"`
+	Seen          bool             `json:"seen"`
+	CreatedAt     pgtype.Timestamp `json:"createdAt"`
+}
+
 type GeneratedDocument struct {
 	ID        pgtype.UUID      `json:"id"`
 	JobId     pgtype.UUID      `json:"jobId"`

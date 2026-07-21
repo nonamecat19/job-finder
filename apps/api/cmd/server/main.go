@@ -29,6 +29,7 @@ import (
 	"github.com/job-finder/api/internal/keyword"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/matching"
+	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/salary"
@@ -109,7 +110,11 @@ func run() error {
 	}
 	profileSvc := profile.NewService(database.Queries, llmProvider, cfg.EmbedModel, cfg.RendercvBin)
 	matchingSvc := matching.NewService(database.Queries, profileSvc, llmProvider, cfg.MatchSimilarityThreshold, cfg.ModelOr(cfg.LLMModelMatch))
-	matchingHandler := matching.NewHandler(matchingSvc)
+	notifierSvc := notifier.NewService(database.Queries,
+		notifier.WithMatchThreshold(cfg.MatchNotifyScoreThreshold),
+		notifier.WithRateLimitCap(cfg.MatchNotifyRateLimit),
+	)
+	matchingHandler := matching.NewHandler(matchingSvc, notifierSvc)
 
 	// MinIO object storage: when configured, every rendered resume/cover-letter
 	// file is uploaded here in addition to the local DocumentsDir.

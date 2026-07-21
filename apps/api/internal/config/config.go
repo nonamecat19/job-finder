@@ -49,6 +49,10 @@ type Config struct {
 	EmbedDims                int     `mapstructure:"EMBED_DIMS"`
 	MatchSimilarityThreshold float64 `mapstructure:"MATCH_SIMILARITY_THRESHOLD"`
 
+	// Fresh-match notification (010-4)
+	MatchNotifyScoreThreshold int `mapstructure:"MATCH_NOTIFY_SCORE_THRESHOLD"`
+	MatchNotifyRateLimit      int `mapstructure:"MATCH_NOTIFY_RATE_LIMIT"`
+
 	ConfigEncryptionKey string `mapstructure:"CONFIG_ENCRYPTION_KEY"`
 
 	// Job source credentials
