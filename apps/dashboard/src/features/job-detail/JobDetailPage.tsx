@@ -15,6 +15,7 @@ import {
 import CompanyIntelCard from './CompanyIntelCard';
 import DOMPurify from 'dompurify';
 import KeywordDiffPanel from './KeywordDiffPanel';
+import PrepPackPanel from './PrepPackPanel';
 
 type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
 
@@ -81,6 +82,8 @@ export default function JobDetailPage() {
       <CompanyIntelCard jobId={job.id} />
 
       <KeywordDiffPanel jobId={id} />
+
+      <PrepPackPanel jobId={id} />
 
       <DocumentsPanel
         documents={documents ?? []}

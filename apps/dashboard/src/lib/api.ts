@@ -4,6 +4,7 @@ import type {
   CompanyIntelDto,
   DocumentType,
   GeneratedDocumentDto,
+  InterviewPrepPack,
   JobDto,
   JobListResponse,
   JobSourceDto,
@@ -59,6 +60,7 @@ export const api = {
       request(`/jobs/${id}/generate`, { method: 'POST', body: JSON.stringify({ type }) }),
     documents: (id: string) => request<GeneratedDocumentDto[]>(`/jobs/${id}/documents`),
     keywordDiff: (id: string) => request<KeywordDiffResponse>(`/jobs/${id}/keyword-diff`),
+    interviewPrep: (id: string) => request<InterviewPrepPack>(`/jobs/${id}/interview-prep`),
   },
   documents: {
     update: (id: string, text: string) =>

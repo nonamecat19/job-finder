@@ -53,6 +53,15 @@ export function useMarkJobApplied(jobId: string | undefined) {
   });
 }
 
+export function useInterviewPrep(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.jobs.interviewPrep(id),
+    queryFn: () => api.jobs.interviewPrep(id!),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
 export function useSaveDocument(jobId: string | undefined, onSaved: () => void) {
   const qc = useQueryClient();
 

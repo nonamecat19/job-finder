@@ -298,6 +298,62 @@ export interface KeywordDiffResponse {
   suggestions: KeywordRephraseSuggestion[];
 }
 
+// ---------------------------------------------------------------------------
+// Interview Prep Pack (013)
+// ---------------------------------------------------------------------------
+
+export interface InterviewPrepPack {
+  jobId: string;
+  generatedAt: string;
+  questions: InterviewQuestion[];
+  companyNews: CompanyNewsItem[];
+  keywordGap: KeywordGapSummary;
+  metadata: InterviewPrepMetadata;
+}
+
+export interface InterviewPrepMetadata {
+  totalQuestions: number;
+  coveredQuestions: number;
+  uncoveredQuestions: number;
+  staleNews: boolean;
+}
+
+export interface InterviewQuestion {
+  id: string;
+  text: string;
+  category: QuestionCategory;
+  source: QuestionSource;
+  sourceExcerpt: string;
+  mappedStories: StoryMapping[];
+}
+
+export type QuestionCategory = 'technical' | 'behavioral' | 'experience' | 'situational' | 'company' | 'gap';
+
+export type QuestionSource = 'required_skill' | 'preferred_skill' | 'responsibility' | 'company_context' | 'generic';
+
+export interface StoryMapping {
+  storyId: string;
+  storyTitle: string;
+  relevanceScore: number;
+  matchedSkills: string[];
+  excerpt: string;
+}
+
+export interface KeywordGapSummary {
+  missingRequired: string[];
+  missingPreferred: string[];
+  coveragePct: number;
+  gapAwarenessTips: string[];
+}
+
+export interface CompanyNewsItem {
+  kind: string;
+  label: string;
+  value: string;
+  source: string;
+  fetchedAt: string;
+}
+
 export const ACTIVITY_OPS = ['ingest', 'match', 'generate', 'enrich'] as const;
 export type ActivityOp = (typeof ACTIVITY_OPS)[number];
 
