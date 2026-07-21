@@ -435,3 +435,35 @@ type ActivityListResponse struct {
 	Active []ActivityRunDto `json:"active"`
 	Recent []ActivityRunDto `json:"recent"`
 }
+
+// PostAgeBucketState is the three-state output contract for the post-age
+// vs response-rate signal (spec 010 §Cold-Start Honesty).
+type PostAgeBucketState string
+
+const (
+	PostAgeStateObserved     PostAgeBucketState = "observed"
+	PostAgeStatePrior        PostAgeBucketState = "prior"
+	PostAgeStateInsufficient PostAgeBucketState = "insufficient"
+)
+
+// PostAgeBucketDto is one bucket in the post-age vs response-rate signal.
+// Rate is null unless State == PostAgeStateObserved. N is always present
+// so the caller can render sample size alongside any rate.
+type PostAgeBucketDto struct {
+	Bucket    string              `json:"bucket"`
+	N         int32               `json:"n"`
+	Responses int32               `json:"responses"`
+	Rate      *float64            `json:"rate"`
+	State     PostAgeBucketState  `json:"state"`
+}
+
+// PostAgeResponseDto is the full signal response served by
+// GET /api/postage-response-rate.
+type PostAgeResponseDto struct {
+	Buckets      []PostAgeBucketDto `json:"buckets"`
+	TotalApps    int32              `json:"totalApps"`
+	GlobalState  PostAgeBucketState `json:"globalState"`
+	PriorRate    float64            `json:"priorRate"`
+	PriorLabel   string             `json:"priorLabel"`
+	ThresholdMsg *string            `json:"thresholdMsg,omitempty"`
+}

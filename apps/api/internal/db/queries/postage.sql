@@ -1,0 +1,48 @@
+-- name: PostAgeResponseRate :many
+-- Deterministic SQL aggregation: post-age-at-apply vs response rate.
+-- Each application with an `applied` event is placed in a bucket by
+-- (appliedAt - postedAt) in days. A "response" is any outcome event
+-- whose type is not 'applied'. Applications with no postedAt or a
+-- negative age are placed in the "unknown" bucket.
+--
+-- The caller applies cold-start honesty thresholds (global minimum
+-- total applications, per-bucket minimum sample) and the documented
+-- prior — this query only computes the raw observed counts.
+WITH applied AS (
+	SELECT
+		a."id" AS app_id,
+		a."appliedAt" AS applied_at,
+		j."postedAt" AS posted_at,
+		CASE
+			WHEN j."postedAt" IS NULL THEN 'unknown'
+			WHEN a."appliedAt" IS NULL THEN 'unknown'
+			WHEN a."appliedAt" < j."postedAt" THEN 'unknown'
+			WHEN EXTRACT(EPOCH FROM a."appliedAt" - j."postedAt") / 86400 <= 2 THEN 'fresh'
+			WHEN EXTRACT(EPOCH FROM a."appliedAt" - j."postedAt") / 86400 <= 7 THEN 'recent'
+			WHEN EXTRACT(EPOCH FROM a."appliedAt" - j."postedAt") / 86400 <= 21 THEN 'aging'
+			ELSE 'stale'
+		END AS bucket
+	FROM "Application" a
+	JOIN "Job" j ON j."id" = a."jobId"
+	WHERE a."appliedAt" IS NOT NULL
+),
+responses AS (
+	SELECT DISTINCT ao."applicationId"
+	FROM "ApplicationOutcome" ao
+	WHERE ao."eventType" != 'applied'
+)
+SELECT
+	ap.bucket,
+	COUNT(*)::int AS n,
+	COUNT(r."applicationId")::int AS responses
+FROM applied ap
+LEFT JOIN responses r ON r."applicationId" = ap.app_id
+GROUP BY ap.bucket
+ORDER BY
+	CASE ap.bucket
+		WHEN 'fresh' THEN 1
+		WHEN 'recent' THEN 2
+		WHEN 'aging' THEN 3
+		WHEN 'stale' THEN 4
+		WHEN 'unknown' THEN 5
+	END;

@@ -30,6 +30,7 @@ import (
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"
+	"github.com/job-finder/api/internal/postage"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/salary"
@@ -191,10 +192,14 @@ func run() error {
 	diffService := keyword.NewDiffService(database.Queries).WithRephraser(cachedRephraser, profileSvc)
 	keywordHandler := &httpapi.KeywordHandler{Diff: diffService}
 
+	postageSvc := postage.NewService(database.Queries)
+	postageHandler := &httpapi.PostAgeHandler{PostAge: postageSvc}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
+		postageHandler.Mount,
 	)
 
 	srv := &http.Server{
