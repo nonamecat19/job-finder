@@ -64,3 +64,19 @@ export function useSaveDocument(jobId: string | undefined, onSaved: () => void) 
     },
   });
 }
+
+export function useCompanyIntel(jobId: string) {
+  return useQuery({
+    queryKey: queryKeys.companies.detail(jobId),
+    queryFn: () => api.companies.intel(jobId),
+  });
+}
+
+export function useRefreshCompanyIntel(jobId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.companies.refresh(jobId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.companies.detail(jobId) }),
+  });
+}

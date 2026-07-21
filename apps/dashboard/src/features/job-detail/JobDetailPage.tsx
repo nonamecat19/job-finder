@@ -12,6 +12,7 @@ import {
   useMarkJobApplied,
   useSaveDocument,
 } from './hooks';
+import CompanyIntelCard from './CompanyIntelCard';
 import DOMPurify from 'dompurify';
 import KeywordDiffPanel from './KeywordDiffPanel';
 
@@ -76,6 +77,8 @@ export default function JobDetailPage() {
       />
 
       {job.matchResult ? <FitSummary job={job} /> : null}
+
+      <CompanyIntelCard jobId={job.id} />
 
       <KeywordDiffPanel jobId={id} />
 

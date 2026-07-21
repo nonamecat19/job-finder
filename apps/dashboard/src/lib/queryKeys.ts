@@ -37,4 +37,8 @@ export const queryKeys = {
   documents: {
     adHoc: ['documents', 'ad-hoc'] as const,
   },
+  companies: {
+    all: ['companies'] as const,
+    detail: (jobId: string) => ['companies', 'detail', jobId] as const,
+  },
 };

@@ -1,5 +1,6 @@
 import type {
   ApplicationDto,
+  CompanyIntelDto,
   GeneratedDocumentDto,
   JobDto,
   JobListResponse,
@@ -156,6 +157,20 @@ export function mockStats(overrides: Partial<StatsDto> = {}): StatsDto {
     highFit: 12,
     pipeline: { found: 80, shortlisted: 15, applied: 5 },
     recentRuns: [mockSourceRun()],
+    ...overrides,
+  }
+}
+
+export function mockCompanyIntel(overrides: Partial<CompanyIntelDto> = {}): CompanyIntelDto {
+  return {
+    companyName: 'Acme Corp',
+    website: 'https://acme.example.com',
+    funding: 'Series B',
+    layoffs: null,
+    glassdoorRating: 3.8,
+    headcount: '200-500',
+    techStack: 'React, TypeScript, Go',
+    fetchedAt: new Date().toISOString(),
     ...overrides,
   }
 }

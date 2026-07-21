@@ -325,3 +325,15 @@ export interface ActivityListResponse {
   active: ActivityRunDto[];
   recent: ActivityRunDto[];
 }
+
+export interface CompanyIntelDto {
+  companyName: string;
+  website: string | null;
+  funding: string | null;
+  layoffs: string | null;
+  glassdoorRating: number | null;
+  headcount: string | null;
+  techStack: string | null;
+  fetchedAt: string;
+  error?: string | null;
+}

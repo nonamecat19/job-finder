@@ -1,6 +1,7 @@
 import type {
   ActivityListResponse,
   ApplicationDto,
+  CompanyIntelDto,
   DocumentType,
   GeneratedDocumentDto,
   JobDto,
@@ -136,5 +137,10 @@ export const api = {
   activity: {
     list: (limit?: number) =>
       request<ActivityListResponse>(`/activity${limit ? `?limit=${limit}` : ''}`),
+  },
+  companies: {
+    intel: (jobId: string) => request<CompanyIntelDto>(`/companies/${jobId}/intel`),
+    refresh: (jobId: string) =>
+      request<CompanyIntelDto>(`/companies/${jobId}/intel/refresh`, { method: 'POST' }),
   },
 };
