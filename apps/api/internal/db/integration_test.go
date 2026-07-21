@@ -65,6 +65,7 @@ func truncateAll(t *testing.T) {
 		`"Subscription"`,
 		`"SavedSearch"`,
 		`"SalaryCache"`,
+		`"JobContact"`,
 		`"Job"`,
 		`"JobSource"`,
 		`"Profile"`,
