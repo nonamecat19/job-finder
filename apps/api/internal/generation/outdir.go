@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"path/filepath"
 )
 
 // fallbackDocumentsDir is used when the configured output directory can't be
@@ -27,9 +28,17 @@ func ensureOutDir(dir string) (string, error) {
 			if fbErr := os.MkdirAll(fallbackDocumentsDir, 0o755); fbErr != nil {
 				return "", fbErr
 			}
-			return fallbackDocumentsDir, nil
+			absDir, absErr := filepath.Abs(fallbackDocumentsDir)
+			if absErr != nil {
+				absDir = fallbackDocumentsDir
+			}
+			return absDir, nil
 		}
 		return "", err
 	}
-	return dir, nil
+	absDir, absErr := filepath.Abs(dir)
+	if absErr != nil {
+		absDir = dir
+	}
+	return absDir, nil
 }
