@@ -3,6 +3,7 @@ import { RequireProfileConfig } from './RequireProfileConfig';
 import FeedPage from '../features/feed/FeedPage';
 import JobDetailPage from '../features/job-detail/JobDetailPage';
 import ProfilePage from '../features/profile/ProfilePage';
+import SettingsPage from '../features/settings/SettingsPage';
 import SourcesPage from '../features/sources/SourcesPage';
 import StatusPage from '../features/status/StatusPage';
 import TailorPage from '../features/tailor/TailorPage';
@@ -31,6 +32,7 @@ export function AppRoutes() {
       <Route path="/tailor" element={<TailorPage />} />
       <Route path="/sources" element={<SourcesPage />} />
       <Route path="/status" element={<StatusPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
       <Route
         path="/tracker"
         element={

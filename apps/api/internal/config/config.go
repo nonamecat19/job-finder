@@ -58,6 +58,13 @@ type Config struct {
 
 	ConfigEncryptionKey string `mapstructure:"CONFIG_ENCRYPTION_KEY"`
 
+	// ExtJWTSecret signs the browser-extension access token (014-autofill-
+	// extension). A 32-byte hex string (openssl rand -hex 32), same shape as
+	// ConfigEncryptionKey. If unset, cmd/server generates a random ephemeral
+	// secret at startup and logs a warning — tokens then stop validating
+	// across restarts, which is safer than a hardcoded default secret.
+	ExtJWTSecret string `mapstructure:"EXT_JWT_SECRET"`
+
 	// Job source credentials
 	AdzunaAppID   string `mapstructure:"ADZUNA_APP_ID"`
 	AdzunaAppKey  string `mapstructure:"ADZUNA_APP_KEY"`
@@ -137,7 +144,7 @@ var defaults = map[string]any{
 var optionalKeys = []string{
 	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
 	"LLM_MODEL_REPHRASE", "LLM_MODEL_GHOST",
-	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
+	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "EXT_JWT_SECRET", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
 	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
 	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD",

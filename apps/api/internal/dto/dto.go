@@ -306,6 +306,45 @@ type ProfileDto struct {
 	UpdatedAt      string           `json:"updatedAt"`
 }
 
+// ExtProfileDto is the profile shape exposed to the browser extension via
+// GET /api/v1/ext/profile (spec 014-autofill-extension section 3). It is a
+// deliberately narrower, flatter projection of ProfileDto/RendercvMaster —
+// only the fields an application-form autofill needs, nothing else from the
+// account (no rendercv theme/design, no other profiles, no internal ids
+// beyond the leaf entries below).
+type ExtProfileDto struct {
+	FullName    string         `json:"fullName"`
+	Email       string         `json:"email"`
+	Phone       string         `json:"phone"`
+	Location    string         `json:"location"`
+	Headline    string         `json:"headline"`
+	Skills      []string       `json:"skills"`
+	WorkHistory []ExtWorkEntry `json:"workHistory"`
+	Education   []ExtEducation `json:"education"`
+	Links       []ExtLink      `json:"links"`
+}
+
+type ExtWorkEntry struct {
+	Employer    string  `json:"employer"`
+	Role        string  `json:"role"`
+	StartDate   string  `json:"startDate"`
+	EndDate     *string `json:"endDate"`
+	Current     bool    `json:"current"`
+	Description string  `json:"description"`
+}
+
+type ExtEducation struct {
+	Institution string `json:"institution"`
+	Degree      string `json:"degree"`
+	StartDate   string `json:"startDate"`
+	EndDate     string `json:"endDate"`
+}
+
+type ExtLink struct {
+	URL   string `json:"url"`
+	Label string `json:"label"`
+}
+
 type JobSourceDto struct {
 	ID      string         `json:"id"`
 	Key     string         `json:"key"`

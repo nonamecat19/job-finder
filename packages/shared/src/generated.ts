@@ -227,6 +227,43 @@ export interface ProfileDto {
   extraNotes?: string;
   updatedAt: string;
 }
+/**
+ * ExtProfileDto is the profile shape exposed to the browser extension via
+ * GET /api/v1/ext/profile (spec 014-autofill-extension section 3). It is a
+ * deliberately narrower, flatter projection of ProfileDto/RendercvMaster —
+ * only the fields an application-form autofill needs, nothing else from the
+ * account (no rendercv theme/design, no other profiles, no internal ids
+ * beyond the leaf entries below).
+ */
+export interface ExtProfileDto {
+  fullName: string;
+  email: string;
+  phone: string;
+  location: string;
+  headline: string;
+  skills: string[];
+  workHistory: ExtWorkEntry[];
+  education: ExtEducation[];
+  links: ExtLink[];
+}
+export interface ExtWorkEntry {
+  employer: string;
+  role: string;
+  startDate: string;
+  endDate?: string;
+  current: boolean;
+  description: string;
+}
+export interface ExtEducation {
+  institution: string;
+  degree: string;
+  startDate: string;
+  endDate: string;
+}
+export interface ExtLink {
+  url: string;
+  label: string;
+}
 export interface JobSourceDto {
   id: string;
   key: string;
