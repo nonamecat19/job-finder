@@ -31,6 +31,14 @@ WHERE "sourceKey" = $1 AND "detailScrapedAt" IS NULL
 ORDER BY "ingestedAt" ASC
 LIMIT $2;
 
+-- name: RecordJobRepost :one
+-- Called by ingestion.persistIfNew when a job with this dedupeKey already
+-- exists: bumps "seenCount" and refreshes "ingestedAt" so the posting's
+-- reappearance is durable, feeding the ghost-job repost signal (005).
+UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now()
+WHERE "dedupeKey" = $1
+RETURNING *;
+
 -- name: UpdateJobDetail :one
 UPDATE "Job" SET
   "description" = COALESCE(NULLIF(sqlc.arg('description'), ''), "description"),

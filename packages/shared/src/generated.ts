@@ -165,6 +165,29 @@ export interface JobDto {
   matchResult?: MatchResultDto;
   documents?: GeneratedDocumentDto[];
   application?: ApplicationDto;
+  /**
+   * Salary inference (spec 006). All five are nil together when no source
+   * could produce a band (FR-009) — SalaryRaw is preserved and displayed
+   * alongside regardless (FR-024).
+   */
+  salaryMin?: number /* int */;
+  salaryMax?: number /* int */;
+  salaryCurrency?: string;
+  salaryConfidence?: number /* float64 */;
+  salarySource?: string;
+  /**
+   * SalaryBelowFloor is computed (not stored) against the configured
+   * SALARY_FLOOR_USD; true only when the band's currency is USD and its
+   * max lies entirely below the floor (FR-016, FR-020 fail-open for other
+   * currencies).
+   */
+  salaryBelowFloor: boolean;
+  /**
+   * GhostSignal is the ghost-job detector's (005) result, when one exists.
+   * A job with no ghost result renders exactly as it does today — this
+   * field is simply absent, never a zero-valued panel (FR-017, SC-008).
+   */
+  ghostSignal?: JobSignalDto;
 }
 export interface JobListResponse {
   items: JobDto[];
@@ -203,6 +226,43 @@ export interface ProfileDto {
   rendercvFull?: any;
   extraNotes?: string;
   updatedAt: string;
+}
+/**
+ * ExtProfileDto is the profile shape exposed to the browser extension via
+ * GET /api/v1/ext/profile (spec 014-autofill-extension section 3). It is a
+ * deliberately narrower, flatter projection of ProfileDto/RendercvMaster —
+ * only the fields an application-form autofill needs, nothing else from the
+ * account (no rendercv theme/design, no other profiles, no internal ids
+ * beyond the leaf entries below).
+ */
+export interface ExtProfileDto {
+  fullName: string;
+  email: string;
+  phone: string;
+  location: string;
+  headline: string;
+  skills: string[];
+  workHistory: ExtWorkEntry[];
+  education: ExtEducation[];
+  links: ExtLink[];
+}
+export interface ExtWorkEntry {
+  employer: string;
+  role: string;
+  startDate: string;
+  endDate?: string;
+  current: boolean;
+  description: string;
+}
+export interface ExtEducation {
+  institution: string;
+  degree: string;
+  startDate: string;
+  endDate: string;
+}
+export interface ExtLink {
+  url: string;
+  label: string;
 }
 export interface JobSourceDto {
   id: string;
@@ -351,4 +411,243 @@ export interface ActivityRunDto {
 export interface ActivityListResponse {
   active: ActivityRunDto[];
   recent: ActivityRunDto[];
+}
+/**
+ * PostAgeBucketState is the three-state output contract for the post-age
+ * vs response-rate signal (spec 010 §Cold-Start Honesty).
+ */
+export type PostAgeBucketState = string;
+export const PostAgeStateObserved: PostAgeBucketState = "observed";
+export const PostAgeStatePrior: PostAgeBucketState = "prior";
+export const PostAgeStateInsufficient: PostAgeBucketState = "insufficient";
+/**
+ * PostAgeBucketDto is one bucket in the post-age vs response-rate signal.
+ * Rate is null unless State == PostAgeStateObserved. N is always present
+ * so the caller can render sample size alongside any rate.
+ */
+export interface PostAgeBucketDto {
+  bucket: string;
+  n: number /* int32 */;
+  responses: number /* int32 */;
+  rate?: number /* float64 */;
+  state: PostAgeBucketState;
+}
+/**
+ * PostAgeResponseDto is the full signal response served by
+ * GET /api/postage-response-rate.
+ */
+export interface PostAgeResponseDto {
+  buckets: PostAgeBucketDto[];
+  totalApps: number /* int32 */;
+  globalState: PostAgeBucketState;
+  priorRate: number /* float64 */;
+  priorLabel: string;
+  thresholdMsg?: string;
+}
+/**
+ * FreshMatchNotificationDto is one row of the fresh-match notification table,
+ * served by GET /api/notifications.
+ */
+export interface FreshMatchNotificationDto {
+  id: string;
+  jobId: string;
+  matchResultId: string;
+  fresh: boolean;
+  seen: boolean;
+  createdAt: string;
+  /**
+   * JobTitle and Company are populated by the list endpoint via a JOIN.
+   */
+  jobTitle?: string;
+  company?: string;
+  matchScore?: number /* int32 */;
+}
+/**
+ * CompanyIntelDto is the flattened company-intel signal set served by
+ * GET /api/companies/{jobId}/intel and POST /api/companies/{jobId}/intel/refresh
+ * (spec 004). Each of the five CompanySignal rows for the job's company is
+ * flattened into one named field; a nil field means that signal has never
+ * been captured (or its source failed and no previous value exists yet).
+ */
+export interface CompanyIntelDto {
+  companyName: string;
+  website?: string;
+  funding?: string;
+  layoffs?: string;
+  glassdoorRating?: number /* float64 */;
+  headcount?: string;
+  techStack?: string;
+  fetchedAt: string;
+  /**
+   * Error is set on a Refresh response when every source failed (FR-007):
+   * previous values (if any) remain in the other fields, and the
+   * dashboard shows a top-level error banner.
+   */
+  error?: string;
+}
+/**
+ * GhostSignalBreakdownDto is the measured evidence behind one ghost score:
+ * the four signals (a value or an explicit unknown — never a bare 0), the
+ * model's confidence, its plain-English explanation, and per-signal
+ * provenance notes. This is also the exact shape marshaled into
+ * "JobSignal"."signals" jsonb, so persistence and API response share one
+ * struct (see ghostjob.Service).
+ */
+export interface GhostSignalBreakdownDto {
+  repostCount: number /* int */;
+  daysOpen?: number /* int */;
+  crossBoardCount?: number /* int */;
+  alwaysHiringCount?: number /* int */;
+  confidence: number /* float64 */;
+  explanation: string;
+  topSignals?: string[];
+  notes: { [key: string]: string};
+}
+/**
+ * JobSignalDto is one row of the generic "JobSignal" table. For this
+ * feature kind is always "ghost"; the shape is deliberately generic so a
+ * future signal kind reuses it (spec Key Entities: Job Signal).
+ */
+export interface JobSignalDto {
+  id: string;
+  jobId: string;
+  kind: string;
+  score: number /* int */;
+  model: string;
+  createdAt: string;
+  signals: GhostSignalBreakdownDto;
+}
+/**
+ * FitGapEvidenceDto is one adjacent profile entry offered as evidence for a
+ * missing must-have (009 fit-gap coach), with a grounded rephrase suggestion
+ * truthfully reframing that existing bullet toward the missing term.
+ */
+export interface FitGapEvidenceDto {
+  sourceEntry: string;
+  sourceBullet: string;
+  proximity: string; // "close" | "moderate" | "distant"
+  rephrase: string;
+}
+/**
+ * FitGapItemDto is one missing must-have with up to 3 adjacent evidence
+ * items drawn from the user's profile. NoAdjacentEvidence is the honest
+ * empty result: nothing in the profile is close enough to cite.
+ */
+export interface FitGapItemDto {
+  term: string;
+  polarity: string; // always "required"
+  adjacentEvidence: FitGapEvidenceDto[];
+  noAdjacentEvidence: boolean;
+}
+/**
+ * FitGapAssessmentDto is the fit-gap coach output (009), served by
+ * POST /api/jobs/{id}/coach/assess and GET /api/jobs/{id}/coach/assessment:
+ * "you fail N of M must-haves", plus per-gap adjacent evidence.
+ */
+export interface FitGapAssessmentDto {
+  jobId: string;
+  totalMustHaves: number /* int */;
+  failedMustHaves: number /* int */;
+  coveragePct: number /* float64 */;
+  gaps: FitGapItemDto[];
+}
+/**
+ * JobContactDto is one resolved recruiter/hiring-manager candidate served
+ * by GET /api/jobs/{id}/contacts and POST /api/jobs/{id}/contacts/refresh
+ * (spec 007). Nil fields mean that channel was never resolved — never
+ * fabricated (FR-006, FR-008). Email/phone/linkedInUrl are sensitive
+ * (FR-018): the API surfaces them only on this endpoint, and callers must
+ * not log them in full.
+ */
+export interface JobContactDto {
+  id: string;
+  name: string;
+  title?: string;
+  linkedInUrl?: string;
+  email?: string;
+  phone?: string;
+  /**
+   * Source is one of "posting" / "company-page" / "linkedin".
+   */
+  source: string;
+  confidence: number /* float64 */;
+  fetchedAt: string;
+}
+/**
+ * ReferralContactDto is one hop in a warm-path chain — a contact imported
+ * from CSV or discovered via GitHub cross-reference.
+ */
+export interface ReferralContactDto {
+  id: string;
+  name: string;
+  email?: string;
+  company?: string;
+  role?: string;
+  linkedInUrl?: string;
+  gitHubUsername?: string;
+}
+/**
+ * ReferralPathDto is one ranked warm path from the user to a contact at the
+ * job's company, served by GET /api/jobs/{id}/referral-paths.
+ */
+export interface ReferralPathDto {
+  path: ReferralContactDto[];
+  score: number /* float64 */;
+  length: number /* int */;
+}
+/**
+ * ContactImportResultDto reports the outcome of a contacts CSV import,
+ * served by POST /api/contacts/import.
+ */
+export interface ContactImportResultDto {
+  imported: number /* int */;
+  skipped: number /* int */;
+  total: number /* int */;
+}
+/**
+ * GithubSyncResultDto reports the outcome of cross-referencing one contact's
+ * GitHub followers/following against the existing contact book, served by
+ * POST /api/contacts/{id}/github-sync.
+ */
+export interface GithubSyncResultDto {
+  contact: ReferralContactDto;
+  followersScanned: number /* int */;
+  followingScanned: number /* int */;
+  connectionsMade: number /* int */;
+}
+/**
+ * GroundingTraceDto is one specific claim in an OutreachDraftDto mapped to
+ * the company-intel signal that backs it (spec 012 FR-014) — the wire shape
+ * of the Story 3 "verify before you send it" view.
+ */
+export interface GroundingTraceDto {
+  claim: string;
+  signalKind: string;
+  signalValue: string;
+}
+/**
+ * OutreachDraftDto is a generated, never-sendable outreach message served
+ * by POST /api/jobs/{id}/outreach/generate (spec 012). ContactId/ContactName
+ * are nil when no resolved contact exists for the job (a neutral salutation
+ * was used instead — FR-007). GroundingTraces is always a non-nil (possibly
+ * empty) slice: empty means the draft made no specific claim at all, which
+ * is the honest fallback when no company-intel signal exists (FR-012).
+ */
+export interface OutreachDraftDto {
+  jobId: string;
+  contactId?: string;
+  contactName?: string;
+  tone: string;
+  text: string;
+  groundingTraces: GroundingTraceDto[];
+  generatedAt: string;
+}
+/**
+ * OutreachToneOptionDto is one offered tone option, served by
+ * GET /api/jobs/{id}/outreach/tones (FR-010, FR-011).
+ */
+export interface OutreachToneOptionDto {
+  value: string;
+  label: string;
+  default: boolean;
 }

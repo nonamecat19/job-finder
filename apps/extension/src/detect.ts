@@ -11,7 +11,7 @@ function getFieldMap(ats: AtsVendor): Record<string, ProfileField> {
   }
 }
 
-function getLabelText(el: HTMLElement): string {
+export function getLabelText(el: HTMLElement): string {
   if (
     (el instanceof HTMLInputElement ||
       el instanceof HTMLTextAreaElement ||

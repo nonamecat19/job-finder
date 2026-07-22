@@ -29,14 +29,21 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."description" ILIKE $4
   )
   AND ($5::int IS NULL OR mr."score" >= $5)
+  AND (
+    $6::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= $6
+  )
 `
 
 type CountJobsParams struct {
-	Source   *string `json:"source"`
-	Status   *string `json:"status"`
-	Remote   *bool   `json:"remote"`
-	Q        *string `json:"q"`
-	MinScore *int32  `json:"min_score"`
+	Source      *string `json:"source"`
+	Status      *string `json:"status"`
+	Remote      *bool   `json:"remote"`
+	Q           *string `json:"q"`
+	MinScore    *int32  `json:"min_score"`
+	SalaryFloor *int32  `json:"salary_floor"`
 }
 
 func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, error) {
@@ -46,6 +53,7 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.SalaryFloor,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -89,7 +97,7 @@ func (q *Queries) GetJobDocuments(ctx context.Context, jobid pgtype.UUID) ([]Gen
 }
 
 const listJobsByDate = `-- name: ListJobsByDate :many
-SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
+SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
   mr."matchedSkills" AS mr_matched_skills, mr."missingSkills" AS mr_missing_skills,
   mr."summary" AS mr_summary, mr."redFlags" AS mr_red_flags, mr."model" AS mr_model,
   mr."createdAt" AS mr_created_at
@@ -108,19 +116,26 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."description" ILIKE $4
   )
   AND ($5::int IS NULL OR mr."score" >= $5)
+  AND (
+    $6::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= $6
+  )
 ORDER BY j."ingestedAt" DESC
-OFFSET $6
-LIMIT $7
+OFFSET $7
+LIMIT $8
 `
 
 type ListJobsByDateParams struct {
-	Source   *string `json:"source"`
-	Status   *string `json:"status"`
-	Remote   *bool   `json:"remote"`
-	Q        *string `json:"q"`
-	MinScore *int32  `json:"min_score"`
-	Offset   int32   `json:"offset"`
-	Limit    int32   `json:"limit"`
+	Source      *string `json:"source"`
+	Status      *string `json:"status"`
+	Remote      *bool   `json:"remote"`
+	Q           *string `json:"q"`
+	MinScore    *int32  `json:"min_score"`
+	SalaryFloor *int32  `json:"salary_floor"`
+	Offset      int32   `json:"offset"`
+	Limit       int32   `json:"limit"`
 }
 
 type ListJobsByDateRow struct {
@@ -146,6 +161,7 @@ type ListJobsByDateRow struct {
 	SalaryCurrency   *string          `json:"salaryCurrency"`
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
+	SeenCount        int32            `json:"seenCount"`
 	MrID             pgtype.UUID      `json:"mr_id"`
 	MrSimilarity     *float64         `json:"mr_similarity"`
 	MrScore          *int32           `json:"mr_score"`
@@ -164,6 +180,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.SalaryFloor,
 		arg.Offset,
 		arg.Limit,
 	)
@@ -197,6 +214,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 			&i.SalaryCurrency,
 			&i.SalaryConfidence,
 			&i.SalarySource,
+			&i.SeenCount,
 			&i.MrID,
 			&i.MrSimilarity,
 			&i.MrScore,
@@ -218,7 +236,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 }
 
 const listJobsByScore = `-- name: ListJobsByScore :many
-SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
+SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
   mr."matchedSkills" AS mr_matched_skills, mr."missingSkills" AS mr_missing_skills,
   mr."summary" AS mr_summary, mr."redFlags" AS mr_red_flags, mr."model" AS mr_model,
   mr."createdAt" AS mr_created_at
@@ -237,19 +255,26 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."description" ILIKE $4
   )
   AND ($5::int IS NULL OR mr."score" >= $5)
+  AND (
+    $6::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= $6
+  )
 ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
-OFFSET $6
-LIMIT $7
+OFFSET $7
+LIMIT $8
 `
 
 type ListJobsByScoreParams struct {
-	Source   *string `json:"source"`
-	Status   *string `json:"status"`
-	Remote   *bool   `json:"remote"`
-	Q        *string `json:"q"`
-	MinScore *int32  `json:"min_score"`
-	Offset   int32   `json:"offset"`
-	Limit    int32   `json:"limit"`
+	Source      *string `json:"source"`
+	Status      *string `json:"status"`
+	Remote      *bool   `json:"remote"`
+	Q           *string `json:"q"`
+	MinScore    *int32  `json:"min_score"`
+	SalaryFloor *int32  `json:"salary_floor"`
+	Offset      int32   `json:"offset"`
+	Limit       int32   `json:"limit"`
 }
 
 type ListJobsByScoreRow struct {
@@ -275,6 +300,7 @@ type ListJobsByScoreRow struct {
 	SalaryCurrency   *string          `json:"salaryCurrency"`
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
+	SeenCount        int32            `json:"seenCount"`
 	MrID             pgtype.UUID      `json:"mr_id"`
 	MrSimilarity     *float64         `json:"mr_similarity"`
 	MrScore          *int32           `json:"mr_score"`
@@ -293,6 +319,7 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.SalaryFloor,
 		arg.Offset,
 		arg.Limit,
 	)
@@ -326,6 +353,7 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 			&i.SalaryCurrency,
 			&i.SalaryConfidence,
 			&i.SalarySource,
+			&i.SeenCount,
 			&i.MrID,
 			&i.MrSimilarity,
 			&i.MrScore,

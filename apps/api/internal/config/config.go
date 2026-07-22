@@ -34,6 +34,9 @@ type Config struct {
 	// LLMModelRephrase is the model for the keyword-diff rephrase suggester
 	// (008-5). Empty falls back to LLMModel via ModelOr.
 	LLMModelRephrase string `mapstructure:"LLM_MODEL_REPHRASE"`
+	// LLMModelGhost is the model for the ghost-job detector (005). Empty
+	// falls back to LLMModel via ModelOr.
+	LLMModelGhost string `mapstructure:"LLM_MODEL_GHOST"`
 
 	// KeywordRephraseCacheTTLSec is the lifetime, in seconds, of a cached set of
 	// keyword-diff rephrase suggestions. Suggestions are generated async and
@@ -54,6 +57,13 @@ type Config struct {
 	MatchNotifyRateLimit      int `mapstructure:"MATCH_NOTIFY_RATE_LIMIT"`
 
 	ConfigEncryptionKey string `mapstructure:"CONFIG_ENCRYPTION_KEY"`
+
+	// ExtJWTSecret signs the browser-extension access token (014-autofill-
+	// extension). A 32-byte hex string (openssl rand -hex 32), same shape as
+	// ConfigEncryptionKey. If unset, cmd/server generates a random ephemeral
+	// secret at startup and logs a warning — tokens then stop validating
+	// across restarts, which is safer than a hardcoded default secret.
+	ExtJWTSecret string `mapstructure:"EXT_JWT_SECRET"`
 
 	// Job source credentials
 	AdzunaAppID   string `mapstructure:"ADZUNA_APP_ID"`
@@ -94,8 +104,15 @@ type Config struct {
 	RendercvBin        string `mapstructure:"RENDERCV_BIN"`
 
 	// Salary inference
-	LevelsFyiCSV  string `mapstructure:"LEVELS_FYI_CSV"`
-	SalaryFloorUsd int   `mapstructure:"SALARY_FLOOR_USD"`
+	LevelsFyiCSV   string `mapstructure:"LEVELS_FYI_CSV"`
+	SalaryFloorUsd int    `mapstructure:"SALARY_FLOOR_USD"`
+
+	// LinkedInScrapeEnabled gates the LinkedIn company-page contact source
+	// used by recruiter/hiring-manager resolution (007). Scraping LinkedIn's
+	// public pages is a ToS gray area (plan.md Constitution Check), so this
+	// defaults to false; enabling it is an explicit operator decision made
+	// via env var, not a code change, and is read once at process start.
+	LinkedInScrapeEnabled bool `mapstructure:"LINKEDIN_SCRAPE_ENABLED"`
 }
 
 // defaults holds the code-level default for every key that has one. Keys
@@ -120,12 +137,13 @@ var defaults = map[string]any{
 	// ("mkdir /data: permission denied") — default to a repo-relative dir
 	// instead; docker-compose.yml / docker-compose.prod.yml / Dockerfile all
 	// set DOCUMENTS_DIR=/data/documents explicitly, so containers are unaffected.
-	"DOCUMENTS_DIR":          "./data/documents",
-	"MINIO_BUCKET":           "documents",
-	"MINIO_USE_SSL":          false,
-	"RESUME_MASTER_PATH":     "./resume/resume.yaml",
-	"RESUME_GROUNDING_LEVEL": "moderate",
-	"RENDERCV_BIN":           "rendercv",
+	"DOCUMENTS_DIR":           "./data/documents",
+	"MINIO_BUCKET":            "documents",
+	"MINIO_USE_SSL":           false,
+	"RESUME_MASTER_PATH":      "./resume/resume.yaml",
+	"RESUME_GROUNDING_LEVEL":  "moderate",
+	"RENDERCV_BIN":            "rendercv",
+	"LINKEDIN_SCRAPE_ENABLED": false,
 }
 
 // keys without a default (optional strings / required-by-consumer). Listed so
@@ -133,8 +151,8 @@ var defaults = map[string]any{
 // viper knows about.
 var optionalKeys = []string{
 	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
-	"LLM_MODEL_REPHRASE",
-	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
+	"LLM_MODEL_REPHRASE", "LLM_MODEL_GHOST",
+	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "EXT_JWT_SECRET", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
 	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
 	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD",

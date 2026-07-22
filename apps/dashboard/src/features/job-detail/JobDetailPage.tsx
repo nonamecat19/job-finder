@@ -12,11 +12,16 @@ import {
   useMarkJobApplied,
   useSaveDocument,
 } from './hooks';
+import CoachPanel from './CoachPanel';
 import CompanyIntelCard from './CompanyIntelCard';
+import ContactLine from './ContactLine';
 import DOMPurify from 'dompurify';
+import GhostSignalPanel from './GhostSignalPanel';
 import KeywordDiffPanel from './KeywordDiffPanel';
+import OutreachPanel from './OutreachPanel';
 import PostAgeSignal from './PostAgeSignal';
 import PrepPackPanel from './PrepPackPanel';
+import ReferralPathsCard from './ReferralPathsCard';
 
 type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
 
@@ -80,11 +85,21 @@ export default function JobDetailPage() {
 
       {job.matchResult ? <FitSummary job={job} /> : null}
 
+      <GhostSignalPanel jobId={job.id} ghostSignal={job.ghostSignal} />
+
       <PostAgeSignal />
+
+      <ContactLine jobId={job.id} />
 
       <CompanyIntelCard jobId={job.id} />
 
+      <ReferralPathsCard jobId={id} />
+
       <KeywordDiffPanel jobId={id} />
+
+      <CoachPanel jobId={id} />
+
+      <OutreachPanel jobId={id} />
 
       <PrepPackPanel jobId={id} />
 

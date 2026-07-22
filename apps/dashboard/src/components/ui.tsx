@@ -24,6 +24,27 @@ export function ScoreBadge({ score }: { score?: number | null }) {
   );
 }
 
+// GhostBadge renders the ghost-job detector's (005) score, informational
+// only: yellow for 50-79, red for 80-100, and NOTHING below 50 or when no
+// ghost signal exists — the feed must stay quiet for jobs the system isn't
+// suspicious of (FR-012, FR-017). This component must never hide, dim, or
+// otherwise act on the job itself; it only ever renders a badge next to
+// ScoreBadge (Constitution Principle I / FR-015).
+export function GhostBadge({ score }: { score?: number | null }) {
+  if (score === null || score === undefined || score < 50) {
+    return null;
+  }
+  const tone = score >= 80 ? 'bg-danger-soft text-danger ring-danger/30' : 'bg-warning-soft text-warning ring-warning/30';
+  return (
+    <span
+      className={cn('rounded-full px-2 py-0.5 text-xs font-bold ring-1 ring-inset tabular-nums', tone)}
+      title="Ghost-job likelihood score — informational only"
+    >
+      👻 {score}
+    </span>
+  );
+}
+
 export function Chip({ children, tone = 'slate' }: { children: ReactNode; tone?: 'green' | 'red' | 'slate' }) {
   const cls =
     tone === 'green'

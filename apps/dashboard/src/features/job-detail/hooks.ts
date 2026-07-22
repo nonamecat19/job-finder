@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DocumentType } from '@job-finder/shared';
 import { api } from '../../api';
 import { queryKeys } from '../../lib/queryKeys';
+import { emitToast, toErrorMessage } from '../../lib/toastBus';
 
 export function useJobDetail(id: string | undefined) {
   return useQuery({
@@ -74,6 +75,52 @@ export function useSaveDocument(jobId: string | undefined, onSaved: () => void) 
   });
 }
 
+export function useCoachAssessment(jobId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.coach.assessment(jobId),
+    queryFn: () => api.coach.assessment(jobId!),
+    enabled: !!jobId,
+    retry: false,
+  });
+}
+
+export function useAssessCoach(jobId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.coach.assess(jobId!),
+    onSuccess: (data) => qc.setQueryData(queryKeys.coach.assessment(jobId), data),
+  });
+}
+
+export function useJobContacts(jobId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.jobs.contacts(jobId),
+    queryFn: () => api.jobs.contacts(jobId!),
+    enabled: !!jobId,
+  });
+}
+
+export function useRefreshJobContacts(jobId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.jobs.refreshContacts(jobId!),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.jobs.contacts(jobId), data);
+    },
+  });
+}
+
+export function useReferralPaths(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.jobs.referralPaths(id),
+    queryFn: () => api.jobs.referralPaths(id!),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
 export function useCompanyIntel(jobId: string) {
   return useQuery({
     queryKey: queryKeys.companies.detail(jobId),
@@ -87,5 +134,41 @@ export function useRefreshCompanyIntel(jobId: string) {
   return useMutation({
     mutationFn: () => api.companies.refresh(jobId),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.companies.detail(jobId) }),
+  });
+}
+
+// US3: manual, per-job re-score. No scheduled re-scoring exists anywhere —
+// this mutation is the only way (besides ingestion) a ghost score changes
+// (FR-014). Invalidating the job-detail query re-fetches the full JobDto so
+// the panel updates in place without a page reload.
+export function useRefreshGhostScore(jobId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.jobs.ghostScore(jobId!),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) }),
+    // The previously stored score is left intact on failure — this mutation
+    // never writes to the jobs.detail cache itself, only invalidates it on
+    // success, so a failed refresh simply leaves the last-fetched job (and
+    // its ghost signal) exactly as it was (Story 3, scenario 4).
+    onError: (err) => emitToast({ title: 'Ghost re-score failed', description: toErrorMessage(err), variant: 'error' }),
+  });
+}
+
+// Post-apply outreach draft generator (012). Tones is a cheap static list;
+// the draft itself is on-demand only (a live LLM call), so it is a
+// mutation, not a query — mirroring useAssessCoach.
+export function useOutreachTones(jobId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.outreach.tones(jobId),
+    queryFn: () => api.outreach.tones(jobId!),
+    enabled: !!jobId,
+    staleTime: Infinity,
+  });
+}
+
+export function useGenerateOutreachDraft(jobId: string | undefined) {
+  return useMutation({
+    mutationFn: (body: { contactId?: string; tone?: string }) => api.outreach.generate(jobId!, body),
   });
 }

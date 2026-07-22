@@ -18,6 +18,12 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
     OR j."description" ILIKE sqlc.narg('q')
   )
   AND (sqlc.narg('min_score')::int IS NULL OR mr."score" >= sqlc.narg('min_score'))
+  AND (
+    sqlc.narg('salary_floor')::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= sqlc.narg('salary_floor')
+  )
 ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
 OFFSET sqlc.arg('offset')
 LIMIT sqlc.arg('limit');
@@ -42,6 +48,12 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
     OR j."description" ILIKE sqlc.narg('q')
   )
   AND (sqlc.narg('min_score')::int IS NULL OR mr."score" >= sqlc.narg('min_score'))
+  AND (
+    sqlc.narg('salary_floor')::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= sqlc.narg('salary_floor')
+  )
 ORDER BY j."ingestedAt" DESC
 OFFSET sqlc.arg('offset')
 LIMIT sqlc.arg('limit');
@@ -62,7 +74,13 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
     OR j."company" ILIKE sqlc.narg('q')
     OR j."description" ILIKE sqlc.narg('q')
   )
-  AND (sqlc.narg('min_score')::int IS NULL OR mr."score" >= sqlc.narg('min_score'));
+  AND (sqlc.narg('min_score')::int IS NULL OR mr."score" >= sqlc.narg('min_score'))
+  AND (
+    sqlc.narg('salary_floor')::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= sqlc.narg('salary_floor')
+  );
 
 -- name: GetJobDocuments :many
 SELECT * FROM "GeneratedDocument" WHERE "jobId" = $1 ORDER BY "createdAt" DESC;

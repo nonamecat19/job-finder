@@ -2,16 +2,25 @@ import type {
   ActivityListResponse,
   ApplicationDto,
   CompanyIntelDto,
+  ContactImportResultDto,
   DocumentType,
+  FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
+  GithubSyncResultDto,
   InterviewPrepPack,
+  JobContactDto,
   JobDto,
   JobListResponse,
+  JobSignalDto,
   JobSourceDto,
   KeywordDiffResponse,
+  OutreachDraftDto,
+  OutreachToneOptionDto,
   PostAgeResponseDto,
   ProfileDto,
+  ReferralContactDto,
+  ReferralPathDto,
   SavedSearchDto,
   SearchQuery,
   SourceRunDto,
@@ -40,6 +49,9 @@ export interface JobFilters {
   remote?: boolean;
   q?: string;
   page?: number;
+  // showBelowFloor reveals jobs below SALARY_FLOOR_USD (spec 006 US2); the
+  // API defaults to hiding them, so this is only sent when toggled on.
+  showBelowFloor?: boolean;
 }
 
 export const api = {
@@ -63,6 +75,24 @@ export const api = {
     documents: (id: string) => request<GeneratedDocumentDto[]>(`/jobs/${id}/documents`),
     keywordDiff: (id: string) => request<KeywordDiffResponse>(`/jobs/${id}/keyword-diff`),
     interviewPrep: (id: string) => request<InterviewPrepPack>(`/jobs/${id}/interview-prep`),
+    ghostScore: (id: string) => request<JobSignalDto>(`/jobs/${id}/ghost-score`, { method: 'POST' }),
+    contacts: (id: string) => request<JobContactDto[]>(`/jobs/${id}/contacts`),
+    refreshContacts: (id: string) =>
+      request<JobContactDto[]>(`/jobs/${id}/contacts/refresh`, { method: 'POST' }),
+    referralPaths: (id: string) => request<ReferralPathDto[]>(`/jobs/${id}/referral-paths`),
+  },
+  coach: {
+    assess: (jobId: string) =>
+      request<FitGapAssessment>(`/jobs/${jobId}/coach/assess`, { method: 'POST' }),
+    assessment: (jobId: string) => request<FitGapAssessment>(`/jobs/${jobId}/coach/assessment`),
+  },
+  outreach: {
+    tones: (jobId: string) => request<OutreachToneOptionDto[]>(`/jobs/${jobId}/outreach/tones`),
+    generate: (jobId: string, body: { contactId?: string; tone?: string }) =>
+      request<OutreachDraftDto>(`/jobs/${jobId}/outreach/generate`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
   documents: {
     update: (id: string, text: string) =>
@@ -154,5 +184,24 @@ export const api = {
     list: () => request<FreshMatchNotificationDto[]>('/notifications'),
     markSeen: (id: string) => request<void>(`/notifications/${id}/seen`, { method: 'POST' }),
     unseenCount: () => request<{ count: number }>('/notifications/unseen-count'),
+  },
+  // Browser-extension pairing (014-autofill-extension). `bootstrap` is the
+  // *only* extension-related call the dashboard makes — it asks the API to
+  // mint a one-time, 5-minute code, then displays it for the user to type
+  // into the extension popup. The dashboard never sees the extension's
+  // access/refresh tokens; those exist only between the extension and the
+  // API from this point on.
+  ext: {
+    bootstrap: () => request<{ code: string; expiresAt: string }>('/v1/ext/auth/bootstrap', { method: 'POST' }),
+  },
+  contacts: {
+    list: () => request<ReferralContactDto[]>('/contacts'),
+    import: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return request<ContactImportResultDto>('/contacts/import', { method: 'POST', body: fd });
+    },
+    githubSync: (contactId: string) =>
+      request<GithubSyncResultDto>(`/contacts/${contactId}/github-sync`, { method: 'POST' }),
   },
 };

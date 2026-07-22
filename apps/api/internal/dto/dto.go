@@ -242,6 +242,25 @@ type JobDto struct {
 	MatchResult     *MatchResultDto        `json:"matchResult,omitempty"`
 	Documents       []GeneratedDocumentDto `json:"documents,omitempty"`
 	Application     *ApplicationDto        `json:"application,omitempty"`
+
+	// Salary inference (spec 006). All five are nil together when no source
+	// could produce a band (FR-009) — SalaryRaw is preserved and displayed
+	// alongside regardless (FR-024).
+	SalaryMin        *int     `json:"salaryMin"`
+	SalaryMax        *int     `json:"salaryMax"`
+	SalaryCurrency   *string  `json:"salaryCurrency"`
+	SalaryConfidence *float64 `json:"salaryConfidence"`
+	SalarySource     *string  `json:"salarySource"`
+	// SalaryBelowFloor is computed (not stored) against the configured
+	// SALARY_FLOOR_USD; true only when the band's currency is USD and its
+	// max lies entirely below the floor (FR-016, FR-020 fail-open for other
+	// currencies).
+	SalaryBelowFloor bool `json:"salaryBelowFloor"`
+
+	// GhostSignal is the ghost-job detector's (005) result, when one exists.
+	// A job with no ghost result renders exactly as it does today — this
+	// field is simply absent, never a zero-valued panel (FR-017, SC-008).
+	GhostSignal *JobSignalDto `json:"ghostSignal,omitempty"`
 }
 
 type JobListResponse struct {
@@ -285,6 +304,45 @@ type ProfileDto struct {
 	RendercvFull   any              `json:"rendercvFull,omitempty"`
 	ExtraNotes     *string          `json:"extraNotes"`
 	UpdatedAt      string           `json:"updatedAt"`
+}
+
+// ExtProfileDto is the profile shape exposed to the browser extension via
+// GET /api/v1/ext/profile (spec 014-autofill-extension section 3). It is a
+// deliberately narrower, flatter projection of ProfileDto/RendercvMaster —
+// only the fields an application-form autofill needs, nothing else from the
+// account (no rendercv theme/design, no other profiles, no internal ids
+// beyond the leaf entries below).
+type ExtProfileDto struct {
+	FullName    string         `json:"fullName"`
+	Email       string         `json:"email"`
+	Phone       string         `json:"phone"`
+	Location    string         `json:"location"`
+	Headline    string         `json:"headline"`
+	Skills      []string       `json:"skills"`
+	WorkHistory []ExtWorkEntry `json:"workHistory"`
+	Education   []ExtEducation `json:"education"`
+	Links       []ExtLink      `json:"links"`
+}
+
+type ExtWorkEntry struct {
+	Employer    string  `json:"employer"`
+	Role        string  `json:"role"`
+	StartDate   string  `json:"startDate"`
+	EndDate     *string `json:"endDate"`
+	Current     bool    `json:"current"`
+	Description string  `json:"description"`
+}
+
+type ExtEducation struct {
+	Institution string `json:"institution"`
+	Degree      string `json:"degree"`
+	StartDate   string `json:"startDate"`
+	EndDate     string `json:"endDate"`
+}
+
+type ExtLink struct {
+	URL   string `json:"url"`
+	Label string `json:"label"`
 }
 
 type JobSourceDto struct {
@@ -450,11 +508,11 @@ const (
 // Rate is null unless State == PostAgeStateObserved. N is always present
 // so the caller can render sample size alongside any rate.
 type PostAgeBucketDto struct {
-	Bucket    string              `json:"bucket"`
-	N         int32               `json:"n"`
-	Responses int32               `json:"responses"`
-	Rate      *float64            `json:"rate"`
-	State     PostAgeBucketState  `json:"state"`
+	Bucket    string             `json:"bucket"`
+	N         int32              `json:"n"`
+	Responses int32              `json:"responses"`
+	Rate      *float64           `json:"rate"`
+	State     PostAgeBucketState `json:"state"`
 }
 
 // PostAgeResponseDto is the full signal response served by
@@ -481,4 +539,183 @@ type FreshMatchNotificationDto struct {
 	JobTitle   *string `json:"jobTitle,omitempty"`
 	Company    *string `json:"company,omitempty"`
 	MatchScore *int32  `json:"matchScore,omitempty"`
+}
+
+// CompanyIntelDto is the flattened company-intel signal set served by
+// GET /api/companies/{jobId}/intel and POST /api/companies/{jobId}/intel/refresh
+// (spec 004). Each of the five CompanySignal rows for the job's company is
+// flattened into one named field; a nil field means that signal has never
+// been captured (or its source failed and no previous value exists yet).
+type CompanyIntelDto struct {
+	CompanyName     string   `json:"companyName"`
+	Website         *string  `json:"website"`
+	Funding         *string  `json:"funding"`
+	Layoffs         *string  `json:"layoffs"`
+	GlassdoorRating *float64 `json:"glassdoorRating"`
+	Headcount       *string  `json:"headcount"`
+	TechStack       *string  `json:"techStack"`
+	FetchedAt       string   `json:"fetchedAt"`
+	// Error is set on a Refresh response when every source failed (FR-007):
+	// previous values (if any) remain in the other fields, and the
+	// dashboard shows a top-level error banner.
+	Error *string `json:"error,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// Ghost-job detector (005)
+// ---------------------------------------------------------------------------
+
+// GhostSignalBreakdownDto is the measured evidence behind one ghost score:
+// the four signals (a value or an explicit unknown — never a bare 0), the
+// model's confidence, its plain-English explanation, and per-signal
+// provenance notes. This is also the exact shape marshaled into
+// "JobSignal"."signals" jsonb, so persistence and API response share one
+// struct (see ghostjob.Service).
+type GhostSignalBreakdownDto struct {
+	RepostCount       int               `json:"repostCount"`
+	DaysOpen          *int              `json:"daysOpen"`
+	CrossBoardCount   *int              `json:"crossBoardCount"`
+	AlwaysHiringCount *int              `json:"alwaysHiringCount"`
+	Confidence        float64           `json:"confidence"`
+	Explanation       string            `json:"explanation"`
+	TopSignals        []string          `json:"topSignals,omitempty"`
+	Notes             map[string]string `json:"notes"`
+}
+
+// JobSignalDto is one row of the generic "JobSignal" table. For this
+// feature kind is always "ghost"; the shape is deliberately generic so a
+// future signal kind reuses it (spec Key Entities: Job Signal).
+type JobSignalDto struct {
+	ID        string                  `json:"id"`
+	JobID     string                  `json:"jobId"`
+	Kind      string                  `json:"kind"`
+	Score     int                     `json:"score"`
+	Model     string                  `json:"model"`
+	CreatedAt string                  `json:"createdAt"`
+	Signals   GhostSignalBreakdownDto `json:"signals"`
+}
+
+// FitGapEvidenceDto is one adjacent profile entry offered as evidence for a
+// missing must-have (009 fit-gap coach), with a grounded rephrase suggestion
+// truthfully reframing that existing bullet toward the missing term.
+type FitGapEvidenceDto struct {
+	SourceEntry  string `json:"sourceEntry"`
+	SourceBullet string `json:"sourceBullet"`
+	Proximity    string `json:"proximity"` // "close" | "moderate" | "distant"
+	Rephrase     string `json:"rephrase"`
+}
+
+// FitGapItemDto is one missing must-have with up to 3 adjacent evidence
+// items drawn from the user's profile. NoAdjacentEvidence is the honest
+// empty result: nothing in the profile is close enough to cite.
+type FitGapItemDto struct {
+	Term               string              `json:"term"`
+	Polarity           string              `json:"polarity"` // always "required"
+	AdjacentEvidence   []FitGapEvidenceDto `json:"adjacentEvidence"`
+	NoAdjacentEvidence bool                `json:"noAdjacentEvidence"`
+}
+
+// FitGapAssessmentDto is the fit-gap coach output (009), served by
+// POST /api/jobs/{id}/coach/assess and GET /api/jobs/{id}/coach/assessment:
+// "you fail N of M must-haves", plus per-gap adjacent evidence.
+type FitGapAssessmentDto struct {
+	JobID           string          `json:"jobId"`
+	TotalMustHaves  int             `json:"totalMustHaves"`
+	FailedMustHaves int             `json:"failedMustHaves"`
+	CoveragePct     float64         `json:"coveragePct"`
+	Gaps            []FitGapItemDto `json:"gaps"`
+}
+
+// JobContactDto is one resolved recruiter/hiring-manager candidate served
+// by GET /api/jobs/{id}/contacts and POST /api/jobs/{id}/contacts/refresh
+// (spec 007). Nil fields mean that channel was never resolved — never
+// fabricated (FR-006, FR-008). Email/phone/linkedInUrl are sensitive
+// (FR-018): the API surfaces them only on this endpoint, and callers must
+// not log them in full.
+type JobContactDto struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Title       *string `json:"title"`
+	LinkedInUrl *string `json:"linkedInUrl"`
+	Email       *string `json:"email"`
+	Phone       *string `json:"phone"`
+	// Source is one of "posting" / "company-page" / "linkedin".
+	Source     string  `json:"source"`
+	Confidence float64 `json:"confidence"`
+	FetchedAt  string  `json:"fetchedAt"`
+}
+
+// ReferralContactDto is one hop in a warm-path chain — a contact imported
+// from CSV or discovered via GitHub cross-reference.
+type ReferralContactDto struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Email          *string `json:"email,omitempty"`
+	Company        *string `json:"company,omitempty"`
+	Role           *string `json:"role,omitempty"`
+	LinkedInUrl    *string `json:"linkedInUrl,omitempty"`
+	GitHubUsername *string `json:"gitHubUsername,omitempty"`
+}
+
+// ReferralPathDto is one ranked warm path from the user to a contact at the
+// job's company, served by GET /api/jobs/{id}/referral-paths.
+type ReferralPathDto struct {
+	Path   []ReferralContactDto `json:"path"`
+	Score  float64              `json:"score"`
+	Length int                  `json:"length"`
+}
+
+// ContactImportResultDto reports the outcome of a contacts CSV import,
+// served by POST /api/contacts/import.
+type ContactImportResultDto struct {
+	Imported int `json:"imported"`
+	Skipped  int `json:"skipped"`
+	Total    int `json:"total"`
+}
+
+// GithubSyncResultDto reports the outcome of cross-referencing one contact's
+// GitHub followers/following against the existing contact book, served by
+// POST /api/contacts/{id}/github-sync.
+type GithubSyncResultDto struct {
+	Contact          ReferralContactDto `json:"contact"`
+	FollowersScanned int                `json:"followersScanned"`
+	FollowingScanned int                `json:"followingScanned"`
+	ConnectionsMade  int                `json:"connectionsMade"`
+}
+
+// ---------------------------------------------------------------------------
+// Post-apply outreach draft generator (012)
+// ---------------------------------------------------------------------------
+
+// GroundingTraceDto is one specific claim in an OutreachDraftDto mapped to
+// the company-intel signal that backs it (spec 012 FR-014) — the wire shape
+// of the Story 3 "verify before you send it" view.
+type GroundingTraceDto struct {
+	Claim       string `json:"claim"`
+	SignalKind  string `json:"signalKind"`
+	SignalValue string `json:"signalValue"`
+}
+
+// OutreachDraftDto is a generated, never-sendable outreach message served
+// by POST /api/jobs/{id}/outreach/generate (spec 012). ContactId/ContactName
+// are nil when no resolved contact exists for the job (a neutral salutation
+// was used instead — FR-007). GroundingTraces is always a non-nil (possibly
+// empty) slice: empty means the draft made no specific claim at all, which
+// is the honest fallback when no company-intel signal exists (FR-012).
+type OutreachDraftDto struct {
+	JobID           string              `json:"jobId"`
+	ContactID       *string             `json:"contactId"`
+	ContactName     *string             `json:"contactName"`
+	Tone            string              `json:"tone"`
+	Text            string              `json:"text"`
+	GroundingTraces []GroundingTraceDto `json:"groundingTraces"`
+	GeneratedAt     string              `json:"generatedAt"`
+}
+
+// OutreachToneOptionDto is one offered tone option, served by
+// GET /api/jobs/{id}/outreach/tones (FR-010, FR-011).
+type OutreachToneOptionDto struct {
+	Value   string `json:"value"`
+	Label   string `json:"label"`
+	Default bool   `json:"default"`
 }

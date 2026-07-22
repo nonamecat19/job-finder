@@ -188,4 +188,113 @@ describe('FeedPage', () => {
     expect(screen.queryByText(/h ago/)).not.toBeInTheDocument()
     expect(screen.queryByText(/d ago/)).not.toBeInTheDocument()
   })
+
+  describe('salary band (spec 006 US1)', () => {
+    it('shows the inferred band alongside salaryRaw', async () => {
+      const job = mockJob({
+        salaryRaw: '$100k-$150k',
+        salaryMin: 100000,
+        salaryMax: 150000,
+        salaryCurrency: 'USD',
+        salaryConfidence: 0.8,
+        salarySource: 'blended',
+      })
+      vi.mocked(api.jobs.list).mockResolvedValue(mockJobListResponse({ items: [job] }))
+
+      renderWithProviders(<FeedPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/100,000–150,000 USD/)).toBeInTheDocument()
+      })
+      // FR-024: salaryRaw stays displayed alongside the band, never replaced.
+      expect(screen.getByText(/\$100k-\$150k/)).toBeInTheDocument()
+      expect(screen.queryByText(/low confidence/)).not.toBeInTheDocument()
+    })
+
+    it('marks a band below the low-confidence threshold', async () => {
+      const job = mockJob({
+        salaryMin: 40000,
+        salaryMax: 60000,
+        salaryCurrency: 'USD',
+        salaryConfidence: 0.2,
+        salarySource: 'llm',
+      })
+      vi.mocked(api.jobs.list).mockResolvedValue(mockJobListResponse({ items: [job] }))
+
+      renderWithProviders(<FeedPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/low confidence/)).toBeInTheDocument()
+      })
+    })
+
+    it('falls back to salaryRaw-only display when there is no band', async () => {
+      const job = mockJob({
+        salaryRaw: '$90k',
+        salaryMin: null,
+        salaryMax: null,
+        salaryCurrency: null,
+        salaryConfidence: null,
+        salarySource: null,
+      })
+      vi.mocked(api.jobs.list).mockResolvedValue(mockJobListResponse({ items: [job] }))
+
+      renderWithProviders(<FeedPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/\$90k/)).toBeInTheDocument()
+      })
+      expect(screen.queryByText(/–/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('below-floor filter (spec 006 US2)', () => {
+    it('hides below-floor jobs by default (chip on)', async () => {
+      renderWithProviders(<FeedPage />)
+
+      await waitFor(() => {
+        expect(screen.getByRole('checkbox', { name: /hide below-floor jobs/i })).toBeChecked()
+      })
+      expect(api.jobs.list).toHaveBeenCalledWith(
+        expect.not.objectContaining({ showBelowFloor: true }),
+      )
+    })
+
+    it('toggling the chip off refetches with showBelowFloor', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<FeedPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Senior React Developer')).toBeInTheDocument()
+      })
+
+      const chip = screen.getByRole('checkbox', { name: /hide below-floor jobs/i })
+      await user.click(chip)
+
+      await waitFor(() => {
+        expect(chip).not.toBeChecked()
+        expect(api.jobs.list).toHaveBeenCalledWith(
+          expect.objectContaining({ showBelowFloor: true }),
+        )
+      })
+    })
+
+    it('marks revealed below-floor jobs with the red marker', async () => {
+      const job = mockJob({
+        salaryMin: 20000,
+        salaryMax: 30000,
+        salaryCurrency: 'USD',
+        salaryConfidence: 0.6,
+        salarySource: 'blended',
+        salaryBelowFloor: true,
+      })
+      vi.mocked(api.jobs.list).mockResolvedValue(mockJobListResponse({ items: [job] }))
+
+      renderWithProviders(<FeedPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/below floor/i)).toBeInTheDocument()
+      })
+    })
+  })
 })

@@ -1,4 +1,4 @@
-import { Activity, BriefcaseBusiness, ClipboardList, FileEdit, Rss, Settings2, UserRound } from 'lucide-react';
+import { Activity, BriefcaseBusiness, ClipboardList, FileEdit, Plug, Rss, Settings2, UserRound, Users } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { ReactNode } from 'react';
 import { cn } from '../lib/utils';
@@ -9,9 +9,11 @@ const navItems = [
   { to: '/', label: 'Feed', icon: Rss },
   { to: '/tracker', label: 'Tracker', icon: ClipboardList },
   { to: '/tailor', label: 'Tailor', icon: FileEdit },
+  { to: '/contacts', label: 'Contacts', icon: Users },
   { to: '/status', label: 'Status', icon: Activity },
   { to: '/sources', label: 'Sources', icon: Settings2 },
   { to: '/profile', label: 'Profile', icon: UserRound },
+  { to: '/settings', label: 'Settings', icon: Plug },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

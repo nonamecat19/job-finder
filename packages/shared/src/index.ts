@@ -141,6 +141,23 @@ export interface JobDto {
   ingestedAt: string;
   status: ApplicationStatus | 'hidden';
   matchResult?: MatchResultDto | null;
+  // Salary inference (spec 006). All five are null together when no source
+  // could produce a band (FR-009) — salaryRaw is preserved and displayed
+  // alongside regardless (FR-024).
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string | null;
+  salaryConfidence: number | null;
+  salarySource: string | null;
+  // Computed against SALARY_FLOOR_USD; true only for a USD band entirely
+  // below the floor (FR-016, FR-020 fails open for other currencies).
+  salaryBelowFloor: boolean;
+  /**
+   * GhostSignal is the ghost-job detector's (005) result, when one exists.
+   * A job with no ghost result renders exactly as it does today — this
+   * field is simply absent, never a zero-valued panel (FR-017, SC-008).
+   */
+  ghostSignal?: JobSignalDto | null;
 }
 
 export interface JobListResponse {
@@ -299,6 +316,44 @@ export interface KeywordDiffResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Fit-gap coach (009)
+// ---------------------------------------------------------------------------
+
+export type FitGapProximity = 'close' | 'moderate' | 'distant';
+
+/** One adjacent profile entry offered as evidence for a missing must-have,
+ * with a grounded rephrase truthfully reframing that existing bullet toward
+ * the missing term. */
+export interface FitGapEvidence {
+  sourceEntry: string;
+  sourceBullet: string;
+  proximity: FitGapProximity;
+  rephrase: string;
+}
+
+/** One missing must-have with up to 3 adjacent evidence items drawn from the
+ * user's profile. noAdjacentEvidence is the honest empty result: nothing in
+ * the profile is close enough to cite. */
+export interface FitGapItem {
+  term: string;
+  polarity: 'required';
+  adjacentEvidence: FitGapEvidence[];
+  noAdjacentEvidence: boolean;
+}
+
+/** The fit-gap coach output: "you fail N of M must-haves", plus per-gap
+ * adjacent evidence. Served by POST /jobs/{id}/coach/assess (runs a fresh
+ * assessment) and GET /jobs/{id}/coach/assessment (the last result computed
+ * for this job in this server process). */
+export interface FitGapAssessment {
+  jobId: string;
+  totalMustHaves: number;
+  failedMustHaves: number;
+  coveragePct: number;
+  gaps: FitGapItem[];
+}
+
+// ---------------------------------------------------------------------------
 // Interview Prep Pack (013)
 // ---------------------------------------------------------------------------
 
@@ -395,6 +450,24 @@ export interface CompanyIntelDto {
 }
 
 // ---------------------------------------------------------------------------
+// Recruiter / hiring-manager resolution (007)
+// ---------------------------------------------------------------------------
+
+export type JobContactSource = 'posting' | 'company-page' | 'linkedin';
+
+export interface JobContactDto {
+  id: string;
+  name: string;
+  title: string | null;
+  linkedInUrl: string | null;
+  email: string | null;
+  phone: string | null;
+  source: JobContactSource;
+  confidence: number;
+  fetchedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Post-age vs Response-rate signal (010)
 // ---------------------------------------------------------------------------
 
@@ -431,4 +504,117 @@ export interface FreshMatchNotificationDto {
   jobTitle?: string | null;
   company?: string | null;
   matchScore?: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Ghost-job detector (005)
+// ---------------------------------------------------------------------------
+
+/**
+ * The measured evidence behind one ghost score: the four signals (a value
+ * or an explicit unknown — never a bare 0), the model's confidence, its
+ * plain-English explanation, and per-signal provenance notes.
+ */
+export interface GhostSignalBreakdownDto {
+  repostCount: number;
+  daysOpen?: number | null;
+  crossBoardCount?: number | null;
+  alwaysHiringCount?: number | null;
+  confidence: number;
+  explanation: string;
+  topSignals?: string[];
+  notes: Record<string, string>;
+}
+
+/**
+ * One row of the generic "JobSignal" table. For this feature kind is
+ * always "ghost"; the shape is deliberately generic so a future signal
+ * kind reuses it.
+ */
+export interface JobSignalDto {
+  id: string;
+  jobId: string;
+  kind: string;
+  score: number;
+  model: string;
+  createdAt: string;
+  signals: GhostSignalBreakdownDto;
+}
+
+// ---------------------------------------------------------------------------
+// Referral path finder (011)
+// ---------------------------------------------------------------------------
+
+/** One hop in a warm-path chain — a contact imported from CSV or discovered via GitHub cross-reference. */
+export interface ReferralContactDto {
+  id: string;
+  name: string;
+  email?: string | null;
+  company?: string | null;
+  role?: string | null;
+  linkedInUrl?: string | null;
+  gitHubUsername?: string | null;
+}
+
+/** One ranked warm path from the user to a contact at the job's company. */
+export interface ReferralPathDto {
+  path: ReferralContactDto[];
+  score: number;
+  length: number;
+}
+
+/** Outcome of a contacts CSV import (POST /api/contacts/import). */
+export interface ContactImportResultDto {
+  imported: number;
+  skipped: number;
+  total: number;
+}
+
+/** Outcome of cross-referencing one contact's GitHub followers/following (POST /api/contacts/{id}/github-sync). */
+export interface GithubSyncResultDto {
+  contact: ReferralContactDto;
+  followersScanned: number;
+  followingScanned: number;
+  connectionsMade: number;
+}
+
+// ---------------------------------------------------------------------------
+// Post-apply outreach draft generator (012)
+// ---------------------------------------------------------------------------
+
+export type OutreachTone = 'warm' | 'direct' | 'formal';
+
+/** One specific claim in an OutreachDraftDto mapped to the company-intel
+ * signal that backs it (FR-014) — the Story 3 "verify before you send it"
+ * view is built directly from this list. */
+export interface GroundingTraceDto {
+  claim: string;
+  signalKind: string;
+  signalValue: string;
+}
+
+/** A generated, never-sendable outreach message, served by
+ * POST /jobs/{id}/outreach/generate. contactId/contactName are undefined
+ * when no resolved contact exists for the job (a neutral salutation was
+ * used instead — FR-007). groundingTraces is always present, possibly
+ * empty: empty means the draft made no specific claim at all, the honest
+ * fallback when no company-intel signal exists (FR-012). The only actions
+ * this feature ever offers on a draft are copy and regenerate — there is no
+ * send/schedule/deliver action anywhere (FR-002, FR-003). */
+export interface OutreachDraftDto {
+  jobId: string;
+  contactId?: string;
+  contactName?: string;
+  tone: OutreachTone;
+  text: string;
+  groundingTraces: GroundingTraceDto[];
+  generatedAt: string;
+}
+
+/** One offered tone option, served by GET /jobs/{id}/outreach/tones
+ * (FR-010, FR-011). */
+export interface OutreachToneOptionDto {
+  value: OutreachTone;
+  label: string;
+  default: boolean;
 }

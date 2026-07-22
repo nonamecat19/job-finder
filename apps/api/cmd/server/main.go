@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -17,10 +19,14 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/applications"
+	"github.com/job-finder/api/internal/coach"
+	"github.com/job-finder/api/internal/companyintel"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/enrichment"
+	"github.com/job-finder/api/internal/extauth"
 	"github.com/job-finder/api/internal/generation"
+	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
 	"github.com/job-finder/api/internal/jobs"
@@ -30,14 +36,37 @@ import (
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"
+	"github.com/job-finder/api/internal/outreach"
 	"github.com/job-finder/api/internal/postage"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/api/internal/recruiter"
+	"github.com/job-finder/api/internal/referral"
 	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/job-finder/api/internal/storage"
 	"github.com/job-finder/api/internal/subscriptions"
 )
+
+// extJWTSigningSecret decodes a configured 32-byte hex EXT_JWT_SECRET, or
+// generates a random 32-byte secret when unset (dev/first-run convenience —
+// see the EXT_JWT_SECRET comment in .env.example and config.go).
+func extJWTSigningSecret(hexKey string) ([]byte, error) {
+	if hexKey == "" {
+		secret := make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			return nil, err
+		}
+		slog.Warn("EXT_JWT_SECRET not set — using an ephemeral random secret; " +
+			"extension sessions will not survive a server restart")
+		return secret, nil
+	}
+	secret, err := hex.DecodeString(hexKey)
+	if err != nil || len(secret) != 32 {
+		return nil, errors.New("EXT_JWT_SECRET must be a 32-byte hex string (openssl rand -hex 32)")
+	}
+	return secret, nil
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -117,6 +146,13 @@ func run() error {
 	)
 	matchingHandler := matching.NewHandler(matchingSvc, notifierSvc)
 
+	// Ghost-job detector (005): scored at ingestion (async) and on manual
+	// refresh only — never on a schedule (FR-014). Kept separate from
+	// matching/fit scoring end-to-end (FR-008).
+	ghostSvc := ghostjob.NewService(database.Queries, llmProvider, cfg.ModelOr(cfg.LLMModelGhost))
+	ghostHandler := ghostjob.NewHandler(ghostSvc)
+	ghostJobHandler := &httpapi.GhostJobHandler{Ghost: ghostSvc}
+
 	// MinIO object storage: when configured, every rendered resume/cover-letter
 	// file is uploaded here in addition to the local DocumentsDir.
 	var blobStore storage.Blobstore
@@ -147,7 +183,7 @@ func run() error {
 	documentsHandler := &httpapi.DocumentsHandler{Generation: generationSvc}
 
 	profilesHandler := &httpapi.ProfilesHandler{Profiles: profileSvc}
-	jobsSvc := jobs.NewService(database.Queries, asynqClient)
+	jobsSvc := jobs.NewService(database.Queries, asynqClient, cfg.SalaryFloorUsd)
 	jobsHandler := &httpapi.JobsHandler{Jobs: jobsSvc, Generation: generationSvc}
 	// database (not database.Queries) is passed as the TxRunner so a status
 	// change and its "ApplicationOutcome" event commit atomically.
@@ -192,17 +228,85 @@ func run() error {
 	diffService := keyword.NewDiffService(database.Queries).WithRephraser(cachedRephraser, profileSvc)
 	keywordHandler := &httpapi.KeywordHandler{Diff: diffService}
 
+	// Fit-gap coach (009-wiring): reads the 008 keyword diff + the profile's
+	// grounding entries and produces per-gap adjacent evidence with a
+	// grounded rephrase. Reuses rephraseModel (the same LLM adapter as the
+	// keyword-diff suggester above) since both need the identical
+	// truthful-reframing port. ProfileEntries closes over profileSvc rather
+	// than coach importing internal/profile, keeping that dependency edge
+	// one-directional.
+	coachSvc := coach.NewService(rephraseModel)
+	coachAssessSvc := coach.NewAssessmentService(coachSvc, database.Queries, func(ctx context.Context) ([]coach.ProfileEntry, error) {
+		entries, err := profileSvc.ProfileEntries(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]coach.ProfileEntry, len(entries))
+		for i, e := range entries {
+			out[i] = coach.ProfileEntry{SourceLabel: e.SourceLabel, Bullet: e.Bullet}
+		}
+		return out, nil
+	})
+	coachHandler := &httpapi.CoachHandler{Coach: coachAssessSvc}
+
 	postageSvc := postage.NewService(database.Queries)
 	postageHandler := &httpapi.PostAgeHandler{PostAge: postageSvc}
 
 	notificationSvc := notifier.NewNotificationService(database.Queries, database.Queries)
 	notificationHandler := &httpapi.NotificationHandler{Provider: notificationSvc}
 
+	companyIntelRegistry := companyintel.NewRegistry(
+		companyintel.CrunchbaseScraper{Scraping: scrapingSvc},
+		companyintel.LayoffsScraper{Scraping: scrapingSvc},
+		companyintel.GlassdoorScraper{Scraping: scrapingSvc},
+		companyintel.HeadcountScraper{Scraping: scrapingSvc},
+		companyintel.TechStackScraper{Scraping: scrapingSvc},
+	)
+	companyIntelSvc := companyintel.NewService(database.Queries, companyIntelRegistry, 2*time.Second)
+	companiesHandler := &httpapi.CompaniesHandler{CompanyIntel: companyIntelSvc}
+
+	// Browser-extension auth (014-autofill-extension). extJWTSecret must be
+	// a random byte string; the hex config value is decoded when present, or
+	// a fresh one is generated per process start when absent. The generated
+	// fallback is intentionally never logged or persisted — losing it just
+	// means every extension session must re-authenticate via a new bootstrap
+	// code, which is the safe failure mode (never a predictable secret).
+	extJWTSecret, err := extJWTSigningSecret(cfg.ExtJWTSecret)
+	if err != nil {
+		return err
+	}
+	extSigner := extauth.NewSigner(extJWTSecret)
+	extAuthSvc := extauth.NewService(database.Queries, extSigner)
+	extAuthHandler := &httpapi.ExtAuthHandler{Auth: extAuthSvc}
+	extProfileHandler := &httpapi.ExtProfileHandler{Profiles: profileSvc, Verifier: extSigner}
+
+	// Recruiter/hiring-manager resolution (007): posting-text always runs;
+	// the company-page source reuses scrapingSvc the same way companyintel's
+	// HeadcountScraper does, and LinkedIn only runs when the operator has
+	// opted in via LINKEDIN_SCRAPE_ENABLED.
+	recruiterSvc := recruiter.NewService(database.Queries, llmProvider, cfg.ModelOr(""), scrapingSvc, cfg.LinkedInScrapeEnabled)
+	contactsHandler := &httpapi.ContactsHandler{Recruiter: recruiterSvc}
+
+	referralSvc := referral.NewService(database.Queries, database.Queries, referral.NewGitHubCrossReferencer())
+	referralHandler := &httpapi.ReferralHandler{Referral: referralSvc}
+
+	// Post-apply outreach draft generator (012): consumes 007's resolved
+	// contacts (recruiterSvc) as the sole addressee source and 004's
+	// company-intel signals (companyIntelSvc) as the sole grounding
+	// source — it re-resolves neither, per assumptions.md. Draft-only: no
+	// send path exists anywhere in this package (Principle I).
+	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, llmProvider, cfg.ModelOr(""))
+	outreachHandler := &httpapi.OutreachHandler{Outreach: outreachSvc}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
-		postageHandler.Mount, notificationHandler.Mount,
+		postageHandler.Mount, notificationHandler.Mount, companiesHandler.Mount,
+		ghostJobHandler.Mount, coachHandler.Mount,
+		extAuthHandler.Mount, extProfileHandler.Mount,
+		contactsHandler.Mount, referralHandler.Mount,
+		outreachHandler.Mount,
 	)
 
 	srv := &http.Server{
@@ -256,6 +360,14 @@ func run() error {
 		Queues:      map[string]int{queue.QueueSalaryInfer: 1},
 	})
 
+	// Concurrency 1: same local-LLM contention reasoning as match/generate.
+	ghostMux := asynq.NewServeMux()
+	ghostMux.HandleFunc(queue.TypeGhostScore, ghostHandler.ProcessTask)
+	ghostAsynqSrv := asynq.NewServer(redisOpt, asynq.Config{
+		Concurrency: 1,
+		Queues:      map[string]int{queue.QueueGhostScore: 1},
+	})
+
 	go func() {
 		slog.Info("API listening", "port", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -288,6 +400,11 @@ func run() error {
 			slog.Error("asynq salary worker error", "error", err)
 		}
 	}()
+	go func() {
+		if err := ghostAsynqSrv.Run(ghostMux); err != nil {
+			slog.Error("asynq ghost worker error", "error", err)
+		}
+	}()
 
 	go scheduler.Run(ctx)
 
@@ -298,6 +415,7 @@ func run() error {
 	generateSrv.Shutdown()
 	enrichSrv.Shutdown()
 	salaryAsynqSrv.Shutdown()
+	ghostAsynqSrv.Shutdown()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)

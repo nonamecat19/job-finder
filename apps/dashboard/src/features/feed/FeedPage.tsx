@@ -11,6 +11,7 @@ import {
   EmptyState,
   ErrorState,
   Field,
+  GhostBadge,
   Input,
   ScoreBadge,
   Select,
@@ -102,6 +103,13 @@ export default function FeedPage() {
             remote
           </label>
         </div>
+        <label className="mt-3 flex items-center gap-2 text-sm font-medium text-muted">
+          <Checkbox
+            checked={!filters.showBelowFloor}
+            onChange={(e) => set({ showBelowFloor: e.target.checked ? undefined : true })}
+          />
+          hide below-floor jobs
+        </label>
       </Surface>
 
       {isLoading ? <Spinner label="loading jobs…" /> : null}
@@ -135,6 +143,41 @@ export default function FeedPage() {
   );
 }
 
+// LOW_CONFIDENCE_THRESHOLD mirrors the backend's blended-confidence cutoff
+// (spec 006 FR-006): below this, a band is shown but visibly discredited.
+const LOW_CONFIDENCE_THRESHOLD = 0.3;
+
+function formatSalaryBand(job: JobDto): string | null {
+  if (job.salaryMin == null || job.salaryMax == null || !job.salaryCurrency) return null;
+  return `${job.salaryMin.toLocaleString()}–${job.salaryMax.toLocaleString()} ${job.salaryCurrency}`;
+}
+
+// SalaryInfo renders the inferred band where salaryRaw used to render alone,
+// keeping salaryRaw displayed alongside it per FR-024. Band-less jobs fall
+// back to the salaryRaw-only display unchanged.
+function SalaryInfo({ job }: { job: JobDto }) {
+  const band = formatSalaryBand(job);
+  const lowConfidence = job.salaryConfidence != null && job.salaryConfidence < LOW_CONFIDENCE_THRESHOLD;
+
+  return (
+    <>
+      {band ? (
+        <span className={lowConfidence ? 'text-warning' : undefined}>
+          {' · '}
+          {band}
+          {lowConfidence ? ' (low confidence)' : ''}
+        </span>
+      ) : null}
+      {job.salaryRaw ? ` · ${job.salaryRaw}` : ''}
+      {job.salaryBelowFloor ? (
+        <span className="ml-2 rounded bg-danger px-1.5 py-0.5 text-xs font-semibold text-white">
+          below floor
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 function JobCard({
   job,
   onShortlist,
@@ -150,6 +193,9 @@ function JobCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <ScoreBadge score={job.matchResult?.score} />
+            {/* Informational only — never filters, hides, dims, or reorders
+                this job (Constitution Principle I / FR-015). */}
+            <GhostBadge score={job.ghostSignal?.score} />
             <Link to={`/jobs/${job.id}`} className="truncate font-semibold text-primary hover:underline">
               {job.title}
             </Link>
@@ -158,7 +204,7 @@ function JobCard({
             {job.company}
             {job.location ? ` · ${job.location}` : ''}
             {job.remote ? ' · remote' : ''}
-            {job.salaryRaw ? ` · ${job.salaryRaw}` : ''}
+            <SalaryInfo job={job} />
             {postAgeLabel(job.postedAt) ? (
               <span className="ml-2 inline-flex items-center gap-1 text-xs text-faint" title={job.postedAt ?? undefined}>
                 <Clock className="h-3 w-3" aria-hidden="true" />

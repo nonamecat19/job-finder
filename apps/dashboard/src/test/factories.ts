@@ -1,15 +1,21 @@
 import type {
   ApplicationDto,
   CompanyIntelDto,
+  FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
+  JobContactDto,
   JobDto,
   JobListResponse,
   JobSourceDto,
   MatchResultDto,
+  OutreachDraftDto,
+  OutreachToneOptionDto,
   PostAgeBucketDto,
   PostAgeResponseDto,
   ProfileDto,
+  ReferralContactDto,
+  ReferralPathDto,
   SavedSearchDto,
   SourceRunDto,
   StatsDto,
@@ -48,6 +54,12 @@ export function mockJob(overrides: Partial<JobDto> = {}): JobDto {
     ingestedAt: '2025-01-15T12:00:00Z',
     status: 'found',
     matchResult: mockMatchResult(),
+    salaryMin: null,
+    salaryMax: null,
+    salaryCurrency: null,
+    salaryConfidence: null,
+    salarySource: null,
+    salaryBelowFloor: false,
     ...overrides,
   }
 }
@@ -178,6 +190,67 @@ export function mockCompanyIntel(overrides: Partial<CompanyIntelDto> = {}): Comp
   }
 }
 
+export function mockFitGapAssessment(overrides: Partial<FitGapAssessment> = {}): FitGapAssessment {
+  return {
+    jobId: 'test-job-1',
+    totalMustHaves: 2,
+    failedMustHaves: 1,
+    coveragePct: 50,
+    gaps: [
+      {
+        term: 'Kubernetes',
+        polarity: 'required',
+        noAdjacentEvidence: false,
+        adjacentEvidence: [
+          {
+            sourceEntry: 'DevOps Engineer, Acme (2022-2024)',
+            sourceBullet: 'Ran Docker Swarm clusters in production',
+            proximity: 'close',
+            rephrase: 'Ran container orchestration adjacent to Kubernetes',
+          },
+        ],
+      },
+    ],
+    ...overrides,
+  }
+}
+
+export function mockJobContact(overrides: Partial<JobContactDto> = {}): JobContactDto {
+  return {
+    id: 'contact-1',
+    name: 'Jane Doe',
+    title: 'Recruiter',
+    linkedInUrl: null,
+    email: 'jane@acme.com',
+    phone: null,
+    source: 'posting',
+    confidence: 0.9,
+    fetchedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+export function mockOutreachDraft(overrides: Partial<OutreachDraftDto> = {}): OutreachDraftDto {
+  return {
+    jobId: 'test-job-1',
+    contactId: 'contact-1',
+    contactName: 'Jane Doe',
+    tone: 'warm',
+    text: 'Hi Jane, I noticed your team uses Go and React — would love to connect!',
+    groundingTraces: [{ claim: 'Go and React', signalKind: 'tech_stack', signalValue: 'Go, React, Postgres' }],
+    generatedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+export function mockOutreachToneOptions(): OutreachToneOptionDto[] {
+  return [
+    { value: 'warm', label: 'Warm', default: true },
+    { value: 'direct', label: 'Direct', default: false },
+    { value: 'formal', label: 'Formal', default: false },
+  ]
+}
+
 export function mockPostAgeBucket(overrides: Partial<PostAgeBucketDto> = {}): PostAgeBucketDto {
   return {
     bucket: 'fresh',
@@ -202,6 +275,28 @@ export function mockPostAgeResponse(overrides: Partial<PostAgeResponseDto> = {})
     priorRate: 0.2,
     priorLabel: 'Typical baseline — not yet your data',
     thresholdMsg: null,
+    ...overrides,
+  }
+}
+
+export function mockReferralContact(overrides: Partial<ReferralContactDto> = {}): ReferralContactDto {
+  return {
+    id: 'contact-1',
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    company: 'Acme Corp',
+    role: 'Engineering Manager',
+    linkedInUrl: 'https://linkedin.com/in/janedoe',
+    gitHubUsername: 'janedoe',
+    ...overrides,
+  }
+}
+
+export function mockReferralPath(overrides: Partial<ReferralPathDto> = {}): ReferralPathDto {
+  return {
+    path: [mockReferralContact({ id: 'me', name: 'You' }), mockReferralContact()],
+    score: 0.72,
+    length: 2,
     ...overrides,
   }
 }

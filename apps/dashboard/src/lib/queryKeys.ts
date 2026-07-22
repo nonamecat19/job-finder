@@ -8,6 +8,16 @@ export const queryKeys = {
     documents: (id: string | undefined) => ['jobs', 'documents', id] as const,
     keywordDiff: (id: string | undefined) => ['jobs', 'keyword-diff', id] as const,
     interviewPrep: (id: string | undefined) => ['jobs', 'interview-prep', id] as const,
+    contacts: (id: string | undefined) => ['jobs', 'contacts', id] as const,
+    referralPaths: (id: string | undefined) => ['jobs', 'referral-paths', id] as const,
+  },
+  coach: {
+    all: ['coach'] as const,
+    assessment: (jobId: string | undefined) => ['coach', 'assessment', jobId] as const,
+  },
+  outreach: {
+    all: ['outreach'] as const,
+    tones: (jobId: string | undefined) => ['outreach', 'tones', jobId] as const,
   },
   sources: {
     all: ['sources'] as const,
@@ -50,5 +60,8 @@ export const queryKeys = {
     all: ['notifications'] as const,
     list: ['notifications', 'list'] as const,
     unseenCount: ['notifications', 'unseen-count'] as const,
+  },
+  contacts: {
+    all: ['contacts'] as const,
   },
 };

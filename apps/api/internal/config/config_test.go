@@ -29,6 +29,24 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.OllamaKey != "" {
 		t.Errorf("OllamaKey should default empty, got %q", cfg.OllamaKey)
 	}
+	if cfg.LinkedInScrapeEnabled {
+		t.Error("LinkedInScrapeEnabled should default false")
+	}
+}
+
+func TestLoadLinkedInScrapeEnabledOverride(t *testing.T) {
+	if err := unsetForTest(t); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LINKEDIN_SCRAPE_ENABLED", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.LinkedInScrapeEnabled {
+		t.Error("LinkedInScrapeEnabled = false, want true after env override")
+	}
 }
 
 func TestLoadEnvOverride(t *testing.T) {
@@ -76,7 +94,7 @@ func unsetForTest(t *testing.T) error {
 		"PORT", "REDIS_URL", "OLLAMA_URL", "LLM_MODEL", "EMBED_MODEL", "EMBED_DIMS",
 		"MATCH_SIMILARITY_THRESHOLD", "ADZUNA_COUNTRY", "DJINNI_DETAIL_DELAY_MS",
 		"WORKUA_DETAIL_DELAY_MS", "JOBSPY_URL", "DOCUMENTS_DIR", "RESUME_MASTER_PATH",
-		"RESUME_GROUNDING_LEVEL", "RENDERCV_BIN",
+		"RESUME_GROUNDING_LEVEL", "RENDERCV_BIN", "LINKEDIN_SCRAPE_ENABLED",
 	}, optionalKeys...)
 	for _, k := range all {
 		t.Setenv(k, "")

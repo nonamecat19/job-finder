@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../test/test-utils'
-import { mockApplication } from '../test/factories'
+import { mockApplication, mockJob } from '../test/factories'
 import { api } from '../api'
 import TrackerPage from './TrackerPage'
 
@@ -26,8 +26,8 @@ vi.mock('../api', () => ({
 
 beforeEach(() => {
   vi.mocked(api.applications.list).mockResolvedValue([
-    mockApplication({ id: 'app-1', status: 'shortlisted', job: { id: 'j1', dedupeKey: 'd1', sourceKey: 'remotive', title: 'React Dev', company: 'Acme', location: null, remote: true, salaryRaw: null, url: 'https://example.com', description: 'test', postedAt: null, ingestedAt: '2025-01-15T12:00:00Z', status: 'shortlisted', matchResult: { id: 'm1', jobId: 'j1', similarity: 0.9, score: 88, matchedSkills: ['React'], missingSkills: [], summary: null, redFlags: null, model: 'test', createdAt: '2025-01-15T12:00:00Z' } } }),
-    mockApplication({ id: 'app-2', status: 'applied', job: { id: 'j2', dedupeKey: 'd2', sourceKey: 'djinni', title: 'Go Dev', company: 'Beta Inc', location: 'Kyiv', remote: false, salaryRaw: '$80k', url: 'https://example.com/2', description: 'test', postedAt: null, ingestedAt: '2025-01-15T12:00:00Z', status: 'applied' } }),
+    mockApplication({ id: 'app-1', status: 'shortlisted', job: mockJob({ id: 'j1', dedupeKey: 'd1', sourceKey: 'remotive', title: 'React Dev', company: 'Acme', location: null, remote: true, salaryRaw: null, url: 'https://example.com', description: 'test', postedAt: null, ingestedAt: '2025-01-15T12:00:00Z', status: 'shortlisted', matchResult: { id: 'm1', jobId: 'j1', similarity: 0.9, score: 88, matchedSkills: ['React'], missingSkills: [], summary: null, redFlags: null, model: 'test', createdAt: '2025-01-15T12:00:00Z' } }) }),
+    mockApplication({ id: 'app-2', status: 'applied', job: mockJob({ id: 'j2', dedupeKey: 'd2', sourceKey: 'djinni', title: 'Go Dev', company: 'Beta Inc', location: 'Kyiv', remote: false, salaryRaw: '$80k', url: 'https://example.com/2', description: 'test', postedAt: null, ingestedAt: '2025-01-15T12:00:00Z', status: 'applied', matchResult: undefined }) }),
   ])
 })
 

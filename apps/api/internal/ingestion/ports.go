@@ -27,6 +27,7 @@ type Repository interface {
 	GetSubscription(ctx context.Context, id pgtype.UUID) (sqlcgen.Subscription, error)
 	InsertJob(ctx context.Context, arg sqlcgen.InsertJobParams) (sqlcgen.Job, error)
 	InsertSourceRun(ctx context.Context, arg sqlcgen.InsertSourceRunParams) (sqlcgen.SourceRun, error)
+	RecordJobRepost(ctx context.Context, dedupekey string) (sqlcgen.Job, error)
 	ListEnabledSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error)
 	ListSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error)
 	RecentRunsJoined(ctx context.Context, limit int32) ([]sqlcgen.RecentRunsJoinedRow, error)
