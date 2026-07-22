@@ -1,6 +1,7 @@
+import { RefreshCw } from 'lucide-react';
 import type { JobContactDto } from '@job-finder/shared';
-import { Spinner, Surface } from '../../components/ui';
-import { useJobContacts } from './hooks';
+import { Button, Spinner, Surface } from '../../components/ui';
+import { useJobContacts, useRefreshJobContacts } from './hooks';
 
 // pickHeadline returns the highest-confidence contact. useJobContacts
 // already serves contacts pre-ordered best-first by the API (confidence
@@ -18,6 +19,7 @@ function headlineLabel(contact: JobContactDto): string {
 
 export default function ContactLine({ jobId }: { jobId: string | undefined }) {
   const { data: contacts, isLoading } = useJobContacts(jobId);
+  const refresh = useRefreshJobContacts(jobId);
 
   if (isLoading) {
     return (
@@ -33,16 +35,22 @@ export default function ContactLine({ jobId }: { jobId: string | undefined }) {
     <Surface>
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-semibold">Contact</h2>
-        {headline ? (
-          <span className="text-sm text-fg" data-testid="contact-headline">
-            {headlineLabel(headline)}
-            {headline.email ? <span className="ml-2 text-faint">{headline.email}</span> : null}
-          </span>
-        ) : (
-          <span className="text-sm text-faint" data-testid="contact-empty">
-            No contact found — try Refresh
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {headline ? (
+            <span className="text-sm text-fg" data-testid="contact-headline">
+              {headlineLabel(headline)}
+              {headline.email ? <span className="ml-2 text-faint">{headline.email}</span> : null}
+            </span>
+          ) : (
+            <span className="text-sm text-faint" data-testid="contact-empty">
+              No contact found — try Refresh
+            </span>
+          )}
+          <Button variant="secondary" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+            {refresh.isPending ? <Spinner /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+            Refresh contacts
+          </Button>
+        </div>
       </div>
     </Surface>
   );
