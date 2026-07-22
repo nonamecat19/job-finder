@@ -112,6 +112,15 @@ export function useRefreshJobContacts(jobId: string | undefined) {
   });
 }
 
+export function useReferralPaths(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.jobs.referralPaths(id),
+    queryFn: () => api.jobs.referralPaths(id!),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
 export function useCompanyIntel(jobId: string) {
   return useQuery({
     queryKey: queryKeys.companies.detail(jobId),

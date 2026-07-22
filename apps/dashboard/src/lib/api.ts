@@ -2,10 +2,12 @@ import type {
   ActivityListResponse,
   ApplicationDto,
   CompanyIntelDto,
+  ContactImportResultDto,
   DocumentType,
   FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
+  GithubSyncResultDto,
   InterviewPrepPack,
   JobContactDto,
   JobDto,
@@ -15,6 +17,8 @@ import type {
   KeywordDiffResponse,
   PostAgeResponseDto,
   ProfileDto,
+  ReferralContactDto,
+  ReferralPathDto,
   SavedSearchDto,
   SearchQuery,
   SourceRunDto,
@@ -73,6 +77,7 @@ export const api = {
     contacts: (id: string) => request<JobContactDto[]>(`/jobs/${id}/contacts`),
     refreshContacts: (id: string) =>
       request<JobContactDto[]>(`/jobs/${id}/contacts/refresh`, { method: 'POST' }),
+    referralPaths: (id: string) => request<ReferralPathDto[]>(`/jobs/${id}/referral-paths`),
   },
   coach: {
     assess: (jobId: string) =>
@@ -178,5 +183,15 @@ export const api = {
   // API from this point on.
   ext: {
     bootstrap: () => request<{ code: string; expiresAt: string }>('/v1/ext/auth/bootstrap', { method: 'POST' }),
+  },
+  contacts: {
+    list: () => request<ReferralContactDto[]>('/contacts'),
+    import: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return request<ContactImportResultDto>('/contacts/import', { method: 'POST', body: fd });
+    },
+    githubSync: (contactId: string) =>
+      request<GithubSyncResultDto>(`/contacts/${contactId}/github-sync`, { method: 'POST' }),
   },
 };

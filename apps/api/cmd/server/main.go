@@ -40,6 +40,7 @@ import (
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/recruiter"
+	"github.com/job-finder/api/internal/referral"
 	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/job-finder/api/internal/storage"
@@ -285,6 +286,9 @@ func run() error {
 	recruiterSvc := recruiter.NewService(database.Queries, llmProvider, cfg.ModelOr(""), scrapingSvc, cfg.LinkedInScrapeEnabled)
 	contactsHandler := &httpapi.ContactsHandler{Recruiter: recruiterSvc}
 
+	referralSvc := referral.NewService(database.Queries, database.Queries, referral.NewGitHubCrossReferencer())
+	referralHandler := &httpapi.ReferralHandler{Referral: referralSvc}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
@@ -292,7 +296,7 @@ func run() error {
 		postageHandler.Mount, notificationHandler.Mount, companiesHandler.Mount,
 		ghostJobHandler.Mount, coachHandler.Mount,
 		extAuthHandler.Mount, extProfileHandler.Mount,
-		contactsHandler.Mount,
+		contactsHandler.Mount, referralHandler.Mount,
 	)
 
 	srv := &http.Server{

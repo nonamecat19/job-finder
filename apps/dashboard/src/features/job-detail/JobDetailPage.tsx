@@ -20,6 +20,7 @@ import GhostSignalPanel from './GhostSignalPanel';
 import KeywordDiffPanel from './KeywordDiffPanel';
 import PostAgeSignal from './PostAgeSignal';
 import PrepPackPanel from './PrepPackPanel';
+import ReferralPathsCard from './ReferralPathsCard';
 
 type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
 
@@ -90,6 +91,8 @@ export default function JobDetailPage() {
       <ContactLine jobId={job.id} />
 
       <CompanyIntelCard jobId={job.id} />
+
+      <ReferralPathsCard jobId={id} />
 
       <KeywordDiffPanel jobId={id} />
 

@@ -573,3 +573,45 @@ export interface JobContactDto {
   confidence: number /* float64 */;
   fetchedAt: string;
 }
+/**
+ * ReferralContactDto is one hop in a warm-path chain — a contact imported
+ * from CSV or discovered via GitHub cross-reference.
+ */
+export interface ReferralContactDto {
+  id: string;
+  name: string;
+  email?: string;
+  company?: string;
+  role?: string;
+  linkedInUrl?: string;
+  gitHubUsername?: string;
+}
+/**
+ * ReferralPathDto is one ranked warm path from the user to a contact at the
+ * job's company, served by GET /api/jobs/{id}/referral-paths.
+ */
+export interface ReferralPathDto {
+  path: ReferralContactDto[];
+  score: number /* float64 */;
+  length: number /* int */;
+}
+/**
+ * ContactImportResultDto reports the outcome of a contacts CSV import,
+ * served by POST /api/contacts/import.
+ */
+export interface ContactImportResultDto {
+  imported: number /* int */;
+  skipped: number /* int */;
+  total: number /* int */;
+}
+/**
+ * GithubSyncResultDto reports the outcome of cross-referencing one contact's
+ * GitHub followers/following against the existing contact book, served by
+ * POST /api/contacts/{id}/github-sync.
+ */
+export interface GithubSyncResultDto {
+  contact: ReferralContactDto;
+  followersScanned: number /* int */;
+  followingScanned: number /* int */;
+  connectionsMade: number /* int */;
+}
