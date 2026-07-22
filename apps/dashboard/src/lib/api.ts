@@ -155,4 +155,13 @@ export const api = {
     markSeen: (id: string) => request<void>(`/notifications/${id}/seen`, { method: 'POST' }),
     unseenCount: () => request<{ count: number }>('/notifications/unseen-count'),
   },
+  // Browser-extension pairing (014-autofill-extension). `bootstrap` is the
+  // *only* extension-related call the dashboard makes — it asks the API to
+  // mint a one-time, 5-minute code, then displays it for the user to type
+  // into the extension popup. The dashboard never sees the extension's
+  // access/refresh tokens; those exist only between the extension and the
+  // API from this point on.
+  ext: {
+    bootstrap: () => request<{ code: string; expiresAt: string }>('/v1/ext/auth/bootstrap', { method: 'POST' }),
+  },
 };
