@@ -148,7 +148,7 @@ func run() error {
 	documentsHandler := &httpapi.DocumentsHandler{Generation: generationSvc}
 
 	profilesHandler := &httpapi.ProfilesHandler{Profiles: profileSvc}
-	jobsSvc := jobs.NewService(database.Queries, asynqClient)
+	jobsSvc := jobs.NewService(database.Queries, asynqClient, cfg.SalaryFloorUsd)
 	jobsHandler := &httpapi.JobsHandler{Jobs: jobsSvc, Generation: generationSvc}
 	// database (not database.Queries) is passed as the TxRunner so a status
 	// change and its "ApplicationOutcome" event commit atomically.

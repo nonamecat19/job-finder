@@ -242,6 +242,20 @@ type JobDto struct {
 	MatchResult     *MatchResultDto        `json:"matchResult,omitempty"`
 	Documents       []GeneratedDocumentDto `json:"documents,omitempty"`
 	Application     *ApplicationDto        `json:"application,omitempty"`
+
+	// Salary inference (spec 006). All five are nil together when no source
+	// could produce a band (FR-009) — SalaryRaw is preserved and displayed
+	// alongside regardless (FR-024).
+	SalaryMin        *int     `json:"salaryMin"`
+	SalaryMax        *int     `json:"salaryMax"`
+	SalaryCurrency   *string  `json:"salaryCurrency"`
+	SalaryConfidence *float64 `json:"salaryConfidence"`
+	SalarySource     *string  `json:"salarySource"`
+	// SalaryBelowFloor is computed (not stored) against the configured
+	// SALARY_FLOOR_USD; true only when the band's currency is USD and its
+	// max lies entirely below the floor (FR-016, FR-020 fail-open for other
+	// currencies).
+	SalaryBelowFloor bool `json:"salaryBelowFloor"`
 }
 
 type JobListResponse struct {

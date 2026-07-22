@@ -21,14 +21,17 @@ import (
 // Service is the jobs use-case. It depends on the Repository and Enqueuer
 // ports (see ports.go), not on concrete infrastructure.
 type Service struct {
-	q      Repository
-	client Enqueuer
+	q              Repository
+	client         Enqueuer
+	salaryFloorUsd int
 }
 
 // NewService wires the use-case to its ports. The concrete *sqlcgen.Queries and
 // *asynq.Client satisfy the interfaces, so callers pass them directly.
-func NewService(q Repository, client Enqueuer) *Service {
-	return &Service{q: q, client: client}
+// salaryFloorUsd is SALARY_FLOOR_USD (spec 006, US2); 0 disables the floor
+// filter entirely (FR-018).
+func NewService(q Repository, client Enqueuer, salaryFloorUsd int) *Service {
+	return &Service{q: q, client: client, salaryFloorUsd: salaryFloorUsd}
 }
 
 type ListParams struct {
@@ -40,6 +43,10 @@ type ListParams struct {
 	Q        *string
 	Page     int
 	PageSize int
+	// ShowBelowFloor, when true, omits the salary-floor predicate so jobs
+	// below SALARY_FLOOR_USD are included (FR-016). Default (false) hides
+	// them, matching the "filter defaults to on" assumption.
+	ShowBelowFloor bool
 }
 
 // jobRow is the common shape of ListJobsByScoreRow / ListJobsByDateRow (the
@@ -81,8 +88,17 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		minScore = &v
 	}
 
+	// Floor 0 or the reveal toggle both mean "no predicate" — nil omits it
+	// entirely rather than evaluating ">= 0" (FR-018).
+	var salaryFloor *int32
+	if s.salaryFloorUsd > 0 && !params.ShowBelowFloor {
+		v := int32(s.salaryFloorUsd)
+		salaryFloor = &v
+	}
+
 	count, err := s.q.CountJobs(ctx, sqlcgen.CountJobsParams{
 		Source: params.Source, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
+		SalaryFloor: salaryFloor,
 	})
 	if err != nil {
 		return dto.JobListResponse{}, err
@@ -95,7 +111,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	if params.Sort == "date" {
 		r, err := s.q.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{
 			Source: params.Source, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
-			Offset: offset, Limit: limit,
+			SalaryFloor: salaryFloor, Offset: offset, Limit: limit,
 		})
 		if err != nil {
 			return dto.JobListResponse{}, err
@@ -107,6 +123,8 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 					Title: x.Title, Company: x.Company, Location: x.Location, Remote: x.Remote,
 					SalaryRaw: x.SalaryRaw, Url: x.Url, Description: x.Description, Raw: x.Raw,
 					PostedAt: x.PostedAt, IngestedAt: x.IngestedAt, Embedding: x.Embedding, Status: x.Status,
+					SalaryMin: x.SalaryMin, SalaryMax: x.SalaryMax, SalaryCurrency: x.SalaryCurrency,
+					SalaryConfidence: x.SalaryConfidence, SalarySource: x.SalarySource,
 				},
 				MrID: x.MrID, MrSimilarity: x.MrSimilarity, MrScore: x.MrScore,
 				MrMatchedSkills: x.MrMatchedSkills, MrMissingSkills: x.MrMissingSkills,
@@ -116,7 +134,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	} else {
 		r, err := s.q.ListJobsByScore(ctx, sqlcgen.ListJobsByScoreParams{
 			Source: params.Source, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
-			Offset: offset, Limit: limit,
+			SalaryFloor: salaryFloor, Offset: offset, Limit: limit,
 		})
 		if err != nil {
 			return dto.JobListResponse{}, err
@@ -128,6 +146,8 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 					Title: x.Title, Company: x.Company, Location: x.Location, Remote: x.Remote,
 					SalaryRaw: x.SalaryRaw, Url: x.Url, Description: x.Description, Raw: x.Raw,
 					PostedAt: x.PostedAt, IngestedAt: x.IngestedAt, Embedding: x.Embedding, Status: x.Status,
+					SalaryMin: x.SalaryMin, SalaryMax: x.SalaryMax, SalaryCurrency: x.SalaryCurrency,
+					SalaryConfidence: x.SalaryConfidence, SalarySource: x.SalarySource,
 				},
 				MrID: x.MrID, MrSimilarity: x.MrSimilarity, MrScore: x.MrScore,
 				MrMatchedSkills: x.MrMatchedSkills, MrMissingSkills: x.MrMissingSkills,
@@ -138,9 +158,21 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 
 	items := make([]dto.JobDto, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, rowToDto(row))
+		item := rowToDto(row)
+		s.markBelowFloor(&item)
+		items = append(items, item)
 	}
 	return dto.JobListResponse{Items: items, Total: count, Page: page, PageSize: pageSize}, nil
+}
+
+// markBelowFloor sets SalaryBelowFloor when the job's band is entirely below
+// SALARY_FLOOR_USD. Only USD bands are evaluated — a currency the system
+// cannot convert must never be filtered or marked (FR-020 fails open).
+func (s *Service) markBelowFloor(d *dto.JobDto) {
+	if s.salaryFloorUsd <= 0 || d.SalaryMax == nil || d.SalaryCurrency == nil || *d.SalaryCurrency != "USD" {
+		return
+	}
+	d.SalaryBelowFloor = *d.SalaryMax < s.salaryFloorUsd
 }
 
 func (s *Service) Get(ctx context.Context, id string) (dto.JobDto, error) {
@@ -153,6 +185,7 @@ func (s *Service) Get(ctx context.Context, id string) (dto.JobDto, error) {
 		return dto.JobDto{}, fmt.Errorf("job %s not found", id)
 	}
 	out := jobToDto(job)
+	s.markBelowFloor(&out)
 
 	if mr, err := s.q.GetMatchResultByJobID(ctx, uid); err == nil {
 		md := matchResultDto(mr)
@@ -200,7 +233,9 @@ func (s *Service) Hide(ctx context.Context, id string) (dto.JobDto, error) {
 	if err != nil {
 		return dto.JobDto{}, err
 	}
-	return jobToDto(updated), nil
+	out := jobToDto(updated)
+	s.markBelowFloor(&out)
+	return out, nil
 }
 
 // DeleteAll wipes every job (and, via ON DELETE cascade, its applications,
@@ -266,6 +301,8 @@ func jobToDto(j sqlcgen.Job) dto.JobDto {
 		Title: j.Title, Company: j.Company, Location: j.Location, Remote: j.Remote,
 		SalaryRaw: j.SalaryRaw, URL: j.Url, Description: j.Description,
 		PostedAt: dbutil.TimestampPtr(j.PostedAt), IngestedAt: dbutil.Timestamp(j.IngestedAt), Status: j.Status,
+		SalaryMin: int32PtrToIntPtr(j.SalaryMin), SalaryMax: int32PtrToIntPtr(j.SalaryMax),
+		SalaryCurrency: j.SalaryCurrency, SalaryConfidence: j.SalaryConfidence, SalarySource: j.SalarySource,
 	}
 	var rawFields struct {
 		DetailHTML *string `json:"detailHtml"`
@@ -274,6 +311,14 @@ func jobToDto(j sqlcgen.Job) dto.JobDto {
 		out.DescriptionHtml = rawFields.DetailHTML
 	}
 	return out
+}
+
+func int32PtrToIntPtr(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
 }
 
 func rowToDto(row jobRow) dto.JobDto {

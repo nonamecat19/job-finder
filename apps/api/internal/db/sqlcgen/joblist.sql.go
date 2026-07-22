@@ -29,14 +29,21 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."description" ILIKE $4
   )
   AND ($5::int IS NULL OR mr."score" >= $5)
+  AND (
+    $6::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= $6
+  )
 `
 
 type CountJobsParams struct {
-	Source   *string `json:"source"`
-	Status   *string `json:"status"`
-	Remote   *bool   `json:"remote"`
-	Q        *string `json:"q"`
-	MinScore *int32  `json:"min_score"`
+	Source      *string `json:"source"`
+	Status      *string `json:"status"`
+	Remote      *bool   `json:"remote"`
+	Q           *string `json:"q"`
+	MinScore    *int32  `json:"min_score"`
+	SalaryFloor *int32  `json:"salary_floor"`
 }
 
 func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, error) {
@@ -46,6 +53,7 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.SalaryFloor,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -108,19 +116,26 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."description" ILIKE $4
   )
   AND ($5::int IS NULL OR mr."score" >= $5)
+  AND (
+    $6::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= $6
+  )
 ORDER BY j."ingestedAt" DESC
-OFFSET $6
-LIMIT $7
+OFFSET $7
+LIMIT $8
 `
 
 type ListJobsByDateParams struct {
-	Source   *string `json:"source"`
-	Status   *string `json:"status"`
-	Remote   *bool   `json:"remote"`
-	Q        *string `json:"q"`
-	MinScore *int32  `json:"min_score"`
-	Offset   int32   `json:"offset"`
-	Limit    int32   `json:"limit"`
+	Source      *string `json:"source"`
+	Status      *string `json:"status"`
+	Remote      *bool   `json:"remote"`
+	Q           *string `json:"q"`
+	MinScore    *int32  `json:"min_score"`
+	SalaryFloor *int32  `json:"salary_floor"`
+	Offset      int32   `json:"offset"`
+	Limit       int32   `json:"limit"`
 }
 
 type ListJobsByDateRow struct {
@@ -164,6 +179,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.SalaryFloor,
 		arg.Offset,
 		arg.Limit,
 	)
@@ -237,19 +253,26 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."description" ILIKE $4
   )
   AND ($5::int IS NULL OR mr."score" >= $5)
+  AND (
+    $6::int IS NULL
+    OR j."salaryMax" IS NULL
+    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+    OR j."salaryMax" >= $6
+  )
 ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
-OFFSET $6
-LIMIT $7
+OFFSET $7
+LIMIT $8
 `
 
 type ListJobsByScoreParams struct {
-	Source   *string `json:"source"`
-	Status   *string `json:"status"`
-	Remote   *bool   `json:"remote"`
-	Q        *string `json:"q"`
-	MinScore *int32  `json:"min_score"`
-	Offset   int32   `json:"offset"`
-	Limit    int32   `json:"limit"`
+	Source      *string `json:"source"`
+	Status      *string `json:"status"`
+	Remote      *bool   `json:"remote"`
+	Q           *string `json:"q"`
+	MinScore    *int32  `json:"min_score"`
+	SalaryFloor *int32  `json:"salary_floor"`
+	Offset      int32   `json:"offset"`
+	Limit       int32   `json:"limit"`
 }
 
 type ListJobsByScoreRow struct {
@@ -293,6 +316,7 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.SalaryFloor,
 		arg.Offset,
 		arg.Limit,
 	)

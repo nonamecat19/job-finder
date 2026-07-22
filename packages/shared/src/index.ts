@@ -141,6 +141,17 @@ export interface JobDto {
   ingestedAt: string;
   status: ApplicationStatus | 'hidden';
   matchResult?: MatchResultDto | null;
+  // Salary inference (spec 006). All five are null together when no source
+  // could produce a band (FR-009) — salaryRaw is preserved and displayed
+  // alongside regardless (FR-024).
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string | null;
+  salaryConfidence: number | null;
+  salarySource: string | null;
+  // Computed against SALARY_FLOOR_USD; true only for a USD band entirely
+  // below the floor (FR-016, FR-020 fails open for other currencies).
+  salaryBelowFloor: boolean;
 }
 
 export interface JobListResponse {
