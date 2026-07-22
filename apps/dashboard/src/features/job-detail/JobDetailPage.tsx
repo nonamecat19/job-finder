@@ -12,6 +12,7 @@ import {
   useMarkJobApplied,
   useSaveDocument,
 } from './hooks';
+import CoachPanel from './CoachPanel';
 import CompanyIntelCard from './CompanyIntelCard';
 import DOMPurify from 'dompurify';
 import KeywordDiffPanel from './KeywordDiffPanel';
@@ -85,6 +86,8 @@ export default function JobDetailPage() {
       <CompanyIntelCard jobId={job.id} />
 
       <KeywordDiffPanel jobId={id} />
+
+      <CoachPanel jobId={id} />
 
       <PrepPackPanel jobId={id} />
 

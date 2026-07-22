@@ -9,6 +9,10 @@ export const queryKeys = {
     keywordDiff: (id: string | undefined) => ['jobs', 'keyword-diff', id] as const,
     interviewPrep: (id: string | undefined) => ['jobs', 'interview-prep', id] as const,
   },
+  coach: {
+    all: ['coach'] as const,
+    assessment: (jobId: string | undefined) => ['coach', 'assessment', jobId] as const,
+  },
   sources: {
     all: ['sources'] as const,
     list: ['sources', 'list'] as const,
