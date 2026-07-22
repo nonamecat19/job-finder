@@ -14,6 +14,7 @@ import {
 } from './hooks';
 import CompanyIntelCard from './CompanyIntelCard';
 import DOMPurify from 'dompurify';
+import GhostSignalPanel from './GhostSignalPanel';
 import KeywordDiffPanel from './KeywordDiffPanel';
 import PostAgeSignal from './PostAgeSignal';
 import PrepPackPanel from './PrepPackPanel';
@@ -79,6 +80,8 @@ export default function JobDetailPage() {
       />
 
       {job.matchResult ? <FitSummary job={job} /> : null}
+
+      <GhostSignalPanel jobId={job.id} ghostSignal={job.ghostSignal} />
 
       <PostAgeSignal />
 

@@ -11,6 +11,7 @@ import {
   EmptyState,
   ErrorState,
   Field,
+  GhostBadge,
   Input,
   ScoreBadge,
   Select,
@@ -192,6 +193,9 @@ function JobCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <ScoreBadge score={job.matchResult?.score} />
+            {/* Informational only — never filters, hides, dims, or reorders
+                this job (Constitution Principle I / FR-015). */}
+            <GhostBadge score={job.ghostSignal?.score} />
             <Link to={`/jobs/${job.id}`} className="truncate font-semibold text-primary hover:underline">
               {job.title}
             </Link>

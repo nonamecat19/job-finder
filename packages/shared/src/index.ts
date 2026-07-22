@@ -152,6 +152,12 @@ export interface JobDto {
   // Computed against SALARY_FLOOR_USD; true only for a USD band entirely
   // below the floor (FR-016, FR-020 fails open for other currencies).
   salaryBelowFloor: boolean;
+  /**
+   * GhostSignal is the ghost-job detector's (005) result, when one exists.
+   * A job with no ghost result renders exactly as it does today — this
+   * field is simply absent, never a zero-valued panel (FR-017, SC-008).
+   */
+  ghostSignal?: JobSignalDto | null;
 }
 
 export interface JobListResponse {
@@ -442,4 +448,39 @@ export interface FreshMatchNotificationDto {
   jobTitle?: string | null;
   company?: string | null;
   matchScore?: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Ghost-job detector (005)
+// ---------------------------------------------------------------------------
+
+/**
+ * The measured evidence behind one ghost score: the four signals (a value
+ * or an explicit unknown — never a bare 0), the model's confidence, its
+ * plain-English explanation, and per-signal provenance notes.
+ */
+export interface GhostSignalBreakdownDto {
+  repostCount: number;
+  daysOpen?: number | null;
+  crossBoardCount?: number | null;
+  alwaysHiringCount?: number | null;
+  confidence: number;
+  explanation: string;
+  topSignals?: string[];
+  notes: Record<string, string>;
+}
+
+/**
+ * One row of the generic "JobSignal" table. For this feature kind is
+ * always "ghost"; the shape is deliberately generic so a future signal
+ * kind reuses it.
+ */
+export interface JobSignalDto {
+  id: string;
+  jobId: string;
+  kind: string;
+  score: number;
+  model: string;
+  createdAt: string;
+  signals: GhostSignalBreakdownDto;
 }

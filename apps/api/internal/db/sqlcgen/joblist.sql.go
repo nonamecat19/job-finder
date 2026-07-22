@@ -97,7 +97,7 @@ func (q *Queries) GetJobDocuments(ctx context.Context, jobid pgtype.UUID) ([]Gen
 }
 
 const listJobsByDate = `-- name: ListJobsByDate :many
-SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
+SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
   mr."matchedSkills" AS mr_matched_skills, mr."missingSkills" AS mr_missing_skills,
   mr."summary" AS mr_summary, mr."redFlags" AS mr_red_flags, mr."model" AS mr_model,
   mr."createdAt" AS mr_created_at
@@ -161,6 +161,7 @@ type ListJobsByDateRow struct {
 	SalaryCurrency   *string          `json:"salaryCurrency"`
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
+	SeenCount        int32            `json:"seenCount"`
 	MrID             pgtype.UUID      `json:"mr_id"`
 	MrSimilarity     *float64         `json:"mr_similarity"`
 	MrScore          *int32           `json:"mr_score"`
@@ -213,6 +214,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 			&i.SalaryCurrency,
 			&i.SalaryConfidence,
 			&i.SalarySource,
+			&i.SeenCount,
 			&i.MrID,
 			&i.MrSimilarity,
 			&i.MrScore,
@@ -234,7 +236,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 }
 
 const listJobsByScore = `-- name: ListJobsByScore :many
-SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
+SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
   mr."matchedSkills" AS mr_matched_skills, mr."missingSkills" AS mr_missing_skills,
   mr."summary" AS mr_summary, mr."redFlags" AS mr_red_flags, mr."model" AS mr_model,
   mr."createdAt" AS mr_created_at
@@ -298,6 +300,7 @@ type ListJobsByScoreRow struct {
 	SalaryCurrency   *string          `json:"salaryCurrency"`
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
+	SeenCount        int32            `json:"seenCount"`
 	MrID             pgtype.UUID      `json:"mr_id"`
 	MrSimilarity     *float64         `json:"mr_similarity"`
 	MrScore          *int32           `json:"mr_score"`
@@ -350,6 +353,7 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 			&i.SalaryCurrency,
 			&i.SalaryConfidence,
 			&i.SalarySource,
+			&i.SeenCount,
 			&i.MrID,
 			&i.MrSimilarity,
 			&i.MrScore,

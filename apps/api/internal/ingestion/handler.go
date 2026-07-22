@@ -171,6 +171,13 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob) (bool, 
 
 	_, err := h.q.GetJobByDedupeKey(ctx, dedupeKey)
 	if err == nil {
+		// Already exists: this is a repost. Bump "seenCount" so the
+		// ghost-job detector's repost signal (005, FR-002a) has something to
+		// measure — without this, dedupeKey's UNIQUE constraint means every
+		// count-by-dedupeKey query can only ever return 1.
+		if _, err := h.q.RecordJobRepost(ctx, dedupeKey); err != nil {
+			slog.Warn("ingestion: record repost failed", "dedupeKey", dedupeKey, "error", err)
+		}
 		return false, nil // already exists
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -202,6 +209,7 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob) (bool, 
 
 	jobID := dbutil.UUIDString(created.ID)
 	h.enqueueMatch(ctx, jobID, j)
+	h.enqueueGhostScore(ctx, jobID)
 
 	if j.SourceKey == "djinni" || j.SourceKey == "dou" {
 		if err := h.enqueueEnrich(ctx, jobID, j); err != nil {
@@ -227,6 +235,21 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, j dto.Normaliz
 	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload),
 		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
 		slog.Warn("ingestion: enqueue match failed", "job", jobID, "error", err)
+	}
+}
+
+// enqueueGhostScore queues the ghost-job detector (005) to score this job
+// right after ingestion. No activity record (unlike match): this is a
+// best-effort informational signal, not a user-facing pipeline step, and a
+// failure here must never affect ingestion or the job's own record (FR-018).
+func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string) {
+	payload, err := json.Marshal(queue.GhostScorePayload{JobID: jobID})
+	if err != nil {
+		return
+	}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGhostScore, payload),
+		asynq.MaxRetry(0), asynq.Queue(queue.QueueGhostScore)); err != nil {
+		slog.Warn("ingestion: enqueue ghost score failed", "job", jobID, "error", err)
 	}
 }
 

@@ -182,6 +182,12 @@ export interface JobDto {
    * currencies).
    */
   salaryBelowFloor: boolean;
+  /**
+   * GhostSignal is the ghost-job detector's (005) result, when one exists.
+   * A job with no ghost result renders exactly as it does today — this
+   * field is simply absent, never a zero-valued panel (FR-017, SC-008).
+   */
+  ghostSignal?: JobSignalDto;
 }
 export interface JobListResponse {
   items: JobDto[];
@@ -418,4 +424,59 @@ export interface FreshMatchNotificationDto {
   jobTitle?: string;
   company?: string;
   matchScore?: number /* int32 */;
+}
+/**
+ * CompanyIntelDto is the flattened company-intel signal set served by
+ * GET /api/companies/{jobId}/intel and POST /api/companies/{jobId}/intel/refresh
+ * (spec 004). Each of the five CompanySignal rows for the job's company is
+ * flattened into one named field; a nil field means that signal has never
+ * been captured (or its source failed and no previous value exists yet).
+ */
+export interface CompanyIntelDto {
+  companyName: string;
+  website?: string;
+  funding?: string;
+  layoffs?: string;
+  glassdoorRating?: number /* float64 */;
+  headcount?: string;
+  techStack?: string;
+  fetchedAt: string;
+  /**
+   * Error is set on a Refresh response when every source failed (FR-007):
+   * previous values (if any) remain in the other fields, and the
+   * dashboard shows a top-level error banner.
+   */
+  error?: string;
+}
+/**
+ * GhostSignalBreakdownDto is the measured evidence behind one ghost score:
+ * the four signals (a value or an explicit unknown — never a bare 0), the
+ * model's confidence, its plain-English explanation, and per-signal
+ * provenance notes. This is also the exact shape marshaled into
+ * "JobSignal"."signals" jsonb, so persistence and API response share one
+ * struct (see ghostjob.Service).
+ */
+export interface GhostSignalBreakdownDto {
+  repostCount: number /* int */;
+  daysOpen?: number /* int */;
+  crossBoardCount?: number /* int */;
+  alwaysHiringCount?: number /* int */;
+  confidence: number /* float64 */;
+  explanation: string;
+  topSignals?: string[];
+  notes: { [key: string]: string};
+}
+/**
+ * JobSignalDto is one row of the generic "JobSignal" table. For this
+ * feature kind is always "ghost"; the shape is deliberately generic so a
+ * future signal kind reuses it (spec Key Entities: Job Signal).
+ */
+export interface JobSignalDto {
+  id: string;
+  jobId: string;
+  kind: string;
+  score: number /* int */;
+  model: string;
+  createdAt: string;
+  signals: GhostSignalBreakdownDto;
 }

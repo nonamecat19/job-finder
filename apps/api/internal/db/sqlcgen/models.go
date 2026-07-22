@@ -113,6 +113,7 @@ type Job struct {
 	SalaryCurrency   *string          `json:"salaryCurrency"`
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
+	SeenCount        int32            `json:"seenCount"`
 }
 
 type JobContact struct {

@@ -26,6 +26,11 @@ type Repository interface {
 	GetMatchResultByJobID(ctx context.Context, jobID pgtype.UUID) (sqlcgen.MatchResult, error)
 	GetJobDocuments(ctx context.Context, jobID pgtype.UUID) ([]sqlcgen.GeneratedDocument, error)
 	GetApplicationByJobID(ctx context.Context, jobID pgtype.UUID) (sqlcgen.Application, error)
+	// GetJobSignal / ListJobSignalsByJobIds serve the ghost-job detector's
+	// (005) result: one row for the detail page, a batch query for the feed
+	// (one query for the page, not one per job).
+	GetJobSignal(ctx context.Context, arg sqlcgen.GetJobSignalParams) (sqlcgen.JobSignal, error)
+	ListJobSignalsByJobIds(ctx context.Context, arg sqlcgen.ListJobSignalsByJobIdsParams) ([]sqlcgen.JobSignal, error)
 	UpdateJobStatus(ctx context.Context, arg sqlcgen.UpdateJobStatusParams) (sqlcgen.Job, error)
 	UpsertApplicationStatus(ctx context.Context, arg sqlcgen.UpsertApplicationStatusParams) error
 	GetDefaultProfile(ctx context.Context) (sqlcgen.Profile, error)
