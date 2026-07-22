@@ -94,8 +94,15 @@ type Config struct {
 	RendercvBin        string `mapstructure:"RENDERCV_BIN"`
 
 	// Salary inference
-	LevelsFyiCSV  string `mapstructure:"LEVELS_FYI_CSV"`
-	SalaryFloorUsd int   `mapstructure:"SALARY_FLOOR_USD"`
+	LevelsFyiCSV   string `mapstructure:"LEVELS_FYI_CSV"`
+	SalaryFloorUsd int    `mapstructure:"SALARY_FLOOR_USD"`
+
+	// LinkedInScrapeEnabled gates the LinkedIn company-page contact source
+	// used by recruiter/hiring-manager resolution (007). Scraping LinkedIn's
+	// public pages is a ToS gray area (plan.md Constitution Check), so this
+	// defaults to false; enabling it is an explicit operator decision made
+	// via env var, not a code change, and is read once at process start.
+	LinkedInScrapeEnabled bool `mapstructure:"LINKEDIN_SCRAPE_ENABLED"`
 }
 
 // defaults holds the code-level default for every key that has one. Keys
@@ -120,12 +127,13 @@ var defaults = map[string]any{
 	// ("mkdir /data: permission denied") — default to a repo-relative dir
 	// instead; docker-compose.yml / docker-compose.prod.yml / Dockerfile all
 	// set DOCUMENTS_DIR=/data/documents explicitly, so containers are unaffected.
-	"DOCUMENTS_DIR":          "./data/documents",
-	"MINIO_BUCKET":           "documents",
-	"MINIO_USE_SSL":          false,
-	"RESUME_MASTER_PATH":     "./resume/resume.yaml",
-	"RESUME_GROUNDING_LEVEL": "moderate",
-	"RENDERCV_BIN":           "rendercv",
+	"DOCUMENTS_DIR":           "./data/documents",
+	"MINIO_BUCKET":            "documents",
+	"MINIO_USE_SSL":           false,
+	"RESUME_MASTER_PATH":      "./resume/resume.yaml",
+	"RESUME_GROUNDING_LEVEL":  "moderate",
+	"RENDERCV_BIN":            "rendercv",
+	"LINKEDIN_SCRAPE_ENABLED": false,
 }
 
 // keys without a default (optional strings / required-by-consumer). Listed so
