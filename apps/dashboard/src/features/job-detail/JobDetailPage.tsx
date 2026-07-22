@@ -13,6 +13,7 @@ import {
   useSaveDocument,
 } from './hooks';
 import CompanyIntelCard from './CompanyIntelCard';
+import ContactLine from './ContactLine';
 import DOMPurify from 'dompurify';
 import KeywordDiffPanel from './KeywordDiffPanel';
 import PostAgeSignal from './PostAgeSignal';
@@ -81,6 +82,8 @@ export default function JobDetailPage() {
       {job.matchResult ? <FitSummary job={job} /> : null}
 
       <PostAgeSignal />
+
+      <ContactLine jobId={job.id} />
 
       <CompanyIntelCard jobId={job.id} />
 

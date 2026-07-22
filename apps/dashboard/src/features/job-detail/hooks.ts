@@ -74,6 +74,25 @@ export function useSaveDocument(jobId: string | undefined, onSaved: () => void) 
   });
 }
 
+export function useJobContacts(jobId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.jobs.contacts(jobId),
+    queryFn: () => api.jobs.contacts(jobId!),
+    enabled: !!jobId,
+  });
+}
+
+export function useRefreshJobContacts(jobId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.jobs.refreshContacts(jobId!),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.jobs.contacts(jobId), data);
+    },
+  });
+}
+
 export function useCompanyIntel(jobId: string) {
   return useQuery({
     queryKey: queryKeys.companies.detail(jobId),

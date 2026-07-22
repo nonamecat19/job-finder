@@ -6,6 +6,7 @@ import type {
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
   InterviewPrepPack,
+  JobContactDto,
   JobDto,
   JobListResponse,
   JobSourceDto,
@@ -66,6 +67,9 @@ export const api = {
     documents: (id: string) => request<GeneratedDocumentDto[]>(`/jobs/${id}/documents`),
     keywordDiff: (id: string) => request<KeywordDiffResponse>(`/jobs/${id}/keyword-diff`),
     interviewPrep: (id: string) => request<InterviewPrepPack>(`/jobs/${id}/interview-prep`),
+    contacts: (id: string) => request<JobContactDto[]>(`/jobs/${id}/contacts`),
+    refreshContacts: (id: string) =>
+      request<JobContactDto[]>(`/jobs/${id}/contacts/refresh`, { method: 'POST' }),
   },
   documents: {
     update: (id: string, text: string) =>

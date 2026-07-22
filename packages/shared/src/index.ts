@@ -406,6 +406,24 @@ export interface CompanyIntelDto {
 }
 
 // ---------------------------------------------------------------------------
+// Recruiter / hiring-manager resolution (007)
+// ---------------------------------------------------------------------------
+
+export type JobContactSource = 'posting' | 'company-page' | 'linkedin';
+
+export interface JobContactDto {
+  id: string;
+  name: string;
+  title: string | null;
+  linkedInUrl: string | null;
+  email: string | null;
+  phone: string | null;
+  source: JobContactSource;
+  confidence: number;
+  fetchedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Post-age vs Response-rate signal (010)
 // ---------------------------------------------------------------------------
 

@@ -3,6 +3,7 @@ import type {
   CompanyIntelDto,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
+  JobContactDto,
   JobDto,
   JobListResponse,
   JobSourceDto,
@@ -179,6 +180,21 @@ export function mockCompanyIntel(overrides: Partial<CompanyIntelDto> = {}): Comp
     glassdoorRating: 3.8,
     headcount: '200-500',
     techStack: 'React, TypeScript, Go',
+    fetchedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+export function mockJobContact(overrides: Partial<JobContactDto> = {}): JobContactDto {
+  return {
+    id: 'contact-1',
+    name: 'Jane Doe',
+    title: 'Recruiter',
+    linkedInUrl: null,
+    email: 'jane@acme.com',
+    phone: null,
+    source: 'posting',
+    confidence: 0.9,
     fetchedAt: new Date().toISOString(),
     ...overrides,
   }

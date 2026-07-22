@@ -419,3 +419,48 @@ export interface FreshMatchNotificationDto {
   company?: string;
   matchScore?: number /* int32 */;
 }
+/**
+ * CompanyIntelDto is the flattened company-intel signal set served by
+ * GET /api/companies/{jobId}/intel and POST /api/companies/{jobId}/intel/refresh
+ * (spec 004). Each of the five CompanySignal rows for the job's company is
+ * flattened into one named field; a nil field means that signal has never
+ * been captured (or its source failed and no previous value exists yet).
+ */
+export interface CompanyIntelDto {
+  companyName: string;
+  website?: string;
+  funding?: string;
+  layoffs?: string;
+  glassdoorRating?: number /* float64 */;
+  headcount?: string;
+  techStack?: string;
+  fetchedAt: string;
+  /**
+   * Error is set on a Refresh response when every source failed (FR-007):
+   * previous values (if any) remain in the other fields, and the
+   * dashboard shows a top-level error banner.
+   */
+  error?: string;
+}
+/**
+ * JobContactDto is one resolved recruiter/hiring-manager candidate served
+ * by GET /api/jobs/{id}/contacts and POST /api/jobs/{id}/contacts/refresh
+ * (spec 007). Nil fields mean that channel was never resolved — never
+ * fabricated (FR-006, FR-008). Email/phone/linkedInUrl are sensitive
+ * (FR-018): the API surfaces them only on this endpoint, and callers must
+ * not log them in full.
+ */
+export interface JobContactDto {
+  id: string;
+  name: string;
+  title?: string;
+  linkedInUrl?: string;
+  email?: string;
+  phone?: string;
+  /**
+   * Source is one of "posting" / "company-page" / "linkedin".
+   */
+  source: string;
+  confidence: number /* float64 */;
+  fetchedAt: string;
+}
