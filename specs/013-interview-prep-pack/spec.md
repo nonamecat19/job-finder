@@ -410,4 +410,3 @@ The spec does not prescribe the UI — implementation tasks will decide based on
 - [ ] Spec defines the data flow diagram and API endpoint
 - [ ] Spec documents dependencies on plans 004 and 008
 - [ ] Spec registered in Documentation Directory (el-2eo)
-- [ ] Spec added to Documentation library (`sf docs add`)

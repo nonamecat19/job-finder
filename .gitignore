@@ -16,5 +16,3 @@ resume/
 /apps/api/server
 /apps/api/seed
 .aider*
-/.stoneforge/
-/.stoneforge/.worktrees/
