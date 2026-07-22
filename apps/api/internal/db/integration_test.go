@@ -1714,6 +1714,134 @@ func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
 	}
 }
 
+// --------------- JobContact CRUD ---------------
+
+func TestJobContactUpsertIdempotent(t *testing.T) {
+	truncateAll(t)
+	ctx := context.Background()
+
+	mustInsertJobSource(t, "js-contact", "api")
+	job := mustInsertJob(t, "js-contact", "contact-job-1", "Contact Job")
+
+	// First insert
+	contact, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
+		JobId:      job.ID,
+		Name:       "Jane Doe",
+		Title:      strPtr("Recruiter"),
+		Email:      strPtr("jane@acme.com"),
+		Source:     "posting",
+		Confidence: 0.9,
+	})
+	if err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+	if contact.Name != "Jane Doe" {
+		t.Fatalf("expected name Jane Doe, got %s", contact.Name)
+	}
+
+	// Re-run with the same (jobId, source, name) but a different title —
+	// should update in place, not duplicate (FR-013/SC-006).
+	contact2, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
+		JobId:      job.ID,
+		Name:       "Jane Doe",
+		Title:      strPtr("Senior Recruiter"),
+		Email:      strPtr("jane@acme.com"),
+		Source:     "posting",
+		Confidence: 0.95,
+	})
+	if err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+	if contact2.ID != contact.ID {
+		t.Fatal("expected same ID on upsert (no duplicate row)")
+	}
+	if contact2.Title == nil || *contact2.Title != "Senior Recruiter" {
+		t.Fatalf("expected updated title, got %v", contact2.Title)
+	}
+
+	rows, err := testDB.Queries.ListJobContactsByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list contacts: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row after idempotent re-run, got %d", len(rows))
+	}
+}
+
+func TestJobContactOrdering(t *testing.T) {
+	truncateAll(t)
+	ctx := context.Background()
+
+	mustInsertJobSource(t, "js-contact-order", "api")
+	job := mustInsertJob(t, "js-contact-order", "contact-job-2", "Contact Order Job")
+
+	// Same confidence, different source — posting must sort before linkedin.
+	if _, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
+		JobId: job.ID, Name: "B Person", Source: "linkedin", Confidence: 0.5,
+	}); err != nil {
+		t.Fatalf("upsert linkedin contact: %v", err)
+	}
+	if _, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
+		JobId: job.ID, Name: "A Person", Source: "posting", Confidence: 0.5,
+	}); err != nil {
+		t.Fatalf("upsert posting contact: %v", err)
+	}
+	if _, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
+		JobId: job.ID, Name: "C Person", Source: "posting", Confidence: 0.9,
+	}); err != nil {
+		t.Fatalf("upsert high-confidence posting contact: %v", err)
+	}
+
+	rows, err := testDB.Queries.ListJobContactsByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list contacts: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(rows))
+	}
+	// Highest confidence first, then source priority, then name.
+	want := []string{"C Person", "A Person", "B Person"}
+	for i, w := range want {
+		if rows[i].Name != w {
+			t.Fatalf("row %d: expected %s, got %s", i, w, rows[i].Name)
+		}
+	}
+}
+
+func TestJobContactCascadeDelete(t *testing.T) {
+	truncateAll(t)
+	ctx := context.Background()
+
+	mustInsertJobSource(t, "js-contact-cascade", "api")
+	job := mustInsertJob(t, "js-contact-cascade", "contact-job-3", "Contact Cascade Job")
+
+	if _, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
+		JobId: job.ID, Name: "Jane Doe", Source: "posting", Confidence: 0.9,
+	}); err != nil {
+		t.Fatalf("upsert contact: %v", err)
+	}
+
+	rows, err := testDB.Queries.ListJobContactsByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list contacts before delete: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 contact before delete, got %d", len(rows))
+	}
+
+	if _, err := testDB.Pool.Exec(ctx, `DELETE FROM "Job" WHERE "id" = $1`, job.ID); err != nil {
+		t.Fatalf("delete job: %v", err)
+	}
+
+	rows, err = testDB.Queries.ListJobContactsByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list contacts after delete: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected 0 contacts after cascade delete, got %d", len(rows))
+	}
+}
+
 // --------------- helpers ---------------
 
 func strPtr(s string) *string { return &s }
