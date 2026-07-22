@@ -17,6 +17,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/applications"
+	"github.com/job-finder/api/internal/companyintel"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/enrichment"
@@ -198,11 +199,21 @@ func run() error {
 	notificationSvc := notifier.NewNotificationService(database.Queries, database.Queries)
 	notificationHandler := &httpapi.NotificationHandler{Provider: notificationSvc}
 
+	companyIntelRegistry := companyintel.NewRegistry(
+		companyintel.CrunchbaseScraper{Scraping: scrapingSvc},
+		companyintel.LayoffsScraper{Scraping: scrapingSvc},
+		companyintel.GlassdoorScraper{Scraping: scrapingSvc},
+		companyintel.HeadcountScraper{Scraping: scrapingSvc},
+		companyintel.TechStackScraper{Scraping: scrapingSvc},
+	)
+	companyIntelSvc := companyintel.NewService(database.Queries, companyIntelRegistry, 2*time.Second)
+	companiesHandler := &httpapi.CompaniesHandler{CompanyIntel: companyIntelSvc}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
-		postageHandler.Mount, notificationHandler.Mount,
+		postageHandler.Mount, notificationHandler.Mount, companiesHandler.Mount,
 	)
 
 	srv := &http.Server{
