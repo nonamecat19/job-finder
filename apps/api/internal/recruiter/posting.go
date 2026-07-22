@@ -79,10 +79,10 @@ func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string,
 		return nil, fmt.Errorf("recruiter: posting extraction: %w", err)
 	}
 
-	return groundExtraction(out, text)
+	return groundContact(out, text, SourcePosting, postingConfidence)
 }
 
-// groundExtraction validates every field the LLM returned actually occurs
+// groundContact validates every field the LLM returned actually occurs
 // (case-insensitively, Unicode-aware) in the source text, drops anything
 // that doesn't, and applies the no-fabrication rules (FR-007, FR-008):
 //   - a field not found verbatim in source is discarded;
@@ -91,7 +91,11 @@ func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string,
 //     it may only ever be dropped, never stored under an invented name;
 //   - a generic-mailbox email (jobs@, hr@, careers@, ...) never counts as
 //     a personal channel, even alongside a grounded name.
-func groundExtraction(out extractedContact, source string) (*ResolvedContact, error) {
+//
+// Shared by every extraction source (posting.go, companypage.go,
+// linkedin.go) so grounding/no-fabrication logic lives in exactly one
+// place; only the source label and confidence formula vary per source.
+func groundContact(out extractedContact, source, sourceName string, confidenceFn func(source, email, phone string) float64) (*ResolvedContact, error) {
 	lowerSource := strings.ToLower(source)
 
 	ground := func(v string) string {
@@ -129,8 +133,8 @@ func groundExtraction(out extractedContact, source string) (*ResolvedContact, er
 
 	contact := &ResolvedContact{
 		Name:       name,
-		Source:     SourcePosting,
-		Confidence: postingConfidence(source, email, phone),
+		Source:     sourceName,
+		Confidence: confidenceFn(source, email, phone),
 	}
 	if title != "" {
 		contact.Title = &title

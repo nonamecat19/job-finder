@@ -19,6 +19,10 @@ type Repository interface {
 	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
 	UpsertJobContact(ctx context.Context, arg sqlcgen.UpsertJobContactParams) (sqlcgen.JobContact, error)
 	ListJobContactsByJob(ctx context.Context, jobId pgtype.UUID) ([]sqlcgen.JobContact, error)
+	// GetCompanyByNormalizedName backs the company-page source (US2): it
+	// reads the Company.website plan 004 populates, keyed by the job's
+	// normalized company name. Never written by this package.
+	GetCompanyByNormalizedName(ctx context.Context, normalizedName string) (sqlcgen.Company, error)
 }
 
 // Service orchestrates the resolution sources and the JobContact
@@ -108,10 +112,13 @@ type resolutionSource struct {
 }
 
 // sources builds the ordered list of resolution sources to run for one
-// job. Posting-text is always on; company-page/LinkedIn sources are added
-// here in US2.
+// job. Posting-text always runs; the company-page source runs whenever the
+// job's company has a website on file (plan 004); the LinkedIn source is
+// only included at all when LINKEDIN_SCRAPE_ENABLED is true (FR-004) — when
+// false it is never constructed, let alone invoked, so a disabled run makes
+// zero LinkedIn requests (SC-004).
 func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSource {
-	return []resolutionSource{
+	sources := []resolutionSource{
 		{
 			name: SourcePosting,
 			run: func(ctx context.Context) ([]ResolvedContact, error) {
@@ -125,7 +132,12 @@ func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSour
 				return []ResolvedContact{*contact}, nil
 			},
 		},
+		s.companyPageSource(job),
 	}
+	if s.linkedInEnabled {
+		sources = append(sources, s.linkedInSource(job))
+	}
+	return sources
 }
 
 func (s *Service) upsert(ctx context.Context, jobID pgtype.UUID, c ResolvedContact) (sqlcgen.JobContact, error) {
