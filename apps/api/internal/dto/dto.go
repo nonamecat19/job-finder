@@ -482,3 +482,34 @@ type FreshMatchNotificationDto struct {
 	Company    *string `json:"company,omitempty"`
 	MatchScore *int32  `json:"matchScore,omitempty"`
 }
+
+// FitGapEvidenceDto is one adjacent profile entry offered as evidence for a
+// missing must-have (009 fit-gap coach), with a grounded rephrase suggestion
+// truthfully reframing that existing bullet toward the missing term.
+type FitGapEvidenceDto struct {
+	SourceEntry  string `json:"sourceEntry"`
+	SourceBullet string `json:"sourceBullet"`
+	Proximity    string `json:"proximity"` // "close" | "moderate" | "distant"
+	Rephrase     string `json:"rephrase"`
+}
+
+// FitGapItemDto is one missing must-have with up to 3 adjacent evidence
+// items drawn from the user's profile. NoAdjacentEvidence is the honest
+// empty result: nothing in the profile is close enough to cite.
+type FitGapItemDto struct {
+	Term               string              `json:"term"`
+	Polarity           string              `json:"polarity"` // always "required"
+	AdjacentEvidence   []FitGapEvidenceDto `json:"adjacentEvidence"`
+	NoAdjacentEvidence bool                `json:"noAdjacentEvidence"`
+}
+
+// FitGapAssessmentDto is the fit-gap coach output (009), served by
+// POST /api/jobs/{id}/coach/assess and GET /api/jobs/{id}/coach/assessment:
+// "you fail N of M must-haves", plus per-gap adjacent evidence.
+type FitGapAssessmentDto struct {
+	JobID           string          `json:"jobId"`
+	TotalMustHaves  int             `json:"totalMustHaves"`
+	FailedMustHaves int             `json:"failedMustHaves"`
+	CoveragePct     float64         `json:"coveragePct"`
+	Gaps            []FitGapItemDto `json:"gaps"`
+}

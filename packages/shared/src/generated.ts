@@ -352,3 +352,87 @@ export interface ActivityListResponse {
   active: ActivityRunDto[];
   recent: ActivityRunDto[];
 }
+/**
+ * PostAgeBucketState is the three-state output contract for the post-age
+ * vs response-rate signal (spec 010 §Cold-Start Honesty).
+ */
+export type PostAgeBucketState = string;
+export const PostAgeStateObserved: PostAgeBucketState = "observed";
+export const PostAgeStatePrior: PostAgeBucketState = "prior";
+export const PostAgeStateInsufficient: PostAgeBucketState = "insufficient";
+/**
+ * PostAgeBucketDto is one bucket in the post-age vs response-rate signal.
+ * Rate is null unless State == PostAgeStateObserved. N is always present
+ * so the caller can render sample size alongside any rate.
+ */
+export interface PostAgeBucketDto {
+  bucket: string;
+  n: number /* int32 */;
+  responses: number /* int32 */;
+  rate?: number /* float64 */;
+  state: PostAgeBucketState;
+}
+/**
+ * PostAgeResponseDto is the full signal response served by
+ * GET /api/postage-response-rate.
+ */
+export interface PostAgeResponseDto {
+  buckets: PostAgeBucketDto[];
+  totalApps: number /* int32 */;
+  globalState: PostAgeBucketState;
+  priorRate: number /* float64 */;
+  priorLabel: string;
+  thresholdMsg?: string;
+}
+/**
+ * FreshMatchNotificationDto is one row of the fresh-match notification table,
+ * served by GET /api/notifications.
+ */
+export interface FreshMatchNotificationDto {
+  id: string;
+  jobId: string;
+  matchResultId: string;
+  fresh: boolean;
+  seen: boolean;
+  createdAt: string;
+  /**
+   * JobTitle and Company are populated by the list endpoint via a JOIN.
+   */
+  jobTitle?: string;
+  company?: string;
+  matchScore?: number /* int32 */;
+}
+/**
+ * FitGapEvidenceDto is one adjacent profile entry offered as evidence for a
+ * missing must-have (009 fit-gap coach), with a grounded rephrase suggestion
+ * truthfully reframing that existing bullet toward the missing term.
+ */
+export interface FitGapEvidenceDto {
+  sourceEntry: string;
+  sourceBullet: string;
+  proximity: string; // "close" | "moderate" | "distant"
+  rephrase: string;
+}
+/**
+ * FitGapItemDto is one missing must-have with up to 3 adjacent evidence
+ * items drawn from the user's profile. NoAdjacentEvidence is the honest
+ * empty result: nothing in the profile is close enough to cite.
+ */
+export interface FitGapItemDto {
+  term: string;
+  polarity: string; // always "required"
+  adjacentEvidence: FitGapEvidenceDto[];
+  noAdjacentEvidence: boolean;
+}
+/**
+ * FitGapAssessmentDto is the fit-gap coach output (009), served by
+ * POST /api/jobs/{id}/coach/assess and GET /api/jobs/{id}/coach/assessment:
+ * "you fail N of M must-haves", plus per-gap adjacent evidence.
+ */
+export interface FitGapAssessmentDto {
+  jobId: string;
+  totalMustHaves: number /* int */;
+  failedMustHaves: number /* int */;
+  coveragePct: number /* float64 */;
+  gaps: FitGapItemDto[];
+}
