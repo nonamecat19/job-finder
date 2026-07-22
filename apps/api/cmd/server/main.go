@@ -21,6 +21,7 @@ import (
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/generation"
+	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
 	"github.com/job-finder/api/internal/jobs"
@@ -117,6 +118,13 @@ func run() error {
 	)
 	matchingHandler := matching.NewHandler(matchingSvc, notifierSvc)
 
+	// Ghost-job detector (005): scored at ingestion (async) and on manual
+	// refresh only — never on a schedule (FR-014). Kept separate from
+	// matching/fit scoring end-to-end (FR-008).
+	ghostSvc := ghostjob.NewService(database.Queries, llmProvider, cfg.ModelOr(cfg.LLMModelGhost))
+	ghostHandler := ghostjob.NewHandler(ghostSvc)
+	ghostJobHandler := &httpapi.GhostJobHandler{Ghost: ghostSvc}
+
 	// MinIO object storage: when configured, every rendered resume/cover-letter
 	// file is uploaded here in addition to the local DocumentsDir.
 	var blobStore storage.Blobstore
@@ -202,7 +210,7 @@ func run() error {
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
-		postageHandler.Mount, notificationHandler.Mount,
+		postageHandler.Mount, notificationHandler.Mount, ghostJobHandler.Mount,
 	)
 
 	srv := &http.Server{
@@ -256,6 +264,14 @@ func run() error {
 		Queues:      map[string]int{queue.QueueSalaryInfer: 1},
 	})
 
+	// Concurrency 1: same local-LLM contention reasoning as match/generate.
+	ghostMux := asynq.NewServeMux()
+	ghostMux.HandleFunc(queue.TypeGhostScore, ghostHandler.ProcessTask)
+	ghostAsynqSrv := asynq.NewServer(redisOpt, asynq.Config{
+		Concurrency: 1,
+		Queues:      map[string]int{queue.QueueGhostScore: 1},
+	})
+
 	go func() {
 		slog.Info("API listening", "port", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -288,6 +304,11 @@ func run() error {
 			slog.Error("asynq salary worker error", "error", err)
 		}
 	}()
+	go func() {
+		if err := ghostAsynqSrv.Run(ghostMux); err != nil {
+			slog.Error("asynq ghost worker error", "error", err)
+		}
+	}()
 
 	go scheduler.Run(ctx)
 
@@ -298,6 +319,7 @@ func run() error {
 	generateSrv.Shutdown()
 	enrichSrv.Shutdown()
 	salaryAsynqSrv.Shutdown()
+	ghostAsynqSrv.Shutdown()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)

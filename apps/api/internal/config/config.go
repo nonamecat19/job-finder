@@ -34,6 +34,9 @@ type Config struct {
 	// LLMModelRephrase is the model for the keyword-diff rephrase suggester
 	// (008-5). Empty falls back to LLMModel via ModelOr.
 	LLMModelRephrase string `mapstructure:"LLM_MODEL_REPHRASE"`
+	// LLMModelGhost is the model for the ghost-job detector (005). Empty
+	// falls back to LLMModel via ModelOr.
+	LLMModelGhost string `mapstructure:"LLM_MODEL_GHOST"`
 
 	// KeywordRephraseCacheTTLSec is the lifetime, in seconds, of a cached set of
 	// keyword-diff rephrase suggestions. Suggestions are generated async and
@@ -94,8 +97,8 @@ type Config struct {
 	RendercvBin        string `mapstructure:"RENDERCV_BIN"`
 
 	// Salary inference
-	LevelsFyiCSV  string `mapstructure:"LEVELS_FYI_CSV"`
-	SalaryFloorUsd int   `mapstructure:"SALARY_FLOOR_USD"`
+	LevelsFyiCSV   string `mapstructure:"LEVELS_FYI_CSV"`
+	SalaryFloorUsd int    `mapstructure:"SALARY_FLOOR_USD"`
 }
 
 // defaults holds the code-level default for every key that has one. Keys
@@ -133,7 +136,7 @@ var defaults = map[string]any{
 // viper knows about.
 var optionalKeys = []string{
 	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
-	"LLM_MODEL_REPHRASE",
+	"LLM_MODEL_REPHRASE", "LLM_MODEL_GHOST",
 	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
 	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",

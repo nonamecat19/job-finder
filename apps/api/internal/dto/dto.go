@@ -242,6 +242,10 @@ type JobDto struct {
 	MatchResult     *MatchResultDto        `json:"matchResult,omitempty"`
 	Documents       []GeneratedDocumentDto `json:"documents,omitempty"`
 	Application     *ApplicationDto        `json:"application,omitempty"`
+	// GhostSignal is the ghost-job detector's (005) result, when one exists.
+	// A job with no ghost result renders exactly as it does today — this
+	// field is simply absent, never a zero-valued panel (FR-017, SC-008).
+	GhostSignal *JobSignalDto `json:"ghostSignal,omitempty"`
 }
 
 type JobListResponse struct {
@@ -450,11 +454,11 @@ const (
 // Rate is null unless State == PostAgeStateObserved. N is always present
 // so the caller can render sample size alongside any rate.
 type PostAgeBucketDto struct {
-	Bucket    string              `json:"bucket"`
-	N         int32               `json:"n"`
-	Responses int32               `json:"responses"`
-	Rate      *float64            `json:"rate"`
-	State     PostAgeBucketState  `json:"state"`
+	Bucket    string             `json:"bucket"`
+	N         int32              `json:"n"`
+	Responses int32              `json:"responses"`
+	Rate      *float64           `json:"rate"`
+	State     PostAgeBucketState `json:"state"`
 }
 
 // PostAgeResponseDto is the full signal response served by
@@ -481,4 +485,38 @@ type FreshMatchNotificationDto struct {
 	JobTitle   *string `json:"jobTitle,omitempty"`
 	Company    *string `json:"company,omitempty"`
 	MatchScore *int32  `json:"matchScore,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// Ghost-job detector (005)
+// ---------------------------------------------------------------------------
+
+// GhostSignalBreakdownDto is the measured evidence behind one ghost score:
+// the four signals (a value or an explicit unknown — never a bare 0), the
+// model's confidence, its plain-English explanation, and per-signal
+// provenance notes. This is also the exact shape marshaled into
+// "JobSignal"."signals" jsonb, so persistence and API response share one
+// struct (see ghostjob.Service).
+type GhostSignalBreakdownDto struct {
+	RepostCount       int               `json:"repostCount"`
+	DaysOpen          *int              `json:"daysOpen"`
+	CrossBoardCount   *int              `json:"crossBoardCount"`
+	AlwaysHiringCount *int              `json:"alwaysHiringCount"`
+	Confidence        float64           `json:"confidence"`
+	Explanation       string            `json:"explanation"`
+	TopSignals        []string          `json:"topSignals,omitempty"`
+	Notes             map[string]string `json:"notes"`
+}
+
+// JobSignalDto is one row of the generic "JobSignal" table. For this
+// feature kind is always "ghost"; the shape is deliberately generic so a
+// future signal kind reuses it (spec Key Entities: Job Signal).
+type JobSignalDto struct {
+	ID        string                  `json:"id"`
+	JobID     string                  `json:"jobId"`
+	Kind      string                  `json:"kind"`
+	Score     int                     `json:"score"`
+	Model     string                  `json:"model"`
+	CreatedAt string                  `json:"createdAt"`
+	Signals   GhostSignalBreakdownDto `json:"signals"`
 }

@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	TypeIngest     = "ingest"
-	TypeMatch      = "match"
-	TypeGenerate   = "generate"
-	TypeEnrich     = "enrich"
+	TypeIngest      = "ingest"
+	TypeMatch       = "match"
+	TypeGenerate    = "generate"
+	TypeEnrich      = "enrich"
 	TypeSalaryInfer = "salary:infer"
+	TypeGhostScore  = "ghost:score"
 )
 
 // Queue names each task type is routed to. These are deliberately separate
@@ -29,11 +30,12 @@ const (
 // per-queue concurrency ceiling, so one server can't reproduce "match never
 // runs more than 1 at a time" on its own.
 const (
-	QueueIngest     = TypeIngest
-	QueueMatch      = TypeMatch
-	QueueGenerate   = TypeGenerate
-	QueueEnrich     = TypeEnrich
+	QueueIngest      = TypeIngest
+	QueueMatch       = TypeMatch
+	QueueGenerate    = TypeGenerate
+	QueueEnrich      = TypeEnrich
 	QueueSalaryInfer = TypeSalaryInfer
+	QueueGhostScore  = TypeGhostScore
 )
 
 // IngestPayload mirrors IngestJobData. Exactly one of SearchID/SubscriptionID
@@ -63,11 +65,18 @@ type SalaryInferPayload struct {
 	JobID string `json:"jobId"`
 }
 
+// GhostScorePayload carries the job to run the ghost-job detector (005)
+// against. Triggered by ingestion and by the manual POST
+// /api/jobs/{id}/ghost-score endpoint only — never on a schedule (FR-014).
+type GhostScorePayload struct {
+	JobID string `json:"jobId"`
+}
+
 // GeneratePayload mirrors GenerateJobData.
 type GeneratePayload struct {
-	JobID     string  `json:"jobId"`
-	Type      string  `json:"type"` // "resume" | "cover_letter"
-	ProfileID *string `json:"profileId,omitempty"`
+	JobID      string  `json:"jobId"`
+	Type       string  `json:"type"` // "resume" | "cover_letter"
+	ProfileID  *string `json:"profileId,omitempty"`
 	ActivityID *string `json:"activityId,omitempty"`
 }
 

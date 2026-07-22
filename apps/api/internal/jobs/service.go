@@ -31,6 +31,12 @@ func NewService(q Repository, client Enqueuer) *Service {
 	return &Service{q: q, client: client}
 }
 
+// ghostSignalKind mirrors ghostjob.Kind. Kept as a local literal rather than
+// importing the ghostjob package, matching the existing house style where
+// jobs/service.go maps sqlcgen.MatchResult independently of matching's own
+// mapping (see matchResultDto here vs matching.toDto there).
+const ghostSignalKind = "ghost"
+
 type ListParams struct {
 	Sort     string // "score" | "date"
 	Source   *string
@@ -140,6 +146,31 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	for _, row := range rows {
 		items = append(items, rowToDto(row))
 	}
+
+	// Ghost-job signal (005): one batch query for the whole page, not one
+	// per job (FR-012's badge is informational only — see GhostSignal doc on
+	// dto.JobDto; nothing here filters or reorders `items`).
+	if len(items) > 0 {
+		jobIDs := make([]pgtype.UUID, len(rows))
+		for i, row := range rows {
+			jobIDs[i] = row.Job.ID
+		}
+		if signals, err := s.q.ListJobSignalsByJobIds(ctx, sqlcgen.ListJobSignalsByJobIdsParams{
+			JobIds: jobIDs, Kind: ghostSignalKind,
+		}); err == nil {
+			byJobID := make(map[string]sqlcgen.JobSignal, len(signals))
+			for _, sig := range signals {
+				byJobID[dbutil.UUIDString(sig.JobId)] = sig
+			}
+			for i, item := range items {
+				if sig, ok := byJobID[item.ID]; ok {
+					gsd := jobSignalDto(sig)
+					items[i].GhostSignal = &gsd
+				}
+			}
+		}
+	}
+
 	return dto.JobListResponse{Items: items, Total: count, Page: page, PageSize: pageSize}, nil
 }
 
@@ -166,6 +197,12 @@ func (s *Service) Get(ctx context.Context, id string) (dto.JobDto, error) {
 	if app, err := s.q.GetApplicationByJobID(ctx, uid); err == nil {
 		ad := applicationDto(app)
 		out.Application = &ad
+	}
+	// A job with no ghost result renders exactly as it does today: GhostSignal
+	// simply stays nil rather than an empty/zero-valued panel (FR-017, SC-008).
+	if gs, err := s.q.GetJobSignal(ctx, sqlcgen.GetJobSignalParams{JobId: uid, Kind: ghostSignalKind}); err == nil {
+		gsd := jobSignalDto(gs)
+		out.GhostSignal = &gsd
 	}
 	return out, nil
 }
@@ -323,6 +360,24 @@ func matchResultDto(r sqlcgen.MatchResult) dto.MatchResultDto {
 		ID: dbutil.UUIDString(r.ID), JobID: dbutil.UUIDString(r.JobId), Similarity: r.Similarity,
 		Score: score, MatchedSkills: matched, MissingSkills: missing, Summary: r.Summary, RedFlags: redFlags,
 		Model: r.Model, CreatedAt: dbutil.Timestamp(r.CreatedAt),
+	}
+}
+
+func jobSignalDto(r sqlcgen.JobSignal) dto.JobSignalDto {
+	var breakdown dto.GhostSignalBreakdownDto
+	_ = dbutil.UnmarshalJSONB(r.Signals, &breakdown)
+	var model string
+	if r.Model != nil {
+		model = *r.Model
+	}
+	return dto.JobSignalDto{
+		ID:        dbutil.UUIDString(r.ID),
+		JobID:     dbutil.UUIDString(r.JobId),
+		Kind:      r.Kind,
+		Score:     int(r.Score),
+		Model:     model,
+		CreatedAt: dbutil.Timestamp(r.CreatedAt),
+		Signals:   breakdown,
 	}
 }
 
