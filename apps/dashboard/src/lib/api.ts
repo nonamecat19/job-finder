@@ -8,6 +8,7 @@ import type {
   InterviewPrepPack,
   JobDto,
   JobListResponse,
+  JobSignalDto,
   JobSourceDto,
   KeywordDiffResponse,
   PostAgeResponseDto,
@@ -63,6 +64,7 @@ export const api = {
     documents: (id: string) => request<GeneratedDocumentDto[]>(`/jobs/${id}/documents`),
     keywordDiff: (id: string) => request<KeywordDiffResponse>(`/jobs/${id}/keyword-diff`),
     interviewPrep: (id: string) => request<InterviewPrepPack>(`/jobs/${id}/interview-prep`),
+    ghostScore: (id: string) => request<JobSignalDto>(`/jobs/${id}/ghost-score`, { method: 'POST' }),
   },
   documents: {
     update: (id: string, text: string) =>

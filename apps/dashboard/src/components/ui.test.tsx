@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ScoreBadge, Chip, Spinner, Button } from './ui'
+import { ScoreBadge, GhostBadge, Chip, Spinner, Button } from './ui'
 
 describe('ScoreBadge', () => {
   it('renders em-dash for null score', () => {
@@ -35,6 +35,59 @@ describe('ScoreBadge', () => {
     render(<ScoreBadge score={20} />)
     const badge = screen.getByText('20')
     expect(badge.className).toContain('danger')
+  })
+})
+
+describe('GhostBadge', () => {
+  it('renders nothing when no signal exists (undefined)', () => {
+    const { container } = render(<GhostBadge />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('renders nothing when score is null', () => {
+    const { container } = render(<GhostBadge score={null} />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('renders nothing below 50', () => {
+    const { container } = render(<GhostBadge score={49} />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('renders yellow badge for 50-79', () => {
+    render(<GhostBadge score={62} />)
+    const badge = screen.getByText(/62/)
+    expect(badge.className).toContain('warning')
+  })
+
+  it('renders yellow badge at the 79 boundary', () => {
+    render(<GhostBadge score={79} />)
+    expect(screen.getByText(/79/).className).toContain('warning')
+  })
+
+  it('renders red badge for 80-100', () => {
+    render(<GhostBadge score={85} />)
+    const badge = screen.getByText(/85/)
+    expect(badge.className).toContain('danger')
+  })
+
+  it('renders red badge at the 80 boundary', () => {
+    render(<GhostBadge score={80} />)
+    expect(screen.getByText(/80/).className).toContain('danger')
+  })
+
+  // SC-008: an unscored card must render identically to today — verified
+  // here as "GhostBadge renders nothing", so it contributes zero DOM/markup
+  // next to ScoreBadge for a job with no ghost signal.
+  it('an unscored job renders the same DOM as ScoreBadge alone (no ghost markup added)', () => {
+    const { container: withGhost } = render(
+      <>
+        <ScoreBadge score={72} />
+        <GhostBadge score={undefined} />
+      </>,
+    )
+    const { container: withoutGhost } = render(<ScoreBadge score={72} />)
+    expect(withGhost.innerHTML).toBe(withoutGhost.innerHTML)
   })
 })
 

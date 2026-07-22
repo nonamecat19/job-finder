@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DocumentType } from '@job-finder/shared';
 import { api } from '../../api';
 import { queryKeys } from '../../lib/queryKeys';
+import { emitToast, toErrorMessage } from '../../lib/toastBus';
 
 export function useJobDetail(id: string | undefined) {
   return useQuery({
@@ -87,5 +88,23 @@ export function useRefreshCompanyIntel(jobId: string) {
   return useMutation({
     mutationFn: () => api.companies.refresh(jobId),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.companies.detail(jobId) }),
+  });
+}
+
+// US3: manual, per-job re-score. No scheduled re-scoring exists anywhere —
+// this mutation is the only way (besides ingestion) a ghost score changes
+// (FR-014). Invalidating the job-detail query re-fetches the full JobDto so
+// the panel updates in place without a page reload.
+export function useRefreshGhostScore(jobId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.jobs.ghostScore(jobId!),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) }),
+    // The previously stored score is left intact on failure — this mutation
+    // never writes to the jobs.detail cache itself, only invalidates it on
+    // success, so a failed refresh simply leaves the last-fetched job (and
+    // its ghost signal) exactly as it was (Story 3, scenario 4).
+    onError: (err) => emitToast({ title: 'Ghost re-score failed', description: toErrorMessage(err), variant: 'error' }),
   });
 }
