@@ -34,6 +34,7 @@ import (
 	"github.com/job-finder/api/internal/postage"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/api/internal/recruiter"
 	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/job-finder/api/internal/storage"
@@ -209,11 +210,19 @@ func run() error {
 	companyIntelSvc := companyintel.NewService(database.Queries, companyIntelRegistry, 2*time.Second)
 	companiesHandler := &httpapi.CompaniesHandler{CompanyIntel: companyIntelSvc}
 
+	// Recruiter/hiring-manager resolution (007): posting-text always runs;
+	// the company-page source reuses scrapingSvc the same way companyintel's
+	// HeadcountScraper does, and LinkedIn only runs when the operator has
+	// opted in via LINKEDIN_SCRAPE_ENABLED.
+	recruiterSvc := recruiter.NewService(database.Queries, llmProvider, cfg.ModelOr(""), scrapingSvc, cfg.LinkedInScrapeEnabled)
+	contactsHandler := &httpapi.ContactsHandler{Recruiter: recruiterSvc}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
 		postageHandler.Mount, notificationHandler.Mount, companiesHandler.Mount,
+		contactsHandler.Mount,
 	)
 
 	srv := &http.Server{
