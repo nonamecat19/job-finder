@@ -18,6 +18,27 @@ type Service struct {
 	log   *slog.Logger
 }
 
+// seniorityLevel maps job-title seniority prefixes to a numeric rank.
+// Higher rank = more senior. Used to detect seniority inflation.
+var seniorityLevel = map[string]int{
+	"junior":     0,
+	"associate":  0,
+	"entry":      0,
+	"mid":        1,
+	"senior":     2,
+	"lead":       3,
+	"staff":      3,
+	"principal":  4,
+	"architect":  4,
+	"distinguished": 4,
+}
+
+// seniorityRe matches a seniority prefix at the start of a job title.
+var seniorityRe = regexp.MustCompile(`(?i)\b(junior|associate|entry|mid|senior|lead|staff|principal|architect|distinguished)\b`)
+
+// dateRangeRe matches date ranges like "2022–2024", "2020-2023", "Jan 2020–Present".
+var dateRangeRe = regexp.MustCompile(`(\d{4})\s*(?:[–\-]|to)\s*(\d{4}|present|now|current)`)
+
 // RephraseModel is the minimal LLM port for generating grounded rephrases.
 type RephraseModel interface {
 	Rephrase(ctx context.Context, prompt string) (string, error)
@@ -170,9 +191,13 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 	allowedProper := properNounSet([]string{entry.Bullet})
 	sourceNums := numberSet(entry.Bullet)
 
+	// Extract seniority and date range from the source label for grounding
+	sourceSeniority := extractSeniority(entry.SourceLabel)
+	sourceDateRange := extractDateRange(entry.SourceLabel)
+
 	var lastViol []string
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		prompt := buildRephrasePrompt(term, entry.Bullet, lastViol)
+		prompt := buildRephrasePrompt(term, entry.Bullet, entry.SourceLabel, lastViol)
 		raw, err := s.model.Rephrase(ctx, prompt)
 		if err != nil {
 			s.log.WarnContext(ctx, "coach: rephrase model error",
@@ -182,7 +207,7 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 		out := strings.TrimSpace(raw)
 
 		// Grounding post-check (spec 009 §4.3)
-		lastViol = verifyRephraseGrounding(entry.Bullet, allowedProper, sourceNums, out)
+		lastViol = verifyRephraseGrounding(entry.Bullet, allowedProper, sourceNums, out, sourceSeniority, sourceDateRange)
 		if len(lastViol) == 0 {
 			return out
 		}
@@ -199,7 +224,9 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 }
 
 // buildRephrasePrompt mirrors keyword.buildRephrasePrompt (spec 009 §4.3).
-func buildRephrasePrompt(term keyword.DiffTerm, sourceBullet string, priorViolations []string) string {
+// sourceLabel provides the entry header (e.g. "DevOps Engineer, Acme Corp (2022–2024)")
+// which grounds seniority, employer, and duration claims.
+func buildRephrasePrompt(term keyword.DiffTerm, sourceBullet string, sourceLabel string, priorViolations []string) string {
 	want := term.Term
 	if term.Canonical != "" {
 		want = term.Canonical
@@ -209,14 +236,18 @@ func buildRephrasePrompt(term keyword.DiffTerm, sourceBullet string, priorViolat
 	b.WriteString("STRICT RULES:\n")
 	b.WriteString("- Rephrase ONLY the experience shown in the source bullet below.\n")
 	b.WriteString("- Do NOT add any skill, technology, employer, job title, date, or metric that is not already in the source bullet.\n")
+	b.WriteString("- Do NOT inflate seniority. If the source label says 'Junior', do not call it 'Senior'.\n")
+	b.WriteString("- Do NOT inflate duration. If the source label says '2022–2024', do not claim '10+ years'.\n")
+	b.WriteString("- Do NOT borrow technologies from other entries. Only use what is in the source bullet.\n")
 	b.WriteString("- If the source bullet does not genuinely support the target term, do not stretch it — return the bullet unchanged.\n")
 	b.WriteString("- Output the single reframed bullet as plain text. No preamble, no quotes, no bullet marker.\n\n")
 	b.WriteString("TARGET TERM: " + want + "\n\n")
+	b.WriteString("SOURCE LABEL (seniority, employer, dates):\n" + sourceLabel + "\n\n")
 	b.WriteString("SOURCE BULLET:\n" + sourceBullet + "\n")
 	if len(priorViolations) > 0 {
 		b.WriteString("\nYour previous attempt violated the no-invention rule:\n- ")
 		b.WriteString(strings.Join(priorViolations, "\n- "))
-		b.WriteString("\nRegenerate using only what the source bullet contains.\n")
+		b.WriteString("\nRegenerate using only what the source bullet and label contain.\n")
 	}
 	return b.String()
 }
@@ -225,25 +256,51 @@ func buildRephrasePrompt(term keyword.DiffTerm, sourceBullet string, priorViolat
 
 var numberRe = regexp.MustCompile(`\d+(?:[.,]\d+)*%?`)
 
-// verifyRephraseGrounding checks that every proper noun and number in the
-// rephrase is traceable to the source. Returns violations; empty slice means
-// grounded.
-func verifyRephraseGrounding(sourceBullet string, allowedProper, sourceNums map[string]bool, rephrase string) []string {
+// verifyRephraseGrounding checks that every proper noun, number, seniority
+// claim, and duration claim in the rephrase is traceable to the source.
+// Returns violations; empty slice means grounded.
+func verifyRephraseGrounding(sourceBullet string, allowedProper, sourceNums map[string]bool, rephrase string, sourceSeniority string, sourceDateRange string) []string {
 	if strings.TrimSpace(rephrase) == "" {
 		return []string{"empty rephrase"}
 	}
 	var violations []string
 
+	// Check proper nouns (technologies, employers, product names)
 	for _, p := range properNounsInText(rephrase) {
 		if !allowedProper[lowerASCII(p)] {
 			violations = append(violations, fmt.Sprintf("proper noun / technology %q not in source bullet", p))
 		}
 	}
+
+	// Check metrics/numbers
 	for _, n := range numberRe.FindAllString(rephrase, -1) {
 		if !sourceNums[normNumber(n)] {
 			violations = append(violations, fmt.Sprintf("metric/number %q not in source bullet", n))
 		}
 	}
+
+	// Check seniority inflation: if the source has a seniority level, the
+	// rephrase must not claim a higher level.
+	if sourceSeniority != "" {
+		rephraseSeniority := extractSeniority(rephrase)
+		if rephraseSeniority != "" && seniorityLevel[rephraseSeniority] > seniorityLevel[sourceSeniority] {
+			violations = append(violations, fmt.Sprintf("seniority inflated: source is %q, rephrase claims %q", sourceSeniority, rephraseSeniority))
+		}
+	}
+
+	// Check duration inflation: if the source label has a date range, the
+	// rephrase must not claim a longer duration.
+	if sourceDateRange != "" {
+		rephraseDuration := extractDateRange(rephrase)
+		if rephraseDuration != "" {
+			srcYears := parseDurationYears(sourceDateRange)
+			rpYears := parseDurationYears(rephraseDuration)
+			if rpYears > srcYears {
+				violations = append(violations, fmt.Sprintf("duration inflated: source is %q (%d years), rephrase claims %q (%d years)", sourceDateRange, srcYears, rephraseDuration, rpYears))
+			}
+		}
+	}
+
 	return violations
 }
 
@@ -321,6 +378,64 @@ func numberSet(text string) map[string]bool {
 func normNumber(n string) string {
 	n = strings.TrimSuffix(n, "%")
 	return strings.ReplaceAll(n, ",", "")
+}
+
+// --- Seniority and duration helpers ---
+
+// extractSeniority returns the first seniority-level token found in text,
+// lowercased, or "" if none.
+func extractSeniority(text string) string {
+	m := seniorityRe.FindString(text)
+	if m == "" {
+		return ""
+	}
+	return strings.ToLower(m)
+}
+
+// extractDateRange returns the first matched date range from text (e.g.
+// "2022–2024") or "" if none.
+func extractDateRange(text string) string {
+	m := dateRangeRe.FindString(text)
+	return m
+}
+
+// parseDurationYears extracts the number of whole years from a date range
+// string like "2022–2024" (returns 2) or "2020–Present" (returns 0 for
+// unknown end). Returns 0 on parse failure.
+func parseDurationYears(dr string) int {
+	m := dateRangeRe.FindStringSubmatch(dr)
+	if len(m) < 3 {
+		return 0
+	}
+	start := parseInt(m[1])
+	if start == 0 {
+		return 0
+	}
+	endStr := strings.ToLower(m[2])
+	if endStr == "present" || endStr == "now" || endStr == "current" {
+		return 0 // Can't verify open-ended ranges
+	}
+	end := parseInt(endStr)
+	if end == 0 {
+		return 0
+	}
+	if end > start {
+		return end - start
+	}
+	return 0
+}
+
+// parseInt parses a base-10 integer from s, returning 0 on failure.
+func parseInt(s string) int {
+	var n int
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			n = n*10 + int(r-'0')
+		} else {
+			return 0
+		}
+	}
+	return n
 }
 
 // --- Helpers (mirrors keyword/helpers.go) ---

@@ -128,6 +128,16 @@ type JobContact struct {
 	FetchedAt   pgtype.Timestamp `json:"fetchedAt"`
 }
 
+type JobSignal struct {
+	ID        pgtype.UUID      `json:"id"`
+	JobId     pgtype.UUID      `json:"jobId"`
+	Kind      string           `json:"kind"`
+	Score     int32            `json:"score"`
+	Signals   []byte           `json:"signals"`
+	Model     *string          `json:"model"`
+	CreatedAt pgtype.Timestamp `json:"createdAt"`
+}
+
 type JobSource struct {
 	ID      pgtype.UUID `json:"id"`
 	Key     string      `json:"key"`

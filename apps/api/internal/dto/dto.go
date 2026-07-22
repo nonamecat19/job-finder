@@ -450,11 +450,11 @@ const (
 // Rate is null unless State == PostAgeStateObserved. N is always present
 // so the caller can render sample size alongside any rate.
 type PostAgeBucketDto struct {
-	Bucket    string              `json:"bucket"`
-	N         int32               `json:"n"`
-	Responses int32               `json:"responses"`
-	Rate      *float64            `json:"rate"`
-	State     PostAgeBucketState  `json:"state"`
+	Bucket    string             `json:"bucket"`
+	N         int32              `json:"n"`
+	Responses int32              `json:"responses"`
+	Rate      *float64           `json:"rate"`
+	State     PostAgeBucketState `json:"state"`
 }
 
 // PostAgeResponseDto is the full signal response served by
@@ -481,4 +481,24 @@ type FreshMatchNotificationDto struct {
 	JobTitle   *string `json:"jobTitle,omitempty"`
 	Company    *string `json:"company,omitempty"`
 	MatchScore *int32  `json:"matchScore,omitempty"`
+}
+
+// CompanyIntelDto is the flattened company-intel signal set served by
+// GET /api/companies/{jobId}/intel and POST /api/companies/{jobId}/intel/refresh
+// (spec 004). Each of the five CompanySignal rows for the job's company is
+// flattened into one named field; a nil field means that signal has never
+// been captured (or its source failed and no previous value exists yet).
+type CompanyIntelDto struct {
+	CompanyName     string   `json:"companyName"`
+	Website         *string  `json:"website"`
+	Funding         *string  `json:"funding"`
+	Layoffs         *string  `json:"layoffs"`
+	GlassdoorRating *float64 `json:"glassdoorRating"`
+	Headcount       *string  `json:"headcount"`
+	TechStack       *string  `json:"techStack"`
+	FetchedAt       string   `json:"fetchedAt"`
+	// Error is set on a Refresh response when every source failed (FR-007):
+	// previous values (if any) remain in the other fields, and the
+	// dashboard shows a top-level error banner.
+	Error *string `json:"error,omitempty"`
 }
