@@ -615,3 +615,39 @@ export interface GithubSyncResultDto {
   followingScanned: number /* int */;
   connectionsMade: number /* int */;
 }
+/**
+ * GroundingTraceDto is one specific claim in an OutreachDraftDto mapped to
+ * the company-intel signal that backs it (spec 012 FR-014) — the wire shape
+ * of the Story 3 "verify before you send it" view.
+ */
+export interface GroundingTraceDto {
+  claim: string;
+  signalKind: string;
+  signalValue: string;
+}
+/**
+ * OutreachDraftDto is a generated, never-sendable outreach message served
+ * by POST /api/jobs/{id}/outreach/generate (spec 012). ContactId/ContactName
+ * are nil when no resolved contact exists for the job (a neutral salutation
+ * was used instead — FR-007). GroundingTraces is always a non-nil (possibly
+ * empty) slice: empty means the draft made no specific claim at all, which
+ * is the honest fallback when no company-intel signal exists (FR-012).
+ */
+export interface OutreachDraftDto {
+  jobId: string;
+  contactId?: string;
+  contactName?: string;
+  tone: string;
+  text: string;
+  groundingTraces: GroundingTraceDto[];
+  generatedAt: string;
+}
+/**
+ * OutreachToneOptionDto is one offered tone option, served by
+ * GET /api/jobs/{id}/outreach/tones (FR-010, FR-011).
+ */
+export interface OutreachToneOptionDto {
+  value: string;
+  label: string;
+  default: boolean;
+}

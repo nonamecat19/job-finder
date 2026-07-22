@@ -577,3 +577,44 @@ export interface GithubSyncResultDto {
   followingScanned: number;
   connectionsMade: number;
 }
+
+// ---------------------------------------------------------------------------
+// Post-apply outreach draft generator (012)
+// ---------------------------------------------------------------------------
+
+export type OutreachTone = 'warm' | 'direct' | 'formal';
+
+/** One specific claim in an OutreachDraftDto mapped to the company-intel
+ * signal that backs it (FR-014) — the Story 3 "verify before you send it"
+ * view is built directly from this list. */
+export interface GroundingTraceDto {
+  claim: string;
+  signalKind: string;
+  signalValue: string;
+}
+
+/** A generated, never-sendable outreach message, served by
+ * POST /jobs/{id}/outreach/generate. contactId/contactName are undefined
+ * when no resolved contact exists for the job (a neutral salutation was
+ * used instead — FR-007). groundingTraces is always present, possibly
+ * empty: empty means the draft made no specific claim at all, the honest
+ * fallback when no company-intel signal exists (FR-012). The only actions
+ * this feature ever offers on a draft are copy and regenerate — there is no
+ * send/schedule/deliver action anywhere (FR-002, FR-003). */
+export interface OutreachDraftDto {
+  jobId: string;
+  contactId?: string;
+  contactName?: string;
+  tone: OutreachTone;
+  text: string;
+  groundingTraces: GroundingTraceDto[];
+  generatedAt: string;
+}
+
+/** One offered tone option, served by GET /jobs/{id}/outreach/tones
+ * (FR-010, FR-011). */
+export interface OutreachToneOptionDto {
+  value: OutreachTone;
+  label: string;
+  default: boolean;
+}
