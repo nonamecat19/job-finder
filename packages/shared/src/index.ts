@@ -316,6 +316,44 @@ export interface KeywordDiffResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Fit-gap coach (009)
+// ---------------------------------------------------------------------------
+
+export type FitGapProximity = 'close' | 'moderate' | 'distant';
+
+/** One adjacent profile entry offered as evidence for a missing must-have,
+ * with a grounded rephrase truthfully reframing that existing bullet toward
+ * the missing term. */
+export interface FitGapEvidence {
+  sourceEntry: string;
+  sourceBullet: string;
+  proximity: FitGapProximity;
+  rephrase: string;
+}
+
+/** One missing must-have with up to 3 adjacent evidence items drawn from the
+ * user's profile. noAdjacentEvidence is the honest empty result: nothing in
+ * the profile is close enough to cite. */
+export interface FitGapItem {
+  term: string;
+  polarity: 'required';
+  adjacentEvidence: FitGapEvidence[];
+  noAdjacentEvidence: boolean;
+}
+
+/** The fit-gap coach output: "you fail N of M must-haves", plus per-gap
+ * adjacent evidence. Served by POST /jobs/{id}/coach/assess (runs a fresh
+ * assessment) and GET /jobs/{id}/coach/assessment (the last result computed
+ * for this job in this server process). */
+export interface FitGapAssessment {
+  jobId: string;
+  totalMustHaves: number;
+  failedMustHaves: number;
+  coveragePct: number;
+  gaps: FitGapItem[];
+}
+
+// ---------------------------------------------------------------------------
 // Interview Prep Pack (013)
 // ---------------------------------------------------------------------------
 

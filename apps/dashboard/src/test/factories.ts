@@ -1,6 +1,7 @@
 import type {
   ApplicationDto,
   CompanyIntelDto,
+  FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
   JobDto,
@@ -180,6 +181,31 @@ export function mockCompanyIntel(overrides: Partial<CompanyIntelDto> = {}): Comp
     headcount: '200-500',
     techStack: 'React, TypeScript, Go',
     fetchedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+export function mockFitGapAssessment(overrides: Partial<FitGapAssessment> = {}): FitGapAssessment {
+  return {
+    jobId: 'test-job-1',
+    totalMustHaves: 2,
+    failedMustHaves: 1,
+    coveragePct: 50,
+    gaps: [
+      {
+        term: 'Kubernetes',
+        polarity: 'required',
+        noAdjacentEvidence: false,
+        adjacentEvidence: [
+          {
+            sourceEntry: 'DevOps Engineer, Acme (2022-2024)',
+            sourceBullet: 'Ran Docker Swarm clusters in production',
+            proximity: 'close',
+            rephrase: 'Ran container orchestration adjacent to Kubernetes',
+          },
+        ],
+      },
+    ],
     ...overrides,
   }
 }

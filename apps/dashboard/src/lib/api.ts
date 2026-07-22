@@ -3,6 +3,7 @@ import type {
   ApplicationDto,
   CompanyIntelDto,
   DocumentType,
+  FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
   InterviewPrepPack,
@@ -68,6 +69,11 @@ export const api = {
     keywordDiff: (id: string) => request<KeywordDiffResponse>(`/jobs/${id}/keyword-diff`),
     interviewPrep: (id: string) => request<InterviewPrepPack>(`/jobs/${id}/interview-prep`),
     ghostScore: (id: string) => request<JobSignalDto>(`/jobs/${id}/ghost-score`, { method: 'POST' }),
+  },
+  coach: {
+    assess: (jobId: string) =>
+      request<FitGapAssessment>(`/jobs/${jobId}/coach/assess`, { method: 'POST' }),
+    assessment: (jobId: string) => request<FitGapAssessment>(`/jobs/${jobId}/coach/assessment`),
   },
   documents: {
     update: (id: string, text: string) =>

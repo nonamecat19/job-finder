@@ -17,6 +17,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/applications"
+	"github.com/job-finder/api/internal/coach"
 	"github.com/job-finder/api/internal/companyintel"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
@@ -201,6 +202,27 @@ func run() error {
 	diffService := keyword.NewDiffService(database.Queries).WithRephraser(cachedRephraser, profileSvc)
 	keywordHandler := &httpapi.KeywordHandler{Diff: diffService}
 
+	// Fit-gap coach (009-wiring): reads the 008 keyword diff + the profile's
+	// grounding entries and produces per-gap adjacent evidence with a
+	// grounded rephrase. Reuses rephraseModel (the same LLM adapter as the
+	// keyword-diff suggester above) since both need the identical
+	// truthful-reframing port. ProfileEntries closes over profileSvc rather
+	// than coach importing internal/profile, keeping that dependency edge
+	// one-directional.
+	coachSvc := coach.NewService(rephraseModel)
+	coachAssessSvc := coach.NewAssessmentService(coachSvc, database.Queries, func(ctx context.Context) ([]coach.ProfileEntry, error) {
+		entries, err := profileSvc.ProfileEntries(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]coach.ProfileEntry, len(entries))
+		for i, e := range entries {
+			out[i] = coach.ProfileEntry{SourceLabel: e.SourceLabel, Bullet: e.Bullet}
+		}
+		return out, nil
+	})
+	coachHandler := &httpapi.CoachHandler{Coach: coachAssessSvc}
+
 	postageSvc := postage.NewService(database.Queries)
 	postageHandler := &httpapi.PostAgeHandler{PostAge: postageSvc}
 
@@ -222,7 +244,7 @@ func run() error {
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
 		postageHandler.Mount, notificationHandler.Mount, companiesHandler.Mount,
-		ghostJobHandler.Mount,
+		ghostJobHandler.Mount, coachHandler.Mount,
 	)
 
 	srv := &http.Server{

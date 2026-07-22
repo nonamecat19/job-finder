@@ -480,3 +480,37 @@ export interface JobSignalDto {
   createdAt: string;
   signals: GhostSignalBreakdownDto;
 }
+/**
+ * FitGapEvidenceDto is one adjacent profile entry offered as evidence for a
+ * missing must-have (009 fit-gap coach), with a grounded rephrase suggestion
+ * truthfully reframing that existing bullet toward the missing term.
+ */
+export interface FitGapEvidenceDto {
+  sourceEntry: string;
+  sourceBullet: string;
+  proximity: string; // "close" | "moderate" | "distant"
+  rephrase: string;
+}
+/**
+ * FitGapItemDto is one missing must-have with up to 3 adjacent evidence
+ * items drawn from the user's profile. NoAdjacentEvidence is the honest
+ * empty result: nothing in the profile is close enough to cite.
+ */
+export interface FitGapItemDto {
+  term: string;
+  polarity: string; // always "required"
+  adjacentEvidence: FitGapEvidenceDto[];
+  noAdjacentEvidence: boolean;
+}
+/**
+ * FitGapAssessmentDto is the fit-gap coach output (009), served by
+ * POST /api/jobs/{id}/coach/assess and GET /api/jobs/{id}/coach/assessment:
+ * "you fail N of M must-haves", plus per-gap adjacent evidence.
+ */
+export interface FitGapAssessmentDto {
+  jobId: string;
+  totalMustHaves: number /* int */;
+  failedMustHaves: number /* int */;
+  coveragePct: number /* float64 */;
+  gaps: FitGapItemDto[];
+}
