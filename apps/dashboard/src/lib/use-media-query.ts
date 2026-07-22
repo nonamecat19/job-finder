@@ -30,3 +30,6 @@ function getMatches(query: string): boolean {
   }
   return window.matchMedia(query).matches;
 }
+
+/** Tailwind `md` breakpoint (768px) — matches the `md:` variants used in the app shell. */
+export const MD_BREAKPOINT_QUERY = '(min-width: 768px)';

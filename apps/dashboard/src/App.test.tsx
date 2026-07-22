@@ -71,6 +71,7 @@ describe('App', () => {
     for (const label of ['Feed', 'Tracker', 'Tailor', 'Status', 'Sources', 'Profile']) {
       expect(screen.getAllByRole('link', { name: label })).toHaveLength(1)
     }
+    expect(screen.getAllByRole('navigation')).toHaveLength(1)
   })
 
   it('defaults to FeedPage', async () => {
@@ -84,6 +85,8 @@ describe('App', () => {
     const user = userEvent.setup()
     renderWithProviders(<App />)
     await user.click(screen.getByRole('link', { name: 'Sources' }))
+    // Assert the page-level <h1>, not the "Job sources" section title: that section
+    // only renders once api.sources.list returns a non-empty list (mocked empty here).
     expect(screen.getByRole('heading', { name: 'Sources & searches' })).toBeInTheDocument()
   })
 
