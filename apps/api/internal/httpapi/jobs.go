@@ -74,6 +74,9 @@ func (h *JobsHandler) list(w http.ResponseWriter, r *http.Request) {
 			params.PageSize = n
 		}
 	}
+	if v := q.Get("showBelowFloor"); v != "" {
+		params.ShowBelowFloor = v == "true"
+	}
 
 	out, err := h.Jobs.List(r.Context(), params)
 	if err != nil {

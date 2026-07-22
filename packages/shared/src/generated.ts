@@ -165,6 +165,23 @@ export interface JobDto {
   matchResult?: MatchResultDto;
   documents?: GeneratedDocumentDto[];
   application?: ApplicationDto;
+  /**
+   * Salary inference (spec 006). All five are nil together when no source
+   * could produce a band (FR-009) — SalaryRaw is preserved and displayed
+   * alongside regardless (FR-024).
+   */
+  salaryMin?: number /* int */;
+  salaryMax?: number /* int */;
+  salaryCurrency?: string;
+  salaryConfidence?: number /* float64 */;
+  salarySource?: string;
+  /**
+   * SalaryBelowFloor is computed (not stored) against the configured
+   * SALARY_FLOOR_USD; true only when the band's currency is USD and its
+   * max lies entirely below the floor (FR-016, FR-020 fail-open for other
+   * currencies).
+   */
+  salaryBelowFloor: boolean;
 }
 export interface JobListResponse {
   items: JobDto[];
@@ -351,4 +368,54 @@ export interface ActivityRunDto {
 export interface ActivityListResponse {
   active: ActivityRunDto[];
   recent: ActivityRunDto[];
+}
+/**
+ * PostAgeBucketState is the three-state output contract for the post-age
+ * vs response-rate signal (spec 010 §Cold-Start Honesty).
+ */
+export type PostAgeBucketState = string;
+export const PostAgeStateObserved: PostAgeBucketState = "observed";
+export const PostAgeStatePrior: PostAgeBucketState = "prior";
+export const PostAgeStateInsufficient: PostAgeBucketState = "insufficient";
+/**
+ * PostAgeBucketDto is one bucket in the post-age vs response-rate signal.
+ * Rate is null unless State == PostAgeStateObserved. N is always present
+ * so the caller can render sample size alongside any rate.
+ */
+export interface PostAgeBucketDto {
+  bucket: string;
+  n: number /* int32 */;
+  responses: number /* int32 */;
+  rate?: number /* float64 */;
+  state: PostAgeBucketState;
+}
+/**
+ * PostAgeResponseDto is the full signal response served by
+ * GET /api/postage-response-rate.
+ */
+export interface PostAgeResponseDto {
+  buckets: PostAgeBucketDto[];
+  totalApps: number /* int32 */;
+  globalState: PostAgeBucketState;
+  priorRate: number /* float64 */;
+  priorLabel: string;
+  thresholdMsg?: string;
+}
+/**
+ * FreshMatchNotificationDto is one row of the fresh-match notification table,
+ * served by GET /api/notifications.
+ */
+export interface FreshMatchNotificationDto {
+  id: string;
+  jobId: string;
+  matchResultId: string;
+  fresh: boolean;
+  seen: boolean;
+  createdAt: string;
+  /**
+   * JobTitle and Company are populated by the list endpoint via a JOIN.
+   */
+  jobTitle?: string;
+  company?: string;
+  matchScore?: number /* int32 */;
 }
