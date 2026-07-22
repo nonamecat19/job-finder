@@ -551,3 +551,25 @@ export interface FitGapAssessmentDto {
   coveragePct: number /* float64 */;
   gaps: FitGapItemDto[];
 }
+/**
+ * JobContactDto is one resolved recruiter/hiring-manager candidate served
+ * by GET /api/jobs/{id}/contacts and POST /api/jobs/{id}/contacts/refresh
+ * (spec 007). Nil fields mean that channel was never resolved — never
+ * fabricated (FR-006, FR-008). Email/phone/linkedInUrl are sensitive
+ * (FR-018): the API surfaces them only on this endpoint, and callers must
+ * not log them in full.
+ */
+export interface JobContactDto {
+  id: string;
+  name: string;
+  title?: string;
+  linkedInUrl?: string;
+  email?: string;
+  phone?: string;
+  /**
+   * Source is one of "posting" / "company-page" / "linkedin".
+   */
+  source: string;
+  confidence: number /* float64 */;
+  fetchedAt: string;
+}

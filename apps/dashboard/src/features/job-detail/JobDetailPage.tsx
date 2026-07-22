@@ -14,6 +14,7 @@ import {
 } from './hooks';
 import CoachPanel from './CoachPanel';
 import CompanyIntelCard from './CompanyIntelCard';
+import ContactLine from './ContactLine';
 import DOMPurify from 'dompurify';
 import GhostSignalPanel from './GhostSignalPanel';
 import KeywordDiffPanel from './KeywordDiffPanel';
@@ -85,6 +86,8 @@ export default function JobDetailPage() {
       <GhostSignalPanel jobId={job.id} ghostSignal={job.ghostSignal} />
 
       <PostAgeSignal />
+
+      <ContactLine jobId={job.id} />
 
       <CompanyIntelCard jobId={job.id} />
 

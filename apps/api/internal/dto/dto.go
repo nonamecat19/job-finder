@@ -625,3 +625,22 @@ type FitGapAssessmentDto struct {
 	CoveragePct     float64         `json:"coveragePct"`
 	Gaps            []FitGapItemDto `json:"gaps"`
 }
+
+// JobContactDto is one resolved recruiter/hiring-manager candidate served
+// by GET /api/jobs/{id}/contacts and POST /api/jobs/{id}/contacts/refresh
+// (spec 007). Nil fields mean that channel was never resolved — never
+// fabricated (FR-006, FR-008). Email/phone/linkedInUrl are sensitive
+// (FR-018): the API surfaces them only on this endpoint, and callers must
+// not log them in full.
+type JobContactDto struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Title       *string `json:"title"`
+	LinkedInUrl *string `json:"linkedInUrl"`
+	Email       *string `json:"email"`
+	Phone       *string `json:"phone"`
+	// Source is one of "posting" / "company-page" / "linkedin".
+	Source     string  `json:"source"`
+	Confidence float64 `json:"confidence"`
+	FetchedAt  string  `json:"fetchedAt"`
+}

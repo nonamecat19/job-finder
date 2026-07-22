@@ -4,6 +4,7 @@ import type {
   FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
+  JobContactDto,
   JobDto,
   JobListResponse,
   JobSourceDto,
@@ -206,6 +207,21 @@ export function mockFitGapAssessment(overrides: Partial<FitGapAssessment> = {}):
         ],
       },
     ],
+    ...overrides,
+  }
+}
+
+export function mockJobContact(overrides: Partial<JobContactDto> = {}): JobContactDto {
+  return {
+    id: 'contact-1',
+    name: 'Jane Doe',
+    title: 'Recruiter',
+    linkedInUrl: null,
+    email: 'jane@acme.com',
+    phone: null,
+    source: 'posting',
+    confidence: 0.9,
+    fetchedAt: new Date().toISOString(),
     ...overrides,
   }
 }
