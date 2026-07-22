@@ -330,6 +330,247 @@ func TestAssess_ProximitySorting(t *testing.T) {
 	}
 }
 
+// --- Adversarial: inflated seniority (009-4 framing rewriter) ---
+
+func TestAssess_RejectsInflatedSeniority(t *testing.T) {
+	model := &fakeRephraseModel{
+		responses: map[string]string{
+			"Docker": "As a Senior DevOps Engineer, managed CI/CD pipelines with Podman and BuildKit",
+		},
+	}
+	svc := NewService(model)
+
+	// Source label says "DevOps Engineer" (no seniority prefix), but the
+	// rephrase claims "Senior" — must be rejected.
+	diffResult := &keyword.DiffResult{
+		Matched: []keyword.DiffTerm{},
+		MissingRequired: []keyword.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+		},
+		MissingPreferred: []keyword.DiffTerm{},
+		Metadata: keyword.DiffMetadata{
+			TotalRequired:    1,
+			TotalPreferred:   0,
+			MatchedRequired:  0,
+			MatchedPreferred: 0,
+			CoveragePct:      0.0,
+		},
+	}
+
+	profileEntries := []ProfileEntry{
+		{
+			SourceLabel: "DevOps Engineer, Acme Corp (2022–2024)",
+			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
+		},
+	}
+
+	result := svc.Assess(context.Background(), "job-1", diffResult, profileEntries, "devops")
+
+	if len(result.Gaps) != 1 {
+		t.Fatalf("Gaps: got %d, want 1", len(result.Gaps))
+	}
+
+	gap := result.Gaps[0]
+	if !gap.NoAdjacentEvidence {
+		t.Errorf("Gap.NoAdjacentEvidence: got false, want true (seniority inflation rejected)")
+	}
+	if len(gap.AdjacentEvidence) != 0 {
+		t.Errorf("Gap.AdjacentEvidence: got %d items, want 0 (all rephrases rejected)", len(gap.AdjacentEvidence))
+	}
+}
+
+func TestAssess_RejectsInflatedSeniority_JuniorToSenior(t *testing.T) {
+	model := &fakeRephraseModel{
+		responses: map[string]string{
+			"Docker": "As a Senior DevOps Engineer, managed CI/CD pipelines with Podman and BuildKit",
+		},
+	}
+	svc := NewService(model)
+
+	// Source label says "Junior DevOps Engineer" — rephrase claiming "Senior"
+	// must be rejected.
+	diffResult := &keyword.DiffResult{
+		Matched: []keyword.DiffTerm{},
+		MissingRequired: []keyword.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+		},
+		MissingPreferred: []keyword.DiffTerm{},
+		Metadata: keyword.DiffMetadata{
+			TotalRequired:    1,
+			TotalPreferred:   0,
+			MatchedRequired:  0,
+			MatchedPreferred: 0,
+			CoveragePct:      0.0,
+		},
+	}
+
+	profileEntries := []ProfileEntry{
+		{
+			SourceLabel: "Junior DevOps Engineer, Acme Corp (2022–2024)",
+			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
+		},
+	}
+
+	result := svc.Assess(context.Background(), "job-1", diffResult, profileEntries, "devops")
+
+	if len(result.Gaps) != 1 {
+		t.Fatalf("Gaps: got %d, want 1", len(result.Gaps))
+	}
+
+	gap := result.Gaps[0]
+	if !gap.NoAdjacentEvidence {
+		t.Errorf("Gap.NoAdjacentEvidence: got false, want true (junior→senior inflation rejected)")
+	}
+	if len(gap.AdjacentEvidence) != 0 {
+		t.Errorf("Gap.AdjacentEvidence: got %d items, want 0", len(gap.AdjacentEvidence))
+	}
+}
+
+func TestAssess_AllowsSameSeniority(t *testing.T) {
+	model := &fakeRephraseModel{
+		responses: map[string]string{
+			"Docker": "Managed CI/CD pipelines with Podman and BuildKit for containerization",
+		},
+	}
+	svc := NewService(model)
+
+	// Source label says "Senior DevOps Engineer" — rephrase does not mention
+	// seniority at all (only uses words from the source bullet), so no
+	// inflation violation. Same-level or absent seniority is allowed.
+	diffResult := &keyword.DiffResult{
+		Matched: []keyword.DiffTerm{},
+		MissingRequired: []keyword.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+		},
+		MissingPreferred: []keyword.DiffTerm{},
+		Metadata: keyword.DiffMetadata{
+			TotalRequired:    1,
+			TotalPreferred:   0,
+			MatchedRequired:  0,
+			MatchedPreferred: 0,
+			CoveragePct:      0.0,
+		},
+	}
+
+	profileEntries := []ProfileEntry{
+		{
+			SourceLabel: "Senior DevOps Engineer, Acme Corp (2022–2024)",
+			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
+		},
+	}
+
+	result := svc.Assess(context.Background(), "job-1", diffResult, profileEntries, "devops")
+
+	if len(result.Gaps) != 1 {
+		t.Fatalf("Gaps: got %d, want 1", len(result.Gaps))
+	}
+
+	gap := result.Gaps[0]
+	if gap.NoAdjacentEvidence {
+		t.Errorf("Gap.NoAdjacentEvidence: got true, want false (same seniority should be allowed)")
+	}
+	if len(gap.AdjacentEvidence) == 0 {
+		t.Errorf("Gap.AdjacentEvidence: got 0 items, want >= 1")
+	}
+}
+
+// --- Adversarial: invented duration (009-4 framing rewriter) ---
+
+func TestAssess_RejectsInflatedDuration(t *testing.T) {
+	model := &fakeRephraseModel{
+		responses: map[string]string{
+			"Docker": "With over 10 years of experience, managed CI/CD pipelines with Podman and BuildKit",
+		},
+	}
+	svc := NewService(model)
+
+	// Source label says "2022–2024" (2 years), but rephrase claims "10+ years".
+	diffResult := &keyword.DiffResult{
+		Matched: []keyword.DiffTerm{},
+		MissingRequired: []keyword.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+		},
+		MissingPreferred: []keyword.DiffTerm{},
+		Metadata: keyword.DiffMetadata{
+			TotalRequired:    1,
+			TotalPreferred:   0,
+			MatchedRequired:  0,
+			MatchedPreferred: 0,
+			CoveragePct:      0.0,
+		},
+	}
+
+	profileEntries := []ProfileEntry{
+		{
+			SourceLabel: "DevOps Engineer, Acme Corp (2022–2024)",
+			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
+		},
+	}
+
+	result := svc.Assess(context.Background(), "job-1", diffResult, profileEntries, "devops")
+
+	if len(result.Gaps) != 1 {
+		t.Fatalf("Gaps: got %d, want 1", len(result.Gaps))
+	}
+
+	gap := result.Gaps[0]
+	if !gap.NoAdjacentEvidence {
+		t.Errorf("Gap.NoAdjacentEvidence: got false, want true (duration inflation rejected)")
+	}
+	if len(gap.AdjacentEvidence) != 0 {
+		t.Errorf("Gap.AdjacentEvidence: got %d items, want 0", len(gap.AdjacentEvidence))
+	}
+}
+
+// --- Adversarial: borrowed technologies (009-4 framing rewriter) ---
+
+func TestAssess_RejectsBorrowedTechnology(t *testing.T) {
+	model := &fakeRephraseModel{
+		responses: map[string]string{
+			"Docker": "Managed Docker containers and Kubernetes clusters in production",
+		},
+	}
+	svc := NewService(model)
+
+	// Source bullet only mentions "Podman and BuildKit" — "Kubernetes" is
+	// borrowed from elsewhere and must be rejected.
+	diffResult := &keyword.DiffResult{
+		Matched: []keyword.DiffTerm{},
+		MissingRequired: []keyword.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+		},
+		MissingPreferred: []keyword.DiffTerm{},
+		Metadata: keyword.DiffMetadata{
+			TotalRequired:    1,
+			TotalPreferred:   0,
+			MatchedRequired:  0,
+			MatchedPreferred: 0,
+			CoveragePct:      0.0,
+		},
+	}
+
+	profileEntries := []ProfileEntry{
+		{
+			SourceLabel: "DevOps Engineer, Acme Corp (2022–2024)",
+			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
+		},
+	}
+
+	result := svc.Assess(context.Background(), "job-1", diffResult, profileEntries, "devops")
+
+	if len(result.Gaps) != 1 {
+		t.Fatalf("Gaps: got %d, want 1", len(result.Gaps))
+	}
+
+	gap := result.Gaps[0]
+	if !gap.NoAdjacentEvidence {
+		t.Errorf("Gap.NoAdjacentEvidence: got false, want true (borrowed tech rejected)")
+	}
+	if len(gap.AdjacentEvidence) != 0 {
+		t.Errorf("Gap.AdjacentEvidence: got %d items, want 0", len(gap.AdjacentEvidence))
+	}
+}
+
 func TestAssess_NilDiffResult(t *testing.T) {
 	model := &fakeRephraseModel{responses: map[string]string{}}
 	svc := NewService(model)
