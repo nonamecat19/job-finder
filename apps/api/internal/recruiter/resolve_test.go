@@ -37,7 +37,9 @@ func (m *multiSourceFakeLLM) CompleteJSON(ctx context.Context, prompt string, op
 	}
 	return m.postingJSON, nil
 }
-func (m *multiSourceFakeLLM) Embed(ctx context.Context, text string) ([]float32, error) { return nil, nil }
+func (m *multiSourceFakeLLM) Embed(ctx context.Context, text string) ([]float32, error) {
+	return nil, nil
+}
 
 // fakeRepository is an in-memory Repository. UpsertJobContact mirrors the
 // real (jobId, source, name) upsert-in-place semantics (FR-013) so

@@ -93,4 +93,63 @@ describe('ContactLine', () => {
     const btn = screen.getByRole('button', { name: /refresh contacts/i });
     expect(btn).toBeDisabled();
   });
+
+  it('expands to show every resolved contact with source and confidence, ordered best-first', async () => {
+    const user = userEvent.setup();
+    setupRefreshMock();
+    const high = mockJobContact({
+      id: 'c-high',
+      name: 'Jane Doe',
+      title: 'Recruiter',
+      confidence: 0.9,
+      source: 'posting',
+    });
+    const low = mockJobContact({
+      id: 'c-low',
+      name: 'Tom Baker',
+      title: 'Head of Talent',
+      confidence: 0.4,
+      source: 'company-page',
+      email: null,
+    });
+    // API already returns best-first order.
+    setupQueryMock({ data: [high, low] });
+
+    render(<ContactLine jobId="job-1" />);
+    await user.click(screen.getByText('Contact'));
+
+    const list = screen.getByTestId('contact-list');
+    const rows = list.querySelectorAll('li');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Jane Doe');
+    expect(rows[0]).toHaveTextContent('posting');
+    expect(rows[0]).toHaveTextContent('90% confidence');
+    expect(rows[1]).toHaveTextContent('Tom Baker');
+    expect(rows[1]).toHaveTextContent('company page');
+    expect(rows[1]).toHaveTextContent('40% confidence');
+  });
+
+  it('expanding a single-contact job shows just that one contact, not a partial-set indicator', async () => {
+    const user = userEvent.setup();
+    setupRefreshMock();
+    const only = mockJobContact({ id: 'c-only', name: 'Jane Doe' });
+    setupQueryMock({ data: [only] });
+
+    render(<ContactLine jobId="job-1" />);
+    await user.click(screen.getByText('Contact'));
+
+    const list = screen.getByTestId('contact-list');
+    expect(list.querySelectorAll('li')).toHaveLength(1);
+  });
+
+  it('does not expand when there are zero contacts to show', async () => {
+    const user = userEvent.setup();
+    setupRefreshMock();
+    setupQueryMock({ data: [] });
+
+    render(<ContactLine jobId="job-1" />);
+    await user.click(screen.getByText('Contact'));
+
+    expect(screen.queryByTestId('contact-list')).not.toBeInTheDocument();
+  });
 });
