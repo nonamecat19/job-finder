@@ -165,6 +165,12 @@ export interface JobDto {
   matchResult?: MatchResultDto;
   documents?: GeneratedDocumentDto[];
   application?: ApplicationDto;
+  /**
+   * GhostSignal is the ghost-job detector's (005) result, when one exists.
+   * A job with no ghost result renders exactly as it does today — this
+   * field is simply absent, never a zero-valued panel (FR-017, SC-008).
+   */
+  ghostSignal?: JobSignalDto;
 }
 export interface JobListResponse {
   items: JobDto[];
@@ -351,4 +357,86 @@ export interface ActivityRunDto {
 export interface ActivityListResponse {
   active: ActivityRunDto[];
   recent: ActivityRunDto[];
+}
+/**
+ * PostAgeBucketState is the three-state output contract for the post-age
+ * vs response-rate signal (spec 010 §Cold-Start Honesty).
+ */
+export type PostAgeBucketState = string;
+export const PostAgeStateObserved: PostAgeBucketState = "observed";
+export const PostAgeStatePrior: PostAgeBucketState = "prior";
+export const PostAgeStateInsufficient: PostAgeBucketState = "insufficient";
+/**
+ * PostAgeBucketDto is one bucket in the post-age vs response-rate signal.
+ * Rate is null unless State == PostAgeStateObserved. N is always present
+ * so the caller can render sample size alongside any rate.
+ */
+export interface PostAgeBucketDto {
+  bucket: string;
+  n: number /* int32 */;
+  responses: number /* int32 */;
+  rate?: number /* float64 */;
+  state: PostAgeBucketState;
+}
+/**
+ * PostAgeResponseDto is the full signal response served by
+ * GET /api/postage-response-rate.
+ */
+export interface PostAgeResponseDto {
+  buckets: PostAgeBucketDto[];
+  totalApps: number /* int32 */;
+  globalState: PostAgeBucketState;
+  priorRate: number /* float64 */;
+  priorLabel: string;
+  thresholdMsg?: string;
+}
+/**
+ * FreshMatchNotificationDto is one row of the fresh-match notification table,
+ * served by GET /api/notifications.
+ */
+export interface FreshMatchNotificationDto {
+  id: string;
+  jobId: string;
+  matchResultId: string;
+  fresh: boolean;
+  seen: boolean;
+  createdAt: string;
+  /**
+   * JobTitle and Company are populated by the list endpoint via a JOIN.
+   */
+  jobTitle?: string;
+  company?: string;
+  matchScore?: number /* int32 */;
+}
+/**
+ * GhostSignalBreakdownDto is the measured evidence behind one ghost score:
+ * the four signals (a value or an explicit unknown — never a bare 0), the
+ * model's confidence, its plain-English explanation, and per-signal
+ * provenance notes. This is also the exact shape marshaled into
+ * "JobSignal"."signals" jsonb, so persistence and API response share one
+ * struct (see ghostjob.Service).
+ */
+export interface GhostSignalBreakdownDto {
+  repostCount: number /* int */;
+  daysOpen?: number /* int */;
+  crossBoardCount?: number /* int */;
+  alwaysHiringCount?: number /* int */;
+  confidence: number /* float64 */;
+  explanation: string;
+  topSignals?: string[];
+  notes: { [key: string]: string};
+}
+/**
+ * JobSignalDto is one row of the generic "JobSignal" table. For this
+ * feature kind is always "ghost"; the shape is deliberately generic so a
+ * future signal kind reuses it (spec Key Entities: Job Signal).
+ */
+export interface JobSignalDto {
+  id: string;
+  jobId: string;
+  kind: string;
+  score: number /* int */;
+  model: string;
+  createdAt: string;
+  signals: GhostSignalBreakdownDto;
 }
