@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -20,6 +22,7 @@ import (
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/enrichment"
+	"github.com/job-finder/api/internal/extauth"
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
@@ -38,6 +41,26 @@ import (
 	"github.com/job-finder/api/internal/storage"
 	"github.com/job-finder/api/internal/subscriptions"
 )
+
+// extJWTSigningSecret decodes a configured 32-byte hex EXT_JWT_SECRET, or
+// generates a random 32-byte secret when unset (dev/first-run convenience —
+// see the EXT_JWT_SECRET comment in .env.example and config.go).
+func extJWTSigningSecret(hexKey string) ([]byte, error) {
+	if hexKey == "" {
+		secret := make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			return nil, err
+		}
+		slog.Warn("EXT_JWT_SECRET not set — using an ephemeral random secret; " +
+			"extension sessions will not survive a server restart")
+		return secret, nil
+	}
+	secret, err := hex.DecodeString(hexKey)
+	if err != nil || len(secret) != 32 {
+		return nil, errors.New("EXT_JWT_SECRET must be a 32-byte hex string (openssl rand -hex 32)")
+	}
+	return secret, nil
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -198,11 +221,27 @@ func run() error {
 	notificationSvc := notifier.NewNotificationService(database.Queries, database.Queries)
 	notificationHandler := &httpapi.NotificationHandler{Provider: notificationSvc}
 
+	// Browser-extension auth (014-autofill-extension). extJWTSecret must be
+	// a random byte string; the hex config value is decoded when present, or
+	// a fresh one is generated per process start when absent. The generated
+	// fallback is intentionally never logged or persisted — losing it just
+	// means every extension session must re-authenticate via a new bootstrap
+	// code, which is the safe failure mode (never a predictable secret).
+	extJWTSecret, err := extJWTSigningSecret(cfg.ExtJWTSecret)
+	if err != nil {
+		return err
+	}
+	extSigner := extauth.NewSigner(extJWTSecret)
+	extAuthSvc := extauth.NewService(database.Queries, extSigner)
+	extAuthHandler := &httpapi.ExtAuthHandler{Auth: extAuthSvc}
+	extProfileHandler := &httpapi.ExtProfileHandler{Profiles: profileSvc, Verifier: extSigner}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
 		postageHandler.Mount, notificationHandler.Mount,
+		extAuthHandler.Mount, extProfileHandler.Mount,
 	)
 
 	srv := &http.Server{

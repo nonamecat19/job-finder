@@ -204,6 +204,43 @@ export interface ProfileDto {
   extraNotes?: string;
   updatedAt: string;
 }
+/**
+ * ExtProfileDto is the profile shape exposed to the browser extension via
+ * GET /api/v1/ext/profile (spec 014-autofill-extension section 3). It is a
+ * deliberately narrower, flatter projection of ProfileDto/RendercvMaster —
+ * only the fields an application-form autofill needs, nothing else from the
+ * account (no rendercv theme/design, no other profiles, no internal ids
+ * beyond the leaf entries below).
+ */
+export interface ExtProfileDto {
+  fullName: string;
+  email: string;
+  phone: string;
+  location: string;
+  headline: string;
+  skills: string[];
+  workHistory: ExtWorkEntry[];
+  education: ExtEducation[];
+  links: ExtLink[];
+}
+export interface ExtWorkEntry {
+  employer: string;
+  role: string;
+  startDate: string;
+  endDate?: string;
+  current: boolean;
+  description: string;
+}
+export interface ExtEducation {
+  institution: string;
+  degree: string;
+  startDate: string;
+  endDate: string;
+}
+export interface ExtLink {
+  url: string;
+  label: string;
+}
 export interface JobSourceDto {
   id: string;
   key: string;
@@ -351,4 +388,54 @@ export interface ActivityRunDto {
 export interface ActivityListResponse {
   active: ActivityRunDto[];
   recent: ActivityRunDto[];
+}
+/**
+ * PostAgeBucketState is the three-state output contract for the post-age
+ * vs response-rate signal (spec 010 §Cold-Start Honesty).
+ */
+export type PostAgeBucketState = string;
+export const PostAgeStateObserved: PostAgeBucketState = "observed";
+export const PostAgeStatePrior: PostAgeBucketState = "prior";
+export const PostAgeStateInsufficient: PostAgeBucketState = "insufficient";
+/**
+ * PostAgeBucketDto is one bucket in the post-age vs response-rate signal.
+ * Rate is null unless State == PostAgeStateObserved. N is always present
+ * so the caller can render sample size alongside any rate.
+ */
+export interface PostAgeBucketDto {
+  bucket: string;
+  n: number /* int32 */;
+  responses: number /* int32 */;
+  rate?: number /* float64 */;
+  state: PostAgeBucketState;
+}
+/**
+ * PostAgeResponseDto is the full signal response served by
+ * GET /api/postage-response-rate.
+ */
+export interface PostAgeResponseDto {
+  buckets: PostAgeBucketDto[];
+  totalApps: number /* int32 */;
+  globalState: PostAgeBucketState;
+  priorRate: number /* float64 */;
+  priorLabel: string;
+  thresholdMsg?: string;
+}
+/**
+ * FreshMatchNotificationDto is one row of the fresh-match notification table,
+ * served by GET /api/notifications.
+ */
+export interface FreshMatchNotificationDto {
+  id: string;
+  jobId: string;
+  matchResultId: string;
+  fresh: boolean;
+  seen: boolean;
+  createdAt: string;
+  /**
+   * JobTitle and Company are populated by the list endpoint via a JOIN.
+   */
+  jobTitle?: string;
+  company?: string;
+  matchScore?: number /* int32 */;
 }
