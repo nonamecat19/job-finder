@@ -41,6 +41,10 @@ func (f *fakeRepo) ListJobsByScore(ctx context.Context, arg sqlcgen.ListJobsBySc
 	return f.rows, nil
 }
 
+func (f *fakeRepo) ListJobSignalsByJobIds(ctx context.Context, arg sqlcgen.ListJobSignalsByJobIdsParams) ([]sqlcgen.JobSignal, error) {
+	return nil, nil
+}
+
 type fakeEnqueuer struct{ jobs.Enqueuer }
 
 func TestServiceDeleteAll(t *testing.T) {
