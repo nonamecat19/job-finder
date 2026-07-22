@@ -7,6 +7,14 @@ include .env
 export
 endif
 
+# --- per-worktree isolation ---
+# Each git worktree gets its own compose project and Postgres host port so
+# migration state from one branch never leaks into another's test run.
+WORKTREE_NAME := $(shell basename "$$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+WORKTREE_HASH := $(shell echo "$(WORKTREE_NAME)" | cksum | cut -d' ' -f1)
+export COMPOSE_PROJECT_NAME := jobfinder-$(WORKTREE_NAME)
+export POSTGRES_HOST_PORT := $(shell echo "$$(( 5432 + ( $(WORKTREE_HASH) % 100 ) ))")
+
 install:
 	pnpm install
 
@@ -55,7 +63,7 @@ test-db-setup: up
 test: test-go test-react test-python
 
 test-go:
-	cd apps/api && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:5432/jobfinder_test \
+	cd apps/api && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:${POSTGRES_HOST_PORT}/jobfinder_test \
 		REDIS_URL=redis://localhost:6379/1 \
 		go test ./...
 
@@ -69,7 +77,7 @@ test-integration: test-db-setup
 	@echo "Waiting for postgres to be healthy..."
 	@docker compose up -d postgres
 	@docker compose exec -T postgres sh -c 'until pg_isready -U jobfinder; do sleep 1; done'
-	cd apps/api && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:5432/jobfinder_test \
+	cd apps/api && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:${POSTGRES_HOST_PORT}/jobfinder_test \
 		REDIS_URL=redis://localhost:6379/1 \
 		go test -tags integration ./...
 
@@ -77,7 +85,7 @@ test-e2e: test-db-setup
 	@echo "Waiting for services to be ready..."
 	@docker compose up -d
 	@sleep 5
-	cd apps/dashboard && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:5432/jobfinder_test \
+	cd apps/dashboard && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:${POSTGRES_HOST_PORT}/jobfinder_test \
 		REDIS_URL=redis://localhost:6379/1 \
 		npx playwright test
 
