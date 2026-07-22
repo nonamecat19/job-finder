@@ -3,12 +3,14 @@ import type {
   ApplicationDto,
   CompanyIntelDto,
   DocumentType,
+  FreshMatchNotificationDto,
   GeneratedDocumentDto,
   InterviewPrepPack,
   JobDto,
   JobListResponse,
   JobSourceDto,
   KeywordDiffResponse,
+  PostAgeResponseDto,
   ProfileDto,
   SavedSearchDto,
   SearchQuery,
@@ -144,5 +146,13 @@ export const api = {
     intel: (jobId: string) => request<CompanyIntelDto>(`/companies/${jobId}/intel`),
     refresh: (jobId: string) =>
       request<CompanyIntelDto>(`/companies/${jobId}/intel/refresh`, { method: 'POST' }),
+  },
+  postage: {
+    responseRate: () => request<PostAgeResponseDto>('/postage-response-rate'),
+  },
+  notifications: {
+    list: () => request<FreshMatchNotificationDto[]>('/notifications'),
+    markSeen: (id: string) => request<void>(`/notifications/${id}/seen`, { method: 'POST' }),
+    unseenCount: () => request<{ count: number }>('/notifications/unseen-count'),
   },
 };

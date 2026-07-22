@@ -47,6 +47,25 @@ type ApplicationOutcome struct {
 	CreatedAt     pgtype.Timestamp `json:"createdAt"`
 }
 
+type Company struct {
+	ID              pgtype.UUID      `json:"id"`
+	Name            string           `json:"name"`
+	NormalizedName  string           `json:"normalizedName"`
+	Website         *string          `json:"website"`
+	FirstSeenAt     pgtype.Timestamp `json:"firstSeenAt"`
+	LastRefreshedAt pgtype.Timestamp `json:"lastRefreshedAt"`
+}
+
+type CompanySignal struct {
+	ID        pgtype.UUID      `json:"id"`
+	CompanyId pgtype.UUID      `json:"companyId"`
+	Kind      string           `json:"kind"`
+	Value     []byte           `json:"value"`
+	Source    *string          `json:"source"`
+	FetchedAt pgtype.Timestamp `json:"fetchedAt"`
+	Raw       []byte           `json:"raw"`
+}
+
 type FreshMatchNotification struct {
 	ID            pgtype.UUID      `json:"id"`
 	JobId         pgtype.UUID      `json:"jobId"`
@@ -94,6 +113,19 @@ type Job struct {
 	SalaryCurrency   *string          `json:"salaryCurrency"`
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
+}
+
+type JobContact struct {
+	ID          pgtype.UUID      `json:"id"`
+	JobId       pgtype.UUID      `json:"jobId"`
+	Name        string           `json:"name"`
+	Title       *string          `json:"title"`
+	LinkedInUrl *string          `json:"linkedInUrl"`
+	Email       *string          `json:"email"`
+	Phone       *string          `json:"phone"`
+	Source      string           `json:"source"`
+	Confidence  float64          `json:"confidence"`
+	FetchedAt   pgtype.Timestamp `json:"fetchedAt"`
 }
 
 type JobSource struct {

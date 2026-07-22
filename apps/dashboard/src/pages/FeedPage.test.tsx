@@ -22,6 +22,8 @@ vi.mock('../api', () => ({
     subscriptions: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), run: vi.fn() },
     applications: { list: vi.fn(), update: vi.fn() },
     stats: vi.fn(),
+    postage: { responseRate: vi.fn() },
+    notifications: { list: vi.fn(), markSeen: vi.fn(), unseenCount: vi.fn() },
   },
 }))
 
@@ -160,5 +162,30 @@ describe('FeedPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /prev/ })).toBeDisabled()
     })
+  })
+
+  it('shows posting age on job card', async () => {
+    const recent = new Date(Date.now() - 2 * 3600000).toISOString() // 2h ago
+    const job = mockJob({ postedAt: recent })
+    vi.mocked(api.jobs.list).mockResolvedValue(mockJobListResponse({ items: [job] }))
+
+    renderWithProviders(<FeedPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/2h ago/)).toBeInTheDocument()
+    })
+  })
+
+  it('does not show posting age when postedAt is null', async () => {
+    const job = mockJob({ postedAt: null })
+    vi.mocked(api.jobs.list).mockResolvedValue(mockJobListResponse({ items: [job] }))
+
+    renderWithProviders(<FeedPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Senior React Developer')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/h ago/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/d ago/)).not.toBeInTheDocument()
   })
 })

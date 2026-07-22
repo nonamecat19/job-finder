@@ -28,6 +28,18 @@ func (q *Queries) CountRecentNotificationsByProfile(ctx context.Context, arg Cou
 	return count, err
 }
 
+const countUnseenNotificationsByProfile = `-- name: CountUnseenNotificationsByProfile :one
+SELECT COUNT(*) FROM "FreshMatchNotification"
+WHERE "profileId" = $1 AND "seen" = false
+`
+
+func (q *Queries) CountUnseenNotificationsByProfile(ctx context.Context, profileid pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countUnseenNotificationsByProfile, profileid)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const insertFreshMatchNotification = `-- name: InsertFreshMatchNotification :one
 INSERT INTO "FreshMatchNotification" (
     "jobId", "matchResultId", "profileId", "fresh"
@@ -101,4 +113,77 @@ func (q *Queries) ListRecentNotificationsByProfile(ctx context.Context, arg List
 		return nil, err
 	}
 	return items, nil
+}
+
+const listRecentNotificationsWithJob = `-- name: ListRecentNotificationsWithJob :many
+SELECT
+    n."id", n."jobId", n."matchResultId", n."profileId", n."fresh", n."seen", n."createdAt",
+    j."title" AS job_title,
+    j."company",
+    mr."score" AS match_score
+FROM "FreshMatchNotification" n
+JOIN "Job" j ON j."id" = n."jobId"
+JOIN "MatchResult" mr ON mr."id" = n."matchResultId"
+WHERE n."profileId" = $1
+ORDER BY n."createdAt" DESC
+LIMIT $2
+`
+
+type ListRecentNotificationsWithJobParams struct {
+	ProfileId pgtype.UUID `json:"profileId"`
+	Limit     int32       `json:"limit"`
+}
+
+type ListRecentNotificationsWithJobRow struct {
+	ID            pgtype.UUID      `json:"id"`
+	JobId         pgtype.UUID      `json:"jobId"`
+	MatchResultId pgtype.UUID      `json:"matchResultId"`
+	ProfileId     pgtype.UUID      `json:"profileId"`
+	Fresh         bool             `json:"fresh"`
+	Seen          bool             `json:"seen"`
+	CreatedAt     pgtype.Timestamp `json:"createdAt"`
+	JobTitle      string           `json:"job_title"`
+	Company       string           `json:"company"`
+	MatchScore    *int32           `json:"match_score"`
+}
+
+func (q *Queries) ListRecentNotificationsWithJob(ctx context.Context, arg ListRecentNotificationsWithJobParams) ([]ListRecentNotificationsWithJobRow, error) {
+	rows, err := q.db.Query(ctx, listRecentNotificationsWithJob, arg.ProfileId, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentNotificationsWithJobRow
+	for rows.Next() {
+		var i ListRecentNotificationsWithJobRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.JobId,
+			&i.MatchResultId,
+			&i.ProfileId,
+			&i.Fresh,
+			&i.Seen,
+			&i.CreatedAt,
+			&i.JobTitle,
+			&i.Company,
+			&i.MatchScore,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markNotificationSeen = `-- name: MarkNotificationSeen :exec
+UPDATE "FreshMatchNotification" SET "seen" = true
+WHERE "id" = $1 AND "seen" = false
+`
+
+func (q *Queries) MarkNotificationSeen(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markNotificationSeen, id)
+	return err
 }

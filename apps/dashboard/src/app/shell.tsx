@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { ReactNode } from 'react';
 import { cn } from '../lib/utils';
 import { useMediaQuery } from '../lib/use-media-query';
+import NotificationBell from '../features/notifications/NotificationBell';
 
 const navItems = [
   { to: '/', label: 'Feed', icon: Rss },
@@ -30,6 +31,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <ShellLink key={item.to} {...item} />
               ))}
             </nav>
+            <div className="mt-auto flex items-center justify-end px-1">
+              <NotificationBell />
+            </div>
           </aside>
         )}
 
@@ -38,11 +42,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <header className="sticky top-0 z-20 border-b border-border bg-bg/70 px-4 py-3 backdrop-blur-xl md:hidden">
               <div className="flex items-center justify-between gap-3">
                 <Brand compact />
-                <nav className="flex gap-1" aria-label="Primary">
-                  {navItems.map((item) => (
-                    <ShellLink key={item.to} {...item} compact />
-                  ))}
-                </nav>
+                <div className="flex items-center gap-1">
+                  <NotificationBell />
+                  <nav className="flex gap-1" aria-label="Primary">
+                    {navItems.map((item) => (
+                      <ShellLink key={item.to} {...item} compact />
+                    ))}
+                  </nav>
+                </div>
               </div>
             </header>
           )}

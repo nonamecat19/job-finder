@@ -393,3 +393,42 @@ export interface CompanyIntelDto {
   fetchedAt: string;
   error?: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Post-age vs Response-rate signal (010)
+// ---------------------------------------------------------------------------
+
+export type PostAgeBucketState = 'observed' | 'prior' | 'insufficient';
+
+export interface PostAgeBucketDto {
+  bucket: string;
+  n: number;
+  responses: number;
+  rate: number | null;
+  state: PostAgeBucketState;
+}
+
+export interface PostAgeResponseDto {
+  buckets: PostAgeBucketDto[];
+  totalApps: number;
+  globalState: PostAgeBucketState;
+  priorRate: number;
+  priorLabel: string;
+  thresholdMsg: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Fresh-match notifications (010)
+// ---------------------------------------------------------------------------
+
+export interface FreshMatchNotificationDto {
+  id: string;
+  jobId: string;
+  matchResultId: string;
+  fresh: boolean;
+  seen: boolean;
+  createdAt: string;
+  jobTitle?: string | null;
+  company?: string | null;
+  matchScore?: number | null;
+}

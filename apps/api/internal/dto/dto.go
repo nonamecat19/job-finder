@@ -467,3 +467,18 @@ type PostAgeResponseDto struct {
 	PriorLabel   string             `json:"priorLabel"`
 	ThresholdMsg *string            `json:"thresholdMsg,omitempty"`
 }
+
+// FreshMatchNotificationDto is one row of the fresh-match notification table,
+// served by GET /api/notifications.
+type FreshMatchNotificationDto struct {
+	ID            string `json:"id"`
+	JobId         string `json:"jobId"`
+	MatchResultId string `json:"matchResultId"`
+	Fresh         bool   `json:"fresh"`
+	Seen          bool   `json:"seen"`
+	CreatedAt     string `json:"createdAt"`
+	// JobTitle and Company are populated by the list endpoint via a JOIN.
+	JobTitle   *string `json:"jobTitle,omitempty"`
+	Company    *string `json:"company,omitempty"`
+	MatchScore *int32  `json:"matchScore,omitempty"`
+}

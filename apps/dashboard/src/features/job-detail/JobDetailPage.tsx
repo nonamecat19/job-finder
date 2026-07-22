@@ -15,6 +15,7 @@ import {
 import CompanyIntelCard from './CompanyIntelCard';
 import DOMPurify from 'dompurify';
 import KeywordDiffPanel from './KeywordDiffPanel';
+import PostAgeSignal from './PostAgeSignal';
 import PrepPackPanel from './PrepPackPanel';
 
 type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
@@ -78,6 +79,8 @@ export default function JobDetailPage() {
       />
 
       {job.matchResult ? <FitSummary job={job} /> : null}
+
+      <PostAgeSignal />
 
       <CompanyIntelCard jobId={job.id} />
 

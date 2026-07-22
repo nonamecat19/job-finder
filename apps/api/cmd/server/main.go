@@ -195,11 +195,14 @@ func run() error {
 	postageSvc := postage.NewService(database.Queries)
 	postageHandler := &httpapi.PostAgeHandler{PostAge: postageSvc}
 
+	notificationSvc := notifier.NewNotificationService(database.Queries, database.Queries)
+	notificationHandler := &httpapi.NotificationHandler{Provider: notificationSvc}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
-		postageHandler.Mount,
+		postageHandler.Mount, notificationHandler.Mount,
 	)
 
 	srv := &http.Server{

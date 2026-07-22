@@ -28,6 +28,8 @@ vi.mock('./api', () => ({
     subscriptions: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), run: vi.fn() },
     applications: { list: vi.fn(), update: vi.fn() },
     stats: vi.fn(),
+    postage: { responseRate: vi.fn() },
+    notifications: { list: vi.fn(), markSeen: vi.fn(), unseenCount: vi.fn() },
   },
 }))
 
@@ -40,6 +42,16 @@ beforeEach(() => {
   vi.mocked(api.profiles.configStatus).mockResolvedValue({ hasConfig: true })
   vi.mocked(api.subscriptions.list).mockResolvedValue([])
   vi.mocked(api.applications.list).mockResolvedValue([])
+  vi.mocked(api.notifications.unseenCount).mockResolvedValue({ count: 0 })
+  vi.mocked(api.notifications.list).mockResolvedValue([])
+  vi.mocked(api.postage.responseRate).mockResolvedValue({
+    buckets: [],
+    totalApps: 0,
+    globalState: 'prior',
+    priorRate: 0.2,
+    priorLabel: 'Typical baseline',
+    thresholdMsg: null,
+  })
 })
 
 describe('App', () => {

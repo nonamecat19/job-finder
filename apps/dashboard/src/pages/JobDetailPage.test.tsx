@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../test/test-utils'
-import { mockJob, mockDocument } from '../test/factories'
+import { mockJob, mockDocument, mockPostAgeResponse } from '../test/factories'
 import { api } from '../api'
 import JobDetailPage from './JobDetailPage'
 
@@ -28,6 +28,8 @@ vi.mock('../api', () => ({
     subscriptions: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), run: vi.fn() },
     applications: { list: vi.fn(), update: vi.fn() },
     stats: vi.fn(),
+    postage: { responseRate: vi.fn() },
+    notifications: { list: vi.fn(), markSeen: vi.fn(), unseenCount: vi.fn() },
   },
 }))
 
@@ -134,6 +136,36 @@ describe('JobDetailPage', () => {
     })
     const frame = screen.getByTitle('Resume preview') as HTMLIFrameElement
     expect(frame).toHaveAttribute('src', '/api/documents/doc-42/pdf')
+  })
+
+  it('renders post-age response rate signal with observed buckets', async () => {
+    vi.mocked(api.postage.responseRate).mockResolvedValue(mockPostAgeResponse())
+    renderWithProviders(<JobDetailPage />)
+    await waitFor(() => {
+      expect(screen.getByText('Response rate by application timing')).toBeInTheDocument()
+      expect(screen.getByText('42%')).toBeInTheDocument()
+      expect(screen.getByText('25%')).toBeInTheDocument()
+    })
+  })
+
+  it('renders not enough data chip for insufficient buckets', async () => {
+    vi.mocked(api.postage.responseRate).mockResolvedValue(
+      mockPostAgeResponse({
+        buckets: [
+          { bucket: 'fresh', n: 3, responses: 0, rate: null, state: 'insufficient' },
+        ],
+        totalApps: 3,
+        globalState: 'prior',
+        priorRate: 0.2,
+        priorLabel: 'Typical baseline — not yet your data',
+        thresholdMsg: 'Need 27 more applications before showing your personal response rate.',
+      }),
+    )
+    renderWithProviders(<JobDetailPage />)
+    await waitFor(() => {
+      expect(screen.getByText('not enough data')).toBeInTheDocument()
+      expect(screen.getByText(/Need 27 more applications/)).toBeInTheDocument()
+    })
   })
 
   it('renders textarea and saves when editing a cover letter', async () => {

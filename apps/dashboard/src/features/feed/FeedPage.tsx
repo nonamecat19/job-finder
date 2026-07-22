@@ -1,4 +1,4 @@
-import { ExternalLink, EyeOff, Star, Trash2 } from 'lucide-react';
+import { Clock, ExternalLink, EyeOff, Star, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { JobDto } from '@job-finder/shared';
@@ -18,6 +18,7 @@ import {
   Surface,
 } from '../../components/ui';
 import { useClearJobs, useFeedSources, useHideJob, useJobs, useShortlistJob } from './hooks';
+import { postAgeLabel } from '../../lib/time';
 
 export default function FeedPage() {
   const [filters, setFilters] = useState<JobFilters>({ sort: 'score', page: 1 });
@@ -158,6 +159,12 @@ function JobCard({
             {job.location ? ` · ${job.location}` : ''}
             {job.remote ? ' · remote' : ''}
             {job.salaryRaw ? ` · ${job.salaryRaw}` : ''}
+            {postAgeLabel(job.postedAt) ? (
+              <span className="ml-2 inline-flex items-center gap-1 text-xs text-faint" title={job.postedAt ?? undefined}>
+                <Clock className="h-3 w-3" aria-hidden="true" />
+                {postAgeLabel(job.postedAt)}
+              </span>
+            ) : null}
           </div>
           <div className="mt-2 flex flex-wrap gap-1">
             <Chip>{job.sourceKey}</Chip>

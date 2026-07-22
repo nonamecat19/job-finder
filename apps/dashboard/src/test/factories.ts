@@ -1,11 +1,14 @@
 import type {
   ApplicationDto,
   CompanyIntelDto,
+  FreshMatchNotificationDto,
   GeneratedDocumentDto,
   JobDto,
   JobListResponse,
   JobSourceDto,
   MatchResultDto,
+  PostAgeBucketDto,
+  PostAgeResponseDto,
   ProfileDto,
   SavedSearchDto,
   SourceRunDto,
@@ -171,6 +174,49 @@ export function mockCompanyIntel(overrides: Partial<CompanyIntelDto> = {}): Comp
     headcount: '200-500',
     techStack: 'React, TypeScript, Go',
     fetchedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+export function mockPostAgeBucket(overrides: Partial<PostAgeBucketDto> = {}): PostAgeBucketDto {
+  return {
+    bucket: 'fresh',
+    n: 12,
+    responses: 5,
+    rate: 0.42,
+    state: 'observed',
+    ...overrides,
+  }
+}
+
+export function mockPostAgeResponse(overrides: Partial<PostAgeResponseDto> = {}): PostAgeResponseDto {
+  return {
+    buckets: [
+      mockPostAgeBucket({ bucket: 'fresh', n: 12, responses: 5, rate: 0.42, state: 'observed' }),
+      mockPostAgeBucket({ bucket: 'recent', n: 8, responses: 2, rate: 0.25, state: 'observed' }),
+      mockPostAgeBucket({ bucket: 'aging', n: 3, responses: 0, rate: null, state: 'insufficient' }),
+      mockPostAgeBucket({ bucket: 'stale', n: 2, responses: 0, rate: null, state: 'insufficient' }),
+    ],
+    totalApps: 25,
+    globalState: 'observed',
+    priorRate: 0.2,
+    priorLabel: 'Typical baseline — not yet your data',
+    thresholdMsg: null,
+    ...overrides,
+  }
+}
+
+export function mockFreshMatchNotification(overrides: Partial<FreshMatchNotificationDto> = {}): FreshMatchNotificationDto {
+  return {
+    id: 'notif-1',
+    jobId: 'test-job-1',
+    matchResultId: 'match-1',
+    fresh: true,
+    seen: false,
+    createdAt: new Date().toISOString(),
+    jobTitle: 'Senior React Developer',
+    company: 'Acme Corp',
+    matchScore: 85,
     ...overrides,
   }
 }

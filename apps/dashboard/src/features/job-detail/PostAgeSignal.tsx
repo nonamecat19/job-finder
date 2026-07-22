@@ -1,0 +1,58 @@
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../api';
+import { queryKeys } from '../../lib/queryKeys';
+import { Chip, Spinner, Surface } from '../../components/ui';
+
+export default function PostAgeSignal() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.postage.responseRate,
+    queryFn: api.postage.responseRate,
+    staleTime: 60000,
+  });
+
+  if (isLoading) return <Spinner label="loading response rate…" />;
+  if (error) return null;
+  if (!data) return null;
+
+  const bucketLabel: Record<string, string> = {
+    fresh: 'Applied within 2 days',
+    recent: 'Applied within 3–7 days',
+    aging: 'Applied within 8–21 days',
+    stale: 'Applied 22+ days after posting',
+    unknown: 'Posting date unknown',
+  };
+
+  return (
+    <Surface>
+      <h2 className="mb-2 font-semibold">Response rate by application timing</h2>
+      {data.globalState === 'prior' && data.thresholdMsg ? (
+        <p className="mb-3 text-sm text-muted">{data.thresholdMsg}</p>
+      ) : null}
+      <div className="space-y-2">
+        {data.buckets.map((b) => (
+          <div key={b.bucket} className="flex items-center justify-between gap-3 rounded-md bg-elevated/60 px-3 py-2 text-sm">
+            <div className="min-w-0">
+              <span className="font-medium capitalize text-fg">{b.bucket}</span>
+              <span className="ml-2 text-xs text-faint">{bucketLabel[b.bucket] ?? b.bucket}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {b.state === 'observed' && b.rate !== null ? (
+                <span className="font-semibold tabular-nums text-fg">{(b.rate * 100).toFixed(0)}%</span>
+              ) : b.state === 'insufficient' ? (
+                <Chip>not enough data</Chip>
+              ) : (
+                <span className="text-xs text-faint">—</span>
+              )}
+              <span className="text-xs text-faint">({b.n})</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {data.globalState === 'prior' ? (
+        <p className="mt-2 text-xs text-faint">
+          {data.priorLabel} — {data.priorRate * 100}% baseline
+        </p>
+      ) : null}
+    </Surface>
+  );
+}

@@ -42,4 +42,13 @@ export const queryKeys = {
     all: ['companies'] as const,
     detail: (jobId: string) => ['companies', 'detail', jobId] as const,
   },
+  postage: {
+    all: ['postage'] as const,
+    responseRate: ['postage', 'response-rate'] as const,
+  },
+  notifications: {
+    all: ['notifications'] as const,
+    list: ['notifications', 'list'] as const,
+    unseenCount: ['notifications', 'unseen-count'] as const,
+  },
 };
