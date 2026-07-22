@@ -3,6 +3,7 @@ package recruiter
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -96,6 +97,21 @@ func (f *fakeRepository) ListJobContactsByJob(ctx context.Context, jobId pgtype.
 	for _, c := range f.contacts {
 		out = append(out, c)
 	}
+	// Mirror the real ListJobContactsByJob SQL ORDER BY (confidence desc,
+	// source priority, name asc) so orchestration-level tests can assert
+	// deterministic ordering without a live DB — the SQL itself is covered
+	// by apps/api/internal/db/integration_test.go's TestJobContactOrdering.
+	sourcePriority := map[string]int{SourcePosting: 0, SourceCompanyPage: 1, SourceLinkedIn: 2}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Confidence != out[j].Confidence {
+			return out[i].Confidence > out[j].Confidence
+		}
+		pi, pj := sourcePriority[out[i].Source], sourcePriority[out[j].Source]
+		if pi != pj {
+			return pi < pj
+		}
+		return out[i].Name < out[j].Name
+	})
 	return out, nil
 }
 
@@ -248,5 +264,49 @@ func TestResolveIdempotent(t *testing.T) {
 	}
 	if len(repo.contacts) != len(first) {
 		t.Fatalf("expected no duplicate rows in the repository, got %d stored vs %d listed", len(repo.contacts), len(first))
+	}
+}
+
+// TestListOrderingDeterministic covers T025/FR-010/SC-010: contacts from
+// multiple sources sort by confidence desc with the stable
+// source-priority/name tie-break, and repeated reads of unchanged data
+// return the identical order.
+func TestListOrderingDeterministic(t *testing.T) {
+	job := testJob("n/a")
+	repo := newFakeRepository(job)
+
+	seed := []struct {
+		name, source string
+		confidence   float64
+	}{
+		{"B Person", SourceLinkedIn, 0.5},
+		{"A Person", SourcePosting, 0.5},
+		{"C Person", SourcePosting, 0.9},
+		{"D Person", SourceCompanyPage, 0.5},
+	}
+	for _, s := range seed {
+		if _, err := repo.UpsertJobContact(context.Background(), sqlcgen.UpsertJobContactParams{
+			JobId: job.ID, Name: s.name, Source: s.source, Confidence: s.confidence,
+		}); err != nil {
+			t.Fatalf("seed upsert: %v", err)
+		}
+	}
+
+	svc := NewService(repo, &fakeLLM{json: `{}`}, "", &fakeScraping{}, false)
+
+	want := []string{"C Person", "A Person", "D Person", "B Person"}
+	for read := 0; read < 3; read++ {
+		got, err := svc.ListContacts(context.Background(), dbutil.UUIDString(job.ID))
+		if err != nil {
+			t.Fatalf("ListContacts (read %d): %v", read, err)
+		}
+		if len(got) != len(want) {
+			t.Fatalf("read %d: expected %d contacts, got %d", read, len(want), len(got))
+		}
+		for i, name := range want {
+			if got[i].Name != name {
+				t.Fatalf("read %d, position %d: expected %s, got %s", read, i, name, got[i].Name)
+			}
+		}
 	}
 }
