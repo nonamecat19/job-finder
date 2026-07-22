@@ -154,3 +154,21 @@ export function useRefreshGhostScore(jobId: string | undefined) {
     onError: (err) => emitToast({ title: 'Ghost re-score failed', description: toErrorMessage(err), variant: 'error' }),
   });
 }
+
+// Post-apply outreach draft generator (012). Tones is a cheap static list;
+// the draft itself is on-demand only (a live LLM call), so it is a
+// mutation, not a query — mirroring useAssessCoach.
+export function useOutreachTones(jobId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.outreach.tones(jobId),
+    queryFn: () => api.outreach.tones(jobId!),
+    enabled: !!jobId,
+    staleTime: Infinity,
+  });
+}
+
+export function useGenerateOutreachDraft(jobId: string | undefined) {
+  return useMutation({
+    mutationFn: (body: { contactId?: string; tone?: string }) => api.outreach.generate(jobId!, body),
+  });
+}

@@ -15,6 +15,10 @@ export const queryKeys = {
     all: ['coach'] as const,
     assessment: (jobId: string | undefined) => ['coach', 'assessment', jobId] as const,
   },
+  outreach: {
+    all: ['outreach'] as const,
+    tones: (jobId: string | undefined) => ['outreach', 'tones', jobId] as const,
+  },
   sources: {
     all: ['sources'] as const,
     list: ['sources', 'list'] as const,

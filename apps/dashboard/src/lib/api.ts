@@ -15,6 +15,8 @@ import type {
   JobSignalDto,
   JobSourceDto,
   KeywordDiffResponse,
+  OutreachDraftDto,
+  OutreachToneOptionDto,
   PostAgeResponseDto,
   ProfileDto,
   ReferralContactDto,
@@ -83,6 +85,14 @@ export const api = {
     assess: (jobId: string) =>
       request<FitGapAssessment>(`/jobs/${jobId}/coach/assess`, { method: 'POST' }),
     assessment: (jobId: string) => request<FitGapAssessment>(`/jobs/${jobId}/coach/assessment`),
+  },
+  outreach: {
+    tones: (jobId: string) => request<OutreachToneOptionDto[]>(`/jobs/${jobId}/outreach/tones`),
+    generate: (jobId: string, body: { contactId?: string; tone?: string }) =>
+      request<OutreachDraftDto>(`/jobs/${jobId}/outreach/generate`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
   documents: {
     update: (id: string, text: string) =>
