@@ -1569,6 +1569,151 @@ func TestCascadeDeletes(t *testing.T) {
 	_ = sub // used above
 }
 
+// --------------- Company + CompanySignal CRUD ---------------
+
+func TestCompanyUpsertIdempotent(t *testing.T) {
+	truncateAll(t)
+	ctx := context.Background()
+
+	// First insert
+	company, err := testDB.Queries.UpsertCompany(ctx, sqlcgen.UpsertCompanyParams{
+		Name:            "Acme Corp",
+		NormalizedName:  "acme-corp",
+		Website:         strPtr("https://acme.example.com"),
+		LastRefreshedAt: dbutil.NowTimestamp(),
+	})
+	if err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+	if company.Name != "Acme Corp" {
+		t.Fatalf("expected name Acme Corp, got %s", company.Name)
+	}
+	if company.Website == nil || *company.Website != "https://acme.example.com" {
+		t.Fatal("expected website to be set")
+	}
+	if !company.FirstSeenAt.Valid {
+		t.Fatal("expected firstSeenAt to be set")
+	}
+
+	// Upsert with same normalizedName but different name — should update
+	company2, err := testDB.Queries.UpsertCompany(ctx, sqlcgen.UpsertCompanyParams{
+		Name:            "Acme Corporation",
+		NormalizedName:  "acme-corp",
+		Website:         nil,
+		LastRefreshedAt: dbutil.NowTimestamp(),
+	})
+	if err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+	if company2.ID != company.ID {
+		t.Fatal("expected same ID on upsert")
+	}
+	if company2.Name != "Acme Corporation" {
+		t.Fatalf("expected updated name Acme Corporation, got %s", company2.Name)
+	}
+	// Website should be preserved via COALESCE since we passed nil
+	if company2.Website == nil || *company2.Website != "https://acme.example.com" {
+		t.Fatal("expected website to be preserved on upsert with nil")
+	}
+}
+
+func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
+	truncateAll(t)
+	ctx := context.Background()
+
+	company, err := testDB.Queries.UpsertCompany(ctx, sqlcgen.UpsertCompanyParams{
+		Name:            "TestCo",
+		NormalizedName:  "testco",
+		Website:         nil,
+		LastRefreshedAt: dbutil.NowTimestamp(),
+	})
+	if err != nil {
+		t.Fatalf("upsert company: %v", err)
+	}
+
+	value1, _ := json.Marshal(map[string]any{"rating": 4.5})
+	raw1, _ := json.Marshal(map[string]any{"source": "glassdoor"})
+
+	// First insert
+	signal, err := testDB.Queries.UpsertCompanySignal(ctx, sqlcgen.UpsertCompanySignalParams{
+		CompanyId: company.ID,
+		Kind:      "rating",
+		Value:     value1,
+		Source:    strPtr("glassdoor"),
+		Raw:       raw1,
+	})
+	if err != nil {
+		t.Fatalf("first upsert signal: %v", err)
+	}
+	if signal.Kind != "rating" {
+		t.Fatalf("expected kind rating, got %s", signal.Kind)
+	}
+
+	// Upsert with same (companyId, kind) — should replace
+	value2, _ := json.Marshal(map[string]any{"rating": 3.8})
+	raw2, _ := json.Marshal(map[string]any{"source": "indeed"})
+
+	signal2, err := testDB.Queries.UpsertCompanySignal(ctx, sqlcgen.UpsertCompanySignalParams{
+		CompanyId: company.ID,
+		Kind:      "rating",
+		Value:     value2,
+		Source:    strPtr("indeed"),
+		Raw:       raw2,
+	})
+	if err != nil {
+		t.Fatalf("second upsert signal: %v", err)
+	}
+	if signal2.ID != signal.ID {
+		t.Fatal("expected same ID on upsert")
+	}
+
+	// Verify via GetCompanySignalByKind
+	got, err := testDB.Queries.GetCompanySignalByKind(ctx, sqlcgen.GetCompanySignalByKindParams{
+		CompanyId: company.ID,
+		Kind:      "rating",
+	})
+	if err != nil {
+		t.Fatalf("get signal by kind: %v", err)
+	}
+	var val map[string]any
+	if err := json.Unmarshal(got.Value, &val); err != nil {
+		t.Fatalf("unmarshal value: %v", err)
+	}
+	if val["rating"] != 3.8 {
+		t.Fatalf("expected rating 3.8, got %v", val["rating"])
+	}
+	if got.Source == nil || *got.Source != "indeed" {
+		t.Fatal("expected source indeed")
+	}
+
+	// GetCompanySignals should return 1 signal
+	signals, err := testDB.Queries.GetCompanySignals(ctx, company.ID)
+	if err != nil {
+		t.Fatalf("get company signals: %v", err)
+	}
+	if len(signals) != 1 {
+		t.Fatalf("expected 1 signal, got %d", len(signals))
+	}
+
+	// DeleteCompanySignals
+	deleted, err := testDB.Queries.DeleteCompanySignals(ctx, company.ID)
+	if err != nil {
+		t.Fatalf("delete signals: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected 1 deleted, got %d", deleted)
+	}
+
+	// Verify empty
+	signals, err = testDB.Queries.GetCompanySignals(ctx, company.ID)
+	if err != nil {
+		t.Fatalf("get signals after delete: %v", err)
+	}
+	if len(signals) != 0 {
+		t.Fatalf("expected 0 signals after delete, got %d", len(signals))
+	}
+}
+
 // --------------- helpers ---------------
 
 func strPtr(s string) *string { return &s }
