@@ -18,6 +18,7 @@ import ContactLine from './ContactLine';
 import DOMPurify from 'dompurify';
 import GhostSignalPanel from './GhostSignalPanel';
 import KeywordDiffPanel from './KeywordDiffPanel';
+import OutreachPanel from './OutreachPanel';
 import PostAgeSignal from './PostAgeSignal';
 import PrepPackPanel from './PrepPackPanel';
 import ReferralPathsCard from './ReferralPathsCard';
@@ -97,6 +98,8 @@ export default function JobDetailPage() {
       <KeywordDiffPanel jobId={id} />
 
       <CoachPanel jobId={id} />
+
+      <OutreachPanel jobId={id} />
 
       <PrepPackPanel jobId={id} />
 

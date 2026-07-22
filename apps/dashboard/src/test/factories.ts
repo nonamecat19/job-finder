@@ -9,6 +9,8 @@ import type {
   JobListResponse,
   JobSourceDto,
   MatchResultDto,
+  OutreachDraftDto,
+  OutreachToneOptionDto,
   PostAgeBucketDto,
   PostAgeResponseDto,
   ProfileDto,
@@ -226,6 +228,27 @@ export function mockJobContact(overrides: Partial<JobContactDto> = {}): JobConta
     fetchedAt: new Date().toISOString(),
     ...overrides,
   }
+}
+
+export function mockOutreachDraft(overrides: Partial<OutreachDraftDto> = {}): OutreachDraftDto {
+  return {
+    jobId: 'test-job-1',
+    contactId: 'contact-1',
+    contactName: 'Jane Doe',
+    tone: 'warm',
+    text: 'Hi Jane, I noticed your team uses Go and React — would love to connect!',
+    groundingTraces: [{ claim: 'Go and React', signalKind: 'tech_stack', signalValue: 'Go, React, Postgres' }],
+    generatedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+export function mockOutreachToneOptions(): OutreachToneOptionDto[] {
+  return [
+    { value: 'warm', label: 'Warm', default: true },
+    { value: 'direct', label: 'Direct', default: false },
+    { value: 'formal', label: 'Formal', default: false },
+  ]
 }
 
 export function mockPostAgeBucket(overrides: Partial<PostAgeBucketDto> = {}): PostAgeBucketDto {

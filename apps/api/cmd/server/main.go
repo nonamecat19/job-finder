@@ -36,6 +36,7 @@ import (
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"
+	"github.com/job-finder/api/internal/outreach"
 	"github.com/job-finder/api/internal/postage"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
@@ -289,6 +290,14 @@ func run() error {
 	referralSvc := referral.NewService(database.Queries, database.Queries, referral.NewGitHubCrossReferencer())
 	referralHandler := &httpapi.ReferralHandler{Referral: referralSvc}
 
+	// Post-apply outreach draft generator (012): consumes 007's resolved
+	// contacts (recruiterSvc) as the sole addressee source and 004's
+	// company-intel signals (companyIntelSvc) as the sole grounding
+	// source — it re-resolves neither, per assumptions.md. Draft-only: no
+	// send path exists anywhere in this package (Principle I).
+	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, llmProvider, cfg.ModelOr(""))
+	outreachHandler := &httpapi.OutreachHandler{Outreach: outreachSvc}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
@@ -297,6 +306,7 @@ func run() error {
 		ghostJobHandler.Mount, coachHandler.Mount,
 		extAuthHandler.Mount, extProfileHandler.Mount,
 		contactsHandler.Mount, referralHandler.Mount,
+		outreachHandler.Mount,
 	)
 
 	srv := &http.Server{

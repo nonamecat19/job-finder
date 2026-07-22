@@ -682,3 +682,40 @@ type GithubSyncResultDto struct {
 	FollowingScanned int                `json:"followingScanned"`
 	ConnectionsMade  int                `json:"connectionsMade"`
 }
+
+// ---------------------------------------------------------------------------
+// Post-apply outreach draft generator (012)
+// ---------------------------------------------------------------------------
+
+// GroundingTraceDto is one specific claim in an OutreachDraftDto mapped to
+// the company-intel signal that backs it (spec 012 FR-014) — the wire shape
+// of the Story 3 "verify before you send it" view.
+type GroundingTraceDto struct {
+	Claim       string `json:"claim"`
+	SignalKind  string `json:"signalKind"`
+	SignalValue string `json:"signalValue"`
+}
+
+// OutreachDraftDto is a generated, never-sendable outreach message served
+// by POST /api/jobs/{id}/outreach/generate (spec 012). ContactId/ContactName
+// are nil when no resolved contact exists for the job (a neutral salutation
+// was used instead — FR-007). GroundingTraces is always a non-nil (possibly
+// empty) slice: empty means the draft made no specific claim at all, which
+// is the honest fallback when no company-intel signal exists (FR-012).
+type OutreachDraftDto struct {
+	JobID           string              `json:"jobId"`
+	ContactID       *string             `json:"contactId"`
+	ContactName     *string             `json:"contactName"`
+	Tone            string              `json:"tone"`
+	Text            string              `json:"text"`
+	GroundingTraces []GroundingTraceDto `json:"groundingTraces"`
+	GeneratedAt     string              `json:"generatedAt"`
+}
+
+// OutreachToneOptionDto is one offered tone option, served by
+// GET /api/jobs/{id}/outreach/tones (FR-010, FR-011).
+type OutreachToneOptionDto struct {
+	Value   string `json:"value"`
+	Label   string `json:"label"`
+	Default bool   `json:"default"`
+}
