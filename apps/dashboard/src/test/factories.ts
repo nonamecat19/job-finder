@@ -48,6 +48,12 @@ export function mockJob(overrides: Partial<JobDto> = {}): JobDto {
     ingestedAt: '2025-01-15T12:00:00Z',
     status: 'found',
     matchResult: mockMatchResult(),
+    salaryMin: null,
+    salaryMax: null,
+    salaryCurrency: null,
+    salaryConfidence: null,
+    salarySource: null,
+    salaryBelowFloor: false,
     ...overrides,
   }
 }

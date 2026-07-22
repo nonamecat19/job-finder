@@ -40,6 +40,9 @@ export interface JobFilters {
   remote?: boolean;
   q?: string;
   page?: number;
+  // showBelowFloor reveals jobs below SALARY_FLOOR_USD (spec 006 US2); the
+  // API defaults to hiding them, so this is only sent when toggled on.
+  showBelowFloor?: boolean;
 }
 
 export const api = {
