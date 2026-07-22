@@ -66,23 +66,6 @@ type CompanySignal struct {
 	Raw       []byte           `json:"raw"`
 }
 
-type ExtBootstrapCode struct {
-	ID        pgtype.UUID      `json:"id"`
-	CodeHash  string           `json:"codeHash"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	ExpiresAt pgtype.Timestamp `json:"expiresAt"`
-	UsedAt    pgtype.Timestamp `json:"usedAt"`
-}
-
-type ExtRefreshToken struct {
-	ID          pgtype.UUID      `json:"id"`
-	TokenHash   string           `json:"tokenHash"`
-	CreatedAt   pgtype.Timestamp `json:"createdAt"`
-	ExpiresAt   pgtype.Timestamp `json:"expiresAt"`
-	RevokedAt   pgtype.Timestamp `json:"revokedAt"`
-	RotatedToId pgtype.UUID      `json:"rotatedToId"`
-}
-
 type Contact struct {
 	ID             pgtype.UUID      `json:"id"`
 	Name           string           `json:"name"`
@@ -102,6 +85,23 @@ type ContactConnection struct {
 	RelationshipType string           `json:"relationshipType"`
 	Strength         float32          `json:"strength"`
 	CreatedAt        pgtype.Timestamp `json:"createdAt"`
+}
+
+type ExtBootstrapCode struct {
+	ID        pgtype.UUID      `json:"id"`
+	CodeHash  string           `json:"codeHash"`
+	CreatedAt pgtype.Timestamp `json:"createdAt"`
+	ExpiresAt pgtype.Timestamp `json:"expiresAt"`
+	UsedAt    pgtype.Timestamp `json:"usedAt"`
+}
+
+type ExtRefreshToken struct {
+	ID          pgtype.UUID      `json:"id"`
+	TokenHash   string           `json:"tokenHash"`
+	CreatedAt   pgtype.Timestamp `json:"createdAt"`
+	ExpiresAt   pgtype.Timestamp `json:"expiresAt"`
+	RevokedAt   pgtype.Timestamp `json:"revokedAt"`
+	RotatedToId pgtype.UUID      `json:"rotatedToId"`
 }
 
 type FreshMatchNotification struct {
