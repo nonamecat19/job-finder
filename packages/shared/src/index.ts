@@ -432,3 +432,40 @@ export interface FreshMatchNotificationDto {
   company?: string | null;
   matchScore?: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// Referral path finder (011)
+// ---------------------------------------------------------------------------
+
+/** One hop in a warm-path chain — a contact imported from CSV or discovered via GitHub cross-reference. */
+export interface ReferralContactDto {
+  id: string;
+  name: string;
+  email?: string | null;
+  company?: string | null;
+  role?: string | null;
+  linkedInUrl?: string | null;
+  gitHubUsername?: string | null;
+}
+
+/** One ranked warm path from the user to a contact at the job's company. */
+export interface ReferralPathDto {
+  path: ReferralContactDto[];
+  score: number;
+  length: number;
+}
+
+/** Outcome of a contacts CSV import (POST /api/contacts/import). */
+export interface ContactImportResultDto {
+  imported: number;
+  skipped: number;
+  total: number;
+}
+
+/** Outcome of cross-referencing one contact's GitHub followers/following (POST /api/contacts/{id}/github-sync). */
+export interface GithubSyncResultDto {
+  contact: ReferralContactDto;
+  followersScanned: number;
+  followingScanned: number;
+  connectionsMade: number;
+}

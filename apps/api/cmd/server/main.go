@@ -33,6 +33,7 @@ import (
 	"github.com/job-finder/api/internal/postage"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/api/internal/referral"
 	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/job-finder/api/internal/storage"
@@ -198,11 +199,14 @@ func run() error {
 	notificationSvc := notifier.NewNotificationService(database.Queries, database.Queries)
 	notificationHandler := &httpapi.NotificationHandler{Provider: notificationSvc}
 
+	referralSvc := referral.NewService(database.Queries, database.Queries, referral.NewGitHubCrossReferencer())
+	referralHandler := &httpapi.ReferralHandler{Referral: referralSvc}
+
 	router := httpapi.NewRouter(
 		sourcesHandler.Mount, searchesHandler.Mount, documentsHandler.Mount,
 		profilesHandler.Mount, jobsHandler.Mount, applicationsHandler.Mount,
 		subsHandler.Mount, activityHandler.Mount, keywordHandler.Mount,
-		postageHandler.Mount, notificationHandler.Mount,
+		postageHandler.Mount, notificationHandler.Mount, referralHandler.Mount,
 	)
 
 	srv := &http.Server{

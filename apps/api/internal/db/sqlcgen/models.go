@@ -66,6 +66,27 @@ type CompanySignal struct {
 	Raw       []byte           `json:"raw"`
 }
 
+type Contact struct {
+	ID             pgtype.UUID      `json:"id"`
+	Name           string           `json:"name"`
+	Email          *string          `json:"email"`
+	Company        *string          `json:"company"`
+	Role           *string          `json:"role"`
+	LinkedinUrl    *string          `json:"linkedinUrl"`
+	GithubUsername *string          `json:"githubUsername"`
+	Source         string           `json:"source"`
+	CreatedAt      pgtype.Timestamp `json:"createdAt"`
+}
+
+type ContactConnection struct {
+	ID               pgtype.UUID      `json:"id"`
+	FromContactId    pgtype.UUID      `json:"fromContactId"`
+	ToContactId      pgtype.UUID      `json:"toContactId"`
+	RelationshipType string           `json:"relationshipType"`
+	Strength         float32          `json:"strength"`
+	CreatedAt        pgtype.Timestamp `json:"createdAt"`
+}
+
 type FreshMatchNotification struct {
 	ID            pgtype.UUID      `json:"id"`
 	JobId         pgtype.UUID      `json:"jobId"`

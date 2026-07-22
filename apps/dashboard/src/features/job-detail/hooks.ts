@@ -74,6 +74,15 @@ export function useSaveDocument(jobId: string | undefined, onSaved: () => void) 
   });
 }
 
+export function useReferralPaths(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.jobs.referralPaths(id),
+    queryFn: () => api.jobs.referralPaths(id!),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
 export function useCompanyIntel(jobId: string) {
   return useQuery({
     queryKey: queryKeys.companies.detail(jobId),

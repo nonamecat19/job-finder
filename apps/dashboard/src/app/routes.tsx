@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { RequireProfileConfig } from './RequireProfileConfig';
+import ContactsPage from '../features/contacts/ContactsPage';
 import FeedPage from '../features/feed/FeedPage';
 import JobDetailPage from '../features/job-detail/JobDetailPage';
 import ProfilePage from '../features/profile/ProfilePage';
@@ -28,6 +29,7 @@ export function AppRoutes() {
         }
       />
       <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/contacts" element={<ContactsPage />} />
       <Route path="/tailor" element={<TailorPage />} />
       <Route path="/sources" element={<SourcesPage />} />
       <Route path="/status" element={<StatusPage />} />

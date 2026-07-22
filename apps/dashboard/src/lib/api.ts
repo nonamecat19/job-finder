@@ -2,9 +2,11 @@ import type {
   ActivityListResponse,
   ApplicationDto,
   CompanyIntelDto,
+  ContactImportResultDto,
   DocumentType,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
+  GithubSyncResultDto,
   InterviewPrepPack,
   JobDto,
   JobListResponse,
@@ -12,6 +14,8 @@ import type {
   KeywordDiffResponse,
   PostAgeResponseDto,
   ProfileDto,
+  ReferralContactDto,
+  ReferralPathDto,
   SavedSearchDto,
   SearchQuery,
   SourceRunDto,
@@ -63,6 +67,7 @@ export const api = {
     documents: (id: string) => request<GeneratedDocumentDto[]>(`/jobs/${id}/documents`),
     keywordDiff: (id: string) => request<KeywordDiffResponse>(`/jobs/${id}/keyword-diff`),
     interviewPrep: (id: string) => request<InterviewPrepPack>(`/jobs/${id}/interview-prep`),
+    referralPaths: (id: string) => request<ReferralPathDto[]>(`/jobs/${id}/referral-paths`),
   },
   documents: {
     update: (id: string, text: string) =>
@@ -154,5 +159,15 @@ export const api = {
     list: () => request<FreshMatchNotificationDto[]>('/notifications'),
     markSeen: (id: string) => request<void>(`/notifications/${id}/seen`, { method: 'POST' }),
     unseenCount: () => request<{ count: number }>('/notifications/unseen-count'),
+  },
+  contacts: {
+    list: () => request<ReferralContactDto[]>('/contacts'),
+    import: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return request<ContactImportResultDto>('/contacts/import', { method: 'POST', body: fd });
+    },
+    githubSync: (contactId: string) =>
+      request<GithubSyncResultDto>(`/contacts/${contactId}/github-sync`, { method: 'POST' }),
   },
 };

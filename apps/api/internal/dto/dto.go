@@ -482,3 +482,41 @@ type FreshMatchNotificationDto struct {
 	Company    *string `json:"company,omitempty"`
 	MatchScore *int32  `json:"matchScore,omitempty"`
 }
+
+// ReferralContactDto is one hop in a warm-path chain — a contact imported
+// from CSV or discovered via GitHub cross-reference.
+type ReferralContactDto struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Email          *string `json:"email,omitempty"`
+	Company        *string `json:"company,omitempty"`
+	Role           *string `json:"role,omitempty"`
+	LinkedInUrl    *string `json:"linkedInUrl,omitempty"`
+	GitHubUsername *string `json:"gitHubUsername,omitempty"`
+}
+
+// ReferralPathDto is one ranked warm path from the user to a contact at the
+// job's company, served by GET /api/jobs/{id}/referral-paths.
+type ReferralPathDto struct {
+	Path   []ReferralContactDto `json:"path"`
+	Score  float64              `json:"score"`
+	Length int                  `json:"length"`
+}
+
+// ContactImportResultDto reports the outcome of a contacts CSV import,
+// served by POST /api/contacts/import.
+type ContactImportResultDto struct {
+	Imported int `json:"imported"`
+	Skipped  int `json:"skipped"`
+	Total    int `json:"total"`
+}
+
+// GithubSyncResultDto reports the outcome of cross-referencing one contact's
+// GitHub followers/following against the existing contact book, served by
+// POST /api/contacts/{id}/github-sync.
+type GithubSyncResultDto struct {
+	Contact          ReferralContactDto `json:"contact"`
+	FollowersScanned int                `json:"followersScanned"`
+	FollowingScanned int                `json:"followingScanned"`
+	ConnectionsMade  int                `json:"connectionsMade"`
+}

@@ -17,6 +17,7 @@ import DOMPurify from 'dompurify';
 import KeywordDiffPanel from './KeywordDiffPanel';
 import PostAgeSignal from './PostAgeSignal';
 import PrepPackPanel from './PrepPackPanel';
+import ReferralPathsCard from './ReferralPathsCard';
 
 type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
 
@@ -83,6 +84,8 @@ export default function JobDetailPage() {
       <PostAgeSignal />
 
       <CompanyIntelCard jobId={job.id} />
+
+      <ReferralPathsCard jobId={id} />
 
       <KeywordDiffPanel jobId={id} />
 
