@@ -1,8 +1,8 @@
-// Package ingestion ports modules/ingestion/*: SavedSearch CRUD, RunSearch
-// (enqueue one ingest task per search × enabled source), the asynq ingest
-// task handler (adapter.Search -> dedupe -> persist -> enqueue match), and
-// the due-since-lastRunAt scheduler.
-package ingestion
+// SearchService ports modules/ingestion/*'s SavedSearch CRUD and RunSearch
+// (enqueue one ingest task per search × enabled source) use-cases. The asynq
+// ingest task handler and the due-since-lastRunAt scheduler that trigger it
+// live in interfaces/worker.
+package application
 
 import (
 	"context"
@@ -15,27 +15,26 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/queue"
 )
 
-type Service struct {
-	q        Repository
+type SearchService struct {
+	q        domain.SearchRepository
 	registry *domain.Registry
-	sources  *application.Service
+	sources  *Service
 	client   Enqueuer
 }
 
-func NewService(q Repository, registry *domain.Registry, sources *application.Service, client Enqueuer) *Service {
-	return &Service{q: q, registry: registry, sources: sources, client: client}
+func NewSearchService(q domain.SearchRepository, registry *domain.Registry, sources *Service, client Enqueuer) *SearchService {
+	return &SearchService{q: q, registry: registry, sources: sources, client: client}
 }
 
 // ---------------------------------------------------------------------------
 // SavedSearch CRUD (searches.controller.ts)
 // ---------------------------------------------------------------------------
 
-func (s *Service) ListSearches(ctx context.Context) ([]dto.SavedSearchDto, error) {
+func (s *SearchService) ListSearches(ctx context.Context) ([]dto.SavedSearchDto, error) {
 	rows, err := s.q.ListSavedSearches(ctx)
 	if err != nil {
 		return nil, err
@@ -47,7 +46,7 @@ func (s *Service) ListSearches(ctx context.Context) ([]dto.SavedSearchDto, error
 	return out, nil
 }
 
-func (s *Service) CreateSearch(ctx context.Context, name string, query dto.SearchQuery, cron string, enabled bool) (*dto.SavedSearchDto, error) {
+func (s *SearchService) CreateSearch(ctx context.Context, name string, query dto.SearchQuery, cron string, enabled bool) (*dto.SavedSearchDto, error) {
 	if name == "" || query.Keywords == "" {
 		return nil, fmt.Errorf("name and query.keywords are required")
 	}
@@ -78,7 +77,7 @@ type UpdateSearchInput struct {
 	Enabled *bool
 }
 
-func (s *Service) UpdateSearch(ctx context.Context, id string, in UpdateSearchInput) (*dto.SavedSearchDto, error) {
+func (s *SearchService) UpdateSearch(ctx context.Context, id string, in UpdateSearchInput) (*dto.SavedSearchDto, error) {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
 		return nil, err
@@ -108,7 +107,7 @@ func (s *Service) UpdateSearch(ctx context.Context, id string, in UpdateSearchIn
 	return &dtoRow, nil
 }
 
-func (s *Service) DeleteSearch(ctx context.Context, id string) error {
+func (s *SearchService) DeleteSearch(ctx context.Context, id string) error {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
 		return err
@@ -116,7 +115,7 @@ func (s *Service) DeleteSearch(ctx context.Context, id string) error {
 	return s.q.DeleteSavedSearch(ctx, uid)
 }
 
-func (s *Service) RecentRuns(ctx context.Context, limit int32) ([]dto.SourceRunDto, error) {
+func (s *SearchService) RecentRuns(ctx context.Context, limit int32) ([]dto.SourceRunDto, error) {
 	rows, err := s.q.RecentRunsJoined(ctx, limit)
 	if err != nil {
 		return nil, err
@@ -155,7 +154,7 @@ func savedSearchDto(r sqlcgen.SavedSearch) dto.SavedSearchDto {
 // RunSearch: enqueue one ingest task per (search × enabled source)
 // ---------------------------------------------------------------------------
 
-func (s *Service) RunSearch(ctx context.Context, searchID string) ([]string, error) {
+func (s *SearchService) RunSearch(ctx context.Context, searchID string) ([]string, error) {
 	uid, err := dbutil.ParseUUID(searchID)
 	if err != nil {
 		return nil, err
@@ -227,7 +226,7 @@ func (s *Service) RunSearch(ctx context.Context, searchID string) ([]string, err
 // RunSource enqueues an ingest task that scrapes a source with no saved search
 // or subscription — a direct "run this source" trigger. Mirrors the planned
 // POST /api/sources/{key}/run endpoint from plan/02-djinni-subscriptions.md.
-func (s *Service) RunSource(ctx context.Context, sourceKey string) error {
+func (s *SearchService) RunSource(ctx context.Context, sourceKey string) error {
 	source, err := s.sources.GetByKey(ctx, sourceKey)
 	if err != nil {
 		return err
@@ -261,7 +260,7 @@ func (s *Service) RunSource(ctx context.Context, sourceKey string) error {
 // RunSubscription enqueues an ingest task that scrapes a single subscription
 // URL through its source's adapter (SubscriptionURL in the query, instead of
 // keywords). lastRunAt is touched by the ingest handler once the run finishes.
-func (s *Service) RunSubscription(ctx context.Context, subscriptionID string) error {
+func (s *SearchService) RunSubscription(ctx context.Context, subscriptionID string) error {
 	uid, err := dbutil.ParseUUID(subscriptionID)
 	if err != nil {
 		return err
@@ -306,7 +305,7 @@ func (s *Service) RunSubscription(ctx context.Context, subscriptionID string) er
 
 // RunAllSubscriptions enqueues an ingest task for every enabled subscription,
 // skipping subscriptions whose source is disabled. Returns the number queued.
-func (s *Service) RunAllSubscriptions(ctx context.Context) (int, error) {
+func (s *SearchService) RunAllSubscriptions(ctx context.Context) (int, error) {
 	subs, err := s.q.ListSubscriptions(ctx)
 	if err != nil {
 		return 0, err

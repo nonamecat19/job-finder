@@ -17,11 +17,11 @@ import (
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/httpapi"
-	"github.com/job-finder/api/internal/ingestion"
 	"github.com/job-finder/api/internal/jobs"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
+	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/keyword"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/llmsettings"
@@ -64,14 +64,14 @@ type App struct {
 	AutoGenerate *httpapi.AutoGenerateHandler
 
 	// Worker handlers (each exposes ProcessTask).
-	Ingestion  *ingestion.Handler
+	Ingestion  *worker.Handler
 	Matching   *matching.Handler
 	Generation *generation.Handler
 	Enrichment *enrichment.Handler
 	Salary     *salary.Handler
 	Ghost      *ghostjob.Handler
 
-	Scheduler *ingestion.Scheduler
+	Scheduler *worker.Scheduler
 }
 
 type sourcesHandles struct {
@@ -112,17 +112,17 @@ func composeJobSources(p *Platform) *sourcesHandles {
 }
 
 type ingestionHandles struct {
-	Ingestion *ingestion.Service
-	Handler   *ingestion.Handler
-	Scheduler *ingestion.Scheduler
+	Ingestion *application.SearchService
+	Handler   *worker.Handler
+	Scheduler *worker.Scheduler
 	Sources   *httpapi.SourcesHandler
 	Searches  *httpapi.SearchesHandler
 }
 
 func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
-	ingestionSvc := ingestion.NewService(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient)
-	ingestionHandler := ingestion.NewHandler(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient)
-	scheduler := ingestion.NewScheduler(p.DB.Queries, ingestionSvc)
+	ingestionSvc := application.NewSearchService(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient)
+	ingestionHandler := worker.NewHandler(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient)
+	scheduler := worker.NewScheduler(p.DB.Queries, ingestionSvc)
 	return &ingestionHandles{
 		Ingestion: ingestionSvc,
 		Handler:   ingestionHandler,
@@ -284,7 +284,7 @@ func composeApplications(p *Platform) *httpapi.ApplicationsHandler {
 	return &httpapi.ApplicationsHandler{Applications: applicationsSvc}
 }
 
-func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestionSvc *ingestion.Service) *httpapi.SubscriptionsHandler {
+func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestionSvc *application.SearchService) *httpapi.SubscriptionsHandler {
 	subsSvc := subscriptions.NewService(p.DB.Queries, sourcesSvc)
 	return &httpapi.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
 }

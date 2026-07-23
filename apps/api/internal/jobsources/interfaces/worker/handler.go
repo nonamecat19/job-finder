@@ -1,4 +1,8 @@
-package ingestion
+// Package worker holds the jobsources bounded context's inbound worker
+// adapters: the asynq ingest task handler (adapter.Search -> dedupe ->
+// persist -> enqueue match) and the due-since-lastRunAt cron Scheduler that
+// triggers it. Mirrors ingestion.processor.ts / ingestion.scheduler.ts.
+package worker
 
 import (
 	"context"
@@ -25,13 +29,13 @@ const unhealthyAfterConsecutiveFailures = 3
 // Handler processes "ingest" asynq tasks: adapter.Search -> dedupe -> persist
 // -> enqueue match. Mirrors ingestion.processor.ts.
 type Handler struct {
-	q        Repository
+	q        domain.SearchRepository
 	registry *domain.Registry
 	sources  *application.Service
-	client   Enqueuer
+	client   application.Enqueuer
 }
 
-func NewHandler(q Repository, registry *domain.Registry, sources *application.Service, client Enqueuer) *Handler {
+func NewHandler(q domain.SearchRepository, registry *domain.Registry, sources *application.Service, client application.Enqueuer) *Handler {
 	return &Handler{q: q, registry: registry, sources: sources, client: client}
 }
 

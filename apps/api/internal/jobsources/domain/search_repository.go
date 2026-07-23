@@ -1,20 +1,21 @@
-package ingestion
+package domain
 
 import (
 	"context"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// Repository is the outbound persistence port for the ingestion use-cases
-// (Service, Handler, Scheduler). *sqlcgen.Queries satisfies it structurally.
-// It embeds activity.Store because the handler starts/resumes an activity
-// record from the same value (activity.New, activity.FromID).
-type Repository interface {
+// SearchRepository is the outbound persistence port for the SavedSearch/
+// SourceRun/Job ingestion use-cases (application.SearchService, the
+// interfaces/worker Handler and Scheduler). *sqlcgen.Queries satisfies it
+// structurally. It embeds activity.Store because the worker handler
+// starts/resumes an activity record from the same value (activity.New,
+// activity.FromID).
+type SearchRepository interface {
 	activity.Store
 
 	CreateSavedSearch(ctx context.Context, arg sqlcgen.CreateSavedSearchParams) (sqlcgen.SavedSearch, error)
@@ -37,9 +38,4 @@ type Repository interface {
 	TouchSavedSearchLastRun(ctx context.Context, id pgtype.UUID) error
 	TouchSubscriptionLastRun(ctx context.Context, id pgtype.UUID) error
 	UpdateSavedSearch(ctx context.Context, arg sqlcgen.UpdateSavedSearchParams) (sqlcgen.SavedSearch, error)
-}
-
-// Enqueuer is the outbound task-queue port. *asynq.Client satisfies it.
-type Enqueuer interface {
-	EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error)
 }
