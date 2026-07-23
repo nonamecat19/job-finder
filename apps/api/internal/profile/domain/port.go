@@ -1,4 +1,4 @@
-package profile
+package domain
 
 import (
 	"context"

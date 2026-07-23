@@ -1,4 +1,4 @@
-package profile
+package application
 
 import (
 	"context"
@@ -6,19 +6,8 @@ import (
 	"strings"
 
 	"github.com/job-finder/api/internal/generation"
+	"github.com/job-finder/api/internal/profile/domain"
 )
-
-// Entry pairs one resume bullet with its source label (position, company,
-// and employment dates). It is the grounding unit the 009 fit-gap coach
-// matches adjacent evidence against: every claim it shows the user must
-// trace back to one of these, verbatim.
-type Entry struct {
-	// SourceLabel is the human-readable entry header, e.g.
-	// "Senior Backend Engineer, CloudScale (2022–2024)".
-	SourceLabel string
-	// Bullet is the verbatim resume highlight text.
-	Bullet string
-}
 
 // ProfileEntries returns the default profile's existing resume bullets,
 // verbatim, each paired with its source label. It mirrors ProfileBullets
@@ -27,7 +16,7 @@ type Entry struct {
 // (009) needs the label to ground seniority and duration claims in its
 // rephrase suggestions. A missing or unparseable config yields an empty
 // slice (nil error), matching ProfileBullets' degrade-gracefully behavior.
-func (s *Service) ProfileEntries(ctx context.Context) ([]Entry, error) {
+func (s *Service) ProfileEntries(ctx context.Context) ([]domain.Entry, error) {
 	p, err := s.GetDefault(ctx)
 	if err != nil {
 		// No profile yet is not an error — there is simply nothing to cite.
@@ -52,12 +41,12 @@ func (s *Service) ProfileEntries(ctx context.Context) ([]Entry, error) {
 		return nil, nil
 	}
 
-	var entries []Entry
+	var entries []domain.Entry
 	for _, e := range generation.AsSliceOfMaps(expRaw) {
 		label := experienceLabel(e)
 		for _, h := range generation.StringSliceField(e, "highlights") {
 			if h = strings.TrimSpace(h); h != "" {
-				entries = append(entries, Entry{SourceLabel: label, Bullet: h})
+				entries = append(entries, domain.Entry{SourceLabel: label, Bullet: h})
 			}
 		}
 	}

@@ -1,4 +1,4 @@
-package profile
+package application
 
 import (
 	"context"
@@ -15,16 +15,17 @@ import (
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/profile/domain"
 )
 
 type Service struct {
-	q           Repository
+	q           domain.Repository
 	llmc        llm.Provider
 	embedModel  string
 	rendercvBin string
 }
 
-func NewService(q Repository, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
+func NewService(q domain.Repository, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
 	if embedModel == "" {
 		embedModel = "nomic-embed-text"
 	}
