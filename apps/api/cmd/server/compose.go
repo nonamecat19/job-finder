@@ -32,7 +32,7 @@ import (
 	"github.com/job-finder/api/internal/recruiter"
 	"github.com/job-finder/api/internal/referral"
 	"github.com/job-finder/api/internal/salary"
-	"github.com/job-finder/api/internal/storage"
+	"github.com/job-finder/api/internal/platform/storage"
 	"github.com/job-finder/api/internal/subscriptions"
 )
 

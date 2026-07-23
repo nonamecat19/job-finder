@@ -12,7 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/job-finder/api/internal/storage"
+	"github.com/job-finder/api/internal/platform/storage"
 )
 
 // RenderCvRenderer renders a (tailored) RenderCV master object to PDF by
