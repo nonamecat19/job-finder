@@ -32,7 +32,8 @@ import (
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/recruiter"
 	"github.com/job-finder/api/internal/referral"
-	"github.com/job-finder/api/internal/salary"
+	salaryapp "github.com/job-finder/api/internal/salary/application"
+	salaryworker "github.com/job-finder/api/internal/salary/interfaces/worker"
 	"github.com/job-finder/api/internal/storage"
 	"github.com/job-finder/api/internal/subscriptions"
 )
@@ -68,7 +69,7 @@ type App struct {
 	Matching   *matchingworker.Handler
 	Generation *generation.Handler
 	Enrichment *enrichment.Handler
-	Salary     *salary.Handler
+	Salary     *salaryworker.Handler
 	Ghost      *ghostjob.Handler
 
 	Scheduler *ingestion.Scheduler
@@ -301,16 +302,16 @@ func composeEnrichment(p *Platform, sources *sourcesHandles) *enrichment.Handler
 }
 
 type salaryHandles struct {
-	Worker       *salary.Handler
-	LevelsLoader *salary.LevelsFyiLoader
+	Worker       *salaryworker.Handler
+	LevelsLoader *salaryapp.LevelsFyiLoader
 }
 
 // composeSalary builds the salary inference worker and loads the levels.fyi
 // CSV when configured (a warn-only side effect, unchanged from the original).
 func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) *salaryHandles {
 	cfg := p.Config
-	levelsFyiLoader := salary.NewLevelsFyiLoader(p.DB.Queries)
-	salaryService := salary.NewService(p.DB.Queries, defaultRouter, levelsFyiLoader, "")
+	levelsFyiLoader := salaryapp.NewLevelsFyiLoader(p.DB.Queries)
+	salaryService := salaryapp.NewService(p.DB.Queries, defaultRouter, levelsFyiLoader, "")
 
 	if cfg.LevelsFyiCSV != "" {
 		if _, err := levelsFyiLoader.LoadCSV(ctx, cfg.LevelsFyiCSV); err != nil {
@@ -321,7 +322,7 @@ func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) 
 	}
 
 	return &salaryHandles{
-		Worker:       salary.NewHandler(salaryService, p.DB.Queries),
+		Worker:       salaryworker.NewHandler(salaryService, p.DB.Queries),
 		LevelsLoader: levelsFyiLoader,
 	}
 }

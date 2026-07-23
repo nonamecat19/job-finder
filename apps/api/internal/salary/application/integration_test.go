@@ -1,6 +1,6 @@
 //go:build integration
 
-package salary_test
+package application_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/salary"
+	"github.com/job-finder/api/internal/salary/domain"
 )
 
 func TestIntegration_SalaryCacheUpsert(t *testing.T) {
@@ -33,12 +33,12 @@ func TestIntegration_SalaryCacheUpsert(t *testing.T) {
 	q := database.Queries
 
 	bucket := "test-title|test-location|unknown"
-	band := salary.SalaryBand{
+	band := domain.SalaryBand{
 		Min:        100000,
 		Max:        150000,
 		Currency:   "USD",
 		Confidence: 0.5,
-		Source:     salary.SourceIngestedCache,
+		Source:     domain.SourceIngestedCache,
 	}
 
 	err = q.UpsertSalaryCache(ctx, sqlcgen.UpsertSalaryCacheParams{
@@ -63,7 +63,7 @@ func TestIntegration_SalaryCacheUpsert(t *testing.T) {
 	if rows[0].Currency != "USD" {
 		t.Errorf("expected USD, got %s", rows[0].Currency)
 	}
-	if rows[0].Source != string(salary.SourceIngestedCache) {
+	if rows[0].Source != string(domain.SourceIngestedCache) {
 		t.Errorf("expected ingested-cache, got %s", rows[0].Source)
 	}
 
@@ -72,7 +72,7 @@ func TestIntegration_SalaryCacheUpsert(t *testing.T) {
 		SalaryMin:  int32Ptr(110000),
 		SalaryMax:  int32Ptr(160000),
 		Currency:   "USD",
-		Source:     string(salary.SourceIngestedCache),
+		Source:     string(domain.SourceIngestedCache),
 		SampleSize: 1,
 	})
 	if err != nil {
@@ -130,7 +130,7 @@ func TestIntegration_JobSalaryPersistence(t *testing.T) {
 		SalaryMax:        int32Ptr(120000),
 		SalaryCurrency:   strPtr("USD"),
 		SalaryConfidence: float64Ptr(0.5),
-		SalarySource:     strPtr(string(salary.SourceIngestedCache)),
+		SalarySource:     strPtr(string(domain.SourceIngestedCache)),
 	})
 	if err != nil {
 		t.Fatalf("update salary: %v", err)
@@ -149,7 +149,7 @@ func TestIntegration_JobSalaryPersistence(t *testing.T) {
 	if updated.SalaryCurrency == nil || *updated.SalaryCurrency != "USD" {
 		t.Errorf("expected USD, got %v", updated.SalaryCurrency)
 	}
-	if updated.SalarySource == nil || *updated.SalarySource != string(salary.SourceIngestedCache) {
+	if updated.SalarySource == nil || *updated.SalarySource != string(domain.SourceIngestedCache) {
 		t.Errorf("expected ingested-cache, got %v", updated.SalarySource)
 	}
 }

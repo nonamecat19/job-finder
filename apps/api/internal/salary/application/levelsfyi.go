@@ -1,4 +1,4 @@
-package salary
+package application
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/salary/domain"
 )
 
 type LevelsFyiLoader struct {
@@ -21,7 +22,7 @@ func NewLevelsFyiLoader(q *sqlcgen.Queries) *LevelsFyiLoader {
 	return &LevelsFyiLoader{q: q}
 }
 
-func (l *LevelsFyiLoader) LoadCSV(ctx context.Context, csvPath string) ([]SalaryBand, error) {
+func (l *LevelsFyiLoader) LoadCSV(ctx context.Context, csvPath string) ([]domain.SalaryBand, error) {
 	if csvPath == "" {
 		return nil, nil
 	}
@@ -43,7 +44,7 @@ func (l *LevelsFyiLoader) LoadCSV(ctx context.Context, csvPath string) ([]Salary
 
 	colIdx := columnIndex(header)
 
-	var bands []SalaryBand
+	var bands []domain.SalaryBand
 	rowCount := 0
 
 	for {
@@ -112,28 +113,28 @@ func columnIndex(header []string) csvColumns {
 	return c
 }
 
-func rowToBand(record []string, col csvColumns) (SalaryBand, bool) {
+func rowToBand(record []string, col csvColumns) (domain.SalaryBand, bool) {
 	if col.totalComp < 0 || col.totalComp >= len(record) {
-		return SalaryBand{}, false
+		return domain.SalaryBand{}, false
 	}
 
 	totalComp, err := strconv.ParseFloat(strings.TrimSpace(record[col.totalComp]), 64)
 	if err != nil || totalComp <= 0 {
-		return SalaryBand{}, false
+		return domain.SalaryBand{}, false
 	}
 
 	comp := int(totalComp)
 
-	return SalaryBand{
+	return domain.SalaryBand{
 		Min:        comp,
 		Max:        comp,
 		Currency:   "USD",
 		Confidence: 0.6,
-		Source:     SourceLevelsFyi,
+		Source:     domain.SourceLevelsFyi,
 	}, true
 }
 
-func (l *LevelsFyiLoader) upsertBands(ctx context.Context, bands []SalaryBand) error {
+func (l *LevelsFyiLoader) upsertBands(ctx context.Context, bands []domain.SalaryBand) error {
 	for _, b := range bands {
 		if err := l.q.UpsertSalaryCache(ctx, sqlcgen.UpsertSalaryCacheParams{
 			Bucket:     "",

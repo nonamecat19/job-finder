@@ -1,6 +1,6 @@
 //go:build live
 
-package salary_test
+package application_test
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/salary"
+	"github.com/job-finder/api/internal/salary/application"
 )
 
 func TestLive_InferOneJob(t *testing.T) {
@@ -38,14 +38,14 @@ func TestLive_InferOneJob(t *testing.T) {
 		t.Fatalf("llm new: %v", err)
 	}
 
-	levelsFyi := salary.NewLevelsFyiLoader(database.Queries)
+	levelsFyi := application.NewLevelsFyiLoader(database.Queries)
 	if cfg.LevelsFyiCSV != "" {
 		if _, err := levelsFyi.LoadCSV(ctx, cfg.LevelsFyiCSV); err != nil {
 			t.Logf("levels.fyi load warning: %v", err)
 		}
 	}
 
-	svc := salary.NewService(database.Queries, llmProvider, levelsFyi, cfg.ModelOr(""))
+	svc := application.NewService(database.Queries, llmProvider, levelsFyi, cfg.ModelOr(""))
 
 	jobs, err := database.Queries.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{Limit: 1})
 	if err != nil || len(jobs) == 0 {

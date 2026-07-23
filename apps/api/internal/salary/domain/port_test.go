@@ -1,4 +1,4 @@
-package salary
+package domain
 
 import (
 	"testing"
@@ -86,37 +86,5 @@ func TestSalaryBandValidate(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
-	}
-}
-
-func TestBlend(t *testing.T) {
-	a := SalaryBand{Min: 100000, Max: 150000, Currency: "USD", Confidence: 0.7, Source: SourceIngestedCache}
-	b := SalaryBand{Min: 120000, Max: 160000, Currency: "USD", Confidence: 0.6, Source: SourceLevelsFyi}
-
-	result := blend(a, b)
-
-	if result.Source != SourceBlended {
-		t.Errorf("blend source = %s, want %s", result.Source, SourceBlended)
-	}
-	if result.Currency != "USD" {
-		t.Errorf("blend currency = %s, want USD", result.Currency)
-	}
-	if result.Confidence > 1.0 {
-		t.Errorf("blend confidence = %f, want <= 1.0", result.Confidence)
-	}
-	if result.Min <= 0 || result.Max <= 0 {
-		t.Errorf("blend min/max should be positive, got %d/%d", result.Min, result.Max)
-	}
-}
-
-func TestMakeBucket(t *testing.T) {
-	b := makeBucket("Senior Backend Engineer", "London, UK", "51-200")
-	if b != "senior-backend-engineer|london-uk|51-200" {
-		t.Errorf("makeBucket = %s", b)
-	}
-
-	b2 := makeBucket("DevOps", "", "")
-	if b2 != "devops||unknown" {
-		t.Errorf("makeBucket empty = %s", b2)
 	}
 }

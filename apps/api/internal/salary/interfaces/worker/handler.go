@@ -1,4 +1,6 @@
-package salary
+// Package worker holds the salary bounded context's inbound worker adapter:
+// the asynq "salary_infer" task handler.
+package worker
 
 import (
 	"context"
@@ -12,14 +14,15 @@ import (
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/api/internal/salary/application"
 )
 
 type Handler struct {
-	svc   *Service
+	svc   *application.Service
 	store activity.Store
 }
 
-func NewHandler(svc *Service, store activity.Store) *Handler {
+func NewHandler(svc *application.Service, store activity.Store) *Handler {
 	return &Handler{svc: svc, store: store}
 }
 
