@@ -1,14 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../../api';
-import { queryKeys } from '../../lib/queryKeys';
 import { Chip, Spinner, Surface } from '../../components/ui';
+import { usePostAgeSignal } from './hooks';
 
 export default function PostAgeSignal() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.postage.responseRate,
-    queryFn: api.postage.responseRate,
-    staleTime: 60000,
-  });
+  const { data, isLoading, error } = usePostAgeSignal();
 
   if (isLoading) return <Spinner label="loading response rate…" />;
   if (error) return null;

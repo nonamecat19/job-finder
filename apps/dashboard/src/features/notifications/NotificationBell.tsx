@@ -1,33 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../api';
 import { Button, Chip, Spinner, Surface } from '../../components/ui';
-import { queryKeys } from '../../lib/queryKeys';
+import { useMarkNotificationSeen, useNotifications, useUnseenNotificationCount } from './hooks';
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const qc = useQueryClient();
 
-  const { data: countData } = useQuery({
-    queryKey: queryKeys.notifications.unseenCount,
-    queryFn: api.notifications.unseenCount,
-    refetchInterval: 30000,
-  });
-
-  const { data: notifications, isLoading } = useQuery({
-    queryKey: queryKeys.notifications.list,
-    queryFn: api.notifications.list,
-    enabled: open,
-  });
-
-  const markSeen = useMutation({
-    mutationFn: (id: string) => api.notifications.markSeen(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.notifications.all });
-    },
-  });
+  const { data: countData } = useUnseenNotificationCount();
+  const { data: notifications, isLoading } = useNotifications(open);
+  const markSeen = useMarkNotificationSeen();
 
   const unseen = countData?.count ?? 0;
 

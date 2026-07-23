@@ -1,4 +1,4 @@
-import type { JobFilters } from '../api';
+import type { JobFilters } from './api';
 
 export const queryKeys = {
   jobs: {

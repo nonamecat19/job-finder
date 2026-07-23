@@ -2,7 +2,7 @@ import { Clock, ExternalLink, EyeOff, Star, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { JobDto } from '@job-finder/shared';
-import { type JobFilters } from '../../api';
+import { type JobFilters } from '../../lib/api';
 import { PageHeader } from '../../components/layout/PageHeader';
 import {
   Button,

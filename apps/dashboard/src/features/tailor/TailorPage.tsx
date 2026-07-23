@@ -4,7 +4,7 @@ import type { GeneratedDocumentDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { Button, EmptyState, Field, Input, Select, Spinner, Surface, Textarea } from '../../components/ui';
 import { useToast } from '../../components/toast';
-import { api } from '../../api';
+import { api } from '../../lib/api';
 import { useAdHocDocuments, useSaveAdHocDocument, useTailorDocuments } from './hooks';
 
 const GROUNDING_LEVELS = ['strict', 'moderate', 'aggressive'] as const;

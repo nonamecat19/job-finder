@@ -23,3 +23,23 @@ jobs:
 
       - name: Check generated code matches migrations and queries
         run: ./scripts/sqlc-check.sh
+
+  tygo-drift:
+    name: tygo generate is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned tygo version
+        id: tygo
+        run: echo "version=$(tr -d '[:space:]' < apps/api/.tygo-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+
+      - name: Install tygo
+        run: go install github.com/gzuidhof/tygo@v${{ steps.tygo.outputs.version }}
+
+      - name: Check generated TypeScript matches Go DTOs
+        run: ./scripts/tygo-check.sh

@@ -680,6 +680,15 @@ export interface UpdateLlmSettingsRequestDto {
   tasks: LlmTaskSettingDto[];
 }
 /**
+ * AutoGenerateSettingDto is the GET/PUT /v1/settings/autogenerate response:
+ * whether a resume is auto-enqueued when a job's match score reaches
+ * Threshold (0-100).
+ */
+export interface AutoGenerateSettingDto {
+  enabled: boolean;
+  threshold: number /* int */;
+}
+/**
  * CerebrasModelDto is one curated Cerebras free-tier model offered in the
  * Settings model selector, served by GET /v1/settings/llm/models.
  */
