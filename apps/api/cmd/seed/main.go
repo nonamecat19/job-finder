@@ -13,9 +13,9 @@ import (
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
-	"github.com/job-finder/api/internal/jobsources/adapters"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/jobsources/domain"
+	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/seed"
 )
 
@@ -59,15 +59,15 @@ func run() error {
 	// (SourceRun, Subscription) FK against those rows, so materialize one per
 	// adapter here via the same lazy GetByKey path the running server uses.
 	registry := domain.NewRegistry(
-		adapters.AdzunaAdapter{},
+		adapters.AdzunaAdapter{AppID: cfg.AdzunaAppID, AppKey: cfg.AdzunaAppKey, Country: cfg.AdzunaCountry},
 		adapters.RemotiveAdapter{},
 		adapters.ArbeitnowAdapter{},
 		adapters.DjinniAdapter{},
 		adapters.DouAdapter{},
 		adapters.WorkUaAdapter{},
 		adapters.RobotaAdapter{},
-		adapters.JobSpyAdapter{},
-		adapters.JoobleAdapter{},
+		adapters.JobSpyAdapter{URL: cfg.JobspyURL},
+		adapters.JoobleAdapter{APIKey: cfg.JoobleAPIKey},
 	)
 	sourcesSvc := application.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
 	for _, a := range registry.All() {

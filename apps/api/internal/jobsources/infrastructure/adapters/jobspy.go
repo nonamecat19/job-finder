@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"github.com/job-finder/api/internal/dto"
@@ -40,14 +39,18 @@ type jobspyHealthResponse struct {
 
 // JobSpyAdapter delegates LinkedIn/Indeed/Glassdoor to the python jobspy
 // sidecar (apps/jobspy-sidecar). Best-effort: upstream scrapers break
-// periodically. Mirrors jobspy.adapter.ts.
-type JobSpyAdapter struct{}
+// periodically. Mirrors jobspy.adapter.ts. URL is an env-sourced default
+// injected at construction (config.Config), used when the per-source runtime
+// config omits it.
+type JobSpyAdapter struct {
+	URL string
+}
 
 func (JobSpyAdapter) Key() string          { return "jobspy" }
 func (JobSpyAdapter) Kind() dto.SourceKind { return dto.SourceKindSidecar }
 
-func (JobSpyAdapter) baseURL(config map[string]any) string {
-	return jobsources.StringOr(config["url"], envOr("JOBSPY_URL", "http://jobspy-sidecar:8000"))
+func (a JobSpyAdapter) baseURL(config map[string]any) string {
+	return jobsources.StringOr(config["url"], a.URL)
 }
 
 func (a JobSpyAdapter) Search(ctx context.Context, query dto.SearchQuery, config map[string]any) ([]dto.NormalizedJob, error) {
@@ -117,9 +120,3 @@ func (a JobSpyAdapter) HealthCheck(ctx context.Context, config map[string]any) (
 	return res.OK, nil
 }
 
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}

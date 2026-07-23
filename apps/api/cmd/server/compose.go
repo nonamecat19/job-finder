@@ -19,9 +19,9 @@ import (
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
 	"github.com/job-finder/api/internal/jobs"
-	"github.com/job-finder/api/internal/jobsources/adapters"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/jobsources/domain"
+	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/keyword"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/llmsettings"
@@ -90,15 +90,15 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	douAdapter := adapters.DouAdapter{Scraping: p.Scraping}
 	workuaAdapter := adapters.WorkUaAdapter{Scraping: p.Scraping}
 	registry := domain.NewRegistry(
-		adapters.AdzunaAdapter{},
+		adapters.AdzunaAdapter{AppID: p.Config.AdzunaAppID, AppKey: p.Config.AdzunaAppKey, Country: p.Config.AdzunaCountry},
 		adapters.RemotiveAdapter{},
 		adapters.ArbeitnowAdapter{},
 		djinniAdapter,
 		douAdapter,
 		workuaAdapter,
 		adapters.RobotaAdapter{},
-		adapters.JobSpyAdapter{},
-		adapters.JoobleAdapter{},
+		adapters.JobSpyAdapter{URL: p.Config.JobspyURL},
+		adapters.JoobleAdapter{APIKey: p.Config.JoobleAPIKey},
 	)
 	sourcesSvc := application.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc

@@ -8,7 +8,7 @@ import (
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
-	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/scraping"
 )

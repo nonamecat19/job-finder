@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/job-finder/api/internal/dto"
@@ -29,8 +28,12 @@ type joobleResponse struct {
 	Jobs       []joobleJob `json:"jobs"`
 }
 
-// JoobleAdapter mirrors the Jooble API adapter.
-type JoobleAdapter struct{}
+// JoobleAdapter mirrors the Jooble API adapter. APIKey is an env-sourced
+// default injected at construction (config.Config), used when the per-source
+// runtime config omits it.
+type JoobleAdapter struct {
+	APIKey string
+}
 
 func (JoobleAdapter) Key() string          { return "jooble" }
 func (JoobleAdapter) Kind() dto.SourceKind { return dto.SourceKindAPI }
@@ -55,7 +58,7 @@ func keywordsFromURL(rawURL string) string {
 }
 
 func (a JoobleAdapter) Search(ctx context.Context, query dto.SearchQuery, config map[string]any) ([]dto.NormalizedJob, error) {
-	apiKey := jobsources.StringOr(config["apiKey"], os.Getenv("JOOBLE_API_KEY"))
+	apiKey := jobsources.StringOr(config["apiKey"], a.APIKey)
 	if apiKey == "" {
 		return nil, fmt.Errorf("jooble: apiKey not configured")
 	}
