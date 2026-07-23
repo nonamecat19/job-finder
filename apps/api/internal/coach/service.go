@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // Service computes fit-gap assessments: for each missing must-have, find up to
@@ -21,15 +21,15 @@ type Service struct {
 // seniorityLevel maps job-title seniority prefixes to a numeric rank.
 // Higher rank = more senior. Used to detect seniority inflation.
 var seniorityLevel = map[string]int{
-	"junior":     0,
-	"associate":  0,
-	"entry":      0,
-	"mid":        1,
-	"senior":     2,
-	"lead":       3,
-	"staff":      3,
-	"principal":  4,
-	"architect":  4,
+	"junior":        0,
+	"associate":     0,
+	"entry":         0,
+	"mid":           1,
+	"senior":        2,
+	"lead":          3,
+	"staff":         3,
+	"principal":     4,
+	"architect":     4,
 	"distinguished": 4,
 }
 
@@ -62,10 +62,10 @@ func (s *Service) WithLogger(l *slog.Logger) *Service {
 
 // Assess computes the fit-gap assessment for a job+profile pair. jobID is for
 // traceability only; the actual diff comes from diffResult (the output of
-// keyword.Differ.Diff). profileEntries are all the user's profile bullets with
+// domain.Differ.Diff). profileEntries are all the user's profile bullets with
 // their source metadata. roleContext is the job role hint for adjacency lookup
 // (e.g. "backend", "systems", "frontend"); pass "" for context-agnostic.
-func (s *Service) Assess(ctx context.Context, jobID string, diffResult *keyword.DiffResult, profileEntries []ProfileEntry, roleContext string) *FitGapAssessment {
+func (s *Service) Assess(ctx context.Context, jobID string, diffResult *domain.DiffResult, profileEntries []ProfileEntry, roleContext string) *FitGapAssessment {
 	if diffResult == nil {
 		return &FitGapAssessment{
 			JobID:           jobID,
@@ -96,7 +96,7 @@ func (s *Service) Assess(ctx context.Context, jobID string, diffResult *keyword.
 }
 
 // assessGap finds up to 3 adjacent profile entries for one missing term.
-func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileEntries []ProfileEntry, roleContext string) GapItem {
+func (s *Service) assessGap(ctx context.Context, term domain.DiffTerm, profileEntries []ProfileEntry, roleContext string) GapItem {
 	gap := GapItem{
 		Term:             term.Term,
 		Polarity:         string(term.Polarity),
@@ -104,14 +104,14 @@ func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileE
 	}
 
 	// Lookup adjacency for the missing term
-	adjacencies := keyword.Adjacent(term.Canonical, roleContext)
+	adjacencies := domain.Adjacent(term.Canonical, roleContext)
 	if len(adjacencies) == 0 {
 		gap.NoAdjacentEvidence = true
 		return gap
 	}
 
 	// Build a map of adjacent term stems for matching
-	adjacentStems := make(map[string]keyword.Proximity)
+	adjacentStems := make(map[string]domain.Proximity)
 	for _, adj := range adjacencies {
 		stemmed := stem(lowerASCII(adj.Term))
 		if stemmed != "" {
@@ -125,7 +125,7 @@ func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileE
 	// Find profile entries that mention adjacent terms
 	type match struct {
 		entry     ProfileEntry
-		proximity keyword.Proximity
+		proximity domain.Proximity
 	}
 	var matches []match
 	for _, entry := range profileEntries {
@@ -184,7 +184,7 @@ func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileE
 // generateGroundedRephrase attempts to generate a truthful rephrase for the
 // source entry, with grounding post-check retry. Returns empty string on
 // failure (all attempts violated grounding).
-func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.DiffTerm, entry ProfileEntry) string {
+func (s *Service) generateGroundedRephrase(ctx context.Context, term domain.DiffTerm, entry ProfileEntry) string {
 	const maxAttempts = 2
 
 	// Build allowed proper noun set from the source bullet only (spec 009 §4.3)
@@ -223,10 +223,10 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 	return ""
 }
 
-// buildRephrasePrompt mirrors keyword.buildRephrasePrompt (spec 009 §4.3).
+// buildRephrasePrompt mirrors domain.buildRephrasePrompt (spec 009 §4.3).
 // sourceLabel provides the entry header (e.g. "DevOps Engineer, Acme Corp (2022–2024)")
 // which grounds seniority, employer, and duration claims.
-func buildRephrasePrompt(term keyword.DiffTerm, sourceBullet string, sourceLabel string, priorViolations []string) string {
+func buildRephrasePrompt(term domain.DiffTerm, sourceBullet string, sourceLabel string, priorViolations []string) string {
 	want := term.Term
 	if term.Canonical != "" {
 		want = term.Canonical
@@ -442,20 +442,20 @@ func parseInt(s string) int {
 
 func lowerASCII(s string) string { return strings.ToLower(s) }
 
-func proximityRank(p keyword.Proximity) int {
+func proximityRank(p domain.Proximity) int {
 	switch p {
-	case keyword.ProximityClose:
+	case domain.ProximityClose:
 		return 0
-	case keyword.ProximityModerate:
+	case domain.ProximityModerate:
 		return 1
-	case keyword.ProximityDistant:
+	case domain.ProximityDistant:
 		return 2
 	default:
 		return 3
 	}
 }
 
-// stem is a minimal stemmer (mirrors keyword.stem).
+// stem is a minimal stemmer (mirrors domain.stem).
 func stem(s string) string {
 	s = strings.TrimSuffix(s, "ing")
 	s = strings.TrimSuffix(s, "ed")

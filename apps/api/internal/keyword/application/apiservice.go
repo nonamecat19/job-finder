@@ -1,4 +1,4 @@
-package keyword
+package application
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // ErrDiffNotFound is returned when no KeywordDiff cache row exists for a job
@@ -28,7 +29,7 @@ type DiffReader interface {
 // The keyword *Suggester (008-5) satisfies it; it is optional so the endpoint
 // degrades gracefully (empty suggestions) when no model is wired.
 type Rephraser interface {
-	SuggestAll(ctx context.Context, missingRequired []DiffTerm, profileBullets []string) []RephraseSuggestion
+	SuggestAll(ctx context.Context, missingRequired []domain.DiffTerm, profileBullets []string) []RephraseSuggestion
 }
 
 // BulletsProvider loads the user's existing resume bullet lines, verbatim, used
@@ -104,7 +105,7 @@ func (s *DiffService) KeywordDiff(ctx context.Context, jobID string) (dto.Keywor
 // suggestions produces advisory rephrases for the missing-required terms when a
 // rephraser + grounding source are wired; otherwise an empty slice. Failures to
 // load bullets are non-fatal — the diff still renders without suggestions.
-func (s *DiffService) suggestions(ctx context.Context, missingRequired []DiffTerm) []dto.KeywordRephraseSuggestionDto {
+func (s *DiffService) suggestions(ctx context.Context, missingRequired []domain.DiffTerm) []dto.KeywordRephraseSuggestionDto {
 	if s.rephraser == nil || s.bullets == nil || len(missingRequired) == 0 {
 		return []dto.KeywordRephraseSuggestionDto{}
 	}
@@ -126,18 +127,18 @@ func (s *DiffService) suggestions(ctx context.Context, missingRequired []DiffTer
 	return out
 }
 
-func unmarshalTerms(raw []byte) ([]DiffTerm, error) {
+func unmarshalTerms(raw []byte) ([]domain.DiffTerm, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
-	var terms []DiffTerm
+	var terms []domain.DiffTerm
 	if err := json.Unmarshal(raw, &terms); err != nil {
 		return nil, err
 	}
 	return terms, nil
 }
 
-func toTermDtos(terms []DiffTerm) []dto.KeywordDiffTermDto {
+func toTermDtos(terms []domain.DiffTerm) []dto.KeywordDiffTermDto {
 	out := make([]dto.KeywordDiffTermDto, 0, len(terms))
 	for _, t := range terms {
 		out = append(out, dto.KeywordDiffTermDto{
@@ -154,10 +155,10 @@ func toTermDtos(terms []DiffTerm) []dto.KeywordDiffTermDto {
 // buildMetadata recomputes the coverage counters from the buckets (the cache
 // row persists only coveragePct) so the panel always has full metadata. The
 // persisted coveragePct is authoritative when present; otherwise it is derived.
-func buildMetadata(matched, missingRequired, missingPreferred []DiffTerm, coveragePct *float64) dto.KeywordDiffMetadataDto {
+func buildMetadata(matched, missingRequired, missingPreferred []domain.DiffTerm, coveragePct *float64) dto.KeywordDiffMetadataDto {
 	var matchedRequired, matchedPreferred int
 	for _, t := range matched {
-		if t.Polarity == PolarityRequired {
+		if t.Polarity == domain.PolarityRequired {
 			matchedRequired++
 		} else {
 			matchedPreferred++

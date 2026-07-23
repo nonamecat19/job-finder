@@ -1,6 +1,6 @@
-package keyword
+package application
 
-// Package keyword — async/cached rephrase wiring (task 008 follow-up).
+// Async/cached rephrase wiring (task 008 follow-up).
 //
 // The truthful rephrase suggester (008-5) makes a live LLM call per
 // missing-required term, so running it inline on every keyword-diff request
@@ -26,6 +26,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // DefaultRephraseCacheTTL is the fallback entry lifetime used when a
@@ -103,7 +105,7 @@ func (c *CachedRephraser) WithLogger(l *slog.Logger) *CachedRephraser {
 // key when a fresh entry exists, and otherwise returns an empty slice while
 // (at most once per key) computing them in the background. It never blocks on
 // the inner rephraser, so it is safe to call inline on the diff request.
-func (c *CachedRephraser) SuggestAll(_ context.Context, missingRequired []DiffTerm, profileBullets []string) []RephraseSuggestion {
+func (c *CachedRephraser) SuggestAll(_ context.Context, missingRequired []domain.DiffTerm, profileBullets []string) []RephraseSuggestion {
 	if len(missingRequired) == 0 {
 		return []RephraseSuggestion{}
 	}
@@ -124,7 +126,7 @@ func (c *CachedRephraser) SuggestAll(_ context.Context, missingRequired []DiffTe
 
 	// Copy inputs so a concurrent mutation by the caller cannot race the
 	// background computation.
-	terms := append([]DiffTerm(nil), missingRequired...)
+	terms := append([]domain.DiffTerm(nil), missingRequired...)
 	bullets := append([]string(nil), profileBullets...)
 	c.spawn(func() { c.compute(key, terms, bullets) })
 
@@ -134,7 +136,7 @@ func (c *CachedRephraser) SuggestAll(_ context.Context, missingRequired []DiffTe
 // compute runs the inner rephraser and stores the result. It always clears the
 // inflight marker so a failed/empty computation can be retried on the next
 // request once the entry (if any) expires.
-func (c *CachedRephraser) compute(key string, terms []DiffTerm, bullets []string) {
+func (c *CachedRephraser) compute(key string, terms []domain.DiffTerm, bullets []string) {
 	defer func() {
 		c.mu.Lock()
 		delete(c.inflight, key)
@@ -167,7 +169,7 @@ func cloneSuggestions(in []RephraseSuggestion) []RephraseSuggestion {
 // profile bullets. Term order is deterministic (it comes straight from the
 // persisted diff), so no sorting is needed; the delimiters keep distinct field
 // boundaries from colliding.
-func rephraseCacheKey(terms []DiffTerm, bullets []string) string {
+func rephraseCacheKey(terms []domain.DiffTerm, bullets []string) string {
 	h := sha256.New()
 	for _, t := range terms {
 		io.WriteString(h, t.Term)

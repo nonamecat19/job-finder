@@ -22,7 +22,8 @@ import (
 	"github.com/job-finder/api/internal/jobs"
 	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/jobsources/adapters"
-	"github.com/job-finder/api/internal/keyword"
+	keywordapp "github.com/job-finder/api/internal/keyword/application"
+	"github.com/job-finder/api/internal/keyword/infrastructure/rephraseadapter"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/llmsettings"
 	matchingapp "github.com/job-finder/api/internal/matching/application"
@@ -330,19 +331,19 @@ func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) 
 
 type keywordHandles struct {
 	Handler       *httpapi.KeywordHandler
-	RephraseModel *keyword.ProviderRephraseModel
+	RephraseModel *rephraseadapter.ProviderRephraseModel
 }
 
 // composeKeyword builds the keyword-diff endpoint with its async, TTL'd
 // rephrase cache. RephraseModel is returned so the fit-gap coach can reuse the
 // identical truthful-reframing port.
 func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile.Service) *keywordHandles {
-	rephraseModel := keyword.NewProviderRephraseModel(rephraseRouter, "")
-	cachedRephraser := keyword.NewCachedRephraser(
-		keyword.NewSuggester(rephraseModel),
+	rephraseModel := rephraseadapter.NewProviderRephraseModel(rephraseRouter, "")
+	cachedRephraser := keywordapp.NewCachedRephraser(
+		keywordapp.NewSuggester(rephraseModel),
 		time.Duration(p.Config.KeywordRephraseCacheTTLSec)*time.Second,
 	)
-	diffService := keyword.NewDiffService(p.DB.Queries).WithRephraser(cachedRephraser, profileSvc)
+	diffService := keywordapp.NewDiffService(p.DB.Queries).WithRephraser(cachedRephraser, profileSvc)
 	return &keywordHandles{
 		Handler:       &httpapi.KeywordHandler{Diff: diffService},
 		RephraseModel: rephraseModel,
@@ -351,7 +352,7 @@ func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile
 
 // composeCoach builds the fit-gap coach. ProfileEntries closes over profileSvc
 // rather than coach importing internal/profile, keeping that edge one-directional.
-func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, profileSvc *profile.Service) *httpapi.CoachHandler {
+func composeCoach(p *Platform, rephraseModel *rephraseadapter.ProviderRephraseModel, profileSvc *profile.Service) *httpapi.CoachHandler {
 	coachSvc := coach.NewService(rephraseModel)
 	coachAssessSvc := coach.NewAssessmentService(coachSvc, p.DB.Queries, func(ctx context.Context) ([]coach.ProfileEntry, error) {
 		entries, err := profileSvc.ProfileEntries(ctx)

@@ -1,4 +1,4 @@
-package keyword
+package application
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // DefaultDiffModel labels rows produced by the deterministic (non-LLM) engine
@@ -23,7 +24,7 @@ type DiffWriter interface {
 // Persist writes a DiffResult into the KeywordDiff cache row (008-2) for jobID,
 // upserting on the unique jobId so re-running the diff refreshes in place. The
 // model label defaults to DefaultDiffModel when empty.
-func Persist(ctx context.Context, w DiffWriter, jobID pgtype.UUID, res *DiffResult, model string) (sqlcgen.KeywordDiff, error) {
+func Persist(ctx context.Context, w DiffWriter, jobID pgtype.UUID, res *domain.DiffResult, model string) (sqlcgen.KeywordDiff, error) {
 	if res == nil {
 		return sqlcgen.KeywordDiff{}, fmt.Errorf("keyword: nil diff result")
 	}

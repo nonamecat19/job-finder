@@ -1,9 +1,9 @@
-package keyword_test
+package domain_test
 
 import (
 	"testing"
 
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // classifyFixture reuses the same JD fixture set exercised by the 008-3
@@ -16,16 +16,16 @@ type classifyFixture struct {
 	niceToHav []string // canonical terms expected nice_to_have
 }
 
-func findClassified(cs []keyword.ClassifiedTerm, canonical string) (keyword.ClassifiedTerm, bool) {
+func findClassified(cs []domain.ClassifiedTerm, canonical string) (domain.ClassifiedTerm, bool) {
 	for _, c := range cs {
 		if c.Canonical == canonical {
 			return c, true
 		}
 	}
-	return keyword.ClassifiedTerm{}, false
+	return domain.ClassifiedTerm{}, false
 }
 
-func classifiedList(cs []keyword.ClassifiedTerm) []string {
+func classifiedList(cs []domain.ClassifiedTerm) []string {
 	out := make([]string, 0, len(cs))
 	for _, c := range cs {
 		out = append(out, c.Canonical+"("+string(c.Class)+")")
@@ -165,21 +165,21 @@ Bonus points
 		},
 	}
 
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	for _, f := range fixtures {
 		t.Run(f.name, func(t *testing.T) {
 			res, err := ext.Extract(f.jd)
 			if err != nil {
 				t.Fatalf("Extract: %v", err)
 			}
-			cs := keyword.Classify(res)
+			cs := domain.Classify(res)
 			for _, want := range f.mustHave {
 				c, ok := findClassified(cs, want)
 				if !ok {
 					t.Errorf("expected must_have term %q not found; got: %v", want, classifiedList(cs))
 					continue
 				}
-				if c.Class != keyword.ClassMustHave {
+				if c.Class != domain.ClassMustHave {
 					t.Errorf("term %q: class = %s, want must_have (signals=%v)", want, c.Class, c.Signals)
 				}
 			}
@@ -189,7 +189,7 @@ Bonus points
 					t.Errorf("expected nice_to_have term %q not found; got: %v", want, classifiedList(cs))
 					continue
 				}
-				if c.Class != keyword.ClassNiceToHave {
+				if c.Class != domain.ClassNiceToHave {
 					t.Errorf("term %q: class = %s, want nice_to_have (signals=%v)", want, c.Class, c.Signals)
 				}
 			}
@@ -205,46 +205,46 @@ func TestClassifySignals(t *testing.T) {
 		name    string
 		jd      string
 		term    string
-		class   keyword.Class
-		signals []keyword.Signal // subset that MUST be present
+		class   domain.Class
+		signals []domain.Signal // subset that MUST be present
 	}{
 		{
 			name:    "years-of-experience is a hard signal",
 			jd:      "Requirements\n- 5+ years of Python experience",
 			term:    "Python",
-			class:   keyword.ClassMustHave,
-			signals: []keyword.Signal{keyword.SignalYearsOfExperience, keyword.SignalRequiredSection},
+			class:   domain.ClassMustHave,
+			signals: []domain.Signal{domain.SignalYearsOfExperience, domain.SignalRequiredSection},
 		},
 		{
 			name:    "inline must-have promotes an optional-section term",
 			jd:      "Nice to have\n- You must have Kubernetes in production",
 			term:    "Kubernetes",
-			class:   keyword.ClassMustHave,
-			signals: []keyword.Signal{keyword.SignalMustHavePhrase},
+			class:   domain.ClassMustHave,
+			signals: []domain.Signal{domain.SignalMustHavePhrase},
 		},
 		{
 			name:    "inline required phrase is a hard signal",
 			jd:      "About the role\n- AWS is required for this position",
 			term:    "AWS",
-			class:   keyword.ClassMustHave,
-			signals: []keyword.Signal{keyword.SignalRequiredPhrase},
+			class:   domain.ClassMustHave,
+			signals: []domain.Signal{domain.SignalRequiredPhrase},
 		},
 		{
 			name:    "a plus stays nice-to-have",
 			jd:      "Bonus points\n- Experience with Terraform is a plus",
 			term:    "Terraform",
-			class:   keyword.ClassNiceToHave,
-			signals: []keyword.Signal{keyword.SignalPreferredPhrase},
+			class:   domain.ClassNiceToHave,
+			signals: []domain.Signal{domain.SignalPreferredPhrase},
 		},
 	}
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := ext.Extract(tt.jd)
 			if err != nil {
 				t.Fatalf("Extract: %v", err)
 			}
-			cs := keyword.Classify(res)
+			cs := domain.Classify(res)
 			c, ok := findClassified(cs, tt.term)
 			if !ok {
 				t.Fatalf("term %q not found; got: %v", tt.term, classifiedList(cs))
@@ -261,7 +261,7 @@ func TestClassifySignals(t *testing.T) {
 	}
 }
 
-func hasSignal(sigs []keyword.Signal, want keyword.Signal) bool {
+func hasSignal(sigs []domain.Signal, want domain.Signal) bool {
 	for _, s := range sigs {
 		if s == want {
 			return true
@@ -271,7 +271,7 @@ func hasSignal(sigs []keyword.Signal, want keyword.Signal) bool {
 }
 
 func TestClassifyNilResult(t *testing.T) {
-	if got := keyword.Classify(nil); got != nil {
+	if got := domain.Classify(nil); got != nil {
 		t.Errorf("Classify(nil) = %v, want nil", got)
 	}
 }

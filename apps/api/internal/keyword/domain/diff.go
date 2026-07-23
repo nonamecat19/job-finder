@@ -1,8 +1,8 @@
-package keyword
+package domain
 
 import "sort"
 
-// Package keyword — diff engine (spec 008-1 §3, task 008-4).
+// Diff engine (spec 008-1 §3, task 008-4).
 //
 // Given the typed terms extracted from a job description (008-3) and the terms
 // drawn from the user's *whole* master profile (not only the rendered resume,
@@ -10,7 +10,7 @@ import "sort"
 // deterministic buckets: matched, missing-required, and missing-preferred.
 //
 // The engine is pure and dependency-free so it is unit-testable in isolation;
-// persistence to the KeywordDiff cache table (008-2) lives in persist.go.
+// persistence to the KeywordDiff cache table (008-2) lives in application/persist.go.
 
 // MatchType records how a JD term matched a resume term, for traceability in
 // the UI and downstream features.

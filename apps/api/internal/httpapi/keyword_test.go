@@ -6,7 +6,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/httpapi"
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/application"
 	"github.com/job-finder/api/internal/testutil"
 )
 
@@ -85,7 +85,7 @@ func TestKeywordDiffGet(t *testing.T) {
 }
 
 func TestKeywordDiffNotFound(t *testing.T) {
-	h := &httpapi.KeywordHandler{Diff: &fakeKeywordProvider{err: keyword.ErrDiffNotFound}}
+	h := &httpapi.KeywordHandler{Diff: &fakeKeywordProvider{err: application.ErrDiffNotFound}}
 	r := testutil.SetupRouter(h.Mount)
 
 	w := testutil.DoRequest(r, "GET", "/api/jobs/missing/keyword-diff", nil, map[string]string{"id": "missing"})

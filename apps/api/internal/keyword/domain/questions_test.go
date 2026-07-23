@@ -1,20 +1,20 @@
-package keyword_test
+package domain_test
 
 import (
 	"testing"
 
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // questionFixture reuses the same 8 JD fixtures from the 008-3 extractor and
 // 009-2 classifier tests. Each must-have term must yield at least one question.
 type questionFixture struct {
-	name              string
-	jd                string
-	mustHave          []string
-	minQuestions      int
-	expectCategories  []keyword.QuestionCategory
-	expectSources     []keyword.QuestionSource
+	name             string
+	jd               string
+	mustHave         []string
+	minQuestions     int
+	expectCategories []domain.QuestionCategory
+	expectSources    []domain.QuestionSource
 }
 
 func TestDeriveQuestionsFromMustHaves(t *testing.T) {
@@ -37,13 +37,13 @@ Nice to have
 `,
 			mustHave:     []string{"React", "TypeScript", "Kubernetes", "Docker", "Python", "JavaScript", "AWS"},
 			minQuestions: 7,
-			expectCategories: []keyword.QuestionCategory{
-				keyword.CategoryTechnical,
-				keyword.CategoryBehavioral,
+			expectCategories: []domain.QuestionCategory{
+				domain.CategoryTechnical,
+				domain.CategoryBehavioral,
 			},
-			expectSources: []keyword.QuestionSource{
-				keyword.SourceRequiredSkill,
-				keyword.SourceResponsibility,
+			expectSources: []domain.QuestionSource{
+				domain.SourceRequiredSkill,
+				domain.SourceResponsibility,
 			},
 		},
 		{
@@ -60,11 +60,11 @@ Bonus points
 `,
 			mustHave:     []string{"Go", "PostgreSQL", "gRPC", "Docker", "Kubernetes"},
 			minQuestions: 5,
-			expectCategories: []keyword.QuestionCategory{
-				keyword.CategoryTechnical,
+			expectCategories: []domain.QuestionCategory{
+				domain.CategoryTechnical,
 			},
-			expectSources: []keyword.QuestionSource{
-				keyword.SourceRequiredSkill,
+			expectSources: []domain.QuestionSource{
+				domain.SourceRequiredSkill,
 			},
 		},
 		{
@@ -81,11 +81,11 @@ Preferred qualifications
 `,
 			mustHave:     []string{"React", "TypeScript", "JavaScript"},
 			minQuestions: 3,
-			expectCategories: []keyword.QuestionCategory{
-				keyword.CategoryTechnical,
+			expectCategories: []domain.QuestionCategory{
+				domain.CategoryTechnical,
 			},
-			expectSources: []keyword.QuestionSource{
-				keyword.SourceRequiredSkill,
+			expectSources: []domain.QuestionSource{
+				domain.SourceRequiredSkill,
 			},
 		},
 		{
@@ -103,11 +103,11 @@ Nice to have
 `,
 			mustHave:     []string{"Python", "SQL", "Machine Learning"},
 			minQuestions: 3,
-			expectCategories: []keyword.QuestionCategory{
-				keyword.CategoryTechnical,
+			expectCategories: []domain.QuestionCategory{
+				domain.CategoryTechnical,
 			},
-			expectSources: []keyword.QuestionSource{
-				keyword.SourceRequiredSkill,
+			expectSources: []domain.QuestionSource{
+				domain.SourceRequiredSkill,
 			},
 		},
 		{
@@ -124,11 +124,11 @@ Desired
 `,
 			mustHave:     []string{"AWS", "Terraform"},
 			minQuestions: 2,
-			expectCategories: []keyword.QuestionCategory{
-				keyword.CategoryTechnical,
+			expectCategories: []domain.QuestionCategory{
+				domain.CategoryTechnical,
 			},
-			expectSources: []keyword.QuestionSource{
-				keyword.SourceRequiredSkill,
+			expectSources: []domain.QuestionSource{
+				domain.SourceRequiredSkill,
 			},
 		},
 		{
@@ -145,11 +145,11 @@ Preferred
 `,
 			mustHave:     []string{"Swift", "iOS", "SwiftUI"},
 			minQuestions: 3,
-			expectCategories: []keyword.QuestionCategory{
-				keyword.CategoryTechnical,
+			expectCategories: []domain.QuestionCategory{
+				domain.CategoryTechnical,
 			},
-			expectSources: []keyword.QuestionSource{
-				keyword.SourceRequiredSkill,
+			expectSources: []domain.QuestionSource{
+				domain.SourceRequiredSkill,
 			},
 		},
 		{
@@ -166,11 +166,11 @@ Nice-to-have
 `,
 			mustHave:     []string{"Python"},
 			minQuestions: 1,
-			expectCategories: []keyword.QuestionCategory{
-				keyword.CategoryTechnical,
+			expectCategories: []domain.QuestionCategory{
+				domain.CategoryTechnical,
 			},
-			expectSources: []keyword.QuestionSource{
-				keyword.SourceRequiredSkill,
+			expectSources: []domain.QuestionSource{
+				domain.SourceRequiredSkill,
 			},
 		},
 		{
@@ -190,24 +190,24 @@ Bonus points
 `,
 			mustHave:     []string{"Java", "Kotlin", "Kafka", "PostgreSQL"},
 			minQuestions: 4,
-			expectCategories: []keyword.QuestionCategory{
-				keyword.CategoryTechnical,
+			expectCategories: []domain.QuestionCategory{
+				domain.CategoryTechnical,
 			},
-			expectSources: []keyword.QuestionSource{
-				keyword.SourceRequiredSkill,
+			expectSources: []domain.QuestionSource{
+				domain.SourceRequiredSkill,
 			},
 		},
 	}
 
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	for _, f := range fixtures {
 		t.Run(f.name, func(t *testing.T) {
 			res, err := ext.Extract(f.jd)
 			if err != nil {
 				t.Fatalf("Extract: %v", err)
 			}
-			classified := keyword.Classify(res)
-			questions := keyword.DeriveQuestions(classified, f.jd)
+			classified := domain.Classify(res)
+			questions := domain.DeriveQuestions(classified, f.jd)
 
 			if len(questions) < f.minQuestions {
 				t.Errorf("got %d questions, want at least %d", len(questions), f.minQuestions)
@@ -216,7 +216,7 @@ Bonus points
 			for _, want := range f.mustHave {
 				found := false
 				for _, q := range questions {
-					if q.Source == keyword.SourceRequiredSkill && containsTerm(q.Text, want) {
+					if q.Source == domain.SourceRequiredSkill && containsTerm(q.Text, want) {
 						found = true
 						break
 					}
@@ -239,35 +239,35 @@ Bonus points
 }
 
 func TestDeriveQuestionsEmptyJD(t *testing.T) {
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	res, err := ext.Extract("Requirements\n- Python")
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
-	classified := keyword.Classify(res)
-	questions := keyword.DeriveQuestions(classified, "")
+	classified := domain.Classify(res)
+	questions := domain.DeriveQuestions(classified, "")
 	if len(questions) == 0 {
 		t.Fatal("expected at least one question from must-have term")
 	}
 }
 
 func TestDeriveQuestionsNilClassified(t *testing.T) {
-	questions := keyword.DeriveQuestions(nil, "some jd")
+	questions := domain.DeriveQuestions(nil, "some jd")
 	if questions != nil {
 		t.Errorf("DeriveQuestions(nil, ...) = %v, want nil", questions)
 	}
 }
 
 func TestDeriveQuestionsNoMustHaves(t *testing.T) {
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	res, err := ext.Extract("Nice to have\n- Go is a plus")
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
-	classified := keyword.Classify(res)
-	questions := keyword.DeriveQuestions(classified, "Nice to have\n- Go is a plus")
+	classified := domain.Classify(res)
+	questions := domain.DeriveQuestions(classified, "Nice to have\n- Go is a plus")
 	for _, q := range questions {
-		if q.Source == keyword.SourceRequiredSkill {
+		if q.Source == domain.SourceRequiredSkill {
 			t.Errorf("unexpected required_skill question for nice-to-have term: %q", q.Text)
 		}
 	}
@@ -283,19 +283,19 @@ Responsibilities
 Requirements
 - 5+ years of Python experience
 `
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	res, err := ext.Extract(jd)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
-	classified := keyword.Classify(res)
-	questions := keyword.DeriveQuestions(classified, jd)
+	classified := domain.Classify(res)
+	questions := domain.DeriveQuestions(classified, jd)
 
 	behavioralCount := 0
 	for _, q := range questions {
-		if q.Category == keyword.CategoryBehavioral {
+		if q.Category == domain.CategoryBehavioral {
 			behavioralCount++
-			if q.Source != keyword.SourceResponsibility {
+			if q.Source != domain.SourceResponsibility {
 				t.Errorf("behavioral question has wrong source: %s", q.Source)
 			}
 		}
@@ -310,7 +310,7 @@ func containsTerm(text, term string) bool {
 		(text == term || len(text) > len(term))
 }
 
-func hasCategory(cats []keyword.QuestionCategory, cat keyword.QuestionCategory) bool {
+func hasCategory(cats []domain.QuestionCategory, cat domain.QuestionCategory) bool {
 	for _, c := range cats {
 		if c == cat {
 			return true
@@ -319,7 +319,7 @@ func hasCategory(cats []keyword.QuestionCategory, cat keyword.QuestionCategory) 
 	return false
 }
 
-func hasSource(srcs []keyword.QuestionSource, src keyword.QuestionSource) bool {
+func hasSource(srcs []domain.QuestionSource, src domain.QuestionSource) bool {
 	for _, s := range srcs {
 		if s == src {
 			return true

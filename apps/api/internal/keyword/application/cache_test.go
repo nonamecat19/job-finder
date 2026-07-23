@@ -1,7 +1,8 @@
-package keyword
+package application
 
 import (
 	"context"
+	"github.com/job-finder/api/internal/keyword/domain"
 	"sync"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ type countingRephraser struct {
 	calls int
 }
 
-func (c *countingRephraser) SuggestAll(_ context.Context, missingRequired []DiffTerm, _ []string) []RephraseSuggestion {
+func (c *countingRephraser) SuggestAll(_ context.Context, missingRequired []domain.DiffTerm, _ []string) []RephraseSuggestion {
 	c.mu.Lock()
 	c.calls++
 	c.mu.Unlock()
@@ -39,7 +40,7 @@ func TestCachedRephraser_FirstCallEmptyThenCached(t *testing.T) {
 	inner := &countingRephraser{}
 	c := NewCachedRephraser(inner, time.Minute).WithSpawner(syncSpawn)
 
-	terms := []DiffTerm{reqTerm("kubernetes", "Kubernetes")}
+	terms := []domain.DiffTerm{reqTerm("kubernetes", "Kubernetes")}
 	bullets := []string{"Ran Docker in prod"}
 
 	// First call returns empty (compute kicked off in background) but, with the
@@ -80,7 +81,7 @@ func TestCachedRephraser_ExpiryRecomputes(t *testing.T) {
 		WithSpawner(syncSpawn).
 		WithClock(func() time.Time { return now })
 
-	terms := []DiffTerm{reqTerm("go", "Go")}
+	terms := []domain.DiffTerm{reqTerm("go", "Go")}
 	bullets := []string{"wrote services"}
 
 	c.SuggestAll(context.Background(), terms, bullets) // compute #1
@@ -104,9 +105,9 @@ func TestCachedRephraser_KeyVariesByInput(t *testing.T) {
 	inner := &countingRephraser{}
 	c := NewCachedRephraser(inner, time.Minute).WithSpawner(syncSpawn)
 
-	c.SuggestAll(context.Background(), []DiffTerm{reqTerm("go", "Go")}, []string{"a"})
-	c.SuggestAll(context.Background(), []DiffTerm{reqTerm("rust", "Rust")}, []string{"a"})
-	c.SuggestAll(context.Background(), []DiffTerm{reqTerm("go", "Go")}, []string{"b"})
+	c.SuggestAll(context.Background(), []domain.DiffTerm{reqTerm("go", "Go")}, []string{"a"})
+	c.SuggestAll(context.Background(), []domain.DiffTerm{reqTerm("rust", "Rust")}, []string{"a"})
+	c.SuggestAll(context.Background(), []domain.DiffTerm{reqTerm("go", "Go")}, []string{"b"})
 
 	if inner.count() != 3 {
 		t.Fatalf("inner calls = %d, want 3 (distinct keys)", inner.count())
@@ -118,7 +119,7 @@ func TestCachedRephraser_SingleInflight(t *testing.T) {
 	inner := &blockingRephraser{release: release, counter: &countingRephraser{}}
 	c := NewCachedRephraser(inner, time.Minute) // real goroutine spawner
 
-	terms := []DiffTerm{reqTerm("go", "Go")}
+	terms := []domain.DiffTerm{reqTerm("go", "Go")}
 	bullets := []string{"a"}
 
 	// Fire several concurrent misses for the same key while the first compute
@@ -154,7 +155,7 @@ type blockingRephraser struct {
 	counter *countingRephraser
 }
 
-func (b *blockingRephraser) SuggestAll(ctx context.Context, missingRequired []DiffTerm, bullets []string) []RephraseSuggestion {
+func (b *blockingRephraser) SuggestAll(ctx context.Context, missingRequired []domain.DiffTerm, bullets []string) []RephraseSuggestion {
 	<-b.release
 	return b.counter.SuggestAll(ctx, missingRequired, bullets)
 }

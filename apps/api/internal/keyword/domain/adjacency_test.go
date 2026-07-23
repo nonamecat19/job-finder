@@ -1,18 +1,18 @@
-package keyword_test
+package domain_test
 
 import (
 	"testing"
 
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
-func hasAdjacent(adj []keyword.Adjacency, term string) (keyword.Adjacency, bool) {
+func hasAdjacent(adj []domain.Adjacency, term string) (domain.Adjacency, bool) {
 	for _, a := range adj {
 		if a.Term == term {
 			return a, true
 		}
 	}
-	return keyword.Adjacency{}, false
+	return domain.Adjacency{}, false
 }
 
 // TestAdjacencyLookup covers term+context resolution: context-specific entries
@@ -23,19 +23,19 @@ func TestAdjacencyLookup(t *testing.T) {
 		term      string
 		context   string
 		wantTerm  string
-		wantProx  keyword.Proximity
+		wantProx  domain.Proximity
 		wantFound bool
 	}{
-		{"postgres->mysql any", "Postgres", "any", "MySQL", keyword.ProximityClose, true},
-		{"postgres->mysql empty context", "Postgres", "", "MySQL", keyword.ProximityClose, true},
-		{"case-insensitive term", "postgres", "any", "SQLite", keyword.ProximityClose, true},
-		{"rust->go only in systems context", "Rust", "systems", "Go", keyword.ProximityModerate, true},
+		{"postgres->mysql any", "Postgres", "any", "MySQL", domain.ProximityClose, true},
+		{"postgres->mysql empty context", "Postgres", "", "MySQL", domain.ProximityClose, true},
+		{"case-insensitive term", "postgres", "any", "SQLite", domain.ProximityClose, true},
+		{"rust->go only in systems context", "Rust", "systems", "Go", domain.ProximityModerate, true},
 		{"rust->go absent in any context", "Rust", "any", "Go", "", false},
 		{"unknown term yields nothing", "COBOL", "any", "Fortran", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			adj := keyword.Adjacent(tt.term, tt.context)
+			adj := domain.Adjacent(tt.term, tt.context)
 			got, found := hasAdjacent(adj, tt.wantTerm)
 			if found != tt.wantFound {
 				t.Fatalf("Adjacent(%q,%q) found %q = %v, want %v (got %v)",
@@ -50,7 +50,7 @@ func TestAdjacencyLookup(t *testing.T) {
 
 // TestAdjacencyOrderedByProximity asserts lookups return closest-first.
 func TestAdjacencyOrderedByProximity(t *testing.T) {
-	adj := keyword.Adjacent("Postgres", "any")
+	adj := domain.Adjacent("Postgres", "any")
 	if len(adj) < 2 {
 		t.Fatalf("expected multiple adjacents, got %v", adj)
 	}
@@ -61,13 +61,13 @@ func TestAdjacencyOrderedByProximity(t *testing.T) {
 	}
 }
 
-func rank(p keyword.Proximity) int {
+func rank(p domain.Proximity) int {
 	switch p {
-	case keyword.ProximityClose:
+	case domain.ProximityClose:
 		return 0
-	case keyword.ProximityModerate:
+	case domain.ProximityModerate:
 		return 1
-	case keyword.ProximityDistant:
+	case domain.ProximityDistant:
 		return 2
 	default:
 		return 3
@@ -80,13 +80,13 @@ func rank(p keyword.Proximity) int {
 // must return the source term at the same proximity; if the edge is explicitly
 // asymmetric, the reverse lookup must NOT contain it.
 func TestAdjacencySymmetry(t *testing.T) {
-	cfg := keyword.AdjacencyConfigForTest()
+	cfg := domain.AdjacencyConfigForTest()
 	symmetricChecked, asymmetricChecked := 0, 0
 
 	for _, entry := range cfg.Entries {
 		ctx := entry.Context
 		for _, edge := range entry.Adjacent {
-			reverse := keyword.Adjacent(edge.Term, ctx)
+			reverse := domain.Adjacent(edge.Term, ctx)
 			back, found := hasAdjacent(reverse, entry.Term)
 
 			symmetric := edge.Symmetric == nil || *edge.Symmetric
@@ -121,15 +121,15 @@ func TestAdjacencySymmetry(t *testing.T) {
 
 // TestAdjacencyMapVersion asserts the map is versioned (spec §2.6).
 func TestAdjacencyMapVersion(t *testing.T) {
-	if v := keyword.AdjacencyMapVersion(); v < 1 {
+	if v := domain.AdjacencyMapVersion(); v < 1 {
 		t.Errorf("AdjacencyMapVersion() = %d, want >= 1", v)
 	}
 }
 
 // TestLoadAdjacencyMapIdempotent asserts the startup hook can be re-run.
 func TestLoadAdjacencyMap(t *testing.T) {
-	keyword.LoadAdjacencyMap()
-	if _, found := hasAdjacent(keyword.Adjacent("Docker", "any"), "Podman"); !found {
+	domain.LoadAdjacencyMap()
+	if _, found := hasAdjacent(domain.Adjacent("Docker", "any"), "Podman"); !found {
 		t.Error("after reload, Docker->Podman adjacency missing")
 	}
 }

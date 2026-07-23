@@ -1,9 +1,10 @@
-package keyword
+package application
 
 import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/job-finder/api/internal/keyword/domain"
 	"log/slog"
 	"strings"
 	"testing"
@@ -42,10 +43,10 @@ type fixedFinder struct {
 	ok     bool
 }
 
-func (f fixedFinder) FindEvidence(DiffTerm, []string) (string, bool) { return f.bullet, f.ok }
+func (f fixedFinder) FindEvidence(domain.DiffTerm, []string) (string, bool) { return f.bullet, f.ok }
 
-func reqTerm(term, canonical string) DiffTerm {
-	return DiffTerm{Term: term, Canonical: canonical, Polarity: PolarityRequired}
+func reqTerm(term, canonical string) domain.DiffTerm {
+	return domain.DiffTerm{Term: term, Canonical: canonical, Polarity: domain.PolarityRequired}
 }
 
 func bufLogger() (*slog.Logger, *bytes.Buffer) {
@@ -207,7 +208,7 @@ func TestSuggestAll_Alignment(t *testing.T) {
 	profile := []string{"Ran workloads on Kubernetes in production."}
 	s := NewSuggester(model) // lexical finder: "Kubernetes" overlaps, "Rust" does not
 
-	terms := []DiffTerm{
+	terms := []domain.DiffTerm{
 		reqTerm("Kubernetes", "Kubernetes"),
 		reqTerm("Rust", "Rust"),
 	}

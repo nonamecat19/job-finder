@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/application"
 )
 
 // KeywordDiffProvider is the interface KeywordHandler needs from the keyword
@@ -30,7 +30,7 @@ func (h *KeywordHandler) get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Diff.KeywordDiff(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, keyword.ErrDiffNotFound) {
+		if errors.Is(err, application.ErrDiffNotFound) {
 			writeError(w, http.StatusNotFound, "keyword diff not found for job")
 			return
 		}

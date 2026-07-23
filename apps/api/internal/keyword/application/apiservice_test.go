@@ -1,4 +1,4 @@
-package keyword
+package application
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 type fakeReader struct {
@@ -34,12 +35,12 @@ const validJobID = "11111111-1111-1111-1111-111111111111"
 func TestDiffServiceReadsCacheAndRecomputesMetadata(t *testing.T) {
 	pct := 50.0
 	row := sqlcgen.KeywordDiff{
-		Matched: mustJSON(t, []DiffTerm{
-			{Term: "kubernetes", Canonical: "Kubernetes", Polarity: PolarityRequired, Stemmed: "kubernet", MatchType: MatchExact},
-			{Term: "typescript", Canonical: "TypeScript", Polarity: PolarityPreferred, Stemmed: "typescript"},
+		Matched: mustJSON(t, []domain.DiffTerm{
+			{Term: "kubernetes", Canonical: "Kubernetes", Polarity: domain.PolarityRequired, Stemmed: "kubernet", MatchType: domain.MatchExact},
+			{Term: "typescript", Canonical: "TypeScript", Polarity: domain.PolarityPreferred, Stemmed: "typescript"},
 		}),
-		MissingRequired:  mustJSON(t, []DiffTerm{{Term: "docker", Canonical: "Docker", Polarity: PolarityRequired, Stemmed: "docker"}}),
-		MissingPreferred: mustJSON(t, []DiffTerm{{Term: "grpc", Canonical: "gRPC", Polarity: PolarityPreferred, Stemmed: "grpc"}}),
+		MissingRequired:  mustJSON(t, []domain.DiffTerm{{Term: "docker", Canonical: "Docker", Polarity: domain.PolarityRequired, Stemmed: "docker"}}),
+		MissingPreferred: mustJSON(t, []domain.DiffTerm{{Term: "grpc", Canonical: "gRPC", Polarity: domain.PolarityPreferred, Stemmed: "grpc"}}),
 		CoveragePct:      &pct,
 	}
 	svc := NewDiffService(fakeReader{row: row})
@@ -79,7 +80,7 @@ func TestDiffServiceBadUUID(t *testing.T) {
 
 type fakeRephraser struct{}
 
-func (fakeRephraser) SuggestAll(ctx context.Context, missing []DiffTerm, bullets []string) []RephraseSuggestion {
+func (fakeRephraser) SuggestAll(ctx context.Context, missing []domain.DiffTerm, bullets []string) []RephraseSuggestion {
 	out := make([]RephraseSuggestion, 0, len(missing))
 	for _, t := range missing {
 		r := "Reframed " + t.Canonical
@@ -96,9 +97,9 @@ func (fakeBullets) ProfileBullets(ctx context.Context) ([]string, error) {
 
 func TestDiffServiceWithRephraser(t *testing.T) {
 	row := sqlcgen.KeywordDiff{
-		Matched:          mustJSON(t, []DiffTerm{}),
-		MissingRequired:  mustJSON(t, []DiffTerm{{Term: "docker", Canonical: "Docker", Polarity: PolarityRequired, Stemmed: "docker"}}),
-		MissingPreferred: mustJSON(t, []DiffTerm{}),
+		Matched:          mustJSON(t, []domain.DiffTerm{}),
+		MissingRequired:  mustJSON(t, []domain.DiffTerm{{Term: "docker", Canonical: "Docker", Polarity: domain.PolarityRequired, Stemmed: "docker"}}),
+		MissingPreferred: mustJSON(t, []domain.DiffTerm{}),
 	}
 	svc := NewDiffService(fakeReader{row: row}).WithRephraser(fakeRephraser{}, fakeBullets{})
 

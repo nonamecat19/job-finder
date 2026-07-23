@@ -6,16 +6,16 @@ package coach
 // Every adjacent claim cites its source profile entry. If nothing adjacent
 // exists, noAdjacentEvidence is set true — the honest empty result.
 
-import "github.com/job-finder/api/internal/keyword"
+import "github.com/job-finder/api/internal/keyword/domain"
 
 // FitGapAssessment is the coach output: failure summary + per-gap adjacent
 // evidence (spec 009 §1).
 type FitGapAssessment struct {
-	JobID            string    `json:"jobId"`
-	TotalMustHaves   int       `json:"totalMustHaves"`
-	FailedMustHaves  int       `json:"failedMustHaves"`
-	CoveragePct      float64   `json:"coveragePct"`
-	Gaps             []GapItem `json:"gaps"`
+	JobID           string    `json:"jobId"`
+	TotalMustHaves  int       `json:"totalMustHaves"`
+	FailedMustHaves int       `json:"failedMustHaves"`
+	CoveragePct     float64   `json:"coveragePct"`
+	Gaps            []GapItem `json:"gaps"`
 }
 
 // GapItem is one missing must-have with up to 3 adjacent evidence items.
@@ -28,10 +28,10 @@ type GapItem struct {
 
 // EvidenceItem is one concrete profile item adjacent to the missing term.
 type EvidenceItem struct {
-	SourceEntry  string            `json:"sourceEntry"`
-	SourceBullet string            `json:"sourceBullet"`
-	Proximity    keyword.Proximity `json:"proximity"`
-	Rephrase     string            `json:"rephrase"`
+	SourceEntry  string           `json:"sourceEntry"`
+	SourceBullet string           `json:"sourceBullet"`
+	Proximity    domain.Proximity `json:"proximity"`
+	Rephrase     string           `json:"rephrase"`
 }
 
 // ProfileEntry groups a bullet with its source metadata (employer + dates).

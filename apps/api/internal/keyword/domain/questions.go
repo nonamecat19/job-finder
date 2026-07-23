@@ -1,4 +1,4 @@
-package keyword
+package domain
 
 import (
 	"fmt"

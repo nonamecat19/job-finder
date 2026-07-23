@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // fakeRephraseModel is a deterministic test double for RephraseModel.
@@ -40,11 +40,11 @@ func TestAssess_NoMissingRequired(t *testing.T) {
 	model := &fakeRephraseModel{responses: map[string]string{}}
 	svc := NewService(model)
 
-	diffResult := &keyword.DiffResult{
-		Matched:          []keyword.DiffTerm{{Term: "Go", Polarity: keyword.PolarityRequired}},
-		MissingRequired:  []keyword.DiffTerm{},
-		MissingPreferred: []keyword.DiffTerm{{Term: "Rust", Polarity: keyword.PolarityPreferred}},
-		Metadata: keyword.DiffMetadata{
+	diffResult := &domain.DiffResult{
+		Matched:          []domain.DiffTerm{{Term: "Go", Polarity: domain.PolarityRequired}},
+		MissingRequired:  []domain.DiffTerm{},
+		MissingPreferred: []domain.DiffTerm{{Term: "Rust", Polarity: domain.PolarityPreferred}},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   1,
 			MatchedRequired:  1,
@@ -75,13 +75,13 @@ func TestAssess_ZeroAdjacency(t *testing.T) {
 	svc := NewService(model)
 
 	// Missing term: Rust. Profile has only Java/Python — genuinely no adjacency.
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Rust", Canonical: "Rust", Polarity: keyword.PolarityRequired, Stemmed: "rust"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Rust", Canonical: "Rust", Polarity: domain.PolarityRequired, Stemmed: "rust"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -128,13 +128,13 @@ func TestAssess_AdjacentEvidenceFound(t *testing.T) {
 	svc := NewService(model)
 
 	// Missing: Docker. Profile has Podman (adjacent per adjacency map).
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: domain.PolarityRequired, Stemmed: "docker"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -177,8 +177,8 @@ func TestAssess_AdjacentEvidenceFound(t *testing.T) {
 	if ev.SourceBullet != "Managed CI/CD pipelines with Podman and BuildKit" {
 		t.Errorf("Evidence.SourceBullet: got %q", ev.SourceBullet)
 	}
-	if ev.Proximity != keyword.ProximityClose {
-		t.Errorf("Evidence.Proximity: got %q, want %q", ev.Proximity, keyword.ProximityClose)
+	if ev.Proximity != domain.ProximityClose {
+		t.Errorf("Evidence.Proximity: got %q, want %q", ev.Proximity, domain.ProximityClose)
 	}
 	if ev.Rephrase == "" {
 		t.Errorf("Evidence.Rephrase: got empty, want non-empty")
@@ -194,13 +194,13 @@ func TestAssess_MaxThreeEvidence(t *testing.T) {
 	svc := NewService(model)
 
 	// Missing: Postgres. Profile has 5 entries with MySQL, SQLite, Oracle (all adjacent) — should return max 3.
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Postgres", Canonical: "Postgres", Polarity: keyword.PolarityRequired, Stemmed: "postgr"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Postgres", Canonical: "Postgres", Polarity: domain.PolarityRequired, Stemmed: "postgr"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -242,13 +242,13 @@ func TestAssess_GroundingRejection(t *testing.T) {
 	svc := NewService(model)
 
 	// Missing: gRPC. Profile has REST (adjacent), but the rephrase invents gRPC.
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "gRPC", Canonical: "gRPC", Polarity: keyword.PolarityRequired, Stemmed: "grpc"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "gRPC", Canonical: "gRPC", Polarity: domain.PolarityRequired, Stemmed: "grpc"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -289,13 +289,13 @@ func TestAssess_ProximitySorting(t *testing.T) {
 	svc := NewService(model)
 
 	// Missing: Postgres. Profile has MySQL (close) and Oracle (distant).
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Postgres", Canonical: "Postgres", Polarity: keyword.PolarityRequired, Stemmed: "postgr"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Postgres", Canonical: "Postgres", Polarity: domain.PolarityRequired, Stemmed: "postgr"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -322,8 +322,8 @@ func TestAssess_ProximitySorting(t *testing.T) {
 
 	// First evidence should be the closest proximity (MySQL = close)
 	first := gap.AdjacentEvidence[0]
-	if first.Proximity != keyword.ProximityClose {
-		t.Errorf("First evidence proximity: got %q, want %q (closest first)", first.Proximity, keyword.ProximityClose)
+	if first.Proximity != domain.ProximityClose {
+		t.Errorf("First evidence proximity: got %q, want %q (closest first)", first.Proximity, domain.ProximityClose)
 	}
 	if !contains(first.SourceBullet, "MySQL") {
 		t.Errorf("First evidence should mention MySQL (close), got: %q", first.SourceBullet)
@@ -342,13 +342,13 @@ func TestAssess_RejectsInflatedSeniority(t *testing.T) {
 
 	// Source label says "DevOps Engineer" (no seniority prefix), but the
 	// rephrase claims "Senior" — must be rejected.
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: domain.PolarityRequired, Stemmed: "docker"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -389,13 +389,13 @@ func TestAssess_RejectsInflatedSeniority_JuniorToSenior(t *testing.T) {
 
 	// Source label says "Junior DevOps Engineer" — rephrase claiming "Senior"
 	// must be rejected.
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: domain.PolarityRequired, Stemmed: "docker"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -437,13 +437,13 @@ func TestAssess_AllowsSameSeniority(t *testing.T) {
 	// Source label says "Senior DevOps Engineer" — rephrase does not mention
 	// seniority at all (only uses words from the source bullet), so no
 	// inflation violation. Same-level or absent seniority is allowed.
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: domain.PolarityRequired, Stemmed: "docker"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -485,13 +485,13 @@ func TestAssess_RejectsInflatedDuration(t *testing.T) {
 	svc := NewService(model)
 
 	// Source label says "2022–2024" (2 years), but rephrase claims "10+ years".
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: domain.PolarityRequired, Stemmed: "docker"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,
@@ -534,13 +534,13 @@ func TestAssess_RejectsBorrowedTechnology(t *testing.T) {
 
 	// Source bullet only mentions "Podman and BuildKit" — "Kubernetes" is
 	// borrowed from elsewhere and must be rejected.
-	diffResult := &keyword.DiffResult{
-		Matched: []keyword.DiffTerm{},
-		MissingRequired: []keyword.DiffTerm{
-			{Term: "Docker", Canonical: "Docker", Polarity: keyword.PolarityRequired, Stemmed: "docker"},
+	diffResult := &domain.DiffResult{
+		Matched: []domain.DiffTerm{},
+		MissingRequired: []domain.DiffTerm{
+			{Term: "Docker", Canonical: "Docker", Polarity: domain.PolarityRequired, Stemmed: "docker"},
 		},
-		MissingPreferred: []keyword.DiffTerm{},
-		Metadata: keyword.DiffMetadata{
+		MissingPreferred: []domain.DiffTerm{},
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    1,
 			TotalPreferred:   0,
 			MatchedRequired:  0,

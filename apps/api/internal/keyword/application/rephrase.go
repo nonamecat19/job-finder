@@ -1,6 +1,6 @@
-package keyword
+package application
 
-// Package keyword — truthful rephrase suggester (spec 008-1 §5, task 008-5).
+// Truthful rephrase suggester (spec 008-1 §5, task 008-5).
 //
 // For each missing-required term where the profile holds *adjacent* evidence,
 // the suggester asks the model to reframe an EXISTING profile bullet so the
@@ -30,6 +30,8 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // ReasonNoHonestRephrase is the explicit result when the profile has no
@@ -70,7 +72,7 @@ type RephraseModel interface {
 type EvidenceFinder interface {
 	// FindEvidence returns the best adjacent profile bullet and true, or "" and
 	// false when no bullet is adjacent to the term.
-	FindEvidence(term DiffTerm, bullets []string) (bullet string, ok bool)
+	FindEvidence(term domain.DiffTerm, bullets []string) (bullet string, ok bool)
 }
 
 // Suggester generates truthful rephrases for missing-required terms.
@@ -111,7 +113,7 @@ func (s *Suggester) WithLogger(l *slog.Logger) *Suggester {
 // are the user's existing resume bullet lines, verbatim. The returned slice is
 // aligned 1:1 with missingRequired (including no-rephrase results) so callers
 // can render a complete gap report.
-func (s *Suggester) SuggestAll(ctx context.Context, missingRequired []DiffTerm, profileBullets []string) []RephraseSuggestion {
+func (s *Suggester) SuggestAll(ctx context.Context, missingRequired []domain.DiffTerm, profileBullets []string) []RephraseSuggestion {
 	out := make([]RephraseSuggestion, 0, len(missingRequired))
 	for _, t := range missingRequired {
 		out = append(out, s.Suggest(ctx, t, profileBullets))
@@ -121,7 +123,7 @@ func (s *Suggester) SuggestAll(ctx context.Context, missingRequired []DiffTerm, 
 
 // Suggest produces a truthful rephrase for a single missing-required term, or
 // an explicit no-rephrase result. It never returns an ungrounded suggestion.
-func (s *Suggester) Suggest(ctx context.Context, term DiffTerm, profileBullets []string) RephraseSuggestion {
+func (s *Suggester) Suggest(ctx context.Context, term domain.DiffTerm, profileBullets []string) RephraseSuggestion {
 	res := RephraseSuggestion{Term: term.Term, Canonical: term.Canonical}
 
 	// Guard 1 — evidence gate. No adjacent evidence ⇒ explicit no-rephrase,
@@ -178,7 +180,7 @@ func (s *Suggester) Suggest(ctx context.Context, term DiffTerm, profileBullets [
 // buildRephrasePrompt builds the generation-time grounding prompt (spec §5.2
 // step 2): the model may only reframe the source bullet, and any prior
 // grounding violation is fed back so the retry can correct it.
-func buildRephrasePrompt(term DiffTerm, sourceBullet string, priorViolations []string) string {
+func buildRephrasePrompt(term domain.DiffTerm, sourceBullet string, priorViolations []string) string {
 	want := term.Term
 	if term.Canonical != "" {
 		want = term.Canonical
@@ -225,7 +227,7 @@ func verifyRephraseGrounding(sourceBullet string, allowedProper, sourceNums map[
 	var violations []string
 
 	for _, p := range properNounsInText(rephrase) {
-		if !allowedProper[lowerASCII(p)] {
+		if !allowedProper[domain.LowerASCII(p)] {
 			violations = append(violations, fmt.Sprintf("proper noun / technology %q not in profile", p))
 		}
 	}
@@ -246,7 +248,7 @@ func properNounsInText(s string) []string {
 	var out []string
 	seen := map[string]bool{}
 	for _, sentence := range splitSentences(s) {
-		tokens := tokenRe.FindAllString(sentence, -1)
+		tokens := domain.TokenRe.FindAllString(sentence, -1)
 		for i, tok := range tokens {
 			if !looksProper(tok) {
 				continue
@@ -257,7 +259,7 @@ func properNounsInText(s string) []string {
 			if i == 0 && isPlainCapitalized(tok) {
 				continue
 			}
-			key := lowerASCII(tok)
+			key := domain.LowerASCII(tok)
 			if seen[key] {
 				continue
 			}
@@ -317,8 +319,8 @@ func properNounSet(bullets []string) map[string]bool {
 	for _, b := range bullets {
 		// Index raw word tokens so a lowercase profile mention still grounds a
 		// capitalized mention in the rephrase.
-		for _, w := range tokenRe.FindAllString(b, -1) {
-			set[lowerASCII(w)] = true
+		for _, w := range domain.TokenRe.FindAllString(b, -1) {
+			set[domain.LowerASCII(w)] = true
 		}
 	}
 	return set
@@ -348,14 +350,14 @@ func normNumber(n string) string {
 type LexicalEvidenceFinder struct{}
 
 // FindEvidence returns the first bullet sharing a stemmed token with the term.
-func (LexicalEvidenceFinder) FindEvidence(term DiffTerm, bullets []string) (string, bool) {
+func (LexicalEvidenceFinder) FindEvidence(term domain.DiffTerm, bullets []string) (string, bool) {
 	wants := termStems(term)
 	if len(wants) == 0 {
 		return "", false
 	}
 	for _, b := range bullets {
-		for _, w := range filterStopwords(tokenRe.FindAllString(b, -1)) {
-			if wants[stem(w)] {
+		for _, w := range domain.FilterStopwords(domain.TokenRe.FindAllString(b, -1)) {
+			if wants[domain.Stem(w)] {
 				return b, true
 			}
 		}
@@ -364,14 +366,14 @@ func (LexicalEvidenceFinder) FindEvidence(term DiffTerm, bullets []string) (stri
 }
 
 // termStems returns the set of stemmed significant tokens of a term.
-func termStems(term DiffTerm) map[string]bool {
+func termStems(term domain.DiffTerm) map[string]bool {
 	src := term.Canonical
 	if src == "" {
 		src = term.Term
 	}
 	out := map[string]bool{}
-	for _, w := range filterStopwords(tokenRe.FindAllString(src, -1)) {
-		if s := stem(w); s != "" {
+	for _, w := range domain.FilterStopwords(domain.TokenRe.FindAllString(src, -1)) {
+		if s := domain.Stem(w); s != "" {
 			out[s] = true
 		}
 	}

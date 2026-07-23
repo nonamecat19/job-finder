@@ -1,13 +1,13 @@
-package keyword_test
+package domain_test
 
 import (
 	"testing"
 
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // RegexExtractor must satisfy the Extractor port structurally.
-var _ keyword.Extractor = (*keyword.RegexExtractor)(nil)
+var _ domain.Extractor = (*domain.RegexExtractor)(nil)
 
 // fixture is one real-ish job description plus the skills we expect to be
 // classified required vs preferred. The extractor is recall-biased, so we
@@ -20,13 +20,13 @@ type fixture struct {
 	preferred map[string]bool // canonical term -> must be preferred
 }
 
-func findTerm(res *keyword.ExtractResult, canonical string) (keyword.ExtractedTerm, bool) {
+func findTerm(res *domain.ExtractResult, canonical string) (domain.ExtractedTerm, bool) {
 	for _, t := range res.Terms {
 		if t.Canonical == canonical {
 			return t, true
 		}
 	}
-	return keyword.ExtractedTerm{}, false
+	return domain.ExtractedTerm{}, false
 }
 
 func TestExtractClassifiesRequiredVsPreferred(t *testing.T) {
@@ -179,7 +179,7 @@ Bonus points
 		},
 	}
 
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	for _, f := range fixtures {
 		t.Run(f.name, func(t *testing.T) {
 			res, err := ext.Extract(f.jd)
@@ -192,7 +192,7 @@ Bonus points
 					t.Errorf("expected required term %q not found; got terms: %v", want, termList(res))
 					continue
 				}
-				if term.Polarity != keyword.PolarityRequired {
+				if term.Polarity != domain.PolarityRequired {
 					t.Errorf("term %q: expected required, got %s", want, term.Polarity)
 				}
 			}
@@ -202,7 +202,7 @@ Bonus points
 					t.Errorf("expected preferred term %q not found; got terms: %v", want, termList(res))
 					continue
 				}
-				if term.Polarity != keyword.PolarityPreferred {
+				if term.Polarity != domain.PolarityPreferred {
 					t.Errorf("term %q: expected preferred, got %s", want, term.Polarity)
 				}
 			}
@@ -210,7 +210,7 @@ Bonus points
 	}
 }
 
-func termList(res *keyword.ExtractResult) []string {
+func termList(res *domain.ExtractResult) []string {
 	out := make([]string, 0, len(res.Terms))
 	for _, t := range res.Terms {
 		out = append(out, t.Canonical+"("+string(t.Polarity)+")")
@@ -234,7 +234,7 @@ func TestAcronymAndSynonymExpansion(t *testing.T) {
 		{"node expands to node.js", "Requirements\n- Use Node in production", "Node.js"},
 		{"ci expands to continuous integration", "Requirements\n- Set up CI pipelines", "Continuous Integration"},
 	}
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := ext.Extract(tt.jd)
@@ -264,7 +264,7 @@ func TestStemmingNormalizesInflections(t *testing.T) {
 		{"containerize", "Requirements\n- Ability to containerize apps", "docker"},
 		{"deploying", "Requirements\n- Experience deploying to cloud", "deploy"},
 	}
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := ext.Extract(tt.jd)
@@ -286,14 +286,14 @@ func TestStemmingNormalizesInflections(t *testing.T) {
 }
 
 func TestExtractEmptyReturnsError(t *testing.T) {
-	_, err := keyword.NewExtractor().Extract("   ")
+	_, err := domain.NewExtractor().Extract("   ")
 	if err == nil {
 		t.Fatal("expected error for empty JD, got nil")
 	}
 }
 
 func TestNewServiceAcceptsExtractorPort(t *testing.T) {
-	ext := keyword.NewExtractor()
+	ext := domain.NewExtractor()
 	if ext == nil {
 		t.Fatal("NewExtractor returned nil")
 	}

@@ -1,28 +1,25 @@
-package keyword_test
+package domain_test
 
 import (
-	"context"
 	"reflect"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // term is a tiny constructor for an already-normalized JD term. We call the
 // package's extractor path for realism where it matters, but for the pure diff
 // tests we build terms directly so each case isolates one match path.
-func term(raw string, polarity keyword.Polarity) keyword.ExtractedTerm {
-	res, _ := keyword.NewExtractor().Extract("Requirements\n- " + raw)
+func term(raw string, polarity domain.Polarity) domain.ExtractedTerm {
+	res, _ := domain.NewExtractor().Extract("Requirements\n- " + raw)
 	for _, t := range res.Terms {
 		t.Polarity = polarity
 		return t
 	}
-	return keyword.ExtractedTerm{}
+	return domain.ExtractedTerm{}
 }
 
-func canonicals(terms []keyword.DiffTerm) []string {
+func canonicals(terms []domain.DiffTerm) []string {
 	out := make([]string, len(terms))
 	for i, t := range terms {
 		out[i] = t.Canonical
@@ -30,28 +27,28 @@ func canonicals(terms []keyword.DiffTerm) []string {
 	return out
 }
 
-func findDiff(terms []keyword.DiffTerm, canonical string) (keyword.DiffTerm, bool) {
+func findDiff(terms []domain.DiffTerm, canonical string) (domain.DiffTerm, bool) {
 	for _, t := range terms {
 		if t.Canonical == canonical {
 			return t, true
 		}
 	}
-	return keyword.DiffTerm{}, false
+	return domain.DiffTerm{}, false
 }
 
 // TestExactMatch: a resume term whose canonical form equals the JD term's
 // canonical lands in matched with MatchExact.
 func TestExactMatch(t *testing.T) {
-	jd := &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
-		term("Kubernetes", keyword.PolarityRequired),
+	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
+		term("Kubernetes", domain.PolarityRequired),
 	}}
-	res := keyword.NewDiffer().Diff(jd, []string{"Kubernetes"})
+	res := domain.NewDiffer().Diff(jd, []string{"Kubernetes"})
 
 	got, ok := findDiff(res.Matched, "Kubernetes")
 	if !ok {
 		t.Fatalf("Kubernetes should be matched, got matched=%v", canonicals(res.Matched))
 	}
-	if got.MatchType != keyword.MatchExact {
+	if got.MatchType != domain.MatchExact {
 		t.Errorf("expected exact match, got %q", got.MatchType)
 	}
 	if len(res.MissingRequired) != 0 {
@@ -62,16 +59,16 @@ func TestExactMatch(t *testing.T) {
 // TestSynonymMatchIsExact: JD uses an acronym/alias, resume uses the full form.
 // Synonym resolution collapses both to the same canonical → exact match.
 func TestSynonymMatchIsExact(t *testing.T) {
-	jd := &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
-		term("K8s", keyword.PolarityRequired),
+	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
+		term("K8s", domain.PolarityRequired),
 	}}
-	res := keyword.NewDiffer().Diff(jd, []string{"Kubernetes"})
+	res := domain.NewDiffer().Diff(jd, []string{"Kubernetes"})
 
 	got, ok := findDiff(res.Matched, "Kubernetes")
 	if !ok {
 		t.Fatalf("K8s should match Kubernetes via synonym, got matched=%v", canonicals(res.Matched))
 	}
-	if got.MatchType != keyword.MatchExact {
+	if got.MatchType != domain.MatchExact {
 		t.Errorf("expected exact (canonical) match, got %q", got.MatchType)
 	}
 }
@@ -79,19 +76,19 @@ func TestSynonymMatchIsExact(t *testing.T) {
 // TestNormalizedMatch: canonical strings differ but stemming makes them equal
 // (inflectional variation) → matched with MatchNormalized.
 func TestNormalizedMatch(t *testing.T) {
-	jd := &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
-		term("Microservices", keyword.PolarityRequired),
+	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
+		term("Microservices", domain.PolarityRequired),
 	}}
 	// "microservices" stems (plural strip) to "microservice", matching the
 	// singular resume term even though the canonical strings differ.
-	res := keyword.NewDiffer().Diff(jd, []string{"microservice"})
+	res := domain.NewDiffer().Diff(jd, []string{"microservice"})
 
 	got, ok := findDiff(res.Matched, jd.Terms[0].Canonical)
 	if !ok {
 		t.Fatalf("Microservices should normalize-match microservice, matched=%v missingReq=%v",
 			canonicals(res.Matched), canonicals(res.MissingRequired))
 	}
-	if got.MatchType != keyword.MatchNormalized {
+	if got.MatchType != domain.MatchNormalized {
 		t.Errorf("expected normalized match, got %q", got.MatchType)
 	}
 }
@@ -99,11 +96,11 @@ func TestNormalizedMatch(t *testing.T) {
 // TestNoMatchRequiredAndPreferred: unmatched terms fall into the correct
 // missing bucket by polarity.
 func TestNoMatchRequiredAndPreferred(t *testing.T) {
-	jd := &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
-		term("Rust", keyword.PolarityRequired),
-		term("Haskell", keyword.PolarityPreferred),
+	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
+		term("Rust", domain.PolarityRequired),
+		term("Haskell", domain.PolarityPreferred),
 	}}
-	res := keyword.NewDiffer().Diff(jd, []string{"Python", "Go"})
+	res := domain.NewDiffer().Diff(jd, []string{"Python", "Go"})
 
 	if _, ok := findDiff(res.MissingRequired, "Rust"); !ok {
 		t.Errorf("Rust should be missing-required, got %v", canonicals(res.MissingRequired))
@@ -118,13 +115,13 @@ func TestNoMatchRequiredAndPreferred(t *testing.T) {
 
 // TestCoveragePct: coverage is (matchedRequired+matchedPreferred)/total*100.
 func TestCoveragePct(t *testing.T) {
-	jd := &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
-		term("Python", keyword.PolarityRequired),
-		term("Go", keyword.PolarityRequired),
-		term("Rust", keyword.PolarityRequired),
-		term("gRPC", keyword.PolarityPreferred),
+	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
+		term("Python", domain.PolarityRequired),
+		term("Go", domain.PolarityRequired),
+		term("Rust", domain.PolarityRequired),
+		term("gRPC", domain.PolarityPreferred),
 	}}
-	res := keyword.NewDiffer().Diff(jd, []string{"Python", "Go"})
+	res := domain.NewDiffer().Diff(jd, []string{"Python", "Go"})
 
 	if res.Metadata.TotalRequired != 3 || res.Metadata.TotalPreferred != 1 {
 		t.Fatalf("totals wrong: %+v", res.Metadata)
@@ -140,19 +137,19 @@ func TestCoveragePct(t *testing.T) {
 // TestDeterministicOrdering: buckets are sorted so repeated runs and shuffled
 // input produce byte-identical output (UI stability acceptance criterion).
 func TestDeterministicOrdering(t *testing.T) {
-	mk := func() *keyword.ExtractResult {
-		return &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
-			term("Zsh", keyword.PolarityRequired),
-			term("Ansible", keyword.PolarityRequired),
-			term("Terraform", keyword.PolarityPreferred),
-			term("Docker", keyword.PolarityRequired),
+	mk := func() *domain.ExtractResult {
+		return &domain.ExtractResult{Terms: []domain.ExtractedTerm{
+			term("Zsh", domain.PolarityRequired),
+			term("Ansible", domain.PolarityRequired),
+			term("Terraform", domain.PolarityPreferred),
+			term("Docker", domain.PolarityRequired),
 		}}
 	}
-	shuffled := &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
+	shuffled := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
 		mk().Terms[2], mk().Terms[0], mk().Terms[3], mk().Terms[1],
 	}}
 
-	d := keyword.NewDiffer()
+	d := domain.NewDiffer()
 	a := d.Diff(mk(), nil)
 	b := d.Diff(shuffled, nil)
 
@@ -175,7 +172,7 @@ func TestExtractResumeTerms(t *testing.T) {
 Skills: Python, Kubernetes, Terraform
 Certifications: AWS Certified Solutions Architect
 `
-	terms := keyword.ExtractResumeTerms(profile)
+	terms := domain.ExtractResumeTerms(profile)
 	set := map[string]bool{}
 	for _, s := range terms {
 		set[s] = true
@@ -187,56 +184,15 @@ Certifications: AWS Certified Solutions Architect
 	}
 
 	// End-to-end: whole-profile terms drive the diff.
-	jd := &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
-		term("Kubernetes", keyword.PolarityRequired),
-		term("Rust", keyword.PolarityRequired),
+	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
+		term("Kubernetes", domain.PolarityRequired),
+		term("Rust", domain.PolarityRequired),
 	}}
-	res := keyword.NewDiffer().Diff(jd, terms)
+	res := domain.NewDiffer().Diff(jd, terms)
 	if _, ok := findDiff(res.Matched, "Kubernetes"); !ok {
 		t.Errorf("Kubernetes from profile should match, matched=%v", canonicals(res.Matched))
 	}
 	if _, ok := findDiff(res.MissingRequired, "Rust"); !ok {
 		t.Errorf("Rust should be missing, got %v", canonicals(res.MissingRequired))
-	}
-}
-
-// fakeDiffWriter records the last upsert so Persist can be tested without a DB.
-type fakeDiffWriter struct {
-	arg sqlcgen.UpsertKeywordDiffParams
-}
-
-func (f *fakeDiffWriter) UpsertKeywordDiff(_ context.Context, arg sqlcgen.UpsertKeywordDiffParams) (sqlcgen.KeywordDiff, error) {
-	f.arg = arg
-	return sqlcgen.KeywordDiff{JobId: arg.JobId, Model: arg.Model}, nil
-}
-
-var _ keyword.DiffWriter = (*fakeDiffWriter)(nil)
-
-// TestPersistMarshalsBucketsAndModel verifies the diff is written to the cache
-// row with jsonb buckets, coverage, and a default model label.
-func TestPersistMarshalsBucketsAndModel(t *testing.T) {
-	jd := &keyword.ExtractResult{Terms: []keyword.ExtractedTerm{
-		term("Python", keyword.PolarityRequired),
-		term("Rust", keyword.PolarityRequired),
-	}}
-	res := keyword.NewDiffer().Diff(jd, []string{"Python"})
-
-	w := &fakeDiffWriter{}
-	jobID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
-	row, err := keyword.Persist(context.Background(), w, jobID, res, "")
-	if err != nil {
-		t.Fatalf("Persist error: %v", err)
-	}
-	if row.Model != keyword.DefaultDiffModel {
-		t.Errorf("model want %q, got %q", keyword.DefaultDiffModel, row.Model)
-	}
-	if len(w.arg.Matched) == 0 || string(w.arg.Matched) == "null" {
-		t.Errorf("matched jsonb should be a non-null array, got %q", w.arg.Matched)
-	}
-	if w.arg.CoveragePct == nil || *w.arg.CoveragePct != 50.0 {
-		t.Errorf("coveragePct want 50.0, got %v", w.arg.CoveragePct)
-	}
-	if !w.arg.JobId.Valid {
-		t.Errorf("jobId should be passed through")
 	}
 }

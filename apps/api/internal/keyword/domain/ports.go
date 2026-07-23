@@ -1,10 +1,13 @@
-// Package keyword ports modules/keyword/*: turn a raw job description into a
-// set of typed terms (required vs preferred) and normalize those terms for the
-// downstream ATS diff (008). This is the hexagonal seam: the Extractor port
-// lives in the domain layer (this file) and the concrete implementation behind
-// it is swappable — today a deterministic regex/lexicon extractor, tomorrow an
-// LLM-backed one — without touching callers. See spec 008-1 (el-1a4s).
-package keyword
+// Package domain holds the keyword bounded context's core model: the
+// Extractor port and its regex/lexicon implementation, the term diff/
+// classifier/question/story-selection engines, and the synonym/adjacency
+// data. Everything here is pure and dependency-free — turn a raw job
+// description into a set of typed terms (required vs preferred) and
+// normalize those terms for the downstream ATS diff (008). The Extractor
+// port is swappable — today a deterministic regex/lexicon extractor,
+// tomorrow an LLM-backed one — without touching callers. See spec 008-1
+// (el-1a4s).
+package domain
 
 // Polarity is the required/preferred classification of an extracted term.
 type Polarity string
