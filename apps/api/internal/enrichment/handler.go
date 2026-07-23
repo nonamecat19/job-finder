@@ -15,14 +15,14 @@ import (
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/queue"
 )
 
 type Handler struct {
 	q            Repository
-	sources      *jobsources.Service
+	sources      *application.Service
 	djinni       adapters.DjinniAdapter
 	dou          adapters.DouAdapter
 	workua       adapters.WorkUaAdapter
@@ -31,11 +31,11 @@ type Handler struct {
 	delays       map[string]time.Duration
 }
 
-func NewHandler(q Repository, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
+func NewHandler(q Repository, sources *application.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
 	return &Handler{
 		q: q, sources: sources,
 		djinni: djinni, dou: dou, workua: workua,
-		client: client,
+		client:       client,
 		defaultDelay: defaultDelay,
 		delays:       delays,
 	}

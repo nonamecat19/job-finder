@@ -19,8 +19,9 @@ import (
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
 	"github.com/job-finder/api/internal/jobs"
-	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/jobsources/application"
+	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/keyword"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/llmsettings"
@@ -74,21 +75,21 @@ type App struct {
 }
 
 type sourcesHandles struct {
-	Registry *jobsources.Registry
-	Sources  *jobsources.Service
+	Registry *domain.Registry
+	Sources  *application.Service
 	Djinni   adapters.DjinniAdapter
 	Dou      adapters.DouAdapter
 	Workua   adapters.WorkUaAdapter
 }
 
-// composeJobSources builds the adapter registry and jobsources.Service, then
+// composeJobSources builds the adapter registry and application.Service, then
 // wires the djinni session's Sources back-reference now that the service
 // exists (closing the adapter<->service cycle).
 func composeJobSources(p *Platform) *sourcesHandles {
 	djinniAdapter := adapters.DjinniAdapter{Scraping: p.Scraping, Session: p.DjinniSession}
 	douAdapter := adapters.DouAdapter{Scraping: p.Scraping}
 	workuaAdapter := adapters.WorkUaAdapter{Scraping: p.Scraping}
-	registry := jobsources.NewRegistry(
+	registry := domain.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
 		adapters.ArbeitnowAdapter{},
@@ -99,7 +100,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
 	)
-	sourcesSvc := jobsources.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
+	sourcesSvc := application.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc
 	return &sourcesHandles{
 		Registry: registry,
@@ -283,7 +284,7 @@ func composeApplications(p *Platform) *httpapi.ApplicationsHandler {
 	return &httpapi.ApplicationsHandler{Applications: applicationsSvc}
 }
 
-func composeSubscriptions(p *Platform, sourcesSvc *jobsources.Service, ingestionSvc *ingestion.Service) *httpapi.SubscriptionsHandler {
+func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestionSvc *ingestion.Service) *httpapi.SubscriptionsHandler {
 	subsSvc := subscriptions.NewService(p.DB.Queries, sourcesSvc)
 	return &httpapi.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
 }

@@ -13,8 +13,9 @@ import (
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
-	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/jobsources/application"
+	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/seed"
 )
 
@@ -57,7 +58,7 @@ func run() error {
 	// are created lazily on first use, not seeded upfront. The fixtures below
 	// (SourceRun, Subscription) FK against those rows, so materialize one per
 	// adapter here via the same lazy GetByKey path the running server uses.
-	registry := jobsources.NewRegistry(
+	registry := domain.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
 		adapters.ArbeitnowAdapter{},
@@ -68,7 +69,7 @@ func run() error {
 		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
 	)
-	sourcesSvc := jobsources.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
+	sourcesSvc := application.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
 	for _, a := range registry.All() {
 		if _, err := sourcesSvc.GetByKey(ctx, a.Key()); err != nil {
 			return fmt.Errorf("seed: job source %s: %w", a.Key(), err)

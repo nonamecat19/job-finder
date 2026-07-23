@@ -15,18 +15,19 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/jobsources"
+	"github.com/job-finder/api/internal/jobsources/application"
+	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/queue"
 )
 
 type Service struct {
 	q        Repository
-	registry *jobsources.Registry
-	sources  *jobsources.Service
+	registry *domain.Registry
+	sources  *application.Service
 	client   Enqueuer
 }
 
-func NewService(q Repository, registry *jobsources.Registry, sources *jobsources.Service, client Enqueuer) *Service {
+func NewService(q Repository, registry *domain.Registry, sources *application.Service, client Enqueuer) *Service {
 	return &Service{q: q, registry: registry, sources: sources, client: client}
 }
 

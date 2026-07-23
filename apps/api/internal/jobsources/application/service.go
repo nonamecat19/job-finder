@@ -1,4 +1,9 @@
-package jobsources
+// Package application holds the jobsources use-case orchestration: per-source
+// runtime state (enabled/config/healthy), encrypting/decrypting/masking config,
+// and running health checks. It depends on the domain model (Registry,
+// Repository port, JobSource, typed errors) and never on the HTTP or worker
+// layers.
+package application
 
 import (
 	"context"
@@ -13,6 +18,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/jobsources/domain"
 )
 
 var secretKeyRe = regexp.MustCompile(`(?i)cookie|key|secret|token|password`)
@@ -22,12 +28,12 @@ var secretKeyRe = regexp.MustCompile(`(?i)cookie|key|secret|token|password`)
 // identity (key/kind) lives only in the adapter registry; a JobSource row is
 // created lazily, on first real use of a key, not seeded upfront.
 type Service struct {
-	q        Repository
-	registry *Registry
+	q        domain.Repository
+	registry *domain.Registry
 	encKey   string // CONFIG_ENCRYPTION_KEY hex; "" disables encryption (dev fallback)
 }
 
-func NewService(q Repository, registry *Registry, encKey string) *Service {
+func NewService(q domain.Repository, registry *domain.Registry, encKey string) *Service {
 	return &Service{q: q, registry: registry, encKey: encKey}
 }
 
@@ -92,23 +98,23 @@ func (s *Service) List(ctx context.Context) ([]dto.JobSourceDto, error) {
 	out := make([]dto.JobSourceDto, 0, len(adapters))
 	for _, a := range adapters {
 		if r, ok := byKey[a.Key()]; ok {
-			out = append(out, dto.JobSourceDto{
+			out = append(out, domain.JobSource{
 				ID:      dbutil.UUIDString(r.ID),
 				Key:     r.Key,
 				Kind:    dto.SourceKind(r.Kind),
 				Enabled: r.Enabled,
 				Healthy: r.Healthy,
 				Config:  maskConfig(s.DecryptConfig(r.Config)),
-			})
+			}.ToDTO())
 			continue
 		}
-		out = append(out, dto.JobSourceDto{
+		out = append(out, domain.JobSource{
 			Key:     a.Key(),
 			Kind:    a.Kind(),
 			Enabled: true,
 			Healthy: true,
 			Config:  map[string]any{},
-		})
+		}.ToDTO())
 	}
 	return out, nil
 }
@@ -120,7 +126,7 @@ func (s *Service) List(ctx context.Context) ([]dto.JobSourceDto, error) {
 func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, error) {
 	adapter, err := s.registry.Get(key)
 	if err != nil {
-		return sqlcgen.JobSource{}, fmt.Errorf("source '%s' not found", key)
+		return sqlcgen.JobSource{}, domain.SourceNotFoundError{Key: key}
 	}
 
 	row, err := s.q.GetJobSourceByKey(ctx, key)
@@ -144,7 +150,7 @@ func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, 
 	}
 	row, err = s.q.GetJobSourceByKey(ctx, key)
 	if err != nil {
-		return sqlcgen.JobSource{}, fmt.Errorf("source '%s' not found", key)
+		return sqlcgen.JobSource{}, domain.SourceNotFoundError{Key: key}
 	}
 	return row, nil
 }
@@ -209,7 +215,7 @@ func (s *Service) Update(ctx context.Context, key string, enabled *bool, configP
 			return &list[i], nil
 		}
 	}
-	return nil, fmt.Errorf("source '%s' not found", key)
+	return nil, domain.SourceNotFoundError{Key: key}
 }
 
 // Test runs the adapter's health check (or falls back to a tiny search) and

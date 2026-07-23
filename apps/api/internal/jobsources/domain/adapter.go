@@ -1,12 +1,13 @@
-// Package jobsources defines the JobSourceAdapter extensibility point and the
-// registry of all adapters, mirroring modules/job-sources/adapter.interface.ts
-// and job-source.registry.ts. Adding a job site = one adapter implementing
-// Adapter + one entry in the registry's constructor list.
-package jobsources
+// Package domain holds the jobsources bounded context's core model: the
+// Adapter extensibility point, the adapter Registry, the persistence
+// Repository port, the JobSource value object, and the typed errors the use
+// case can return. It mirrors modules/job-sources/adapter.interface.ts and
+// job-source.registry.ts. Adding a job site = one adapter implementing Adapter
+// + one entry in the registry's constructor list.
+package domain
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/job-finder/api/internal/dto"
 )
@@ -39,7 +40,7 @@ func NewRegistry(adapters ...Adapter) *Registry {
 func (r *Registry) Get(key string) (Adapter, error) {
 	a, ok := r.byKey[key]
 	if !ok {
-		return nil, fmt.Errorf("no job source adapter registered for key '%s'", key)
+		return nil, AdapterNotRegisteredError{Key: key}
 	}
 	return a, nil
 }

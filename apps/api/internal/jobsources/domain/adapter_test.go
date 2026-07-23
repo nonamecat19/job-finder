@@ -1,4 +1,4 @@
-package jobsources
+package domain
 
 import (
 	"context"
