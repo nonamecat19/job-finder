@@ -2,10 +2,10 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { KeywordDiffResponse } from '@job-finder/shared'
 import { renderWithProviders } from '../../test/test-utils'
-import { api } from '../../api'
+import { api } from '../../lib/api'
 import KeywordDiffPanel from './KeywordDiffPanel'
 
-vi.mock('../../api', () => ({
+vi.mock('../../lib/api', () => ({
   api: {
     jobs: { keywordDiff: vi.fn() },
   },

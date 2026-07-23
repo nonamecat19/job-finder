@@ -1,10 +1,10 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from './test/test-utils'
-import { api } from './api'
+import { api } from './lib/api'
 import App from './App'
 
-vi.mock('./api', () => ({
+vi.mock('./lib/api', () => ({
   api: {
     jobs: {
       list: vi.fn(),

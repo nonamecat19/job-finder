@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DocumentType } from '@job-finder/shared';
-import { api } from '../../api';
+import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { emitToast, toErrorMessage } from '../../lib/toastBus';
 
@@ -170,5 +170,13 @@ export function useOutreachTones(jobId: string | undefined) {
 export function useGenerateOutreachDraft(jobId: string | undefined) {
   return useMutation({
     mutationFn: (body: { contactId?: string; tone?: string }) => api.outreach.generate(jobId!, body),
+  });
+}
+
+export function usePostAgeSignal() {
+  return useQuery({
+    queryKey: queryKeys.postage.responseRate,
+    queryFn: api.postage.responseRate,
+    staleTime: 60000,
   });
 }

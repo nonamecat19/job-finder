@@ -1,10 +1,10 @@
 import { screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import { mockPostAgeResponse } from '../../test/factories'
-import { api } from '../../api'
+import { api } from '../../lib/api'
 import PostAgeSignal from './PostAgeSignal'
 
-vi.mock('../../api', () => ({
+vi.mock('../../lib/api', () => ({
   api: {
     postage: { responseRate: vi.fn() },
   },

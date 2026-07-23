@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type JobFilters } from '../../api';
+import { api, type JobFilters } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 
 export function useJobs(filters: JobFilters) {

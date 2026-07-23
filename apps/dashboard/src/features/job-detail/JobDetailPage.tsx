@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { Button, Chip, ScoreBadge, Spinner, Surface, Textarea } from '../../components/ui';
-import { api } from '../../api';
+import { api } from '../../lib/api';
 import {
   useGenerateDocument,
   useJobDetail,

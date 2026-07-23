@@ -2,10 +2,10 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import { mockFreshMatchNotification } from '../../test/factories'
-import { api } from '../../api'
+import { api } from '../../lib/api'
 import NotificationBell from './NotificationBell'
 
-vi.mock('../../api', () => ({
+vi.mock('../../lib/api', () => ({
   api: {
     notifications: { list: vi.fn(), markSeen: vi.fn(), unseenCount: vi.fn() },
   },
