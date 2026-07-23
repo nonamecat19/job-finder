@@ -1,4 +1,4 @@
-package outreach
+package application
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/outreach/domain"
 )
 
 // fakeContacts implements ContactsProvider with a fixed response, mirroring
@@ -195,23 +196,23 @@ func TestGenerateDraft_DefaultTone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateDraft: %v", err)
 	}
-	if out.Tone != string(DefaultTone) {
-		t.Errorf("Tone = %q, want default %q", out.Tone, DefaultTone)
+	if out.Tone != string(domain.DefaultTone) {
+		t.Errorf("Tone = %q, want default %q", out.Tone, domain.DefaultTone)
 	}
 
 	out2, err := svc.GenerateDraft(context.Background(), "job-1", "", "not-a-real-tone")
 	if err != nil {
 		t.Fatalf("GenerateDraft: %v", err)
 	}
-	if out2.Tone != string(DefaultTone) {
-		t.Errorf("Tone = %q for unknown input, want default %q", out2.Tone, DefaultTone)
+	if out2.Tone != string(domain.DefaultTone) {
+		t.Errorf("Tone = %q for unknown input, want default %q", out2.Tone, domain.DefaultTone)
 	}
 }
 
 // TestGenerateDraft_OverLengthRetriesThenFits covers FR-009: an over-length
 // first attempt is rejected and retried rather than ever presented.
 func TestGenerateDraft_OverLengthRetriesThenFits(t *testing.T) {
-	tooLong := strings.Repeat("word ", 200) // way over maxDraftChars
+	tooLong := strings.Repeat("word ", 200) // way over domain.MaxDraftChars
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
 	llmc := &fakeLLM{responses: []string{
@@ -224,8 +225,8 @@ func TestGenerateDraft_OverLengthRetriesThenFits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateDraft: %v", err)
 	}
-	if len(out.Text) > maxDraftChars {
-		t.Errorf("text length %d exceeds limit %d", len(out.Text), maxDraftChars)
+	if len(out.Text) > domain.MaxDraftChars {
+		t.Errorf("text length %d exceeds limit %d", len(out.Text), domain.MaxDraftChars)
 	}
 	if llmc.calls < 2 {
 		t.Errorf("expected a retry after the over-length attempt, got %d calls", llmc.calls)
@@ -245,8 +246,8 @@ func TestGenerateDraft_AllAttemptsOverLength_FallsBackGeneric(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateDraft: %v", err)
 	}
-	if len(out.Text) > maxDraftChars {
-		t.Fatalf("text length %d exceeds limit %d", len(out.Text), maxDraftChars)
+	if len(out.Text) > domain.MaxDraftChars {
+		t.Fatalf("text length %d exceeds limit %d", len(out.Text), domain.MaxDraftChars)
 	}
 	if len(out.GroundingTraces) != 0 {
 		t.Errorf("expected the safe generic fallback (no traces), got %+v", out.GroundingTraces)
@@ -319,8 +320,8 @@ func TestGenerateDraft_MultipleContacts_RequiresChoice(t *testing.T) {
 	svc := NewService(contacts, &fakeIntel{}, &fakeLLM{}, "")
 
 	_, err := svc.GenerateDraft(context.Background(), "job-1", "", "warm")
-	if err != ErrContactRequired {
-		t.Errorf("err = %v, want ErrContactRequired", err)
+	if err != domain.ErrContactRequired {
+		t.Errorf("err = %v, want domain.ErrContactRequired", err)
 	}
 }
 
@@ -332,8 +333,8 @@ func TestGenerateDraft_UnknownContactID(t *testing.T) {
 	svc := NewService(contacts, &fakeIntel{}, &fakeLLM{}, "")
 
 	_, err := svc.GenerateDraft(context.Background(), "job-1", "does-not-exist", "warm")
-	if err != ErrContactNotFound {
-		t.Errorf("err = %v, want ErrContactNotFound", err)
+	if err != domain.ErrContactNotFound {
+		t.Errorf("err = %v, want domain.ErrContactNotFound", err)
 	}
 }
 
@@ -366,8 +367,8 @@ func TestTones(t *testing.T) {
 	for _, to := range tones {
 		if to.Default {
 			defaults++
-			if to.Value != string(DefaultTone) {
-				t.Errorf("default tone value = %q, want %q", to.Value, DefaultTone)
+			if to.Value != string(domain.DefaultTone) {
+				t.Errorf("default tone value = %q, want %q", to.Value, domain.DefaultTone)
 			}
 		}
 	}

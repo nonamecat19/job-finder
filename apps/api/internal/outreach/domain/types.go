@@ -1,14 +1,15 @@
-// Package outreach generates a short, draft-only post-apply outreach
-// message addressed to a resolved contact (plan 007), grounding every
-// specific claim it makes about the team or company in a stored
-// company-intel signal (plan 004). Mirrors specs/012-outreach-generator.
+// Package domain holds the outreach bounded context's core model: the
+// short, draft-only post-apply outreach message addressed to a resolved
+// contact (plan 007), grounding every specific claim it makes about the
+// team or company in a stored company-intel signal (plan 004). Mirrors
+// specs/012-outreach-generator.
 //
 // Two constitution-level hard constraints, enforced by construction rather
 // than by convention:
 //
 //   - Grounding (Principle II): a specific claim about the team, its stack,
 //     funding, size, or situation may only ever be a verbatim substring of a
-//     stored CompanySignal value (see Fact/groundClaims). A claim that
+//     stored CompanySignal value (see Fact/GroundClaims). A claim that
 //     cannot be traced this way is never presented — the draft either
 //     retries or falls back to a fact-free generic opener (FR-004..FR-006,
 //     FR-012).
@@ -16,7 +17,7 @@
 //     no SMTP client import, no auto-composed email-client link, no
 //     delivery integration. GenerateDraft is a pure read-and-produce call;
 //     nothing it returns is ever transmitted by the system (FR-002, FR-017).
-package outreach
+package domain
 
 import "time"
 
@@ -49,9 +50,9 @@ func isValidTone(t Tone) bool {
 	return false
 }
 
-// normalizeTone maps a raw (possibly empty or invalid) tone string to a
+// NormalizeTone maps a raw (possibly empty or invalid) tone string to a
 // valid Tone, defaulting rather than erroring (FR-011).
-func normalizeTone(raw string) Tone {
+func NormalizeTone(raw string) Tone {
 	t := Tone(raw)
 	if isValidTone(t) {
 		return t
