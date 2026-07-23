@@ -34,6 +34,7 @@ import (
 	"github.com/job-finder/api/internal/jobsources/adapters"
 	"github.com/job-finder/api/internal/keyword"
 	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/llmsettings"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/outreach"
@@ -134,12 +135,37 @@ func run() error {
 	sourcesHandler := &httpapi.SourcesHandler{Sources: sourcesSvc, Ingestion: ingestionSvc}
 	searchesHandler := &httpapi.SearchesHandler{Ingestion: ingestionSvc}
 
-	llmProvider, err := llm.New(cfg)
+	// Cerebras free-tier model toggle (001-cerebras-model-toggle): Ollama is
+	// always built; Cerebras is nil when CEREBRAS_API_KEY is unset. Each named
+	// chat task gets its own llm.Router sharing one settings snapshot, so a
+	// dashboard change (llmSettingsSvc.Update) takes effect for newly started
+	// tasks without a restart (FR-005). Embeddings always use ollamaProvider
+	// directly or via Router.Embed, which is pinned to Ollama regardless of
+	// the task's chat provider (FR-006) — Cerebras has no embeddings endpoint.
+	ollamaProvider, cerebrasProvider, err := llm.NewProviders(cfg)
 	if err != nil {
 		return err
 	}
-	profileSvc := profile.NewService(database.Queries, llmProvider, cfg.EmbedModel, cfg.RendercvBin)
-	matchingSvc := matching.NewService(database.Queries, profileSvc, llmProvider, cfg.MatchSimilarityThreshold, cfg.ModelOr(cfg.LLMModelMatch))
+	var cerebrasIface llm.Provider
+	if cerebrasProvider != nil {
+		cerebrasIface = cerebrasProvider
+	}
+	llmSettingsSvc, err := llmsettings.NewService(ctx, database.Queries, cfg.CerebrasAPIKey != "")
+	if err != nil {
+		return err
+	}
+	llmHolder := llmSettingsSvc.Holder()
+	matchRouter := llm.NewRouter("match", llmHolder, ollamaProvider, cerebrasIface)
+	generationRouter := llm.NewRouter("generation", llmHolder, ollamaProvider, cerebrasIface)
+	rephraseRouter := llm.NewRouter("rephrase", llmHolder, ollamaProvider, cerebrasIface)
+	ghostRouter := llm.NewRouter("ghost", llmHolder, ollamaProvider, cerebrasIface)
+	defaultRouter := llm.NewRouter("default", llmHolder, ollamaProvider, cerebrasIface)
+	llmSettingsHandler := &httpapi.LlmSettingsHandler{Settings: llmSettingsSvc}
+
+	// profileSvc only ever calls Embed (never chat), so it talks to Ollama
+	// directly rather than through a task Router.
+	profileSvc := profile.NewService(database.Queries, ollamaProvider, cfg.EmbedModel, cfg.RendercvBin)
+	matchingSvc := matching.NewService(database.Queries, profileSvc, matchRouter, cfg.MatchSimilarityThreshold, "")
 	notifierSvc := notifier.NewService(database.Queries,
 		notifier.WithMatchThreshold(cfg.MatchNotifyScoreThreshold),
 		notifier.WithRateLimitCap(cfg.MatchNotifyRateLimit),
@@ -149,7 +175,7 @@ func run() error {
 	// Ghost-job detector (005): scored at ingestion (async) and on manual
 	// refresh only — never on a schedule (FR-014). Kept separate from
 	// matching/fit scoring end-to-end (FR-008).
-	ghostSvc := ghostjob.NewService(database.Queries, llmProvider, cfg.ModelOr(cfg.LLMModelGhost))
+	ghostSvc := ghostjob.NewService(database.Queries, ghostRouter, "")
 	ghostHandler := ghostjob.NewHandler(ghostSvc)
 	ghostJobHandler := &httpapi.GhostJobHandler{Ghost: ghostSvc}
 
@@ -178,7 +204,7 @@ func run() error {
 	htmlRenderer.Store = blobStore
 	rendercvRenderer := generation.NewRenderCvRenderer(cfg.DocumentsDir, cfg.RendercvBin)
 	rendercvRenderer.Store = blobStore
-	generationSvc := generation.NewService(database.Queries, profileSvc, htmlRenderer, rendercvRenderer, llmProvider, cfg.ModelOr(cfg.LLMModelGeneration), cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
+	generationSvc := generation.NewService(database.Queries, profileSvc, htmlRenderer, rendercvRenderer, generationRouter, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
 	generationHandler := generation.NewHandler(generationSvc)
 	documentsHandler := &httpapi.DocumentsHandler{Generation: generationSvc}
 
@@ -200,7 +226,7 @@ func run() error {
 	sourcesHandler.Enrichment = enrichHandler
 
 	levelsFyiLoader := salary.NewLevelsFyiLoader(database.Queries)
-	salaryService := salary.NewService(database.Queries, llmProvider, levelsFyiLoader, cfg.ModelOr(""))
+	salaryService := salary.NewService(database.Queries, defaultRouter, levelsFyiLoader, "")
 	salaryHandler := salary.NewHandler(salaryService)
 
 	if cfg.LevelsFyiCSV != "" {
@@ -220,7 +246,7 @@ func run() error {
 	// the first request returns empty suggestions and computes them in the
 	// background; later requests return the cached result. Profile bullets are
 	// the grounding source, so the suggester only reframes existing experience.
-	rephraseModel := keyword.NewProviderRephraseModel(llmProvider, cfg.ModelOr(cfg.LLMModelRephrase))
+	rephraseModel := keyword.NewProviderRephraseModel(rephraseRouter, "")
 	cachedRephraser := keyword.NewCachedRephraser(
 		keyword.NewSuggester(rephraseModel),
 		time.Duration(cfg.KeywordRephraseCacheTTLSec)*time.Second,
@@ -284,7 +310,7 @@ func run() error {
 	// the company-page source reuses scrapingSvc the same way companyintel's
 	// HeadcountScraper does, and LinkedIn only runs when the operator has
 	// opted in via LINKEDIN_SCRAPE_ENABLED.
-	recruiterSvc := recruiter.NewService(database.Queries, llmProvider, cfg.ModelOr(""), scrapingSvc, cfg.LinkedInScrapeEnabled)
+	recruiterSvc := recruiter.NewService(database.Queries, defaultRouter, "", scrapingSvc, cfg.LinkedInScrapeEnabled)
 	contactsHandler := &httpapi.ContactsHandler{Recruiter: recruiterSvc}
 
 	referralSvc := referral.NewService(database.Queries, database.Queries, referral.NewGitHubCrossReferencer())
@@ -295,7 +321,7 @@ func run() error {
 	// company-intel signals (companyIntelSvc) as the sole grounding
 	// source — it re-resolves neither, per assumptions.md. Draft-only: no
 	// send path exists anywhere in this package (Principle I).
-	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, llmProvider, cfg.ModelOr(""))
+	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, defaultRouter, "")
 	outreachHandler := &httpapi.OutreachHandler{Outreach: outreachSvc}
 
 	router := httpapi.NewRouter(
@@ -306,7 +332,7 @@ func run() error {
 		ghostJobHandler.Mount, coachHandler.Mount,
 		extAuthHandler.Mount, extProfileHandler.Mount,
 		contactsHandler.Mount, referralHandler.Mount,
-		outreachHandler.Mount,
+		outreachHandler.Mount, llmSettingsHandler.Mount,
 	)
 
 	srv := &http.Server{

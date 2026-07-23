@@ -31,6 +31,15 @@ Chat models are per-task: `LLM_MODEL_MATCH` (fit scoring), `LLM_MODEL_GENERATION
 `LLM_MODEL` as fallback; embeddings use `EMBED_MODEL`.
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 
+Ollama is the default, local-first provider. To additionally enable **Cerebras** free-tier
+models, set `CEREBRAS_API_KEY` (get one at cloud.cerebras.ai) — `CEREBRAS_BASE_URL` defaults to
+`https://api.cerebras.ai/v1`. With no key set, Cerebras is unavailable and every task runs on
+Ollama regardless of its saved setting. Once a key is set, open the dashboard's **Settings →
+AI models** page to assign each chat task (matching, generation, rephrase, ghost-job) to Ollama
+or a Cerebras free-tier model, or use "Switch all to Cerebras" to move every task at once — no
+restart needed, the choice is saved and applied immediately. Embeddings always stay on Ollama
+(Cerebras has no embeddings API), regardless of which provider chat tasks use.
+
 ## Dev workflow (api/dashboard on host)
 
 ```bash

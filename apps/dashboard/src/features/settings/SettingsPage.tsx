@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { Button, ErrorState, Surface } from '../../components/ui';
+import LlmSettingsCard from './LlmSettingsCard';
 import { useBootstrapExtension } from './hooks';
 
 // SettingsPage hosts the browser-extension pairing flow (spec
@@ -15,6 +16,10 @@ export default function SettingsPage() {
         title="Settings"
         description="Connect the browser extension and manage account-level preferences."
       />
+      <section>
+        <SectionTitle>AI models</SectionTitle>
+        <LlmSettingsCard />
+      </section>
       <section>
         <SectionTitle>Browser extension</SectionTitle>
         <ExtensionPairingCard />

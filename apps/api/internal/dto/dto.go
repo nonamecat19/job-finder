@@ -719,3 +719,45 @@ type OutreachToneOptionDto struct {
 	Label   string `json:"label"`
 	Default bool   `json:"default"`
 }
+
+// ---------------------------------------------------------------------------
+// Cerebras free-tier model toggle (001-cerebras-model-toggle)
+// ---------------------------------------------------------------------------
+
+// LlmTaskSettingDto is one chat task's assigned provider/model, served by
+// GET/PUT /v1/settings/llm. TaskKey is one of llmsettings.TaskKeys ("match",
+// "generation", "rephrase", "ghost", "default"); Provider is "ollama" or
+// "cerebras". Model is "" when the provider's own default model applies.
+type LlmTaskSettingDto struct {
+	TaskKey  string `json:"taskKey"`
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+}
+
+// LlmSettingsResponseDto is the GET/PUT /v1/settings/llm response.
+// CredentialConfigured reflects whether CEREBRAS_API_KEY was set at process
+// start — it is never the key itself, which never leaves the server
+// (FR-011, FR-013).
+type LlmSettingsResponseDto struct {
+	CredentialConfigured bool                `json:"credentialConfigured"`
+	Tasks                []LlmTaskSettingDto `json:"tasks"`
+}
+
+// UpdateLlmSettingsRequestDto is the PUT /v1/settings/llm request body. Only
+// the included tasks are changed; omitted tasks keep their current setting.
+type UpdateLlmSettingsRequestDto struct {
+	Tasks []LlmTaskSettingDto `json:"tasks"`
+}
+
+// CerebrasModelDto is one curated Cerebras free-tier model offered in the
+// Settings model selector, served by GET /v1/settings/llm/models.
+type CerebrasModelDto struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	IsDefault bool   `json:"isDefault"`
+}
+
+// LlmModelsResponseDto is the GET /v1/settings/llm/models response.
+type LlmModelsResponseDto struct {
+	Cerebras []CerebrasModelDto `json:"cerebras"`
+}

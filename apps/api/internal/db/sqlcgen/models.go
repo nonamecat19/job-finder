@@ -197,6 +197,13 @@ type KeywordDiff struct {
 	CreatedAt        pgtype.Timestamp `json:"createdAt"`
 }
 
+type LlmTaskSetting struct {
+	TaskKey   string           `json:"taskKey"`
+	Provider  string           `json:"provider"`
+	Model     string           `json:"model"`
+	UpdatedAt pgtype.Timestamp `json:"updatedAt"`
+}
+
 type MatchResult struct {
 	ID            pgtype.UUID      `json:"id"`
 	JobId         pgtype.UUID      `json:"jobId"`

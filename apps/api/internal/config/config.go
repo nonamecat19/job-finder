@@ -38,6 +38,15 @@ type Config struct {
 	// falls back to LLMModel via ModelOr.
 	LLMModelGhost string `mapstructure:"LLM_MODEL_GHOST"`
 
+	// Cerebras (001-cerebras-model-toggle): an optional second chat provider,
+	// selectable per task from dashboard Settings. CerebrasAPIKey is a secret
+	// with no default; when empty, Cerebras is unavailable and every task
+	// resolves to Ollama regardless of its persisted setting. CerebrasBaseURL
+	// defaults to the public Cerebras API. Cerebras has no embeddings endpoint,
+	// so EmbedURL/EmbedModel above are unaffected by this provider.
+	CerebrasAPIKey  string `mapstructure:"CEREBRAS_API_KEY"`
+	CerebrasBaseURL string `mapstructure:"CEREBRAS_BASE_URL"`
+
 	// KeywordRephraseCacheTTLSec is the lifetime, in seconds, of a cached set of
 	// keyword-diff rephrase suggestions. Suggestions are generated async and
 	// cached because each is a live LLM call; a stale entry past this age is
@@ -131,6 +140,7 @@ var defaults = map[string]any{
 	"DJINNI_DETAIL_DELAY_MS":         1500,
 	"WORKUA_DETAIL_DELAY_MS":         2000,
 	"JOBSPY_URL":                     "http://localhost:8000",
+	"CEREBRAS_BASE_URL":              "https://api.cerebras.ai/v1",
 	// "/data/documents" is a container-only path (writable there because the
 	// Dockerfile/compose files run the API as root with a dedicated volume).
 	// On bare-metal dev or `go test`, the host user can't mkdir /data at all
@@ -155,7 +165,7 @@ var optionalKeys = []string{
 	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "EXT_JWT_SECRET", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
 	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
-	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD",
+	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD", "CEREBRAS_API_KEY",
 }
 
 // ModelOr returns m if set, otherwise the default LLMModel. Used to resolve a

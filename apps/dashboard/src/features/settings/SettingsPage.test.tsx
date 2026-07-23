@@ -7,6 +7,11 @@ import SettingsPage from './SettingsPage'
 vi.mock('../../api', () => ({
   api: {
     ext: { bootstrap: vi.fn() },
+    settings: {
+      getLlm: vi.fn().mockResolvedValue({ credentialConfigured: false, tasks: [] }),
+      putLlm: vi.fn(),
+      llmModels: vi.fn().mockResolvedValue({ cerebras: [] }),
+    },
   },
 }))
 

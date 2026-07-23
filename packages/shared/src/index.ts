@@ -618,3 +618,38 @@ export interface OutreachToneOptionDto {
   label: string;
   default: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Cerebras free-tier model toggle (001-cerebras-model-toggle)
+// ---------------------------------------------------------------------------
+
+/** One chat task's assigned provider/model, served by GET/PUT
+ * /v1/settings/llm. taskKey is "match" | "generation" | "rephrase" | "ghost"
+ * | "default"; provider is "ollama" | "cerebras". model is "" when the
+ * provider's own default model applies. */
+export interface LlmTaskSettingDto {
+  taskKey: string;
+  provider: string;
+  model: string;
+}
+
+/** GET/PUT /v1/settings/llm response. credentialConfigured reflects whether
+ * CEREBRAS_API_KEY was set at process start — never the key itself, which
+ * never leaves the server. */
+export interface LlmSettingsResponseDto {
+  credentialConfigured: boolean;
+  tasks: LlmTaskSettingDto[];
+}
+
+/** One curated Cerebras free-tier model offered in the Settings model
+ * selector, served by GET /v1/settings/llm/models. */
+export interface CerebrasModelDto {
+  id: string;
+  label: string;
+  isDefault: boolean;
+}
+
+/** GET /v1/settings/llm/models response. */
+export interface LlmModelsResponseDto {
+  cerebras: CerebrasModelDto[];
+}

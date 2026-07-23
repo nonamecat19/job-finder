@@ -32,6 +32,31 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LinkedInScrapeEnabled {
 		t.Error("LinkedInScrapeEnabled should default false")
 	}
+	if cfg.CerebrasAPIKey != "" {
+		t.Errorf("CerebrasAPIKey should default empty, got %q", cfg.CerebrasAPIKey)
+	}
+	if cfg.CerebrasBaseURL != "https://api.cerebras.ai/v1" {
+		t.Errorf("CerebrasBaseURL default = %q, want https://api.cerebras.ai/v1", cfg.CerebrasBaseURL)
+	}
+}
+
+func TestLoadCerebrasAPIKeyOverride(t *testing.T) {
+	if err := unsetForTest(t); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CEREBRAS_API_KEY", "csk-test")
+	t.Setenv("CEREBRAS_BASE_URL", "http://localhost:9999/v1")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.CerebrasAPIKey != "csk-test" {
+		t.Errorf("CerebrasAPIKey = %q, want csk-test", cfg.CerebrasAPIKey)
+	}
+	if cfg.CerebrasBaseURL != "http://localhost:9999/v1" {
+		t.Errorf("CerebrasBaseURL = %q, want http://localhost:9999/v1", cfg.CerebrasBaseURL)
+	}
 }
 
 func TestLoadLinkedInScrapeEnabledOverride(t *testing.T) {

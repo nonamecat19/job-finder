@@ -15,6 +15,9 @@ import type {
   JobSignalDto,
   JobSourceDto,
   KeywordDiffResponse,
+  LlmModelsResponseDto,
+  LlmSettingsResponseDto,
+  LlmTaskSettingDto,
   OutreachDraftDto,
   OutreachToneOptionDto,
   PostAgeResponseDto,
@@ -203,5 +206,17 @@ export const api = {
     },
     githubSync: (contactId: string) =>
       request<GithubSyncResultDto>(`/contacts/${contactId}/github-sync`, { method: 'POST' }),
+  },
+  // Cerebras free-tier model toggle (001-cerebras-model-toggle): per-task
+  // provider/model assignment. The Cerebras API key itself is never part of
+  // this API — it's env-only (CEREBRAS_API_KEY) and never leaves the server.
+  settings: {
+    getLlm: () => request<LlmSettingsResponseDto>('/v1/settings/llm'),
+    putLlm: (tasks: LlmTaskSettingDto[]) =>
+      request<LlmSettingsResponseDto>('/v1/settings/llm', {
+        method: 'PUT',
+        body: JSON.stringify({ tasks }),
+      }),
+    llmModels: () => request<LlmModelsResponseDto>('/v1/settings/llm/models'),
   },
 };

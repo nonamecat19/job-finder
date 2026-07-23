@@ -64,4 +64,9 @@ export const queryKeys = {
   contacts: {
     all: ['contacts'] as const,
   },
+  llmSettings: {
+    all: ['llmSettings'] as const,
+    get: ['llmSettings', 'get'] as const,
+    models: ['llmSettings', 'models'] as const,
+  },
 };
