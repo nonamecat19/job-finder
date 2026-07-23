@@ -1,13 +1,13 @@
 //go:build integration
 
-package applications_test
+package application_test
 
 import (
 	"context"
 	"os"
 	"testing"
 
-	"github.com/job-finder/api/internal/applications"
+	"github.com/job-finder/api/internal/applications/application"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
@@ -84,10 +84,10 @@ func statusOf(s dto.ApplicationStatus) *dto.ApplicationStatus { return &s }
 func TestUpdateWritesOutcomeLogThroughTx(t *testing.T) {
 	ctx := context.Background()
 	id := seedApplication(t, "svc-outcome")
-	svc := applications.NewService(itDB.Queries, itDB)
+	svc := application.NewService(itDB.Queries, itDB)
 
 	for _, st := range []dto.ApplicationStatus{dto.StatusApplied, dto.StatusInterview, dto.StatusRejected} {
-		if _, err := svc.Update(ctx, id, applications.UpdateInput{Status: statusOf(st)}); err != nil {
+		if _, err := svc.Update(ctx, id, application.UpdateInput{Status: statusOf(st)}); err != nil {
 			t.Fatalf("update to %s: %v", st, err)
 		}
 	}
@@ -138,13 +138,13 @@ func TestUpdateWritesOutcomeLogThroughTx(t *testing.T) {
 func TestUpdateAppliedIsIdempotentEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	id := seedApplication(t, "svc-idempotent")
-	svc := applications.NewService(itDB.Queries, itDB)
+	svc := application.NewService(itDB.Queries, itDB)
 
 	// applied -> shortlisted -> applied: the second `applied` transition is a
 	// real status change (so it reaches the insert) but the partial unique index
 	// drops the duplicate event.
 	for _, st := range []dto.ApplicationStatus{dto.StatusApplied, dto.StatusShortlisted, dto.StatusApplied} {
-		if _, err := svc.Update(ctx, id, applications.UpdateInput{Status: statusOf(st)}); err != nil {
+		if _, err := svc.Update(ctx, id, application.UpdateInput{Status: statusOf(st)}); err != nil {
 			t.Fatalf("update to %s: %v", st, err)
 		}
 	}

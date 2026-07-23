@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/httpapi"
@@ -14,7 +13,7 @@ import (
 )
 
 type fakeDocGenerator struct {
-	doc sqlcgen.GeneratedDocument
+	pdfPath *string
 }
 
 func (f *fakeDocGenerator) GenerateAdHoc(ctx context.Context, in generation.AdHocInput) (dto.GeneratedDocumentDto, dto.GeneratedDocumentDto, error) {
@@ -34,8 +33,8 @@ func (f *fakeDocGenerator) UpdateDocument(ctx context.Context, id, text string) 
 	return dto.GeneratedDocumentDto{ID: id, Type: "rendercv"}, nil
 }
 
-func (f *fakeDocGenerator) GetDocument(ctx context.Context, id string) (sqlcgen.GeneratedDocument, error) {
-	return f.doc, nil
+func (f *fakeDocGenerator) GetDocumentPdfPath(ctx context.Context, id string) (*string, error) {
+	return f.pdfPath, nil
 }
 
 func TestDocumentsTailor(t *testing.T) {
@@ -73,7 +72,7 @@ func TestDocumentsUpdate(t *testing.T) {
 }
 
 func TestDocumentsPdfNotFound(t *testing.T) {
-	fake := &fakeDocGenerator{doc: sqlcgen.GeneratedDocument{PdfPath: nil}}
+	fake := &fakeDocGenerator{pdfPath: nil}
 	h := &httpapi.DocumentsHandler{Generation: fake}
 	r := testutil.SetupRouter(h.Mount)
 
@@ -88,7 +87,7 @@ func TestDocumentsPdfServesFile(t *testing.T) {
 	pdfPath := filepath.Join(tmp, "resume.pdf")
 	os.WriteFile(pdfPath, []byte("%PDF-1.4 fake"), 0644)
 
-	fake := &fakeDocGenerator{doc: sqlcgen.GeneratedDocument{PdfPath: &pdfPath}}
+	fake := &fakeDocGenerator{pdfPath: &pdfPath}
 	h := &httpapi.DocumentsHandler{Generation: fake}
 	r := testutil.SetupRouter(h.Mount)
 

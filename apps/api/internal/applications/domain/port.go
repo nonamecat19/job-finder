@@ -1,12 +1,22 @@
-package applications
+// Package domain holds the application-tracking bounded context's core
+// model: the Repository persistence port, the TxRunner atomicity port, and
+// the ErrNotFound sentinel.
+package domain
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
+
+// ErrNotFound is a sentinel so callers (the HTTP layer) can distinguish
+// "no such application" (404) from other Update failures like an invalid
+// status value (400) — mirrors NestJS's NotFoundException vs
+// BadRequestException split in applications.service.ts:25,28.
+var ErrNotFound = errors.New("application not found")
 
 // Repository is the outbound persistence port for the applications use-case.
 // *sqlcgen.Queries satisfies it structurally, so the concrete sqlc adapter is

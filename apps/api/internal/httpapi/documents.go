@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation"
 )
@@ -19,7 +18,7 @@ type DocumentGenerator interface {
 	ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocumentDto, error)
 	GetDocumentDto(ctx context.Context, id string) (dto.GeneratedDocumentDto, error)
 	UpdateDocument(ctx context.Context, id, text string) (dto.GeneratedDocumentDto, error)
-	GetDocument(ctx context.Context, id string) (sqlcgen.GeneratedDocument, error)
+	GetDocumentPdfPath(ctx context.Context, id string) (*string, error)
 }
 
 // DocumentsHandler wires /api/documents, mirroring documents.controller.ts.
@@ -121,20 +120,20 @@ func (h *DocumentsHandler) update(w http.ResponseWriter, r *http.Request) {
 
 func (h *DocumentsHandler) pdf(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	doc, err := h.Generation.GetDocument(r.Context(), id)
+	pdfPath, err := h.Generation.GetDocumentPdfPath(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	if doc.PdfPath == nil {
+	if pdfPath == nil {
 		writeError(w, http.StatusNotFound, "PDF not rendered yet")
 		return
 	}
-	if _, err := os.Stat(*doc.PdfPath); err != nil {
+	if _, err := os.Stat(*pdfPath); err != nil {
 		writeError(w, http.StatusNotFound, "PDF not rendered yet")
 		return
 	}
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(*doc.PdfPath)+`"`)
-	http.ServeFile(w, r, *doc.PdfPath)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(*pdfPath)+`"`)
+	http.ServeFile(w, r, *pdfPath)
 }

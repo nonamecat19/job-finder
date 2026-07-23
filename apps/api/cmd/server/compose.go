@@ -8,7 +8,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/job-finder/api/internal/applications"
+	activityapp "github.com/job-finder/api/internal/activity/application"
+	applications "github.com/job-finder/api/internal/applications/application"
 	"github.com/job-finder/api/internal/autogen"
 	"github.com/job-finder/api/internal/coach"
 	"github.com/job-finder/api/internal/companyintel"
@@ -491,7 +492,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Jobs:         jobsHandler,
 		Applications: composeApplications(p),
 		Subs:         composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
-		Activity:     httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient),
+		Activity:     httpapi.NewActivityHandler(activityapp.NewService(p.DB.Queries, p.AsynqClient)),
 		Keyword:      keywordH.Handler,
 		PostAge:      composePostAge(p),
 		Notification: composeNotifications(p),

@@ -437,6 +437,18 @@ func (s *Service) GetDocumentDto(ctx context.Context, id string) (dto.GeneratedD
 	return toDocumentDto(row), nil
 }
 
+// GetDocumentPdfPath returns the rendered PDF's local filesystem path for id,
+// or nil if the document exists but has no PDF rendered yet. Kept separate
+// from GetDocumentDto so the httpapi layer never needs the sqlcgen row shape
+// just to serve the file.
+func (s *Service) GetDocumentPdfPath(ctx context.Context, id string) (*string, error) {
+	row, err := s.GetDocument(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return row.PdfPath, nil
+}
+
 func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.GeneratedDocumentDto, error) {
 	doc, err := s.GetDocument(ctx, id)
 	if err != nil {
