@@ -1,6 +1,6 @@
 //go:build integration
 
-package matching_test
+package application_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/matching"
+	"github.com/job-finder/api/internal/matching/application"
 	"github.com/job-finder/api/internal/profile"
 )
 
@@ -86,10 +86,10 @@ func TestMatchJob_SkipsProfileWithoutConfig(t *testing.T) {
 	}
 
 	profiles := profile.NewService(testDB.Queries, noopLLM{}, "nomic-embed-text", "rendercv")
-	svc := matching.NewService(testDB.Queries, profiles, noopLLM{}, 0.5, "")
+	svc := application.NewService(testDB.Queries, profiles, noopLLM{}, 0.5, "")
 
 	_, err = svc.MatchJob(ctx, dbutil.UUIDString(job.ID), nil)
-	if err != matching.ErrNoProfileConfig {
+	if err != application.ErrNoProfileConfig {
 		t.Fatalf("expected ErrNoProfileConfig, got %v", err)
 	}
 

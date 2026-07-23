@@ -24,7 +24,8 @@ import (
 	"github.com/job-finder/api/internal/keyword"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/llmsettings"
-	"github.com/job-finder/api/internal/matching"
+	matchingapp "github.com/job-finder/api/internal/matching/application"
+	matchingworker "github.com/job-finder/api/internal/matching/interfaces/worker"
 	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/outreach"
 	"github.com/job-finder/api/internal/postage"
@@ -64,7 +65,7 @@ type App struct {
 
 	// Worker handlers (each exposes ProcessTask).
 	Ingestion  *ingestion.Handler
-	Matching   *matching.Handler
+	Matching   *matchingworker.Handler
 	Generation *generation.Handler
 	Enrichment *enrichment.Handler
 	Salary     *salary.Handler
@@ -193,14 +194,14 @@ type matchingHandles struct {
 	Notifier            *notifier.Service
 	Autogen             *autogen.Service
 	AutoGenerateHandler *httpapi.AutoGenerateHandler
-	Handler             *matching.Handler
+	Handler             *matchingworker.Handler
 }
 
 // composeMatching also owns jobs.Service: matchingHandler auto-enqueues a
 // resume via it when a job's score crosses the autogen threshold, so it must
 // exist before the matching handler.
 func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Service, matchRouter *llm.Router) (*matchingHandles, error) {
-	matchingSvc := matching.NewService(p.DB.Queries, profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
+	matchingSvc := matchingapp.NewService(p.DB.Queries, profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
 	notifierSvc := notifier.NewService(p.DB.Queries,
 		notifier.WithMatchThreshold(p.Config.MatchNotifyScoreThreshold),
 		notifier.WithRateLimitCap(p.Config.MatchNotifyRateLimit),
@@ -215,7 +216,7 @@ func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Servi
 		Notifier:            notifierSvc,
 		Autogen:             autogenSvc,
 		AutoGenerateHandler: &httpapi.AutoGenerateHandler{Settings: autogenSvc},
-		Handler:             matching.NewHandler(matchingSvc, notifierSvc, autogenSvc, jobsSvc),
+		Handler:             matchingworker.NewHandler(matchingSvc, notifierSvc, autogenSvc, jobsSvc),
 	}, nil
 }
 
