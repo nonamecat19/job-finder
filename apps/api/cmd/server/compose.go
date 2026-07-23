@@ -10,7 +10,8 @@ import (
 
 	"github.com/job-finder/api/internal/applications"
 	"github.com/job-finder/api/internal/autogen"
-	"github.com/job-finder/api/internal/coach"
+	coach "github.com/job-finder/api/internal/coach/application"
+	coachdomain "github.com/job-finder/api/internal/coach/domain"
 	"github.com/job-finder/api/internal/companyintel"
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/extauth"
@@ -350,14 +351,14 @@ func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile
 // rather than coach importing internal/profile, keeping that edge one-directional.
 func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, profileSvc *profile.Service) *httpapi.CoachHandler {
 	coachSvc := coach.NewService(rephraseModel)
-	coachAssessSvc := coach.NewAssessmentService(coachSvc, p.DB.Queries, func(ctx context.Context) ([]coach.ProfileEntry, error) {
+	coachAssessSvc := coach.NewAssessmentService(coachSvc, p.DB.Queries, func(ctx context.Context) ([]coachdomain.ProfileEntry, error) {
 		entries, err := profileSvc.ProfileEntries(ctx)
 		if err != nil {
 			return nil, err
 		}
-		out := make([]coach.ProfileEntry, len(entries))
+		out := make([]coachdomain.ProfileEntry, len(entries))
 		for i, e := range entries {
-			out[i] = coach.ProfileEntry{SourceLabel: e.SourceLabel, Bullet: e.Bullet}
+			out[i] = coachdomain.ProfileEntry{SourceLabel: e.SourceLabel, Bullet: e.Bullet}
 		}
 		return out, nil
 	})

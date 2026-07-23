@@ -1,4 +1,4 @@
-package coach
+package application
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/job-finder/api/internal/coach/domain"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/keyword"
 )
@@ -68,8 +69,8 @@ func TestAssessmentServiceAssess_ComputesAndCaches(t *testing.T) {
 		"Kubernetes": "Ran containerized workloads adjacent to Kubernetes",
 	}}
 	reader := fakeDiffReader{row: rowWithOneMissingRequired(t)}
-	entries := func(ctx context.Context) ([]ProfileEntry, error) {
-		return []ProfileEntry{{SourceLabel: "DevOps Engineer, Acme (2022-2024)", Bullet: "Ran Docker Swarm clusters in production"}}, nil
+	entries := func(ctx context.Context) ([]domain.ProfileEntry, error) {
+		return []domain.ProfileEntry{{SourceLabel: "DevOps Engineer, Acme (2022-2024)", Bullet: "Ran Docker Swarm clusters in production"}}, nil
 	}
 	svc := NewAssessmentService(NewService(model), reader, entries)
 

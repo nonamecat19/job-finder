@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/job-finder/api/internal/coach"
+	"github.com/job-finder/api/internal/coach/application"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/testutil"
@@ -76,7 +76,7 @@ func TestCoachAssessPost(t *testing.T) {
 }
 
 func TestCoachAssessPost_NoDiff(t *testing.T) {
-	h := &httpapi.CoachHandler{Coach: &fakeCoachProvider{assessErr: coach.ErrNoDiff}}
+	h := &httpapi.CoachHandler{Coach: &fakeCoachProvider{assessErr: application.ErrNoDiff}}
 	r := testutil.SetupRouter(h.Mount)
 
 	w := testutil.DoRequest(r, "POST", "/api/jobs/job-1/coach/assess", nil, map[string]string{"id": "job-1"})
@@ -102,7 +102,7 @@ func TestCoachAssessmentGet(t *testing.T) {
 }
 
 func TestCoachAssessmentGet_NotAssessed(t *testing.T) {
-	h := &httpapi.CoachHandler{Coach: &fakeCoachProvider{cachedErr: coach.ErrNotAssessed}}
+	h := &httpapi.CoachHandler{Coach: &fakeCoachProvider{cachedErr: application.ErrNotAssessed}}
 	r := testutil.SetupRouter(h.Mount)
 
 	w := testutil.DoRequest(r, "GET", "/api/jobs/job-1/coach/assessment", nil, map[string]string{"id": "job-1"})

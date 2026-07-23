@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/job-finder/api/internal/coach"
+	"github.com/job-finder/api/internal/coach/application"
 	"github.com/job-finder/api/internal/dto"
 )
 
@@ -39,7 +39,7 @@ func (h *CoachHandler) assess(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Coach.Assess(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, coach.ErrNoDiff) {
+		if errors.Is(err, application.ErrNoDiff) {
 			writeError(w, http.StatusNotFound, "no keyword diff for job — run the keyword diff first")
 			return
 		}
@@ -53,7 +53,7 @@ func (h *CoachHandler) cached(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Coach.CachedAssessment(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, coach.ErrNotAssessed) {
+		if errors.Is(err, application.ErrNotAssessed) {
 			writeError(w, http.StatusNotFound, "no fit-gap assessment yet — assess this job first")
 			return
 		}
