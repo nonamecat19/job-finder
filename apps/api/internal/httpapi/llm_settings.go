@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/llmsettings"
 )
 

@@ -3,7 +3,7 @@ package keyword
 import (
 	"context"
 
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // ProviderRephraseModel adapts an llm.Provider to the RephraseModel port used

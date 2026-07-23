@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/job-finder/api/internal/config"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/scraping"
 )
 

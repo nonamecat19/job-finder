@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // fakeLLM implements llm.Provider and returns a fixed JSON response from

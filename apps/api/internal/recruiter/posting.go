@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // extractedContact is the raw LLM structured-output shape for posting-text

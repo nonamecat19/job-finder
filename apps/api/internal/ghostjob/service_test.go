@@ -9,7 +9,7 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/ghostjob"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // fakeServiceRepo is a controllable stand-in for ghostjob.Repository at the

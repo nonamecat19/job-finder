@@ -10,7 +10,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // companyPagePaths mirrors companyintel's HeadcountScraper About-page

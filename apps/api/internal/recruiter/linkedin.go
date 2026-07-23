@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // linkedInPeoplePath is the public People section of a LinkedIn company

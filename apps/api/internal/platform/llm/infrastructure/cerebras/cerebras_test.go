@@ -1,4 +1,4 @@
-package llm
+package cerebras
 
 import (
 	"context"
@@ -7,46 +7,49 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/job-finder/api/internal/platform/llm/domain"
+	"github.com/job-finder/api/internal/platform/llm/infrastructure/ollama"
 )
 
-func newTestCerebras(t *testing.T, handler http.HandlerFunc) *CerebrasProvider {
+func newTestCerebras(t *testing.T, handler http.HandlerFunc) *Provider {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	p, err := NewCerebras(srv.URL, "test-key", "", nil)
+	p, err := New(srv.URL, "test-key", "", nil)
 	if err != nil {
-		t.Fatalf("NewCerebras: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	return p
 }
 
 func TestNewCerebrasRequiresAPIKey(t *testing.T) {
-	if _, err := NewCerebras("", "", "", nil); err == nil {
+	if _, err := New("", "", "", nil); err == nil {
 		t.Fatal("expected error when apiKey is empty")
 	}
 }
 
 func TestNewCerebrasDefaults(t *testing.T) {
-	p, err := NewCerebras("", "key", "", nil)
+	p, err := New("", "key", "", nil)
 	if err != nil {
-		t.Fatalf("NewCerebras: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	if p.baseURL != "https://api.cerebras.ai/v1" {
 		t.Errorf("baseURL default = %q", p.baseURL)
 	}
-	if p.ModelName() != DefaultCerebrasModel {
-		t.Errorf("ModelName() = %q, want %q", p.ModelName(), DefaultCerebrasModel)
+	if p.ModelName() != DefaultModel {
+		t.Errorf("ModelName() = %q, want %q", p.ModelName(), DefaultModel)
 	}
 }
 
 func TestCerebrasCompleteRequestShape(t *testing.T) {
 	var gotPath, gotAuth string
-	var gotBody cerebrasRequest
+	var gotBody chatRequest
 	p := newTestCerebras(t, func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		gotAuth = r.Header.Get("Authorization")
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
-		_ = json.NewEncoder(w).Encode(cerebrasResponse{
+		_ = json.NewEncoder(w).Encode(chatResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -57,7 +60,7 @@ func TestCerebrasCompleteRequestShape(t *testing.T) {
 		})
 	})
 
-	out, err := p.Complete(context.Background(), "hi", &CompleteOptions{Model: "llama-3.3-70b"})
+	out, err := p.Complete(context.Background(), "hi", &domain.CompleteOptions{Model: "llama-3.3-70b"})
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -76,10 +79,10 @@ func TestCerebrasCompleteRequestShape(t *testing.T) {
 }
 
 func TestCerebrasCompleteJSONSetsResponseFormat(t *testing.T) {
-	var gotBody cerebrasRequest
+	var gotBody chatRequest
 	p := newTestCerebras(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
-		_ = json.NewEncoder(w).Encode(cerebrasResponse{
+		_ = json.NewEncoder(w).Encode(chatResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -99,7 +102,7 @@ func TestCerebrasCompleteJSONSetsResponseFormat(t *testing.T) {
 
 func TestCerebrasCompleteEmptyChoices(t *testing.T) {
 	p := newTestCerebras(t, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(cerebrasResponse{})
+		_ = json.NewEncoder(w).Encode(chatResponse{})
 	})
 	if _, err := p.Complete(context.Background(), "hi", nil); err == nil {
 		t.Fatal("expected error on empty choices")
@@ -145,11 +148,11 @@ func TestCerebrasEmbedDelegatesToOllama(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"embedding": []float32{0.1, 0.2}})
 	}))
 	t.Cleanup(ollamaSrv.Close)
-	ollama := NewOllama(ollamaSrv.URL, "", "", "", "")
+	ollamaProvider := ollama.New(ollamaSrv.URL, "", "", "", "")
 
-	p, err := NewCerebras("https://unused.example", "key", "", ollama)
+	p, err := New("https://unused.example", "key", "", ollamaProvider)
 	if err != nil {
-		t.Fatalf("NewCerebras: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	vec, err := p.Embed(context.Background(), "text")
 	if err != nil {

@@ -1,4 +1,6 @@
-package llm
+// Package cerebras implements domain.Provider against Cerebras's
+// OpenAI-compatible /chat/completions API (001-cerebras-model-toggle).
+package cerebras
 
 import (
 	"bytes"
@@ -10,6 +12,8 @@ import (
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/job-finder/api/internal/platform/llm/domain"
 )
 
 // ErrRateLimited is returned (wrapped) whenever Cerebras responds 429, or
@@ -24,9 +28,9 @@ const rateLimitCooldown = 60 * time.Second
 
 // rateLimitBreaker is a tiny process-wide circuit breaker: the first 429 from
 // Cerebras trips it, and every other in-flight/queued task sharing this
-// *CerebrasProvider (there is exactly one per process, shared by every task
-// Router) immediately fails fast with ErrRateLimited instead of also burning
-// a request against the same exhausted quota.
+// *Provider (there is exactly one per process, shared by every task Router)
+// immediately fails fast with ErrRateLimited instead of also burning a
+// request against the same exhausted quota.
 type rateLimitBreaker struct {
 	until atomic.Int64 // unix nano; 0 or in the past = not tripped
 }
@@ -40,21 +44,21 @@ func (b *rateLimitBreaker) tripped() bool {
 	return u != 0 && time.Now().UnixNano() < u
 }
 
-// CerebrasProvider talks to Cerebras's OpenAI-compatible /chat/completions
-// API. Cerebras has no embeddings endpoint, so Embed delegates to an Ollama
+// Provider talks to Cerebras's OpenAI-compatible /chat/completions API.
+// Cerebras has no embeddings endpoint, so Embed delegates to an Ollama
 // provider (001-cerebras-model-toggle: embeddings always stay on Ollama).
-type CerebrasProvider struct {
+type Provider struct {
 	http      *http.Client
 	baseURL   string
 	apiKey    string
 	modelName string
-	ollama    *OllamaProvider
+	ollama    domain.Provider
 	breaker   rateLimitBreaker
 }
 
-// NewCerebras builds a provider. apiKey is required — the caller (factory.go)
-// only constructs a CerebrasProvider when config.CerebrasAPIKey is set.
-func NewCerebras(baseURL, apiKey, modelName string, ollama *OllamaProvider) (*CerebrasProvider, error) {
+// New builds a provider. apiKey is required — the caller (llm.NewProviders)
+// only constructs a Provider when config.CerebrasAPIKey is set.
+func New(baseURL, apiKey, modelName string, ollama domain.Provider) (*Provider, error) {
 	if apiKey == "" {
 		return nil, errors.New("cerebras: apiKey is required")
 	}
@@ -62,9 +66,9 @@ func NewCerebras(baseURL, apiKey, modelName string, ollama *OllamaProvider) (*Ce
 		baseURL = "https://api.cerebras.ai/v1"
 	}
 	if modelName == "" {
-		modelName = DefaultCerebrasModel
+		modelName = DefaultModel
 	}
-	return &CerebrasProvider{
+	return &Provider{
 		http:      &http.Client{Timeout: 120 * time.Second},
 		baseURL:   baseURL,
 		apiKey:    apiKey,
@@ -73,23 +77,23 @@ func NewCerebras(baseURL, apiKey, modelName string, ollama *OllamaProvider) (*Ce
 	}, nil
 }
 
-func (c *CerebrasProvider) ModelName() string { return c.modelName }
+func (c *Provider) ModelName() string { return c.modelName }
 
-type cerebrasMessage struct {
+type chatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-type cerebrasRequest struct {
+type chatRequest struct {
 	Model               string            `json:"model"`
 	Stream              bool              `json:"stream"`
-	Messages            []cerebrasMessage `json:"messages"`
+	Messages            []chatMessage     `json:"messages"`
 	Temperature         float64           `json:"temperature"`
 	MaxCompletionTokens *int              `json:"max_completion_tokens,omitempty"`
 	ResponseFormat      map[string]string `json:"response_format,omitempty"`
 }
 
-type cerebrasResponse struct {
+type chatResponse struct {
 	Choices []struct {
 		Message struct {
 			Content string `json:"content"`
@@ -97,11 +101,11 @@ type cerebrasResponse struct {
 	} `json:"choices"`
 }
 
-// cerebrasErrMessage extracts a human-readable message from a Cerebras error
-// body when possible, falling back to the raw body. Never includes the
-// request (so the API key, sent only in the Authorization header, cannot
-// leak into an error string derived from the response).
-func cerebrasErrMessage(status int, body []byte) string {
+// errMessage extracts a human-readable message from a Cerebras error body
+// when possible, falling back to the raw body. Never includes the request
+// (so the API key, sent only in the Authorization header, cannot leak into
+// an error string derived from the response).
+func errMessage(status int, body []byte) string {
 	var parsed struct {
 		Error struct {
 			Message string `json:"message"`
@@ -121,7 +125,7 @@ func cerebrasErrMessage(status int, body []byte) string {
 	return fmt.Sprintf("cerebras: returned %d: %s", status, string(body))
 }
 
-func (c *CerebrasProvider) chat(ctx context.Context, req cerebrasRequest) (string, error) {
+func (c *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
 	if c.breaker.tripped() {
 		return "", fmt.Errorf("%w: quota still cooling down", ErrRateLimited)
 	}
@@ -147,12 +151,12 @@ func (c *CerebrasProvider) chat(ctx context.Context, req cerebrasRequest) (strin
 	}
 	if res.StatusCode == http.StatusTooManyRequests {
 		c.breaker.trip()
-		return "", fmt.Errorf("%w: %s", ErrRateLimited, cerebrasErrMessage(res.StatusCode, data))
+		return "", fmt.Errorf("%w: %s", ErrRateLimited, errMessage(res.StatusCode, data))
 	}
 	if res.StatusCode >= 400 {
-		return "", errors.New(cerebrasErrMessage(res.StatusCode, data))
+		return "", errors.New(errMessage(res.StatusCode, data))
 	}
-	var parsed cerebrasResponse
+	var parsed chatResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return "", fmt.Errorf("cerebras: invalid response: %w", err)
 	}
@@ -162,28 +166,28 @@ func (c *CerebrasProvider) chat(ctx context.Context, req cerebrasRequest) (strin
 	return parsed.Choices[0].Message.Content, nil
 }
 
-func (c *CerebrasProvider) Complete(ctx context.Context, prompt string, opts *CompleteOptions) (string, error) {
-	messages := []cerebrasMessage{}
+func (c *Provider) Complete(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
+	messages := []chatMessage{}
 	if sys := opts.SystemPrompt(); sys != "" {
-		messages = append(messages, cerebrasMessage{Role: "system", Content: sys})
+		messages = append(messages, chatMessage{Role: "system", Content: sys})
 	}
-	messages = append(messages, cerebrasMessage{Role: "user", Content: prompt})
+	messages = append(messages, chatMessage{Role: "user", Content: prompt})
 
-	req := cerebrasRequest{Model: opts.ModelOr(c.modelName), Stream: false, Messages: messages, Temperature: opts.Temp(0.3)}
+	req := chatRequest{Model: opts.ModelOr(c.modelName), Stream: false, Messages: messages, Temperature: opts.Temp(0.3)}
 	if opts != nil && opts.MaxTokens != nil {
 		req.MaxCompletionTokens = opts.MaxTokens
 	}
 	return c.chat(ctx, req)
 }
 
-func (c *CerebrasProvider) CompleteJSON(ctx context.Context, prompt string, opts *CompleteOptions) (string, error) {
-	messages := []cerebrasMessage{}
+func (c *Provider) CompleteJSON(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
+	messages := []chatMessage{}
 	if sys := opts.SystemPrompt(); sys != "" {
-		messages = append(messages, cerebrasMessage{Role: "system", Content: sys})
+		messages = append(messages, chatMessage{Role: "system", Content: sys})
 	}
-	messages = append(messages, cerebrasMessage{Role: "user", Content: prompt})
+	messages = append(messages, chatMessage{Role: "user", Content: prompt})
 
-	return c.chat(ctx, cerebrasRequest{
+	return c.chat(ctx, chatRequest{
 		Model:          opts.ModelOr(c.modelName),
 		Stream:         false,
 		Messages:       messages,
@@ -194,6 +198,8 @@ func (c *CerebrasProvider) CompleteJSON(ctx context.Context, prompt string, opts
 
 // Embed delegates to the local Ollama embedder — Cerebras offers no
 // embeddings API (FR-006: embeddings always stay on Ollama).
-func (c *CerebrasProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+func (c *Provider) Embed(ctx context.Context, text string) ([]float32, error) {
 	return c.ollama.Embed(ctx, text)
 }
+
+var _ domain.Provider = (*Provider)(nil)

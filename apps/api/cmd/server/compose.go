@@ -22,7 +22,7 @@ import (
 	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/jobsources/adapters"
 	"github.com/job-finder/api/internal/keyword"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/llmsettings"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"

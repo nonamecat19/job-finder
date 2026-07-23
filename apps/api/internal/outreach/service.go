@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // maxDraftChars is the hard length ceiling (FR-009): outreach is a brief

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // draftOutput is the LLM structured-output shape for the grounded-generation

@@ -1,4 +1,6 @@
-package llm
+// Package ollama implements domain.Provider against an Ollama server (chat +
+// embeddings), either local or Ollama Cloud (https://ollama.com).
+package ollama
 
 import (
 	"bytes"
@@ -10,13 +12,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/job-finder/api/internal/platform/llm/domain"
 	"github.com/job-finder/api/internal/strutil"
 )
 
-// OllamaProvider talks to an Ollama server (chat + embeddings), either local
-// or Ollama Cloud (https://ollama.com). When apiKey is set it authenticates
+// Provider talks to an Ollama server. When apiKey is set it authenticates
 // with an Authorization: Bearer header. Mirrors ollama.provider.ts.
-type OllamaProvider struct {
+type Provider struct {
 	http       *http.Client
 	baseURL    string
 	apiKey     string
@@ -25,9 +27,9 @@ type OllamaProvider struct {
 	embedModel string
 }
 
-// NewOllama builds a provider. embedURL empty falls back to baseURL; apiKey
-// empty means no auth header (local server). Chat and embeddings share apiKey.
-func NewOllama(baseURL, apiKey, modelName, embedModel, embedURL string) *OllamaProvider {
+// New builds a provider. embedURL empty falls back to baseURL; apiKey empty
+// means no auth header (local server). Chat and embeddings share apiKey.
+func New(baseURL, apiKey, modelName, embedModel, embedURL string) *Provider {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -40,7 +42,7 @@ func NewOllama(baseURL, apiKey, modelName, embedModel, embedURL string) *OllamaP
 	if embedModel == "" {
 		embedModel = "nomic-embed-text"
 	}
-	return &OllamaProvider{
+	return &Provider{
 		http:       &http.Client{Timeout: 300 * time.Second}, // local models are slow
 		baseURL:    baseURL,
 		apiKey:     apiKey,
@@ -50,41 +52,41 @@ func NewOllama(baseURL, apiKey, modelName, embedModel, embedURL string) *OllamaP
 	}
 }
 
-func (o *OllamaProvider) ModelName() string { return o.modelName }
+func (o *Provider) ModelName() string { return o.modelName }
 
 // setHeaders applies the JSON content type and, when configured, Bearer auth.
-func (o *OllamaProvider) setHeaders(req *http.Request) {
+func (o *Provider) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	if o.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+o.apiKey)
 	}
 }
 
-type ollamaChatMessage struct {
+type chatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-type ollamaChatRequest struct {
-	Model    string              `json:"model"`
-	Stream   bool                `json:"stream"`
-	Format   string              `json:"format,omitempty"`
-	Messages []ollamaChatMessage `json:"messages"`
-	Options  ollamaChatOptions   `json:"options"`
+type chatRequest struct {
+	Model    string        `json:"model"`
+	Stream   bool          `json:"stream"`
+	Format   string        `json:"format,omitempty"`
+	Messages []chatMessage `json:"messages"`
+	Options  chatOptions   `json:"options"`
 }
 
-type ollamaChatOptions struct {
+type chatOptions struct {
 	Temperature float64 `json:"temperature"`
 	NumPredict  *int    `json:"num_predict,omitempty"`
 }
 
-type ollamaChatResponse struct {
+type chatResponse struct {
 	Message struct {
 		Content string `json:"content"`
 	} `json:"message"`
 }
 
-func (o *OllamaProvider) chat(ctx context.Context, req ollamaChatRequest) (string, error) {
+func (o *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return "", err
@@ -106,55 +108,55 @@ func (o *OllamaProvider) chat(ctx context.Context, req ollamaChatRequest) (strin
 	if res.StatusCode >= 400 {
 		return "", fmt.Errorf("ollama: chat returned %d: %s", res.StatusCode, string(data))
 	}
-	var parsed ollamaChatResponse
+	var parsed chatResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return "", fmt.Errorf("ollama: invalid chat response: %w", err)
 	}
 	return parsed.Message.Content, nil
 }
 
-func (o *OllamaProvider) Complete(ctx context.Context, prompt string, opts *CompleteOptions) (string, error) {
-	messages := []ollamaChatMessage{}
+func (o *Provider) Complete(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
+	messages := []chatMessage{}
 	if sys := opts.SystemPrompt(); sys != "" {
-		messages = append(messages, ollamaChatMessage{Role: "system", Content: sys})
+		messages = append(messages, chatMessage{Role: "system", Content: sys})
 	}
-	messages = append(messages, ollamaChatMessage{Role: "user", Content: prompt})
+	messages = append(messages, chatMessage{Role: "user", Content: prompt})
 
-	chatOpts := ollamaChatOptions{Temperature: opts.Temp(0.3)}
+	chatOpts := chatOptions{Temperature: opts.Temp(0.3)}
 	if opts != nil && opts.MaxTokens != nil {
 		chatOpts.NumPredict = opts.MaxTokens
 	}
-	return o.chat(ctx, ollamaChatRequest{Model: opts.ModelOr(o.modelName), Stream: false, Messages: messages, Options: chatOpts})
+	return o.chat(ctx, chatRequest{Model: opts.ModelOr(o.modelName), Stream: false, Messages: messages, Options: chatOpts})
 }
 
-func (o *OllamaProvider) CompleteJSON(ctx context.Context, prompt string, opts *CompleteOptions) (string, error) {
-	messages := []ollamaChatMessage{}
+func (o *Provider) CompleteJSON(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
+	messages := []chatMessage{}
 	if sys := opts.SystemPrompt(); sys != "" {
-		messages = append(messages, ollamaChatMessage{Role: "system", Content: sys})
+		messages = append(messages, chatMessage{Role: "system", Content: sys})
 	}
-	messages = append(messages, ollamaChatMessage{Role: "user", Content: prompt})
+	messages = append(messages, chatMessage{Role: "user", Content: prompt})
 
-	return o.chat(ctx, ollamaChatRequest{
+	return o.chat(ctx, chatRequest{
 		Model:    opts.ModelOr(o.modelName),
 		Stream:   false,
 		Format:   "json",
 		Messages: messages,
-		Options:  ollamaChatOptions{Temperature: opts.Temp(0.1)},
+		Options:  chatOptions{Temperature: opts.Temp(0.1)},
 	})
 }
 
-type ollamaEmbedRequest struct {
+type embedRequest struct {
 	Model  string `json:"model"`
 	Prompt string `json:"prompt"`
 }
 
-type ollamaEmbedResponse struct {
+type embedResponse struct {
 	Embedding []float32 `json:"embedding"`
 }
 
-func (o *OllamaProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+func (o *Provider) Embed(ctx context.Context, text string) ([]float32, error) {
 	text = strutil.Truncate(text, 8000)
-	body, err := json.Marshal(ollamaEmbedRequest{Model: o.embedModel, Prompt: text})
+	body, err := json.Marshal(embedRequest{Model: o.embedModel, Prompt: text})
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +177,7 @@ func (o *OllamaProvider) Embed(ctx context.Context, text string) ([]float32, err
 	if res.StatusCode >= 400 {
 		return nil, fmt.Errorf("ollama: embeddings returned %d: %s", res.StatusCode, string(data))
 	}
-	var parsed ollamaEmbedResponse
+	var parsed embedResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return nil, fmt.Errorf("ollama: invalid embeddings response: %w", err)
 	}
@@ -184,3 +186,5 @@ func (o *OllamaProvider) Embed(ctx context.Context, text string) ([]float32, err
 	}
 	return parsed.Embedding, nil
 }
+
+var _ domain.Provider = (*Provider)(nil)

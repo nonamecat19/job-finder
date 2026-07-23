@@ -1,7 +1,8 @@
-package llm
+package application
 
 import (
 	"context"
+	"github.com/job-finder/api/internal/platform/llm/domain"
 	"testing"
 )
 
@@ -12,11 +13,11 @@ type stubProvider struct {
 }
 
 func (s *stubProvider) ModelName() string { return s.name }
-func (s *stubProvider) Complete(ctx context.Context, prompt string, opts *CompleteOptions) (string, error) {
+func (s *stubProvider) Complete(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
 	s.gotModel = opts.ModelOr("")
 	return s.name, nil
 }
-func (s *stubProvider) CompleteJSON(ctx context.Context, prompt string, opts *CompleteOptions) (string, error) {
+func (s *stubProvider) CompleteJSON(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
 	s.gotModel = opts.ModelOr("")
 	return s.name, nil
 }

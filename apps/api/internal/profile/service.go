@@ -14,7 +14,7 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 type Service struct {

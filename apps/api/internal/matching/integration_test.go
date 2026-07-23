@@ -12,7 +12,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/profile"
 )
