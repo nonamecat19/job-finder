@@ -3,7 +3,7 @@ package httpapi_test
 import (
 	"context"
 
-	"github.com/job-finder/api/internal/companyintel"
+	"github.com/job-finder/api/internal/companyintel/application"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/testutil"
@@ -83,7 +83,7 @@ func TestCompaniesRefresh_Success(t *testing.T) {
 }
 
 func TestCompaniesRefresh_NoCompany(t *testing.T) {
-	h := &httpapi.CompaniesHandler{CompanyIntel: &fakeCompanyIntelProvider{refreshErr: companyintel.ErrNoCompany}}
+	h := &httpapi.CompaniesHandler{CompanyIntel: &fakeCompanyIntelProvider{refreshErr: application.ErrNoCompany}}
 	r := testutil.SetupRouter(h.Mount)
 
 	w := testutil.DoRequest(r, "POST", "/api/companies/job-1/intel/refresh", nil, nil)

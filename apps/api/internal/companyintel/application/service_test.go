@@ -1,4 +1,4 @@
-package companyintel_test
+package application_test
 
 import (
 	"context"
@@ -10,7 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/job-finder/api/internal/companyintel"
+	"github.com/job-finder/api/internal/companyintel/application"
+	"github.com/job-finder/api/internal/companyintel/domain"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
@@ -19,7 +20,7 @@ const testCompanyID = "22222222-2222-2222-2222-222222222222"
 
 // fakeRepo embeds the Repository port; the test overrides only what it needs.
 type fakeRepo struct {
-	companyintel.Repository
+	domain.Repository
 
 	job    sqlcgen.Job
 	jobErr error
@@ -86,19 +87,19 @@ func jsonValue(t *testing.T, v any) []byte {
 // fakeScraper is a deterministic test double for Scraper.
 type fakeScraper struct {
 	kind, domain string
-	result       *companyintel.SignalResult
+	result       *domain.SignalResult
 	err          error
 }
 
 func (f fakeScraper) Kind() string   { return f.kind }
 func (f fakeScraper) Domain() string { return f.domain }
-func (f fakeScraper) Scrape(ctx context.Context, in companyintel.Input) (*companyintel.SignalResult, error) {
+func (f fakeScraper) Scrape(ctx context.Context, in domain.Input) (*domain.SignalResult, error) {
 	return f.result, f.err
 }
 
 func TestGetIntel_NoCompanyName(t *testing.T) {
 	repo := &fakeRepo{job: sqlcgen.Job{Company: "   "}}
-	svc := companyintel.NewService(repo, companyintel.NewRegistry(), time.Millisecond)
+	svc := application.NewService(repo, domain.NewRegistry(), time.Millisecond)
 
 	out, err := svc.GetIntel(context.Background(), testJobID)
 	if err != nil {
@@ -114,7 +115,7 @@ func TestGetIntel_CompanyNeverProbed(t *testing.T) {
 		job:        sqlcgen.Job{Company: "Acme Corp"},
 		companyErr: pgx.ErrNoRows,
 	}
-	svc := companyintel.NewService(repo, companyintel.NewRegistry(), time.Millisecond)
+	svc := application.NewService(repo, domain.NewRegistry(), time.Millisecond)
 
 	out, err := svc.GetIntel(context.Background(), testJobID)
 	if err != nil {
@@ -131,11 +132,11 @@ func TestGetIntel_ReturnsFlattenedSignals(t *testing.T) {
 		job:     sqlcgen.Job{Company: "Acme Corp"},
 		company: sqlcgen.Company{ID: companyID, Name: "Acme Corp"},
 		signals: []sqlcgen.CompanySignal{
-			{CompanyId: companyID, Kind: companyintel.KindFunding, Value: jsonValue(t, "Series B — $50M"), FetchedAt: pgtype.Timestamp{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Valid: true}},
-			{CompanyId: companyID, Kind: companyintel.KindGlassdoorRating, Value: jsonValue(t, 3.8), FetchedAt: pgtype.Timestamp{Time: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), Valid: true}},
+			{CompanyId: companyID, Kind: domain.KindFunding, Value: jsonValue(t, "Series B — $50M"), FetchedAt: pgtype.Timestamp{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Valid: true}},
+			{CompanyId: companyID, Kind: domain.KindGlassdoorRating, Value: jsonValue(t, 3.8), FetchedAt: pgtype.Timestamp{Time: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), Valid: true}},
 		},
 	}
-	svc := companyintel.NewService(repo, companyintel.NewRegistry(), time.Millisecond)
+	svc := application.NewService(repo, domain.NewRegistry(), time.Millisecond)
 
 	out, err := svc.GetIntel(context.Background(), testJobID)
 	if err != nil {
@@ -157,10 +158,10 @@ func TestGetIntel_ReturnsFlattenedSignals(t *testing.T) {
 
 func TestRefresh_NoCompanyName(t *testing.T) {
 	repo := &fakeRepo{job: sqlcgen.Job{Company: ""}}
-	svc := companyintel.NewService(repo, companyintel.NewRegistry(), time.Millisecond)
+	svc := application.NewService(repo, domain.NewRegistry(), time.Millisecond)
 
 	_, err := svc.Refresh(context.Background(), testJobID)
-	if !errors.Is(err, companyintel.ErrNoCompany) {
+	if !errors.Is(err, application.ErrNoCompany) {
 		t.Errorf("err = %v, want ErrNoCompany", err)
 	}
 }
@@ -171,19 +172,19 @@ func TestRefresh_PersistsSuccessfulSignalsAndSkipsFailures(t *testing.T) {
 		job:     sqlcgen.Job{Company: "Acme Corp"},
 		company: sqlcgen.Company{ID: companyID, Name: "Acme Corp"},
 	}
-	registry := companyintel.NewRegistry(
-		fakeScraper{kind: companyintel.KindFunding, domain: "crunchbase.com",
-			result: &companyintel.SignalResult{Kind: companyintel.KindFunding, Value: "Series B", Source: "https://crunchbase.com/x"}},
-		fakeScraper{kind: companyintel.KindGlassdoorRating, domain: "glassdoor.com",
+	registry := domain.NewRegistry(
+		fakeScraper{kind: domain.KindFunding, domain: "crunchbase.com",
+			result: &domain.SignalResult{Kind: domain.KindFunding, Value: "Series B", Source: "https://crunchbase.com/x"}},
+		fakeScraper{kind: domain.KindGlassdoorRating, domain: "glassdoor.com",
 			err: errors.New("blocked")},
 	)
-	svc := companyintel.NewService(repo, registry, time.Millisecond)
+	svc := application.NewService(repo, registry, time.Millisecond)
 
 	// After Refresh, GetCompanySignals is called again to build the response —
 	// the fake doesn't persist into `signals`, so seed it to reflect what the
 	// fake UpsertCompanySignal call recorded.
 	repo.signals = []sqlcgen.CompanySignal{
-		{CompanyId: companyID, Kind: companyintel.KindFunding, Value: jsonValue(t, "Series B")},
+		{CompanyId: companyID, Kind: domain.KindFunding, Value: jsonValue(t, "Series B")},
 	}
 
 	out, err := svc.Refresh(context.Background(), testJobID)
@@ -193,8 +194,8 @@ func TestRefresh_PersistsSuccessfulSignalsAndSkipsFailures(t *testing.T) {
 	if len(repo.upserted) != 1 {
 		t.Fatalf("expected exactly 1 persisted signal (the successful one), got %d", len(repo.upserted))
 	}
-	if repo.upserted[0].Kind != companyintel.KindFunding {
-		t.Errorf("persisted kind = %q, want %q", repo.upserted[0].Kind, companyintel.KindFunding)
+	if repo.upserted[0].Kind != domain.KindFunding {
+		t.Errorf("persisted kind = %q, want %q", repo.upserted[0].Kind, domain.KindFunding)
 	}
 	if out.Funding == nil || *out.Funding != "Series B" {
 		t.Errorf("Funding = %v, want %q", out.Funding, "Series B")
@@ -210,14 +211,14 @@ func TestRefresh_AllSourcesFail_SetsTopLevelError(t *testing.T) {
 		job:     sqlcgen.Job{Company: "Acme Corp"},
 		company: sqlcgen.Company{ID: companyID, Name: "Acme Corp"},
 		signals: []sqlcgen.CompanySignal{
-			{CompanyId: companyID, Kind: companyintel.KindFunding, Value: jsonValue(t, "Series A (cached)")},
+			{CompanyId: companyID, Kind: domain.KindFunding, Value: jsonValue(t, "Series A (cached)")},
 		},
 	}
-	registry := companyintel.NewRegistry(
-		fakeScraper{kind: companyintel.KindFunding, domain: "crunchbase.com", err: errors.New("down")},
-		fakeScraper{kind: companyintel.KindGlassdoorRating, domain: "glassdoor.com", err: errors.New("blocked")},
+	registry := domain.NewRegistry(
+		fakeScraper{kind: domain.KindFunding, domain: "crunchbase.com", err: errors.New("down")},
+		fakeScraper{kind: domain.KindGlassdoorRating, domain: "glassdoor.com", err: errors.New("blocked")},
 	)
-	svc := companyintel.NewService(repo, registry, time.Millisecond)
+	svc := application.NewService(repo, registry, time.Millisecond)
 
 	out, err := svc.Refresh(context.Background(), testJobID)
 	if err != nil {

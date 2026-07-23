@@ -1,4 +1,4 @@
-package companyintel
+package adapters
 
 import (
 	"context"
@@ -7,7 +7,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/companyintel/domain"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 const (
@@ -22,13 +23,13 @@ const (
 // to the "no layoff data found" value — a successful, zero-result probe,
 // never an error (mirrors the workua zero-results convention).
 type LayoffsScraper struct {
-	Scraping *scraping.Service
+	Scraping scraping.Scraper
 }
 
-func (LayoffsScraper) Kind() string   { return KindLayoffs }
+func (LayoffsScraper) Kind() string   { return domain.KindLayoffs }
 func (LayoffsScraper) Domain() string { return layoffsDomain }
 
-func (s LayoffsScraper) Scrape(ctx context.Context, in Input) (*SignalResult, error) {
+func (s LayoffsScraper) Scrape(ctx context.Context, in domain.Input) (*domain.SignalResult, error) {
 	if strings.TrimSpace(in.CompanyName) == "" {
 		return nil, nil
 	}
@@ -50,7 +51,7 @@ func (s LayoffsScraper) Scrape(ctx context.Context, in Input) (*SignalResult, er
 // are assumed most-recent-first, matching the live site's default sort).
 // Never returns an error — a missing/unmatched row is a successful
 // zero-result probe.
-func parseLayoffsRow(doc *goquery.Document, name, sourceURL string) *SignalResult {
+func parseLayoffsRow(doc *goquery.Document, name, sourceURL string) *domain.SignalResult {
 	target := strings.ToLower(strings.TrimSpace(name))
 
 	var matched *goquery.Selection
@@ -65,8 +66,8 @@ func parseLayoffsRow(doc *goquery.Document, name, sourceURL string) *SignalResul
 	})
 
 	if matched == nil {
-		return &SignalResult{
-			Kind:   KindLayoffs,
+		return &domain.SignalResult{
+			Kind:   domain.KindLayoffs,
 			Value:  noLayoffData,
 			Source: sourceURL,
 		}
@@ -94,8 +95,8 @@ func parseLayoffsRow(doc *goquery.Document, name, sourceURL string) *SignalResul
 
 	rawHTML, _ := matched.Html()
 
-	return &SignalResult{
-		Kind:   KindLayoffs,
+	return &domain.SignalResult{
+		Kind:   domain.KindLayoffs,
 		Value:  value,
 		Source: sourceURL,
 		Raw:    rawHTML,

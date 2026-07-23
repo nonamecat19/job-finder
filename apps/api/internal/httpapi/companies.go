@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/job-finder/api/internal/companyintel"
+	"github.com/job-finder/api/internal/companyintel/application"
 	"github.com/job-finder/api/internal/dto"
 )
 
@@ -47,7 +47,7 @@ func (h *CompaniesHandler) refresh(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobId")
 	out, err := h.CompanyIntel.Refresh(r.Context(), jobID)
 	if err != nil {
-		if errors.Is(err, companyintel.ErrNoCompany) {
+		if errors.Is(err, application.ErrNoCompany) {
 			writeError(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}

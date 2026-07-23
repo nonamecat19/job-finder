@@ -11,7 +11,9 @@ import (
 	"github.com/job-finder/api/internal/applications"
 	"github.com/job-finder/api/internal/autogen"
 	"github.com/job-finder/api/internal/coach"
-	"github.com/job-finder/api/internal/companyintel"
+	companyintel "github.com/job-finder/api/internal/companyintel/application"
+	companyinteldomain "github.com/job-finder/api/internal/companyintel/domain"
+	companyinteladapters "github.com/job-finder/api/internal/companyintel/infrastructure/adapters"
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/extauth"
 	"github.com/job-finder/api/internal/generation"
@@ -380,12 +382,12 @@ type companyIntelHandles struct {
 }
 
 func composeCompanyIntel(p *Platform) *companyIntelHandles {
-	companyIntelRegistry := companyintel.NewRegistry(
-		companyintel.CrunchbaseScraper{Scraping: p.Scraping},
-		companyintel.LayoffsScraper{Scraping: p.Scraping},
-		companyintel.GlassdoorScraper{Scraping: p.Scraping},
-		companyintel.HeadcountScraper{Scraping: p.Scraping},
-		companyintel.TechStackScraper{Scraping: p.Scraping},
+	companyIntelRegistry := companyinteldomain.NewRegistry(
+		companyinteladapters.CrunchbaseScraper{Scraping: p.Scraping},
+		companyinteladapters.LayoffsScraper{Scraping: p.Scraping},
+		companyinteladapters.GlassdoorScraper{Scraping: p.Scraping},
+		companyinteladapters.HeadcountScraper{Scraping: p.Scraping},
+		companyinteladapters.TechStackScraper{Scraping: p.Scraping},
 	)
 	companyIntelSvc := companyintel.NewService(p.DB.Queries, companyIntelRegistry, 2*time.Second)
 	return &companyIntelHandles{
