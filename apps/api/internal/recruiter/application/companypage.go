@@ -1,4 +1,4 @@
-package recruiter
+package application
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/recruiter/domain"
 )
 
 // companyPagePaths mirrors companyintel's HeadcountScraper About-page
@@ -35,8 +36,8 @@ type extractedContactList struct {
 // People/Team section").
 func (s *Service) companyPageSource(job sqlcgen.Job) resolutionSource {
 	return resolutionSource{
-		name: SourceCompanyPage,
-		run: func(ctx context.Context) ([]ResolvedContact, error) {
+		name: domain.SourceCompanyPage,
+		run: func(ctx context.Context) ([]domain.ResolvedContact, error) {
 			if s.scraping == nil {
 				return nil, nil
 			}
@@ -124,7 +125,7 @@ func extractPageText(html string) string {
 // counts as a personal channel. Confidence is lower than the posting
 // source's ceiling — a team-page listing is a weaker signal than an
 // explicit "Contact:" line naming who owns this specific req.
-func ExtractCompanyPageContacts(ctx context.Context, llmc llm.Provider, model string, pageText string) ([]ResolvedContact, error) {
+func ExtractCompanyPageContacts(ctx context.Context, llmc llm.Provider, model string, pageText string) ([]domain.ResolvedContact, error) {
 	text := strings.TrimSpace(pageText)
 	if text == "" {
 		return nil, nil
@@ -154,9 +155,9 @@ func ExtractCompanyPageContacts(ctx context.Context, llmc llm.Provider, model st
 		return nil, fmt.Errorf("recruiter: company-page extraction: %w", err)
 	}
 
-	var results []ResolvedContact
+	var results []domain.ResolvedContact
 	for _, raw := range out.Contacts {
-		contact, err := groundContact(raw, text, SourceCompanyPage, companyPageConfidence)
+		contact, err := groundContact(raw, text, domain.SourceCompanyPage, companyPageConfidence)
 		if err != nil {
 			return nil, err
 		}

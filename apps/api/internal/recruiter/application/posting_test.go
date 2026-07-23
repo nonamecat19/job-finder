@@ -1,7 +1,8 @@
-package recruiter
+package application
 
 import (
 	"context"
+	"github.com/job-finder/api/internal/recruiter/domain"
 	"testing"
 
 	"github.com/job-finder/api/internal/llm"
@@ -48,8 +49,8 @@ func TestPostingParseNamedContact(t *testing.T) {
 	if contact.Email == nil || *contact.Email != "jane@acme.com" {
 		t.Errorf("Email = %v, want jane@acme.com", contact.Email)
 	}
-	if contact.Source != SourcePosting {
-		t.Errorf("Source = %q, want %q", contact.Source, SourcePosting)
+	if contact.Source != domain.SourcePosting {
+		t.Errorf("Source = %q, want %q", contact.Source, domain.SourcePosting)
 	}
 	// Explicit "Contact:" label -> top confidence tier.
 	if contact.Confidence < 0.85 {

@@ -1,7 +1,8 @@
-package recruiter
+package application
 
 import (
 	"context"
+	"github.com/job-finder/api/internal/recruiter/domain"
 	"os"
 	"testing"
 )
@@ -33,8 +34,8 @@ func TestCompanyPageParse(t *testing.T) {
 		t.Fatalf("expected at least 1 contact from the team fixture, got %d", len(contacts))
 	}
 	for _, c := range contacts {
-		if c.Source != SourceCompanyPage {
-			t.Errorf("Source = %q, want %q", c.Source, SourceCompanyPage)
+		if c.Source != domain.SourceCompanyPage {
+			t.Errorf("Source = %q, want %q", c.Source, domain.SourceCompanyPage)
 		}
 	}
 	names := map[string]bool{}

@@ -1,8 +1,9 @@
-package recruiter
+package application
 
 import (
 	"context"
 	"fmt"
+	"github.com/job-finder/api/internal/recruiter/domain"
 	"sort"
 	"strings"
 	"testing"
@@ -103,7 +104,7 @@ func (f *fakeRepository) ListJobContactsByJob(ctx context.Context, jobId pgtype.
 	// source priority, name asc) so orchestration-level tests can assert
 	// deterministic ordering without a live DB — the SQL itself is covered
 	// by apps/api/internal/db/integration_test.go's TestJobContactOrdering.
-	sourcePriority := map[string]int{SourcePosting: 0, SourceCompanyPage: 1, SourceLinkedIn: 2}
+	sourcePriority := map[string]int{domain.SourcePosting: 0, domain.SourceCompanyPage: 1, domain.SourceLinkedIn: 2}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Confidence != out[j].Confidence {
 			return out[i].Confidence > out[j].Confidence
@@ -236,8 +237,8 @@ func TestResolveOneSourceFails(t *testing.T) {
 	if contacts[0].Name != "Jane Doe" {
 		t.Errorf("Name = %q, want Jane Doe", contacts[0].Name)
 	}
-	if contacts[0].Source != SourcePosting {
-		t.Errorf("Source = %q, want %q", contacts[0].Source, SourcePosting)
+	if contacts[0].Source != domain.SourcePosting {
+		t.Errorf("Source = %q, want %q", contacts[0].Source, domain.SourcePosting)
 	}
 }
 
@@ -281,10 +282,10 @@ func TestListOrderingDeterministic(t *testing.T) {
 		name, source string
 		confidence   float64
 	}{
-		{"B Person", SourceLinkedIn, 0.5},
-		{"A Person", SourcePosting, 0.5},
-		{"C Person", SourcePosting, 0.9},
-		{"D Person", SourceCompanyPage, 0.5},
+		{"B Person", domain.SourceLinkedIn, 0.5},
+		{"A Person", domain.SourcePosting, 0.5},
+		{"C Person", domain.SourcePosting, 0.9},
+		{"D Person", domain.SourceCompanyPage, 0.5},
 	}
 	for _, s := range seed {
 		if _, err := repo.UpsertJobContact(context.Background(), sqlcgen.UpsertJobContactParams{

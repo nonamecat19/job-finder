@@ -1,6 +1,6 @@
 //go:build live
 
-package recruiter
+package application
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package recruiter
+package application
 
 import (
 	"context"
@@ -11,43 +11,26 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/recruiter/domain"
 )
-
-// Repository is the outbound persistence port Resolve needs. *sqlcgen.Queries
-// satisfies it structurally.
-type Repository interface {
-	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
-	UpsertJobContact(ctx context.Context, arg sqlcgen.UpsertJobContactParams) (sqlcgen.JobContact, error)
-	ListJobContactsByJob(ctx context.Context, jobId pgtype.UUID) ([]sqlcgen.JobContact, error)
-	// GetCompanyByNormalizedName backs the company-page source (US2): it
-	// reads the Company.website plan 004 populates, keyed by the job's
-	// normalized company name. Never written by this package.
-	GetCompanyByNormalizedName(ctx context.Context, normalizedName string) (sqlcgen.Company, error)
-}
 
 // Service orchestrates the resolution sources and the JobContact
 // persistence, serving the GET/refresh contact endpoints.
 type Service struct {
-	q            Repository
+	q            domain.Repository
 	llmc         llm.Provider
 	postingModel string
 	// scraping fetches the company-page source's target URL (US2). Reused
 	// from the shared scraping.Service (the same fetch abstraction
 	// companyintel's HeadcountScraper uses) rather than a forked client.
-	scraping ScrapingService
+	scraping domain.ScrapingService
 	// linkedInEnabled gates the LinkedIn source (US2); read once at process
 	// start from LINKEDIN_SCRAPE_ENABLED (FR-004, FR-019). When false the
 	// LinkedIn source is never constructed/invoked.
 	linkedInEnabled bool
 }
 
-// ScrapingService is the outbound fetch port the company-page and LinkedIn
-// sources need. *scraping.Service satisfies it structurally.
-type ScrapingService interface {
-	FetchHTML(ctx context.Context, url string, headers map[string]string) (string, error)
-}
-
-func NewService(q Repository, llmc llm.Provider, postingModel string, scraping ScrapingService, linkedInEnabled bool) *Service {
+func NewService(q domain.Repository, llmc llm.Provider, postingModel string, scraping domain.ScrapingService, linkedInEnabled bool) *Service {
 	return &Service{q: q, llmc: llmc, postingModel: postingModel, scraping: scraping, linkedInEnabled: linkedInEnabled}
 }
 
@@ -108,7 +91,7 @@ func (s *Service) Resolve(ctx context.Context, jobID string) ([]dto.JobContactDt
 // never affects the others (FR-015).
 type resolutionSource struct {
 	name string
-	run  func(ctx context.Context) ([]ResolvedContact, error)
+	run  func(ctx context.Context) ([]domain.ResolvedContact, error)
 }
 
 // sources builds the ordered list of resolution sources to run for one
@@ -120,8 +103,8 @@ type resolutionSource struct {
 func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSource {
 	sources := []resolutionSource{
 		{
-			name: SourcePosting,
-			run: func(ctx context.Context) ([]ResolvedContact, error) {
+			name: domain.SourcePosting,
+			run: func(ctx context.Context) ([]domain.ResolvedContact, error) {
 				contact, err := ExtractPostingContact(ctx, s.llmc, s.postingModel, job.Description)
 				if err != nil {
 					return nil, err
@@ -129,7 +112,7 @@ func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSour
 				if contact == nil {
 					return nil, nil
 				}
-				return []ResolvedContact{*contact}, nil
+				return []domain.ResolvedContact{*contact}, nil
 			},
 		},
 		s.companyPageSource(job),
@@ -140,7 +123,7 @@ func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSour
 	return sources
 }
 
-func (s *Service) upsert(ctx context.Context, jobID pgtype.UUID, c ResolvedContact) (sqlcgen.JobContact, error) {
+func (s *Service) upsert(ctx context.Context, jobID pgtype.UUID, c domain.ResolvedContact) (sqlcgen.JobContact, error) {
 	return s.q.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
 		JobId:       jobID,
 		Name:        c.Name,

@@ -1,4 +1,4 @@
-package recruiter
+package application
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/recruiter/domain"
 )
 
 // linkedInPeoplePath is the public People section of a LinkedIn company
@@ -25,8 +26,8 @@ const linkedInPeoplePath = "/people/"
 // spec edge case "LinkedIn markup / gating change").
 func (s *Service) linkedInSource(job sqlcgen.Job) resolutionSource {
 	return resolutionSource{
-		name: SourceLinkedIn,
-		run: func(ctx context.Context) ([]ResolvedContact, error) {
+		name: domain.SourceLinkedIn,
+		run: func(ctx context.Context) ([]domain.ResolvedContact, error) {
 			if s.scraping == nil {
 				return nil, nil
 			}
@@ -74,7 +75,7 @@ func companySlug(name string) string {
 // Confidence sits between the posting and company-page tiers: a LinkedIn
 // People listing names a role at the company but, like the company-page
 // source, doesn't confirm ownership of this specific requisition.
-func ExtractLinkedInContacts(ctx context.Context, llmc llm.Provider, model string, pageText string) ([]ResolvedContact, error) {
+func ExtractLinkedInContacts(ctx context.Context, llmc llm.Provider, model string, pageText string) ([]domain.ResolvedContact, error) {
 	text := strings.TrimSpace(pageText)
 	if text == "" {
 		return nil, nil
@@ -104,9 +105,9 @@ func ExtractLinkedInContacts(ctx context.Context, llmc llm.Provider, model strin
 		return nil, fmt.Errorf("recruiter: linkedin extraction: %w", err)
 	}
 
-	var results []ResolvedContact
+	var results []domain.ResolvedContact
 	for _, raw := range out.Contacts {
-		contact, err := groundContact(raw, text, SourceLinkedIn, linkedInConfidence)
+		contact, err := groundContact(raw, text, domain.SourceLinkedIn, linkedInConfidence)
 		if err != nil {
 			return nil, err
 		}
