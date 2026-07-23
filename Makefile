@@ -1,6 +1,7 @@
 .PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean \
 	test test-go test-react test-python test-integration test-e2e test-lint test-db-setup \
-	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install
+	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install \
+	tygo-generate tygo-check tygo-install
 
 ifneq (,$(wildcard .env))
 include .env
@@ -108,6 +109,20 @@ sqlc-generate:
 # Fails if apps/api/internal/db/sqlcgen is stale. Mirrors the API CI job.
 sqlc-check:
 	./scripts/sqlc-check.sh
+
+# --- tygo code generation (Go DTOs -> packages/shared/src/generated.ts) ---
+# Version is pinned in apps/api/.tygo-version so local and CI emit identical code.
+TYGO_VERSION := $(shell tr -d '[:space:]' < apps/api/.tygo-version)
+
+tygo-install:
+	go install github.com/gzuidhof/tygo@v$(TYGO_VERSION)
+
+tygo-generate:
+	cd apps/api && tygo generate
+
+# Fails if packages/shared/src/generated.ts is stale. Mirrors the API CI job.
+tygo-check:
+	./scripts/tygo-check.sh
 
 # --- go seed data ---
 seed:
