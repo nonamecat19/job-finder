@@ -1,4 +1,4 @@
-package referral
+package application
 
 import (
 	"context"
@@ -7,13 +7,14 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/referral/domain"
 )
 
 type PathFinder struct {
-	repo Repository
+	repo domain.Repository
 }
 
-func NewPathFinder(repo Repository) *PathFinder {
+func NewPathFinder(repo domain.Repository) *PathFinder {
 	return &PathFinder{repo: repo}
 }
 
@@ -22,7 +23,7 @@ type graphNode struct {
 	company   string
 }
 
-func (pf *PathFinder) FindPathsToCompany(ctx context.Context, company string, maxDepth int) ([]ReferralPath, error) {
+func (pf *PathFinder) FindPathsToCompany(ctx context.Context, company string, maxDepth int) ([]domain.ReferralPath, error) {
 	if maxDepth <= 0 {
 		maxDepth = 3
 	}
@@ -64,7 +65,7 @@ func (pf *PathFinder) FindPathsToCompany(ctx context.Context, company string, ma
 		return nil, nil
 	}
 
-	var paths []ReferralPath
+	var paths []domain.ReferralPath
 	visited := make(map[string]bool)
 
 	for startID := range contactMap {
@@ -78,13 +79,13 @@ func (pf *PathFinder) FindPathsToCompany(ctx context.Context, company string, ma
 		for targetID := range targetIDs {
 			path := pf.bfs(startID, targetID, adj, maxDepth)
 			if path != nil {
-				contactPath := make([]Contact, 0, len(path))
+				contactPath := make([]domain.Contact, 0, len(path))
 				for _, id := range path {
 					if c, ok := contactMap[id]; ok {
 						contactPath = append(contactPath, sqlcContactToDomain(c))
 					}
 				}
-				paths = append(paths, ReferralPath{
+				paths = append(paths, domain.ReferralPath{
 					Path:   contactPath,
 					Score:  scorePath(contactPath, allConnections, contactMap),
 					Length: len(contactPath),
@@ -134,7 +135,7 @@ func (pf *PathFinder) bfs(start, target string, adj map[string][]string, maxDept
 	return nil
 }
 
-func scorePath(path []Contact, connections []sqlcgen.ContactConnection, contactMap map[string]sqlcgen.Contact) float64 {
+func scorePath(path []domain.Contact, connections []sqlcgen.ContactConnection, contactMap map[string]sqlcgen.Contact) float64 {
 	if len(path) < 2 {
 		return 0
 	}
@@ -168,8 +169,8 @@ func scorePath(path []Contact, connections []sqlcgen.ContactConnection, contactM
 	return math.Round(avgStrength*lengthPenalty*100) / 100
 }
 
-func sqlcContactToDomain(c sqlcgen.Contact) Contact {
-	return Contact{
+func sqlcContactToDomain(c sqlcgen.Contact) domain.Contact {
+	return domain.Contact{
 		ID:             dbutil.UUIDString(c.ID),
 		Name:           c.Name,
 		Email:          c.Email,

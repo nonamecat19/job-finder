@@ -1,4 +1,4 @@
-package referral
+package application
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/referral/domain"
+	"github.com/job-finder/api/internal/referral/infrastructure/github"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -29,7 +31,7 @@ func (f *fakeJobRepo) GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.J
 
 func TestService_ImportCSV(t *testing.T) {
 	repo := newFakeRepo()
-	svc := NewService(repo, &fakeJobRepo{}, NewGitHubCrossReferencer())
+	svc := NewService(repo, &fakeJobRepo{}, github.NewGitHubCrossReferencer())
 
 	csvBody := "Name,Company\nJane Doe,Acme\nJohn Smith,Acme\n,Skipped Co\n"
 	summary, err := svc.ImportCSV(context.Background(), strings.NewReader(csvBody))
@@ -49,7 +51,7 @@ func TestService_ImportCSV(t *testing.T) {
 
 func TestService_ImportCSV_InvalidCSV(t *testing.T) {
 	repo := newFakeRepo()
-	svc := NewService(repo, &fakeJobRepo{}, NewGitHubCrossReferencer())
+	svc := NewService(repo, &fakeJobRepo{}, github.NewGitHubCrossReferencer())
 
 	_, err := svc.ImportCSV(context.Background(), strings.NewReader(""))
 	if err == nil {
@@ -60,21 +62,21 @@ func TestService_ImportCSV_InvalidCSV(t *testing.T) {
 func TestService_SyncGithub_NoUsername(t *testing.T) {
 	repo := newFakeRepo()
 	c := repo.addContact("No Github", "")
-	svc := NewService(repo, &fakeJobRepo{}, NewGitHubCrossReferencer())
+	svc := NewService(repo, &fakeJobRepo{}, github.NewGitHubCrossReferencer())
 
 	_, err := svc.SyncGithub(context.Background(), dbutil.UUIDString(c.ID))
-	if !errors.Is(err, ErrNoGithubUsername) {
-		t.Fatalf("SyncGithub() error = %v, want ErrNoGithubUsername", err)
+	if !errors.Is(err, domain.ErrNoGithubUsername) {
+		t.Fatalf("SyncGithub() error = %v, want domain.ErrNoGithubUsername", err)
 	}
 }
 
 func TestService_SyncGithub_ContactNotFound(t *testing.T) {
 	repo := newFakeRepo()
-	svc := NewService(repo, &fakeJobRepo{}, NewGitHubCrossReferencer())
+	svc := NewService(repo, &fakeJobRepo{}, github.NewGitHubCrossReferencer())
 
 	_, err := svc.SyncGithub(context.Background(), "00000000-0000-0000-0000-000000000000")
-	if !errors.Is(err, ErrContactNotFound) {
-		t.Fatalf("SyncGithub() error = %v, want ErrContactNotFound", err)
+	if !errors.Is(err, domain.ErrContactNotFound) {
+		t.Fatalf("SyncGithub() error = %v, want domain.ErrContactNotFound", err)
 	}
 }
 
@@ -93,16 +95,16 @@ func TestService_SyncGithub_CreatesConnectionsForKnownContacts(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/users/me-gh/followers":
-			_ = json.NewEncoder(w).Encode([]GitHubProfile{{Login: "alice"}, {Login: "stranger"}})
+			_ = json.NewEncoder(w).Encode([]github.GitHubProfile{{Login: "alice"}, {Login: "stranger"}})
 		case "/users/me-gh/following":
-			_ = json.NewEncoder(w).Encode([]GitHubProfile{{Login: "alice"}})
+			_ = json.NewEncoder(w).Encode([]github.GitHubProfile{{Login: "alice"}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	defer srv.Close()
 
-	gh := &GitHubCrossReferencer{client: srv.Client(), baseURL: srv.URL}
+	gh := github.NewWithClient(srv.Client(), srv.URL)
 	svc := NewService(repo, &fakeJobRepo{}, gh)
 
 	result, err := svc.SyncGithub(context.Background(), dbutil.UUIDString(me.ID))
@@ -136,7 +138,7 @@ func TestService_FindReferralPaths(t *testing.T) {
 	jobs := &fakeJobRepo{jobs: map[string]sqlcgen.Job{
 		jobID: {ID: uid, Company: "Acme"},
 	}}
-	svc := NewService(repo, jobs, NewGitHubCrossReferencer())
+	svc := NewService(repo, jobs, github.NewGitHubCrossReferencer())
 
 	paths, err := svc.FindReferralPaths(context.Background(), jobID, 3, 10)
 	if err != nil {
@@ -149,7 +151,7 @@ func TestService_FindReferralPaths(t *testing.T) {
 
 func TestService_FindReferralPaths_JobNotFound(t *testing.T) {
 	repo := newFakeRepo()
-	svc := NewService(repo, &fakeJobRepo{}, NewGitHubCrossReferencer())
+	svc := NewService(repo, &fakeJobRepo{}, github.NewGitHubCrossReferencer())
 
 	_, err := svc.FindReferralPaths(context.Background(), "22222222-2222-2222-2222-222222222222", 3, 10)
 	if err == nil {
@@ -162,7 +164,7 @@ func TestService_FindReferralPaths_NoCompany(t *testing.T) {
 	jobID := "33333333-3333-3333-3333-333333333333"
 	uid, _ := dbutil.ParseUUID(jobID)
 	jobs := &fakeJobRepo{jobs: map[string]sqlcgen.Job{jobID: {ID: uid, Company: ""}}}
-	svc := NewService(repo, jobs, NewGitHubCrossReferencer())
+	svc := NewService(repo, jobs, github.NewGitHubCrossReferencer())
 
 	paths, err := svc.FindReferralPaths(context.Background(), jobID, 3, 10)
 	if err != nil {

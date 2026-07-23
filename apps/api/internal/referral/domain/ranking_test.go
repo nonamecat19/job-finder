@@ -1,4 +1,4 @@
-package referral
+package domain
 
 import "testing"
 

@@ -1,4 +1,4 @@
-package referral
+package github
 
 import (
 	"context"

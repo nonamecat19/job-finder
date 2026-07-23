@@ -1,4 +1,4 @@
-package referral
+package application
 
 import (
 	"context"

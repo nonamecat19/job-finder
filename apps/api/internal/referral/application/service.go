@@ -1,64 +1,34 @@
-package referral
+package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/referral/domain"
+	"github.com/job-finder/api/internal/referral/infrastructure/github"
 )
-
-// ErrContactNotFound is returned when a referenced contact does not exist.
-var ErrContactNotFound = errors.New("referral: contact not found")
-
-// ErrNoGithubUsername is returned when GitHub sync is requested for a
-// contact that has no githubUsername on file.
-var ErrNoGithubUsername = errors.New("referral: contact has no github username")
-
-// JobRepository is the slice of job persistence the referral service needs
-// to resolve a job's company for a warm-path lookup.
-type JobRepository interface {
-	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
-}
-
-// ImportSummary reports the outcome of a CSV contact import.
-type ImportSummary struct {
-	Imported int
-	Skipped  int
-	Total    int
-}
-
-// GithubSyncResult reports the outcome of cross-referencing one contact's
-// GitHub followers/following against the existing contact book.
-type GithubSyncResult struct {
-	Contact          Contact
-	FollowersScanned int
-	FollowingScanned int
-	ConnectionsMade  int
-}
 
 // Service orchestrates CSV import, GitHub cross-referencing, and warm-path
 // finding/ranking over the Contact/ContactConnection graph.
 type Service struct {
-	repo   Repository
-	jobs   JobRepository
-	gh     *GitHubCrossReferencer
+	repo   domain.Repository
+	jobs   domain.JobRepository
+	gh     *github.GitHubCrossReferencer
 	finder *PathFinder
-	ranker *Ranker
+	ranker *domain.Ranker
 }
 
-func NewService(repo Repository, jobs JobRepository, gh *GitHubCrossReferencer) *Service {
+func NewService(repo domain.Repository, jobs domain.JobRepository, gh *github.GitHubCrossReferencer) *Service {
 	return &Service{
 		repo:   repo,
 		jobs:   jobs,
 		gh:     gh,
 		finder: NewPathFinder(repo),
-		ranker: NewRanker(),
+		ranker: domain.NewRanker(),
 	}
 }
 
@@ -66,13 +36,13 @@ func NewService(repo Repository, jobs JobRepository, gh *GitHubCrossReferencer) 
 // that has a non-empty name. Rows with an empty name are silently skipped
 // (ParseCSV already drops them), so Skipped only reflects rows that failed
 // to insert (e.g. a transient DB error) rather than blank rows.
-func (s *Service) ImportCSV(ctx context.Context, r io.Reader) (ImportSummary, error) {
-	rows, err := ParseCSV(r)
+func (s *Service) ImportCSV(ctx context.Context, r io.Reader) (domain.ImportSummary, error) {
+	rows, err := domain.ParseCSV(r)
 	if err != nil {
-		return ImportSummary{}, err
+		return domain.ImportSummary{}, err
 	}
 
-	summary := ImportSummary{Total: len(rows)}
+	summary := domain.ImportSummary{Total: len(rows)}
 	for _, row := range rows {
 		_, err := s.repo.InsertContact(ctx, sqlcgen.InsertContactParams{
 			Name:           row.Name,
@@ -97,17 +67,17 @@ func (s *Service) ImportCSV(ctx context.Context, r io.Reader) (ImportSummary, er
 // book (by githubUsername). Every match becomes (or strengthens) a
 // ContactConnection between the two contacts — the "GitHub cross-reference"
 // step that turns two independently-imported contacts into a warm-path edge.
-func (s *Service) SyncGithub(ctx context.Context, contactID string) (*GithubSyncResult, error) {
+func (s *Service) SyncGithub(ctx context.Context, contactID string) (*domain.GithubSyncResult, error) {
 	uid, err := dbutil.ParseUUID(contactID)
 	if err != nil {
 		return nil, err
 	}
 	contact, err := s.repo.GetContactByID(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrContactNotFound, contactID)
+		return nil, fmt.Errorf("%w: %s", domain.ErrContactNotFound, contactID)
 	}
 	if contact.GithubUsername == nil || strings.TrimSpace(*contact.GithubUsername) == "" {
-		return nil, ErrNoGithubUsername
+		return nil, domain.ErrNoGithubUsername
 	}
 	username := strings.TrimSpace(*contact.GithubUsername)
 
@@ -120,7 +90,7 @@ func (s *Service) SyncGithub(ctx context.Context, contactID string) (*GithubSync
 		return nil, fmt.Errorf("referral: fetch following for %s: %w", username, err)
 	}
 
-	result := &GithubSyncResult{
+	result := &domain.GithubSyncResult{
 		Contact:          sqlcContactToDomain(contact),
 		FollowersScanned: len(followers),
 		FollowingScanned: len(following),
@@ -178,12 +148,12 @@ func (s *Service) SyncGithub(ctx context.Context, contactID string) (*GithubSync
 // ListContacts returns every contact in the book (CSV-imported or GitHub-
 // discovered), most-recently-added first — the source list for the
 // contacts UI and for picking a contact to run GitHub sync against.
-func (s *Service) ListContacts(ctx context.Context) ([]Contact, error) {
+func (s *Service) ListContacts(ctx context.Context) ([]domain.Contact, error) {
 	rows, err := s.repo.ListContacts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Contact, 0, len(rows))
+	out := make([]domain.Contact, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, sqlcContactToDomain(r))
 	}
@@ -192,7 +162,7 @@ func (s *Service) ListContacts(ctx context.Context) ([]Contact, error) {
 
 // FindReferralPaths resolves the job's company, walks the contact graph for
 // warm paths into it, and returns the top-N paths ranked by strength.
-func (s *Service) FindReferralPaths(ctx context.Context, jobID string, maxDepth, topN int) ([]ReferralPath, error) {
+func (s *Service) FindReferralPaths(ctx context.Context, jobID string, maxDepth, topN int) ([]domain.ReferralPath, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
 		return nil, err

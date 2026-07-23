@@ -1,4 +1,4 @@
-package referral
+package domain
 
 import "time"
 
@@ -27,4 +27,20 @@ type ReferralPath struct {
 	Path   []Contact
 	Score  float64
 	Length int
+}
+
+// ImportSummary reports the outcome of a CSV contact import.
+type ImportSummary struct {
+	Imported int
+	Skipped  int
+	Total    int
+}
+
+// GithubSyncResult reports the outcome of cross-referencing one contact's
+// GitHub followers/following against the existing contact book.
+type GithubSyncResult struct {
+	Contact          Contact
+	FollowersScanned int
+	FollowingScanned int
+	ConnectionsMade  int
 }

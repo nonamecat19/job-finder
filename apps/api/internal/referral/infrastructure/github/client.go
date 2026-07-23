@@ -1,4 +1,4 @@
-package referral
+package github
 
 import (
 	"context"
@@ -30,6 +30,13 @@ func NewGitHubCrossReferencer() *GitHubCrossReferencer {
 		},
 		baseURL: "https://api.github.com",
 	}
+}
+
+// NewWithClient builds a GitHubCrossReferencer against an arbitrary client
+// and base URL — the test seam for pointing at an httptest.Server instead
+// of the real GitHub API.
+func NewWithClient(client *http.Client, baseURL string) *GitHubCrossReferencer {
+	return &GitHubCrossReferencer{client: client, baseURL: baseURL}
 }
 
 func (g *GitHubCrossReferencer) FetchProfile(ctx context.Context, username string) (*GitHubProfile, error) {

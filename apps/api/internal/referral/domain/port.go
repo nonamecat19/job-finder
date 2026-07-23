@@ -1,4 +1,4 @@
-package referral
+package domain
 
 import (
 	"context"
@@ -24,4 +24,10 @@ type Repository interface {
 	GetConnectionsTo(ctx context.Context, toContactID pgtype.UUID) ([]sqlcgen.ContactConnection, error)
 	DeleteAllConnections(ctx context.Context) (int64, error)
 	FindContactsAtCompany(ctx context.Context, company *string) ([]sqlcgen.Contact, error)
+}
+
+// JobRepository is the slice of job persistence the referral service needs
+// to resolve a job's company for a warm-path lookup.
+type JobRepository interface {
+	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
 }
