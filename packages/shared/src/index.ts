@@ -409,10 +409,10 @@ export interface CompanyNewsItem {
   fetchedAt: string;
 }
 
-export const ACTIVITY_OPS = ['ingest', 'match', 'generate', 'enrich'] as const;
+export const ACTIVITY_OPS = ['ingest', 'match', 'generate', 'enrich', 'ghost_score', 'salary_infer'] as const;
 export type ActivityOp = (typeof ACTIVITY_OPS)[number];
 
-export const ACTIVITY_STATES = ['queued', 'running', 'succeeded', 'failed'] as const;
+export const ACTIVITY_STATES = ['queued', 'running', 'succeeded', 'failed', 'cancelled'] as const;
 export type ActivityState = (typeof ACTIVITY_STATES)[number];
 
 export interface ActivityRunDto {
@@ -639,6 +639,13 @@ export interface LlmTaskSettingDto {
 export interface LlmSettingsResponseDto {
   credentialConfigured: boolean;
   tasks: LlmTaskSettingDto[];
+}
+
+/** GET/PUT /v1/settings/autogenerate response: whether a resume is
+ * auto-enqueued when a job's match score reaches threshold (0-100). */
+export interface AutoGenerateSettingDto {
+  enabled: boolean;
+  threshold: number;
 }
 
 /** One curated Cerebras free-tier model offered in the Settings model

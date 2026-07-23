@@ -62,14 +62,16 @@ type EnrichPayload struct {
 
 // SalaryInferPayload carries the job to infer salary for.
 type SalaryInferPayload struct {
-	JobID string `json:"jobId"`
+	JobID      string  `json:"jobId"`
+	ActivityID *string `json:"activityId,omitempty"`
 }
 
 // GhostScorePayload carries the job to run the ghost-job detector (005)
 // against. Triggered by ingestion and by the manual POST
 // /api/jobs/{id}/ghost-score endpoint only — never on a schedule (FR-014).
 type GhostScorePayload struct {
-	JobID string `json:"jobId"`
+	JobID      string  `json:"jobId"`
+	ActivityID *string `json:"activityId,omitempty"`
 }
 
 // GeneratePayload mirrors GenerateJobData.

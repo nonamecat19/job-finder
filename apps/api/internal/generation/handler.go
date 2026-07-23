@@ -3,12 +3,14 @@ package generation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -46,6 +48,13 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 
 	doc, err := h.svc.Generate(ctx, payload.JobID, payload.Type, payload.ProfileID, rec)
 	if err != nil {
+		if errors.Is(err, llm.ErrRateLimited) {
+			slog.Warn("generation cancelled: cerebras rate limited", "jobId", payload.JobID, "type", payload.Type)
+			if rec != nil {
+				rec.Cancel(ctx, err.Error())
+			}
+			return nil
+		}
 		slog.Error("generation failed", "jobId", payload.JobID, "type", payload.Type, "error", err)
 		return err
 	}

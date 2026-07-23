@@ -8,8 +8,37 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 )
+
+// ErrRateLimited is returned (wrapped) whenever Cerebras responds 429, or
+// while the process-wide breaker below is tripped from a prior 429. Callers
+// (the asynq task handlers) treat it as "skip this task" rather than "retry
+// it" — see rateLimitCooldown.
+var ErrRateLimited = errors.New("llm: cerebras rate limited")
+
+// rateLimitCooldown is how long the breaker stays tripped after a 429,
+// matching Cerebras free-tier's per-minute request quota.
+const rateLimitCooldown = 60 * time.Second
+
+// rateLimitBreaker is a tiny process-wide circuit breaker: the first 429 from
+// Cerebras trips it, and every other in-flight/queued task sharing this
+// *CerebrasProvider (there is exactly one per process, shared by every task
+// Router) immediately fails fast with ErrRateLimited instead of also burning
+// a request against the same exhausted quota.
+type rateLimitBreaker struct {
+	until atomic.Int64 // unix nano; 0 or in the past = not tripped
+}
+
+func (b *rateLimitBreaker) trip() {
+	b.until.Store(time.Now().Add(rateLimitCooldown).UnixNano())
+}
+
+func (b *rateLimitBreaker) tripped() bool {
+	u := b.until.Load()
+	return u != 0 && time.Now().UnixNano() < u
+}
 
 // CerebrasProvider talks to Cerebras's OpenAI-compatible /chat/completions
 // API. Cerebras has no embeddings endpoint, so Embed delegates to an Ollama
@@ -20,6 +49,7 @@ type CerebrasProvider struct {
 	apiKey    string
 	modelName string
 	ollama    *OllamaProvider
+	breaker   rateLimitBreaker
 }
 
 // NewCerebras builds a provider. apiKey is required — the caller (factory.go)
@@ -92,6 +122,10 @@ func cerebrasErrMessage(status int, body []byte) string {
 }
 
 func (c *CerebrasProvider) chat(ctx context.Context, req cerebrasRequest) (string, error) {
+	if c.breaker.tripped() {
+		return "", fmt.Errorf("%w: quota still cooling down", ErrRateLimited)
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return "", err
@@ -110,6 +144,10 @@ func (c *CerebrasProvider) chat(ctx context.Context, req cerebrasRequest) (strin
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
+	}
+	if res.StatusCode == http.StatusTooManyRequests {
+		c.breaker.trip()
+		return "", fmt.Errorf("%w: %s", ErrRateLimited, cerebrasErrMessage(res.StatusCode, data))
 	}
 	if res.StatusCode >= 400 {
 		return "", errors.New(cerebrasErrMessage(res.StatusCode, data))

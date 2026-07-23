@@ -15,11 +15,21 @@ UPDATE "ActivityRun" SET "state" = 'succeeded', "refId" = $2, "meta" = COALESCE(
 -- name: FinishActivityRunError :exec
 UPDATE "ActivityRun" SET "state" = 'failed', "error" = $2, "finishedAt" = now() WHERE "id" = $1;
 
+-- name: FinishActivityRunCancelled :exec
+UPDATE "ActivityRun" SET "state" = 'cancelled', "error" = $2, "finishedAt" = now() WHERE "id" = $1;
+
 -- name: ListActiveActivityRuns :many
 SELECT * FROM "ActivityRun" WHERE "state" IN ('queued', 'running') ORDER BY "createdAt" DESC;
 
 -- name: ListRecentActivityRuns :many
 SELECT * FROM "ActivityRun" ORDER BY "createdAt" DESC LIMIT $1;
+
+-- name: ListFailedActivityRuns :many
+-- Includes "cancelled" runs (e.g. skipped because of an upstream rate limit)
+-- alongside "failed" ones — both are retryable the same way.
+SELECT * FROM "ActivityRun"
+WHERE "state" IN ('failed', 'cancelled') AND (sqlc.narg('op')::text IS NULL OR "op" = sqlc.narg('op'))
+ORDER BY "createdAt" DESC;
 
 -- name: DeleteActivityRunsBefore :exec
 DELETE FROM "ActivityRun" WHERE "createdAt" < $1;

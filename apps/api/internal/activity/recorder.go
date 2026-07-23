@@ -20,6 +20,7 @@ type Store interface {
 	SetActivityStep(ctx context.Context, arg sqlcgen.SetActivityStepParams) error
 	FinishActivityRunOk(ctx context.Context, arg sqlcgen.FinishActivityRunOkParams) error
 	FinishActivityRunError(ctx context.Context, arg sqlcgen.FinishActivityRunErrorParams) error
+	FinishActivityRunCancelled(ctx context.Context, arg sqlcgen.FinishActivityRunCancelledParams) error
 }
 
 type Recorder struct {
@@ -122,6 +123,25 @@ func (r *Recorder) Ok(ctx context.Context, refID string, meta map[string]any) {
 		Meta:  metaBytes,
 	}); err != nil {
 		slog.Error("activity: finish ok failed", "id", dbutil.UUIDString(r.id), "error", err)
+	}
+}
+
+// Cancel marks the run "cancelled" rather than "failed" — used when a task is
+// deliberately skipped (e.g. an upstream provider is rate-limited) rather
+// than having actually errored. Retry (POST /activity/retry) treats
+// cancelled the same as failed.
+func (r *Recorder) Cancel(ctx context.Context, reason string) {
+	if !r.valid() {
+		return
+	}
+	if len(reason) > 1000 {
+		reason = reason[:1000]
+	}
+	if dbErr := r.q.FinishActivityRunCancelled(ctx, sqlcgen.FinishActivityRunCancelledParams{
+		ID:    r.id,
+		Error: &reason,
+	}); dbErr != nil {
+		slog.Error("activity: finish cancelled failed", "id", dbutil.UUIDString(r.id), "error", dbErr)
 	}
 }
 

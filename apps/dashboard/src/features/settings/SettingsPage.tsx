@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { Button, ErrorState, Surface } from '../../components/ui';
+import AutoGenerateSettingsCard from './AutoGenerateSettingsCard';
 import LlmSettingsCard from './LlmSettingsCard';
 import { useBootstrapExtension } from './hooks';
 
@@ -19,6 +20,10 @@ export default function SettingsPage() {
       <section>
         <SectionTitle>AI models</SectionTitle>
         <LlmSettingsCard />
+      </section>
+      <section>
+        <SectionTitle>Auto-generate resume</SectionTitle>
+        <AutoGenerateSettingsCard />
       </section>
       <section>
         <SectionTitle>Browser extension</SectionTitle>

@@ -47,6 +47,13 @@ type ApplicationOutcome struct {
 	CreatedAt     pgtype.Timestamp `json:"createdAt"`
 }
 
+type AutoGenerateSetting struct {
+	ID        string           `json:"id"`
+	Enabled   bool             `json:"enabled"`
+	Threshold int32            `json:"threshold"`
+	UpdatedAt pgtype.Timestamp `json:"updatedAt"`
+}
+
 type Company struct {
 	ID              pgtype.UUID      `json:"id"`
 	Name            string           `json:"name"`

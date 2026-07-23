@@ -30,6 +30,7 @@ type Repository interface {
 	RecordJobRepost(ctx context.Context, dedupekey string) (sqlcgen.Job, error)
 	ListEnabledSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error)
 	ListSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error)
+	ListSubscriptions(ctx context.Context) ([]sqlcgen.Subscription, error)
 	RecentRunsJoined(ctx context.Context, limit int32) ([]sqlcgen.RecentRunsJoinedRow, error)
 	RecentSourceRunsForSource(ctx context.Context, arg sqlcgen.RecentSourceRunsForSourceParams) ([]*bool, error)
 	SetJobSourceHealthy(ctx context.Context, arg sqlcgen.SetJobSourceHealthyParams) error

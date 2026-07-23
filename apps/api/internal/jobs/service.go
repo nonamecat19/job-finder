@@ -318,6 +318,15 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	if rec != nil {
 		idStr := dbutil.UUIDString(rec.ID())
 		actID = &idStr
+		// Persist docType/profileID on the run so a later retry (POST
+		// /activity/retry) can rebuild the exact same GeneratePayload —
+		// unlike match/enrich/ghost_score/salary_infer, "generate" needs
+		// more than just the jobId.
+		meta := map[string]any{"docType": docType}
+		if profileID != nil {
+			meta["profileId"] = *profileID
+		}
+		rec.Step(ctx, "queued", meta)
 	}
 
 	payload, err := json.Marshal(queue.GeneratePayload{JobID: id, Type: docType, ProfileID: profileID, ActivityID: actID})

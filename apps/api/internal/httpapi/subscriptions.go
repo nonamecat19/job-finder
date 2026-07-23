@@ -22,6 +22,7 @@ type SubscriptionProvider interface {
 // SubscriptionRunner enqueues subscription ingest tasks.
 type SubscriptionRunner interface {
 	RunSubscription(ctx context.Context, subID string) error
+	RunAllSubscriptions(ctx context.Context) (int, error)
 }
 
 // SubscriptionsHandler wires /api/subscriptions: URL-based subscriptions per
@@ -38,6 +39,7 @@ func (h *SubscriptionsHandler) Mount(r chi.Router) {
 	r.Put("/subscriptions/{id}", h.update)
 	r.Delete("/subscriptions/{id}", h.remove)
 	r.Post("/subscriptions/{id}/run", h.run)
+	r.Post("/subscriptions/run-all", h.runAll)
 }
 
 func (h *SubscriptionsHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -123,4 +125,13 @@ func (h *SubscriptionsHandler) run(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"queued": true})
+}
+
+func (h *SubscriptionsHandler) runAll(w http.ResponseWriter, r *http.Request) {
+	queued, err := h.Ingestion.RunAllSubscriptions(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"queued": queued})
 }

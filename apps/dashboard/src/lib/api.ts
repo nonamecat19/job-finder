@@ -17,6 +17,7 @@ import type {
   KeywordDiffResponse,
   LlmModelsResponseDto,
   LlmSettingsResponseDto,
+  AutoGenerateSettingDto,
   LlmTaskSettingDto,
   OutreachDraftDto,
   OutreachToneOptionDto,
@@ -170,10 +171,14 @@ export const api = {
       request<{ deleted: boolean }>(`/subscriptions/${id}`, { method: 'DELETE' }),
     run: (id: string) =>
       request<{ queued: boolean }>(`/subscriptions/${id}/run`, { method: 'POST' }),
+    runAll: () =>
+      request<{ queued: number }>('/subscriptions/run-all', { method: 'POST' }),
   },
   activity: {
     list: (limit?: number) =>
       request<ActivityListResponse>(`/activity${limit ? `?limit=${limit}` : ''}`),
+    retry: (op?: string) =>
+      request<{ retried: number; skipped: number }>(`/activity/retry${op ? `?op=${op}` : ''}`, { method: 'POST' }),
   },
   companies: {
     intel: (jobId: string) => request<CompanyIntelDto>(`/companies/${jobId}/intel`),
@@ -218,5 +223,11 @@ export const api = {
         body: JSON.stringify({ tasks }),
       }),
     llmModels: () => request<LlmModelsResponseDto>('/v1/settings/llm/models'),
+    getAutoGenerate: () => request<AutoGenerateSettingDto>('/v1/settings/autogenerate'),
+    putAutoGenerate: (body: AutoGenerateSettingDto) =>
+      request<AutoGenerateSettingDto>('/v1/settings/autogenerate', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
   },
 };

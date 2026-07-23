@@ -20,6 +20,20 @@ func (q *Queries) DeleteActivityRunsBefore(ctx context.Context, createdat pgtype
 	return err
 }
 
+const finishActivityRunCancelled = `-- name: FinishActivityRunCancelled :exec
+UPDATE "ActivityRun" SET "state" = 'cancelled', "error" = $2, "finishedAt" = now() WHERE "id" = $1
+`
+
+type FinishActivityRunCancelledParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Error *string     `json:"error"`
+}
+
+func (q *Queries) FinishActivityRunCancelled(ctx context.Context, arg FinishActivityRunCancelledParams) error {
+	_, err := q.db.Exec(ctx, finishActivityRunCancelled, arg.ID, arg.Error)
+	return err
+}
+
 const finishActivityRunError = `-- name: FinishActivityRunError :exec
 UPDATE "ActivityRun" SET "state" = 'failed', "error" = $2, "finishedAt" = now() WHERE "id" = $1
 `
@@ -99,6 +113,49 @@ SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId",
 
 func (q *Queries) ListActiveActivityRuns(ctx context.Context) ([]ActivityRun, error) {
 	rows, err := q.db.Query(ctx, listActiveActivityRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ActivityRun
+	for rows.Next() {
+		var i ActivityRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.Op,
+			&i.State,
+			&i.Label,
+			&i.Step,
+			&i.JobId,
+			&i.SourceKey,
+			&i.QueueTaskId,
+			&i.RefId,
+			&i.Error,
+			&i.Meta,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFailedActivityRuns = `-- name: ListFailedActivityRuns :many
+SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt" FROM "ActivityRun"
+WHERE "state" IN ('failed', 'cancelled') AND ($1::text IS NULL OR "op" = $1)
+ORDER BY "createdAt" DESC
+`
+
+// Includes "cancelled" runs (e.g. skipped because of an upstream rate limit)
+// alongside "failed" ones — both are retryable the same way.
+func (q *Queries) ListFailedActivityRuns(ctx context.Context, op *string) ([]ActivityRun, error) {
+	rows, err := q.db.Query(ctx, listFailedActivityRuns, op)
 	if err != nil {
 		return nil, err
 	}

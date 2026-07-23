@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { RotateCw } from 'lucide-react';
 import type { ActivityOp, ActivityRunDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { Chip, EmptyState, ErrorState, Spinner, Surface } from '../../components/ui';
-import { useActivity } from './hooks';
+import { Button, Chip, EmptyState, ErrorState, Spinner, Surface } from '../../components/ui';
+import { useActivity, useRetryActivity } from './hooks';
 
 const OP_LABELS: Record<ActivityOp, string> = {
   ingest: 'Ingest',
   match: 'Match',
   generate: 'Generate',
   enrich: 'Enrich',
+  ghost_score: 'Ghost score',
+  salary_infer: 'Salary infer',
 };
 
 const OP_TONES: Record<ActivityOp, 'green' | 'red' | 'slate'> = {
@@ -17,10 +20,20 @@ const OP_TONES: Record<ActivityOp, 'green' | 'red' | 'slate'> = {
   match: 'slate',
   generate: 'green',
   enrich: 'slate',
+  ghost_score: 'slate',
+  salary_infer: 'slate',
 };
 
 export default function StatusPage() {
   const { data, isLoading, error } = useActivity(100);
+  const retry = useRetryActivity();
+
+  const failed = data?.recent.filter((r) => r.state === 'failed' || r.state === 'cancelled') ?? [];
+  const failedByOp = failed.reduce<Record<string, number>>((acc, r) => {
+    acc[r.op] = (acc[r.op] ?? 0) + 1;
+    return acc;
+  }, {});
+  const anyCancelled = failed.some((r) => r.state === 'cancelled');
 
   return (
     <div>
@@ -31,6 +44,45 @@ export default function StatusPage() {
 
       {isLoading ? <Spinner label="loading activity…" /> : null}
       {error ? <ErrorState error={error} /> : null}
+
+      {failed.length > 0 ? (
+        <Surface className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <SectionTitle>Failed / cancelled ({failed.length})</SectionTitle>
+            <Button
+              variant="secondary"
+              onClick={() => retry.mutate(undefined)}
+              disabled={retry.isPending}
+            >
+              <RotateCw className="h-3 w-3" /> retry all
+            </Button>
+          </div>
+          {anyCancelled ? (
+            <p className="mb-3 text-xs text-muted">
+              Some of these were cancelled, not failed — an upstream provider (Cerebras) hit its
+              rate limit, so the rest of that batch was skipped instead of also erroring out.
+              Retry once the limit resets.
+            </p>
+          ) : null}
+          <ul className="flex flex-wrap gap-2">
+            {Object.entries(failedByOp).map(([op, count]) => (
+              <li key={op} className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5">
+                <Chip tone={OP_TONES[op as ActivityOp] ?? 'slate'}>
+                  {OP_LABELS[op as ActivityOp] ?? op}
+                </Chip>
+                <span className="text-sm text-muted">{count}</span>
+                <Button
+                  variant="ghost"
+                  onClick={() => retry.mutate(op)}
+                  disabled={retry.isPending}
+                >
+                  <RotateCw className="h-3 w-3" /> retry
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Surface>
+      ) : null}
 
       <section className="mb-8">
         <SectionTitle>Active</SectionTitle>
@@ -114,7 +166,7 @@ function RecentTable({ runs }: { runs: ActivityRunDto[] }) {
                 ) : (
                   <span className="text-fg">{run.label}</span>
                 )}
-                {run.state === 'failed' && run.error ? (
+                {(run.state === 'failed' || run.state === 'cancelled') && run.error ? (
                   <p className="mt-0.5 text-xs text-danger">{run.error}</p>
                 ) : null}
               </td>
@@ -123,6 +175,8 @@ function RecentTable({ runs }: { runs: ActivityRunDto[] }) {
                   <span className="text-success">✓ succeeded</span>
                 ) : run.state === 'failed' ? (
                   <span className="text-danger">✗ failed</span>
+                ) : run.state === 'cancelled' ? (
+                  <span className="text-amber-500">⊘ cancelled</span>
                 ) : (
                   <span className="text-muted">{run.state}</span>
                 )}

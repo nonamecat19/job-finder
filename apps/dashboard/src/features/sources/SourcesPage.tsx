@@ -21,6 +21,7 @@ import {
   useRecentRuns,
   useRunSearch,
   useRunSubscription,
+  useRunAllSubscriptions,
   useSearches,
   useSources,
   useSubscriptions,
@@ -208,13 +209,23 @@ function SubscriptionsPanel() {
   const create = useCreateSubscription();
   const remove = useDeleteSubscription();
   const run = useRunSubscription();
+  const runAll = useRunAllSubscriptions();
   const [showForm, setShowForm] = useState(false);
 
   return (
     <Surface className="mb-5">
       <div className="mb-3 flex items-center justify-between">
         <SectionTitle>Subscriptions</SectionTitle>
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? 'cancel' : '+ add subscription'}</Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => runAll.mutate()}
+            disabled={runAll.isPending || !subs?.some((s) => s.enabled)}
+          >
+            <Play className="h-3 w-3" /> run all
+          </Button>
+          <Button onClick={() => setShowForm((v) => !v)}>{showForm ? 'cancel' : '+ add subscription'}</Button>
+        </div>
       </div>
 
       {showForm ? <NewSubscriptionForm onSubmit={(body) => { create.mutate(body); setShowForm(false); }} /> : null}

@@ -19,6 +19,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/applications"
+	"github.com/job-finder/api/internal/autogen"
 	"github.com/job-finder/api/internal/coach"
 	"github.com/job-finder/api/internal/companyintel"
 	"github.com/job-finder/api/internal/config"
@@ -170,13 +171,21 @@ func run() error {
 		notifier.WithMatchThreshold(cfg.MatchNotifyScoreThreshold),
 		notifier.WithRateLimitCap(cfg.MatchNotifyRateLimit),
 	)
-	matchingHandler := matching.NewHandler(matchingSvc, notifierSvc)
+	// jobsSvc is needed early: matchingHandler auto-enqueues a resume via it
+	// when a job's score crosses the autogen threshold (see below).
+	jobsSvc := jobs.NewService(database.Queries, asynqClient, cfg.SalaryFloorUsd)
+	autogenSvc, err := autogen.NewService(ctx, database.Queries)
+	if err != nil {
+		return err
+	}
+	autoGenerateHandler := &httpapi.AutoGenerateHandler{Settings: autogenSvc}
+	matchingHandler := matching.NewHandler(matchingSvc, notifierSvc, autogenSvc, jobsSvc)
 
 	// Ghost-job detector (005): scored at ingestion (async) and on manual
 	// refresh only — never on a schedule (FR-014). Kept separate from
 	// matching/fit scoring end-to-end (FR-008).
 	ghostSvc := ghostjob.NewService(database.Queries, ghostRouter, "")
-	ghostHandler := ghostjob.NewHandler(ghostSvc)
+	ghostHandler := ghostjob.NewHandler(ghostSvc, database.Queries)
 	ghostJobHandler := &httpapi.GhostJobHandler{Ghost: ghostSvc}
 
 	// MinIO object storage: when configured, every rendered resume/cover-letter
@@ -209,7 +218,6 @@ func run() error {
 	documentsHandler := &httpapi.DocumentsHandler{Generation: generationSvc}
 
 	profilesHandler := &httpapi.ProfilesHandler{Profiles: profileSvc}
-	jobsSvc := jobs.NewService(database.Queries, asynqClient, cfg.SalaryFloorUsd)
 	jobsHandler := &httpapi.JobsHandler{Jobs: jobsSvc, Generation: generationSvc}
 	// database (not database.Queries) is passed as the TxRunner so a status
 	// change and its "ApplicationOutcome" event commit atomically.
@@ -227,7 +235,7 @@ func run() error {
 
 	levelsFyiLoader := salary.NewLevelsFyiLoader(database.Queries)
 	salaryService := salary.NewService(database.Queries, defaultRouter, levelsFyiLoader, "")
-	salaryHandler := salary.NewHandler(salaryService)
+	salaryHandler := salary.NewHandler(salaryService, database.Queries)
 
 	if cfg.LevelsFyiCSV != "" {
 		if _, err := levelsFyiLoader.LoadCSV(ctx, cfg.LevelsFyiCSV); err != nil {
@@ -237,7 +245,7 @@ func run() error {
 		slog.Warn("salary: LEVELS_FYI_CSV not set — levels.fyi source disabled")
 	}
 
-	activityHandler := httpapi.NewActivityHandler(database.Queries)
+	activityHandler := httpapi.NewActivityHandler(database.Queries, asynqClient)
 
 	// Keyword-diff endpoint (008-6): reads the KeywordDiff cache (008-4) and
 	// attaches advisory rephrase suggestions (008-5). Each rephrase is a live
@@ -332,7 +340,7 @@ func run() error {
 		ghostJobHandler.Mount, coachHandler.Mount,
 		extAuthHandler.Mount, extProfileHandler.Mount,
 		contactsHandler.Mount, referralHandler.Mount,
-		outreachHandler.Mount, llmSettingsHandler.Mount,
+		outreachHandler.Mount, llmSettingsHandler.Mount, autoGenerateHandler.Mount,
 	)
 
 	srv := &http.Server{

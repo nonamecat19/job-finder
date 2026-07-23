@@ -25,6 +25,12 @@ Context for AI coding agents working in this repo.
 - New HTTP handlers are wired in `apps/api/cmd/server/main.go` via `httpapi.NewRouter(...)`'s variadic mounts, not by editing `router.go` directly.
 - sqlc queries live in `apps/api/internal/db/queries/*.sql`; regenerate after changes.
 
+## Running the app
+
+Infra/backend/frontend are all long-lived (`make up`, `make run-backend`,
+`make run-frontend`) — start them via `process-hive`, never directly in a
+blocking Bash call.
+
 ## Commit guidelines
 
 - Create commits after completing features, refactors, or significant changes.

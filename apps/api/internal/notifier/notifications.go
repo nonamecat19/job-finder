@@ -27,9 +27,12 @@ func NewNotificationService(q *sqlcgen.Queries, prof ProfileResolver) *Notificat
 }
 
 func (s *NotificationService) ListNotifications(ctx context.Context) ([]dto.FreshMatchNotificationDto, error) {
-	profileUID, err := s.resolveProfileID(ctx)
+	profileUID, ok, err := s.resolveProfileID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return []dto.FreshMatchNotificationDto{}, nil
 	}
 
 	rows, err := s.q.ListRecentNotificationsWithJob(ctx, sqlcgen.ListRecentNotificationsWithJobParams{
@@ -67,17 +70,26 @@ func (s *NotificationService) MarkSeen(ctx context.Context, id string) error {
 }
 
 func (s *NotificationService) UnseenCount(ctx context.Context) (int64, error) {
-	profileUID, err := s.resolveProfileID(ctx)
+	profileUID, ok, err := s.resolveProfileID(ctx)
 	if err != nil {
 		return 0, err
+	}
+	if !ok {
+		return 0, nil
 	}
 	return s.q.CountUnseenNotificationsByProfile(ctx, profileUID)
 }
 
-func (s *NotificationService) resolveProfileID(ctx context.Context) (pgtype.UUID, error) {
+// resolveProfileID returns ok=false (no error) when the user has not
+// created a profile yet, so callers can treat notifications as empty
+// instead of surfacing a 500 during onboarding.
+func (s *NotificationService) resolveProfileID(ctx context.Context) (pgtype.UUID, bool, error) {
 	rows, err := s.prof.ListProfiles(ctx)
-	if err != nil || len(rows) == 0 {
-		return pgtype.UUID{}, fmt.Errorf("no profile found: %w", err)
+	if err != nil {
+		return pgtype.UUID{}, false, fmt.Errorf("list profiles: %w", err)
 	}
-	return rows[0].ID, nil
+	if len(rows) == 0 {
+		return pgtype.UUID{}, false, nil
+	}
+	return rows[0].ID, true, nil
 }

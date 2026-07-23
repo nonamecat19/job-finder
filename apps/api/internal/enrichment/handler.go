@@ -245,7 +245,14 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, job sqlcgen.Jo
 }
 
 func (h *Handler) enqueueSalaryInfer(ctx context.Context, jobID string) {
-	payload, err := json.Marshal(queue.SalaryInferPayload{JobID: jobID})
+	var actID *string
+	rec := activity.New(ctx, h.q, "salary_infer", "salary infer", &jobID, nil, "")
+	if rec != nil {
+		idStr := dbutil.UUIDString(rec.ID())
+		actID = &idStr
+	}
+
+	payload, err := json.Marshal(queue.SalaryInferPayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
 		return
 	}

@@ -749,6 +749,14 @@ type UpdateLlmSettingsRequestDto struct {
 	Tasks []LlmTaskSettingDto `json:"tasks"`
 }
 
+// AutoGenerateSettingDto is the GET/PUT /v1/settings/autogenerate response:
+// whether a resume is auto-enqueued when a job's match score reaches
+// Threshold (0-100).
+type AutoGenerateSettingDto struct {
+	Enabled   bool `json:"enabled"`
+	Threshold int  `json:"threshold"`
+}
+
 // CerebrasModelDto is one curated Cerebras free-tier model offered in the
 // Settings model selector, served by GET /v1/settings/llm/models.
 type CerebrasModelDto struct {

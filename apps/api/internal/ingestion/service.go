@@ -302,3 +302,24 @@ func (s *Service) RunSubscription(ctx context.Context, subscriptionID string) er
 	}
 	return nil
 }
+
+// RunAllSubscriptions enqueues an ingest task for every enabled subscription,
+// skipping subscriptions whose source is disabled. Returns the number queued.
+func (s *Service) RunAllSubscriptions(ctx context.Context) (int, error) {
+	subs, err := s.q.ListSubscriptions(ctx)
+	if err != nil {
+		return 0, err
+	}
+	queued := 0
+	for _, sub := range subs {
+		if !sub.Enabled {
+			continue
+		}
+		id := dbutil.UUIDString(sub.ID)
+		if err := s.RunSubscription(ctx, id); err != nil {
+			continue
+		}
+		queued++
+	}
+	return queued, nil
+}

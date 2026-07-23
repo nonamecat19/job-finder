@@ -48,6 +48,10 @@ func (f *fakeSubRunner) RunSubscription(ctx context.Context, subID string) error
 	return nil
 }
 
+func (f *fakeSubRunner) RunAllSubscriptions(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
 func TestSubscriptionsList(t *testing.T) {
 	h := &httpapi.SubscriptionsHandler{Subs: &fakeSubProvider{}, Ingestion: &fakeSubRunner{}}
 	r := testutil.SetupRouter(h.Mount)

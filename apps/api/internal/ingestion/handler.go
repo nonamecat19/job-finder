@@ -239,11 +239,18 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, j dto.Normaliz
 }
 
 // enqueueGhostScore queues the ghost-job detector (005) to score this job
-// right after ingestion. No activity record (unlike match): this is a
-// best-effort informational signal, not a user-facing pipeline step, and a
-// failure here must never affect ingestion or the job's own record (FR-018).
+// right after ingestion. The activity record is tracked for retry/visibility
+// only — a scoring failure here must never affect ingestion or the job's own
+// record (FR-018); the handler always returns nil to asynq regardless.
 func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string) {
-	payload, err := json.Marshal(queue.GhostScorePayload{JobID: jobID})
+	var actID *string
+	rec := activity.New(ctx, h.q, "ghost_score", "ghost score", &jobID, nil, "")
+	if rec != nil {
+		idStr := dbutil.UUIDString(rec.ID())
+		actID = &idStr
+	}
+
+	payload, err := json.Marshal(queue.GhostScorePayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
 		return
 	}

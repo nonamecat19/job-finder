@@ -102,3 +102,11 @@ export function useRunSubscription() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.subscriptions.all }),
   });
 }
+
+export function useRunAllSubscriptions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.subscriptions.runAll(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.subscriptions.all }),
+  });
+}
