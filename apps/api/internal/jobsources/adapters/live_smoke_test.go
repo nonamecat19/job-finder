@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 func TestLive_Remotive(t *testing.T) {

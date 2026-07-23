@@ -13,7 +13,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 	"github.com/job-finder/api/internal/strutil"
 )
 
@@ -28,7 +28,7 @@ var djinniRemoteRe = regexp.MustCompile(`(?i)remote|віддалено`)
 // the DB); a nil Session means anonymous access (public /jobs only). Selectors
 // are best-effort/defensive, matching djinni.adapter.ts.
 type DjinniAdapter struct {
-	Scraping *scraping.Service
+	Scraping scraping.Scraper
 	Session  DjinniSessionProvider
 }
 

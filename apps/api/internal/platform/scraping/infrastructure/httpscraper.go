@@ -1,8 +1,9 @@
-// Package scraping provides HTML fetching (goquery-friendly, plain HTTP) and
-// a shared headless-Chromium context (chromedp) for PDF rendering, mirroring
+// Package infrastructure implements domain.Scraper: HTML fetching
+// (goquery-friendly, plain HTTP) and a shared headless-Chromium context
+// (chromedp) for PDF rendering, mirroring
 // apps/api/src/modules/scraping/scraping.service.ts (which used axios + a
 // shared Playwright browser).
-package scraping
+package infrastructure
 
 import (
 	"context"
@@ -13,13 +14,15 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+
+	"github.com/job-finder/api/internal/platform/scraping/domain"
 )
 
 const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
-// Service bundles the HTTP fetcher and the lazily-launched shared Chromium
-// instance used for PDF rendering.
-type Service struct {
+// HTTPScraper bundles the HTTP fetcher and the lazily-launched shared
+// Chromium instance used for PDF rendering. Implements domain.Scraper.
+type HTTPScraper struct {
 	http *http.Client
 
 	mu          sync.Mutex
@@ -28,21 +31,23 @@ type Service struct {
 	browserCncl context.CancelFunc
 }
 
-func New() *Service {
-	return &Service{http: &http.Client{Timeout: 20 * time.Second}}
+func New() *HTTPScraper {
+	return &HTTPScraper{http: &http.Client{Timeout: 20 * time.Second}}
 }
+
+var _ domain.Scraper = (*HTTPScraper)(nil)
 
 // HTTPClient returns the underlying *http.Client so adapters can make
 // arbitrary requests (POST, custom headers, etc.) using the same timeout and
 // connection pool.
-func (s *Service) HTTPClient() *http.Client {
+func (s *HTTPScraper) HTTPClient() *http.Client {
 	return s.http
 }
 
 // FetchHTML fetches server-rendered HTML over plain HTTP with a browser-like
 // UA. Only 5xx responses are treated as errors — 4xx pages are still
 // parseable HTML, matching axios's `validateStatus: (s) => s < 500`.
-func (s *Service) FetchHTML(ctx context.Context, url string, headers map[string]string) (string, error) {
+func (s *HTTPScraper) FetchHTML(ctx context.Context, url string, headers map[string]string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -70,7 +75,7 @@ func (s *Service) FetchHTML(ctx context.Context, url string, headers map[string]
 // returns a chromedp context rooted on it. Callers create a new tab context
 // per render with chromedp.NewContext(browserCtx) so pages don't share state,
 // mirroring getBrowser()+browser.newPage() in the TS ScrapingService.
-func (s *Service) BrowserContext(ctx context.Context) (context.Context, error) {
+func (s *HTTPScraper) BrowserContext(ctx context.Context) (context.Context, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -109,7 +114,7 @@ func (s *Service) BrowserContext(ctx context.Context) (context.Context, error) {
 }
 
 // Close shuts down the shared browser, if launched.
-func (s *Service) Close() {
+func (s *HTTPScraper) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.browserCncl != nil {

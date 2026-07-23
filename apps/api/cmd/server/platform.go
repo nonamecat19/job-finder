@@ -9,8 +9,8 @@ import (
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/platform/scraping"
 	"github.com/job-finder/api/internal/queue"
-	"github.com/job-finder/api/internal/scraping"
 )
 
 // Platform holds the process-wide shared infrastructure that every feature
@@ -23,7 +23,7 @@ type Platform struct {
 	Logger      *slog.Logger
 	RedisOpt    asynq.RedisClientOpt
 	AsynqClient *asynq.Client
-	Scraping    *scraping.Service
+	Scraping    scraping.Scraper
 
 	// DjinniSession is shared by pointer with every DjinniAdapter copy
 	// (registry + enrichment handler); its Sources back-reference is wired once

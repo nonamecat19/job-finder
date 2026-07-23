@@ -9,7 +9,7 @@ import (
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 // TestLive_CompanyPage hits a real company website's About/Team page and

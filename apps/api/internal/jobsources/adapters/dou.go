@@ -16,7 +16,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 var (
@@ -30,7 +30,7 @@ const (
 )
 
 type DouAdapter struct {
-	Scraping *scraping.Service
+	Scraping scraping.Scraper
 }
 
 func (DouAdapter) Key() string          { return "dou" }
@@ -398,15 +398,15 @@ func parseDouDetail(doc *goquery.Document, jobURL string) dto.NormalizedJob {
 	isRemote := douRemoteRe.MatchString(description) || douRemoteRe.MatchString(location)
 
 	return dto.NormalizedJob{
-		SourceKey:  "dou",
-		Title:      title,
-		Company:    company,
-		Location:   nilIfEmpty(location),
-		Remote:     isRemote,
-		SalaryRaw:  nilIfEmpty(salary),
-		URL:        jobURL,
+		SourceKey:   "dou",
+		Title:       title,
+		Company:     company,
+		Location:    nilIfEmpty(location),
+		Remote:      isRemote,
+		SalaryRaw:   nilIfEmpty(salary),
+		URL:         jobURL,
 		Description: description,
-		Raw:        map[string]string{"companyURL": companyURL},
+		Raw:         map[string]string{"companyURL": companyURL},
 	}
 }
 
