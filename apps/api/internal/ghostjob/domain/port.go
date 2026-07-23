@@ -1,13 +1,36 @@
-// Package ghostjob implements the ghost-job detector (spec 005): it measures
-// four deterministic signals from data already held (repost count, days
-// open, cross-board duplicates, always-hiring count), hands them to the
-// local LLM to blend into a 0-100 score plus a plain-English explanation,
-// and persists the result to the generic "JobSignal" table under
-// kind="ghost". Principle I: this package only ever informs — nothing here
-// hides, filters, reorders, or auto-rejects a job.
-package ghostjob
+// Package domain holds the ghost-job bounded context's core model: the
+// Repository persistence port, the GhostSignals/GhostJobResult schemas, the
+// simhash cross-board-duplicate detector, and the ErrDeclinedToScore
+// sentinel. Mirrors matching/salary's domain package shape (spec 005).
+package domain
 
-import "fmt"
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/job-finder/api/internal/db/sqlcgen"
+)
+
+// Repository is the outbound persistence port the ghost-job use-case depends
+// on. *sqlcgen.Queries satisfies it structurally, mirroring
+// matching.Repository / salary.Repository's hexagonal seam.
+type Repository interface {
+	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
+	CountRepostsByDedupeKey(ctx context.Context, dedupekey string) (int32, error)
+	ListJobsForCrossBoardCheck(ctx context.Context, id pgtype.UUID) ([]sqlcgen.ListJobsForCrossBoardCheckRow, error)
+	CountAlwaysHiringByCompany(ctx context.Context, lower string) (int32, error)
+	UpsertJobSignal(ctx context.Context, arg sqlcgen.UpsertJobSignalParams) (sqlcgen.JobSignal, error)
+	GetJobSignal(ctx context.Context, arg sqlcgen.GetJobSignalParams) (sqlcgen.JobSignal, error)
+}
+
+// ErrDeclinedToScore is returned when every signal is unknown (spec edge
+// case: no postedAt, one-off company, empty description, first appearance).
+// No LLM call is made and no row is written — the system declines rather
+// than emitting a confident 0 or a confident 50 (SC-003).
+var ErrDeclinedToScore = errors.New("ghostjob: insufficient signal to score this job")
 
 // GhostJobResult is the structured LLM output schema, mirroring
 // matching.FitResult field-for-field in shape and discipline: a plain

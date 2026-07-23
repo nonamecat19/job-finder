@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/ghostjob"
+	"github.com/job-finder/api/internal/ghostjob/application"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/testutil"
 )
@@ -54,7 +54,7 @@ func TestGhostScore_ModelUnreachableReturnsError(t *testing.T) {
 }
 
 func TestGhostScore_DeclinedToScoreReturns422(t *testing.T) {
-	fake := &fakeGhostProvider{err: ghostjob.ErrDeclinedToScore}
+	fake := &fakeGhostProvider{err: application.ErrDeclinedToScore}
 	h := &httpapi.GhostJobHandler{Ghost: fake}
 	r := testutil.SetupRouter(h.Mount)
 

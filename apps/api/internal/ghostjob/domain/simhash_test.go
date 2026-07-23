@@ -1,10 +1,8 @@
-package ghostjob_test
+package domain
 
 import (
 	"strings"
 	"testing"
-
-	"github.com/job-finder/api/internal/ghostjob"
 )
 
 const baseJD = `We are looking for a Senior Backend Engineer to join our growing team.
@@ -20,9 +18,9 @@ func TestSimilarText_ReformattedCopyWithinThreshold(t *testing.T) {
 	// HTML tag, as a board's own renderer would produce.
 	reformatted := "<p>" + strings.ReplaceAll(baseJD, "\n", "  ") + "</p>\n\n  extra   spacing "
 
-	if !ghostjob.SimilarText(baseJD, reformatted) {
+	if !SimilarText(baseJD, reformatted) {
 		t.Errorf("expected reformatted copy to be similar; hamming distance = %d",
-			ghostjob.HammingDistance(ghostjob.Hash(baseJD), ghostjob.Hash(reformatted)))
+			HammingDistance(Hash(baseJD), Hash(reformatted)))
 	}
 }
 
@@ -33,9 +31,9 @@ plan events, and coordinate with external agencies. The ideal candidate has
 comfortable with Adobe Creative Suite and basic analytics tools. This is an
 in-office role based in our downtown location with standard business hours.`
 
-	if ghostjob.SimilarText(baseJD, other) {
+	if SimilarText(baseJD, other) {
 		t.Errorf("expected unrelated JDs to NOT be similar; hamming distance = %d",
-			ghostjob.HammingDistance(ghostjob.Hash(baseJD), ghostjob.Hash(other)))
+			HammingDistance(Hash(baseJD), Hash(other)))
 	}
 }
 
@@ -47,22 +45,22 @@ func TestHash_CyrillicSurvivesNormalization(t *testing.T) {
 
 	reformatted := strings.ToUpper(cyrillic) + "\n\n  "
 
-	h1 := ghostjob.Hash(cyrillic)
-	h2 := ghostjob.Hash(reformatted)
+	h1 := Hash(cyrillic)
+	h2 := Hash(reformatted)
 	if h1 == 0 || h2 == 0 {
 		t.Fatal("expected non-zero hash for Cyrillic text")
 	}
-	if ghostjob.HammingDistance(h1, h2) > ghostjob.CrossBoardSimilarityThreshold {
+	if HammingDistance(h1, h2) > CrossBoardSimilarityThreshold {
 		t.Errorf("expected case-insensitive Cyrillic re-wrap to be similar; distance = %d",
-			ghostjob.HammingDistance(h1, h2))
+			HammingDistance(h1, h2))
 	}
 }
 
 func TestHash_EmptyTextIsZero(t *testing.T) {
-	if ghostjob.Hash("") != 0 {
+	if Hash("") != 0 {
 		t.Error("expected empty text to hash to 0")
 	}
-	if ghostjob.Hash("   \n\t  ") != 0 {
+	if Hash("   \n\t  ") != 0 {
 		t.Error("expected whitespace-only text to hash to 0")
 	}
 }

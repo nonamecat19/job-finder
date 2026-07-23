@@ -1,4 +1,4 @@
-package ghostjob
+package domain
 
 import (
 	"hash/fnv"

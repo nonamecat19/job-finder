@@ -1,6 +1,6 @@
 //go:build live
 
-package ghostjob_test
+package application_test
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/ghostjob"
+	"github.com/job-finder/api/internal/ghostjob/application"
 	"github.com/job-finder/api/internal/llm"
 )
 
@@ -43,7 +43,7 @@ func TestLive_GhostScore(t *testing.T) {
 		t.Fatalf("llm new: %v", err)
 	}
 
-	svc := ghostjob.NewService(database.Queries, llmProvider, cfg.ModelOr(cfg.LLMModelGhost))
+	svc := application.NewService(database.Queries, llmProvider, cfg.ModelOr(cfg.LLMModelGhost))
 
 	jobs, err := database.Queries.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{Limit: 1})
 	if err != nil || len(jobs) == 0 {
@@ -55,7 +55,7 @@ func TestLive_GhostScore(t *testing.T) {
 
 	out, err := svc.ScoreJob(ctx, jobID)
 	if err != nil {
-		if err == ghostjob.ErrDeclinedToScore {
+		if err == application.ErrDeclinedToScore {
 			t.Skip("this job's signals are all unknown; system correctly declined to score")
 		}
 		t.Fatalf("score job: %v", err)

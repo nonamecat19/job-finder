@@ -1,4 +1,4 @@
-package ghostjob_test
+package application_test
 
 import (
 	"context"
@@ -9,10 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/ghostjob"
+	"github.com/job-finder/api/internal/ghostjob/application"
+	"github.com/job-finder/api/internal/ghostjob/domain"
 )
 
-// fakeRepo is a controllable stand-in for ghostjob.Repository. Only the
+// fakeRepo is a controllable stand-in for domain.Repository. Only the
 // methods MeasureSignals actually calls need real behavior; the rest exist
 // to satisfy the interface.
 type fakeRepo struct {
@@ -51,7 +52,7 @@ func (f *fakeRepo) GetJobSignal(ctx context.Context, arg sqlcgen.GetJobSignalPar
 	return sqlcgen.JobSignal{}, errors.New("not implemented")
 }
 
-var _ ghostjob.Repository = (*fakeRepo)(nil)
+var _ domain.Repository = (*fakeRepo)(nil)
 
 func baseJob() sqlcgen.Job {
 	return sqlcgen.Job{
@@ -76,7 +77,7 @@ excellent communication skills.`
 // service receives is NOT silently clamped to 1.
 func TestMeasureSignals_RepostCountGreaterThanOneIsReachable(t *testing.T) {
 	repo := &fakeRepo{repostCount: 3, alwaysHiring: 1}
-	got := ghostjob.MeasureSignals(context.Background(), repo, baseJob())
+	got := application.MeasureSignals(context.Background(), repo, baseJob())
 	if got.RepostCount != 3 {
 		t.Fatalf("expected RepostCount 3, got %d", got.RepostCount)
 	}
@@ -87,7 +88,7 @@ func TestMeasureSignals_RepostCountGreaterThanOneIsReachable(t *testing.T) {
 
 func TestMeasureSignals_RepostCountDefaultsToOneOnQueryError(t *testing.T) {
 	repo := &fakeRepo{repostErr: errors.New("boom"), alwaysHiring: 1}
-	got := ghostjob.MeasureSignals(context.Background(), repo, baseJob())
+	got := application.MeasureSignals(context.Background(), repo, baseJob())
 	if got.RepostCount != 1 {
 		t.Fatalf("expected RepostCount 1 on query error, got %d", got.RepostCount)
 	}
@@ -98,7 +99,7 @@ func TestMeasureSignals_DaysOpenNilOnNullPostedAt(t *testing.T) {
 	job := baseJob()
 	job.PostedAt = pgtype.Timestamp{Valid: false}
 
-	got := ghostjob.MeasureSignals(context.Background(), repo, job)
+	got := application.MeasureSignals(context.Background(), repo, job)
 	if got.DaysOpen != nil {
 		t.Fatalf("expected DaysOpen nil, got %v", *got.DaysOpen)
 	}
@@ -112,7 +113,7 @@ func TestMeasureSignals_DaysOpenMeasuredWhenPostedAtPresent(t *testing.T) {
 	job := baseJob()
 	job.PostedAt = pgtype.Timestamp{Time: time.Now().Add(-72 * time.Hour), Valid: true}
 
-	got := ghostjob.MeasureSignals(context.Background(), repo, job)
+	got := application.MeasureSignals(context.Background(), repo, job)
 	if got.DaysOpen == nil {
 		t.Fatal("expected DaysOpen to be measured")
 	}
@@ -128,7 +129,7 @@ func TestMeasureSignals_AlwaysHiringNilForUnparseableCompany(t *testing.T) {
 		job := baseJob()
 		job.Company = company
 
-		got := ghostjob.MeasureSignals(context.Background(), repo, job)
+		got := application.MeasureSignals(context.Background(), repo, job)
 		if got.AlwaysHiringCount != nil {
 			t.Errorf("company %q: expected AlwaysHiringCount nil, got %d", company, *got.AlwaysHiringCount)
 		}
@@ -147,8 +148,8 @@ func TestMeasureSignals_TwoUnknownCompanyJobsNotGrouped(t *testing.T) {
 	job2 := baseJob()
 	job2.Company = "Unknown"
 
-	got1 := ghostjob.MeasureSignals(context.Background(), repo, job1)
-	got2 := ghostjob.MeasureSignals(context.Background(), repo, job2)
+	got1 := application.MeasureSignals(context.Background(), repo, job1)
+	got2 := application.MeasureSignals(context.Background(), repo, job2)
 
 	if got1.AlwaysHiringCount != nil || got2.AlwaysHiringCount != nil {
 		t.Fatal("expected both placeholder-company jobs to have AlwaysHiringCount nil")
@@ -163,7 +164,7 @@ func TestMeasureSignals_TwoUnknownCompanyJobsNotGrouped(t *testing.T) {
 // prompt/service layer treat that as "no evidence", it does not skip it.
 func TestMeasureSignals_AlwaysHiringCountOneForOneOffCompany(t *testing.T) {
 	repo := &fakeRepo{repostCount: 1, alwaysHiring: 1}
-	got := ghostjob.MeasureSignals(context.Background(), repo, baseJob())
+	got := application.MeasureSignals(context.Background(), repo, baseJob())
 	if got.AlwaysHiringCount == nil || *got.AlwaysHiringCount != 1 {
 		t.Fatalf("expected AlwaysHiringCount 1, got %v", got.AlwaysHiringCount)
 	}
@@ -174,7 +175,7 @@ func TestMeasureSignals_CrossBoardNilOnTeaserDescription(t *testing.T) {
 	job := baseJob()
 	job.Description = "Great opportunity!" // short teaser
 
-	got := ghostjob.MeasureSignals(context.Background(), repo, job)
+	got := application.MeasureSignals(context.Background(), repo, job)
 	if got.CrossBoardCount != nil {
 		t.Fatalf("expected CrossBoardCount nil for a teaser description, got %d", *got.CrossBoardCount)
 	}
@@ -200,7 +201,7 @@ func TestMeasureSignals_CrossBoardCountsDistinctSourcesOnly(t *testing.T) {
 		},
 	}
 
-	got := ghostjob.MeasureSignals(context.Background(), repo, job)
+	got := application.MeasureSignals(context.Background(), repo, job)
 	if got.CrossBoardCount == nil {
 		t.Fatal("expected CrossBoardCount to be measured")
 	}
@@ -223,8 +224,8 @@ func TestMeasureSignals_DeterministicAcrossRuns(t *testing.T) {
 		},
 	}
 
-	run1 := ghostjob.MeasureSignals(context.Background(), repo, job)
-	run2 := ghostjob.MeasureSignals(context.Background(), repo, job)
+	run1 := application.MeasureSignals(context.Background(), repo, job)
+	run2 := application.MeasureSignals(context.Background(), repo, job)
 
 	if run1.RepostCount != run2.RepostCount ||
 		*run1.DaysOpen != *run2.DaysOpen ||
@@ -241,7 +242,7 @@ func TestGhostSignals_AllOptionalSignalsUnknown(t *testing.T) {
 	job.Description = ""
 	job.Company = "Unknown"
 
-	got := ghostjob.MeasureSignals(context.Background(), repo, job)
+	got := application.MeasureSignals(context.Background(), repo, job)
 	if !got.AllOptionalSignalsUnknown() {
 		t.Fatal("expected AllOptionalSignalsUnknown to be true")
 	}
@@ -249,7 +250,7 @@ func TestGhostSignals_AllOptionalSignalsUnknown(t *testing.T) {
 
 func TestGhostSignals_NotAllUnknownWhenOneMeasured(t *testing.T) {
 	repo := &fakeRepo{repostCount: 1, alwaysHiring: 1}
-	got := ghostjob.MeasureSignals(context.Background(), repo, baseJob())
+	got := application.MeasureSignals(context.Background(), repo, baseJob())
 	if got.AllOptionalSignalsUnknown() {
 		t.Fatal("expected AllOptionalSignalsUnknown to be false when always-hiring is measured")
 	}

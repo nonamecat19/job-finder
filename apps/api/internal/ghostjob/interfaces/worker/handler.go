@@ -1,4 +1,6 @@
-package ghostjob
+// Package worker holds the ghost-job bounded context's inbound worker
+// adapter: the asynq "ghost:score" task handler.
+package worker
 
 import (
 	"context"
@@ -10,6 +12,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/ghostjob/application"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/queue"
 )
@@ -19,11 +22,11 @@ import (
 // and by the manual POST /api/jobs/{id}/ghost-score endpoint only — no
 // scheduled or background re-scoring path exists anywhere (FR-014).
 type Handler struct {
-	svc   *Service
+	svc   *application.Service
 	store activity.Store
 }
 
-func NewHandler(svc *Service, store activity.Store) *Handler {
+func NewHandler(svc *application.Service, store activity.Store) *Handler {
 	return &Handler{svc: svc, store: store}
 }
 
@@ -41,7 +44,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 
 	_, err := h.svc.ScoreJob(ctx, payload.JobID)
 	if err != nil {
-		if errors.Is(err, ErrDeclinedToScore) {
+		if errors.Is(err, application.ErrDeclinedToScore) {
 			// Not an error: every signal was unknown, so the service
 			// correctly declined rather than guessing (SC-003). A
 			// scoring "failure" for one job must never affect another

@@ -15,7 +15,8 @@ import (
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/extauth"
 	"github.com/job-finder/api/internal/generation"
-	"github.com/job-finder/api/internal/ghostjob"
+	ghostapp "github.com/job-finder/api/internal/ghostjob/application"
+	ghostworker "github.com/job-finder/api/internal/ghostjob/interfaces/worker"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
 	"github.com/job-finder/api/internal/jobs"
@@ -70,7 +71,7 @@ type App struct {
 	Generation *generation.Handler
 	Enrichment *enrichment.Handler
 	Salary     *salaryworker.Handler
-	Ghost      *ghostjob.Handler
+	Ghost      *ghostworker.Handler
 
 	Scheduler *ingestion.Scheduler
 }
@@ -222,16 +223,16 @@ func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Servi
 }
 
 type ghostHandles struct {
-	Worker      *ghostjob.Handler
+	Worker      *ghostworker.Handler
 	HTTPHandler *httpapi.GhostJobHandler
 }
 
 // composeGhostJob builds the ghost-job detector, kept separate from
 // matching/fit scoring end-to-end.
 func composeGhostJob(p *Platform, ghostRouter *llm.Router) *ghostHandles {
-	ghostSvc := ghostjob.NewService(p.DB.Queries, ghostRouter, "")
+	ghostSvc := ghostapp.NewService(p.DB.Queries, ghostRouter, "")
 	return &ghostHandles{
-		Worker:      ghostjob.NewHandler(ghostSvc, p.DB.Queries),
+		Worker:      ghostworker.NewHandler(ghostSvc, p.DB.Queries),
 		HTTPHandler: &httpapi.GhostJobHandler{Ghost: ghostSvc},
 	}
 }
