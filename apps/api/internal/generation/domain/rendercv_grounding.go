@@ -1,4 +1,4 @@
-package generation
+package domain
 
 // verifyRendercvGrounding is the post-merge grounding check for the RenderCV
 // path. It verifies:
@@ -8,7 +8,7 @@ package generation
 // - ExperienceOrder must include all master companies (no entries lost)
 // - Dropped experience entries must still exist in master
 // - On strict grounding, no skill tokens outside the master skill pool.
-func verifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel) []string {
+func VerifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel) []string {
 	var violations []string
 
 	masterSections := CvSections(master)

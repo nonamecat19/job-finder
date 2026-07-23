@@ -1,6 +1,6 @@
 //go:build live
 
-package generation
+package infrastructure
 
 // Manual smoke test for the real `rendercv` CLI + os/exec plumbing (not part
 // of `go test ./...` — requires the rendercv binary on PATH). Run with:
@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/job-finder/api/internal/generation/domain"
 )
 
 func TestLive_RenderCvRenderer_ProducesRealPDF(t *testing.T) {
@@ -25,7 +27,7 @@ func TestLive_RenderCvRenderer_ProducesRealPDF(t *testing.T) {
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		t.Fatalf("unmarshal fixture: %v", err)
 	}
-	master := RendercvMaster(NormalizeYAMLMap(m).(map[string]any))
+	master := domain.RendercvMaster(domain.NormalizeYAMLMap(m).(map[string]any))
 
 	outDir := t.TempDir()
 	r := NewRenderCvRenderer(outDir, "")

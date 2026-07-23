@@ -1,15 +1,16 @@
-package generation
+// Package domain holds the Document Generation bounded context's core
+// model: the RendercvMaster shape and its pure merge/normalize helpers, the
+// grounding verifiers, the Repository/ProfileStore persistence ports, and
+// MasterFromProfile. Everything here is pure and dependency-free — the LLM
+// prompt-building/calling orchestration lives in application/.
+package domain
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/strutil"
 )
 
 // RendercvMaster is the hand-tuned rendercv YAML config: theme, templates,
@@ -64,7 +65,7 @@ type VacancyAnalysis struct {
 // TailoredSkillGroup / TailoredExperience / TailoredSections are the only
 // content the LLM is allowed to produce — everything else in the master
 // (companies, dates, education, design, templates, locale, header) is
-// preserved by mergeTailored, never sent back by the model. Mirrors
+// preserved by MergeTailored, never sent back by the model. Mirrors
 // tailoredSectionsSchema.
 type TailoredSkillGroup struct {
 	Index   int    `json:"index" jsonschema_description:"0-based index of the skill group in the master, unchanged"`
@@ -79,7 +80,7 @@ type TailoredExperience struct {
 
 // TailoredSections is the enhanced output of Step 2 (content selection).
 // In addition to summary/skills/experience it now carries section-drop
-// decisions and experience ordering so mergeTailored can rearrange and prune
+// decisions and experience ordering so MergeTailored can rearrange and prune
 // the master YAML accordingly.
 type TailoredSections struct {
 	Summary         string               `json:"summary" jsonschema_description:"2-3 sentence professional summary targeting the vacancy"`
@@ -89,7 +90,9 @@ type TailoredSections struct {
 	ExperienceOrder []string             `json:"experienceOrder,omitempty" jsonschema_description:"companies in desired display order, most relevant to the vacancy first"`
 }
 
-var levelRules = map[GroundingLevel]string{
+// LevelRules is the per-GroundingLevel prompt clause explaining how strictly
+// the LLM must stick to the master's existing content.
+var LevelRules = map[GroundingLevel]string{
 	GroundingStrict: "GROUNDING = STRICT. Use ONLY skills and facts already present in the master profile. " +
 		"You may reorder, trim and rephrase, but you must NOT introduce any technology, tool or " +
 		"skill token that does not already appear in the master. Do not invent achievements.",
@@ -106,10 +109,10 @@ var levelRules = map[GroundingLevel]string{
 // protectedSections can never be dropped by the LLM — they are core to any
 // resume regardless of the target role.
 var protectedSections = map[string]bool{
-	"summary":   true,
+	"summary":    true,
 	"experience": true,
-	"education": true,
-	"skills":    true,
+	"education":  true,
+	"skills":     true,
 }
 
 func CvSections(master RendercvMaster) map[string]any {
@@ -161,157 +164,8 @@ func toAnySlice(maps []map[string]any) []any {
 	return out
 }
 
-// ---------------------------------------------------------------------------
-// Step 1: Vacancy Analysis
-// ---------------------------------------------------------------------------
-
-// buildAnalyzePrompt constructs the prompt for Step 1. When VacancyHints are
-// provided, they are included so the LLM can validate/refine them rather than
-// starting from scratch.
-func buildAnalyzePrompt(vacancy string, hints *VacancyHints) string {
-	vac := strutil.Truncate(vacancy, 6000)
-
-	var b strings.Builder
-	b.WriteString("Analyze this job vacancy and extract structured requirements.\n\n")
-	b.WriteString("VACANCY TEXT:\n")
-	b.WriteString(vac)
-	b.WriteString("\n")
-
-	if hints != nil {
-		b.WriteString("\nPROVIDED HINTS (validate and refine these):\n")
-		if len(hints.RequiredSkills) > 0 {
-			b.WriteString("  Required skills (provided): ")
-			b.WriteString(strings.Join(hints.RequiredSkills, ", "))
-			b.WriteString("\n")
-		}
-		if len(hints.NiceToHave) > 0 {
-			b.WriteString("  Nice-to-have skills (provided): ")
-			b.WriteString(strings.Join(hints.NiceToHave, ", "))
-			b.WriteString("\n")
-		}
-		if hints.ExperienceLevel != "" {
-			b.WriteString("  Experience level (provided): ")
-			b.WriteString(hints.ExperienceLevel)
-			b.WriteString("\n")
-		}
-		b.WriteString("\nVerify the hints against the vacancy text. Add any missing required/nice-to-have skills. Correct the experience level if the hints seem wrong.\n")
-	}
-
-	b.WriteString("\nReturn a VacancyAnalysis with:\n")
-	b.WriteString("- requiredSkills: skills explicitly listed as required/mandatory\n")
-	b.WriteString("- niceToHaveSkills: preferred but not required\n")
-	b.WriteString("- experienceLevel: one of junior|mid|senior|lead|staff|principal\n")
-	b.WriteString("- keyResponsibilities: top 3-5 responsibilities\n")
-	b.WriteString("- industryKeywords: domain terms (e.g. fintech, healthcare, SaaS, e-commerce)\n")
-	b.WriteString("- seniorityKeywords: leadership indicators (e.g. mentor, lead team, architecture decisions)")
-
-	return b.String()
-}
-
-// analyzeVacancy calls the LLM to produce a VacancyAnalysis from the raw
-// vacancy text (optionally enriched with caller-provided hints).
-func analyzeVacancy(ctx context.Context, lc llm.Provider, model, vacancy string, hints *VacancyHints) (VacancyAnalysis, error) {
-	prompt := buildAnalyzePrompt(vacancy, hints)
-	return llm.CompleteStructured[VacancyAnalysis](ctx, lc, prompt, &llm.CompleteOptions{
-		System: "You are a job-market analyst who extracts structured requirements from vacancy descriptions. Be precise and concise.",
-		Model:  model,
-	})
-}
-
-// ---------------------------------------------------------------------------
-// Step 2: Content Selection & Tailoring
-// ---------------------------------------------------------------------------
-
-// buildSelectPrompt constructs the prompt for Step 2. It receives the vacancy
-// analysis from Step 1 and the full master resume content, and asks the LLM
-// to select, reorder, rephrase and optionally drop content.
-func buildSelectPrompt(master RendercvMaster, analysis VacancyAnalysis, level GroundingLevel, prevViolations []string) string {
-	sections := CvSections(master)
-	skills := AsSliceOfMaps(sections["skills"])
-	experience := AsSliceOfMaps(sections["experience"])
-	sectionKeys := sectionKeys(sections)
-
-	// Format vacancy analysis
-	var analysisLines []string
-	analysisLines = append(analysisLines, "REQUIRED SKILLS: "+strings.Join(analysis.RequiredSkills, ", "))
-	if len(analysis.NiceToHaveSkills) > 0 {
-		analysisLines = append(analysisLines, "NICE-TO-HAVE: "+strings.Join(analysis.NiceToHaveSkills, ", "))
-	}
-	analysisLines = append(analysisLines, "EXPERIENCE LEVEL: "+analysis.ExperienceLevel)
-	if len(analysis.KeyResponsibilities) > 0 {
-		analysisLines = append(analysisLines, "KEY RESPONSIBILITIES:")
-		for _, r := range analysis.KeyResponsibilities {
-			analysisLines = append(analysisLines, "  - "+r)
-		}
-	}
-	if len(analysis.IndustryKeywords) > 0 {
-		analysisLines = append(analysisLines, "INDUSTRY: "+strings.Join(analysis.IndustryKeywords, ", "))
-	}
-	if len(analysis.SeniorityKeywords) > 0 {
-		analysisLines = append(analysisLines, "SENIORITY SIGNALS: "+strings.Join(analysis.SeniorityKeywords, ", "))
-	}
-
-	// Format skill groups
-	var skillLines []string
-	for i, s := range skills {
-		skillLines = append(skillLines, fmt.Sprintf("  [%d] %s: %s", i, StringField(s, "label"), StringField(s, "details")))
-	}
-
-	// Format experience
-	var expLines []string
-	for _, e := range experience {
-		line := "  - company: " + StringField(e, "company")
-		if pos := StringField(e, "position"); pos != "" {
-			line += " (" + pos + ")"
-		}
-		if loc := StringField(e, "location"); loc != "" {
-			line += " | " + loc
-		}
-		expLines = append(expLines, line)
-		for _, h := range StringSliceField(e, "highlights") {
-			expLines = append(expLines, "      • "+h)
-		}
-	}
-
-	var b strings.Builder
-	b.WriteString("Given this vacancy analysis, tailor the candidate's resume content.\n\n")
-	b.WriteString("VACANCY ANALYSIS:\n")
-	b.WriteString(strings.Join(analysisLines, "\n"))
-	b.WriteString("\n\n")
-	b.WriteString(levelRules[level])
-	b.WriteString("\n\nHARD RULES (all levels):\n")
-	b.WriteString("- Return skills as one entry per group, using the SAME [index] shown below.\n")
-	b.WriteString("- Return experience keyed by the EXACT company name shown below; do not add companies.\n")
-	b.WriteString("- For each experience entry, select the TOP 3-5 most relevant highlights and rephrase them to emphasize what the vacancy asks for.\n")
-	b.WriteString("- Set drop: true only for entries with score below 3 (completely irrelevant to the role).\n")
-	b.WriteString("- Reorder experience: most relevant company first.\n")
-	b.WriteString("- Reorder skills within each group: vacancy-required skills first.\n")
-	b.WriteString("- Keep highlights concise, one achievement each, no fabricated numbers.\n")
-	b.WriteString("- Decide which sections to drop. Section keys available: ")
-	b.WriteString(strings.Join(sectionKeys, ", "))
-	b.WriteString("\n- NEVER drop: summary, experience, education, skills.\n")
-	b.WriteString("- Drop academic sections (patents, invited_talks, publications) for non-academic roles.\n")
-	b.WriteString("- Drop projects if they are irrelevant to the vacancy.\n\n")
-	b.WriteString("Generate a tailored summary (2-3 sentences) that:\n")
-	b.WriteString("- Opens with the candidate's seniority level and domain expertise\n")
-	b.WriteString("- References 2-3 key skills from the vacancy's required skills\n")
-	b.WriteString("- Mentions one quantified achievement from the selected experience\n\n")
-	b.WriteString("SKILL GROUPS (master):\n")
-	b.WriteString(strings.Join(skillLines, "\n"))
-	b.WriteString("\n\nEXPERIENCE (master):\n")
-	b.WriteString(strings.Join(expLines, "\n"))
-
-	if len(prevViolations) > 0 {
-		b.WriteString("\n\nYour previous attempt violated grounding rules:\n- ")
-		b.WriteString(strings.Join(prevViolations, "\n- "))
-		b.WriteString("\nRegenerate without these violations.")
-	}
-
-	return b.String()
-}
-
-// sectionKeys returns the sorted list of section key names from the master.
-func sectionKeys(sections map[string]any) []string {
+// SectionKeys returns the sorted list of section key names from the master.
+func SectionKeys(sections map[string]any) []string {
 	keys := make([]string, 0, len(sections))
 	for k := range sections {
 		keys = append(keys, k)
@@ -326,21 +180,6 @@ func sectionKeys(sections map[string]any) []string {
 	}
 	return keys
 }
-
-// selectAndTailor calls the LLM to produce a TailoredSections from the master
-// resume content and the vacancy analysis.
-func selectAndTailor(ctx context.Context, lc llm.Provider, model string, master RendercvMaster, analysis VacancyAnalysis, level GroundingLevel, prevViolations []string) (TailoredSections, error) {
-	prompt := buildSelectPrompt(master, analysis, level, prevViolations)
-	return llm.CompleteStructured[TailoredSections](ctx, lc, prompt, &llm.CompleteOptions{
-		System: "You are an expert resume writer who never fabricates information. " +
-			"You select, reorder and rephrase existing content to match a specific vacancy.",
-		Model: model,
-	})
-}
-
-// ---------------------------------------------------------------------------
-// Merge: apply LLM output to master
-// ---------------------------------------------------------------------------
 
 // tokens splits a comma/slash-separated details string into skill tokens.
 func tokens(details string) []string {
@@ -420,7 +259,7 @@ func toStringKey(k any) string {
 	}
 }
 
-// mergeTailored deep-clones the master and applies all tailoring decisions:
+// MergeTailored deep-clones the master and applies all tailoring decisions:
 // - Overwrites summary
 // - Overwrites skill-group details (vacancy-required first)
 // - Replaces experience highlights per entry
@@ -429,7 +268,7 @@ func toStringKey(k any) string {
 // - Drops non-protected sections per SectionsToDrop
 // Companies, positions, dates, education, design, templates, locale, settings
 // and header are taken verbatim from the master — the LLM never touches them.
-func mergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMaster, error) {
+func MergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMaster, error) {
 	merged, err := deepCloneYAML(master)
 	if err != nil {
 		return nil, err

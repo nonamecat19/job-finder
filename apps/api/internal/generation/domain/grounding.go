@@ -1,8 +1,6 @@
-// Package generation ports modules/generation/*: tailorResume +
-// writeCoverLetter with grounding verify+retry, html/template->chromedp PDF
-// rendering, the RenderCV ad-hoc tailoring path (os/exec), and the asynq
-// "generate" task handler + document routes.
-package generation
+// Grounding verification: every employer, institution, degree and date in
+// a tailored resume must already exist in the master profile.
+package domain
 
 import (
 	"strings"
@@ -14,7 +12,7 @@ import (
 // degree and date in the tailored resume must already exist in the master
 // profile. The LLM may reorder/rephrase/omit — never invent. Mirrors
 // grounding.ts's verifyGrounding exactly.
-func verifyGrounding(master, tailored dto.JsonResume) []string {
+func VerifyGrounding(master, tailored dto.JsonResume) []string {
 	var violations []string
 
 	employers := map[string]bool{}
@@ -77,7 +75,7 @@ func verifyGrounding(master, tailored dto.JsonResume) []string {
 	return violations
 }
 
-func verifyGroundingFromRendercv(master RendercvMaster, tailored dto.JsonResume) []string {
+func VerifyGroundingFromRendercv(master RendercvMaster, tailored dto.JsonResume) []string {
 	var violations []string
 
 	sections := CvSections(master)

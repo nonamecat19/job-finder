@@ -1,4 +1,4 @@
-package generation
+package domain
 
 import (
 	"strings"
@@ -62,7 +62,7 @@ func loadSampleMaster(t *testing.T) RendercvMaster {
 }
 
 // ---------------------------------------------------------------------------
-// mergeTailored basic tests
+// MergeTailored basic tests
 // ---------------------------------------------------------------------------
 
 func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
@@ -76,9 +76,9 @@ func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 			{Company: "Acme Corp", Highlights: []string{"Shipped feature X", "Led migration Y"}},
 		},
 	}
-	merged, err := mergeTailored(master, payload)
+	merged, err := MergeTailored(master, payload)
 	if err != nil {
-		t.Fatalf("mergeTailored: %v", err)
+		t.Fatalf("MergeTailored: %v", err)
 	}
 
 	design, _ := merged["design"].(map[string]any)
@@ -112,7 +112,7 @@ func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 	origSections := CvSections(master)
 	origSummary := StringSliceField(origSections, "summary")
 	if origSummary[0] != "Old summary line." {
-		t.Fatalf("mergeTailored must not mutate the master profile, got %v", origSummary)
+		t.Fatalf("MergeTailored must not mutate the master profile, got %v", origSummary)
 	}
 }
 
@@ -131,9 +131,9 @@ func TestMergeTailored_ReordersExperience(t *testing.T) {
 		},
 		ExperienceOrder: []string{"StartupX", "Acme Corp"},
 	}
-	merged, err := mergeTailored(master, payload)
+	merged, err := MergeTailored(master, payload)
 	if err != nil {
-		t.Fatalf("mergeTailored: %v", err)
+		t.Fatalf("MergeTailored: %v", err)
 	}
 
 	sections := CvSections(merged)
@@ -163,9 +163,9 @@ func TestMergeTailored_DropsExperience(t *testing.T) {
 			{Company: "StartupX", Highlights: []string{"Not relevant"}, Drop: true},
 		},
 	}
-	merged, err := mergeTailored(master, payload)
+	merged, err := MergeTailored(master, payload)
 	if err != nil {
-		t.Fatalf("mergeTailored: %v", err)
+		t.Fatalf("MergeTailored: %v", err)
 	}
 
 	sections := CvSections(merged)
@@ -192,9 +192,9 @@ func TestMergeTailored_DropsSections(t *testing.T) {
 		},
 		SectionsToDrop: []string{"patents", "invited_talks", "publications", "projects"},
 	}
-	merged, err := mergeTailored(master, payload)
+	merged, err := MergeTailored(master, payload)
 	if err != nil {
-		t.Fatalf("mergeTailored: %v", err)
+		t.Fatalf("MergeTailored: %v", err)
 	}
 
 	sections := CvSections(merged)
@@ -221,9 +221,9 @@ func TestMergeTailored_ProtectedSectionsNeverDropped(t *testing.T) {
 		},
 		SectionsToDrop: []string{"summary", "experience", "education", "skills"},
 	}
-	merged, err := mergeTailored(master, payload)
+	merged, err := MergeTailored(master, payload)
 	if err != nil {
-		t.Fatalf("mergeTailored: %v", err)
+		t.Fatalf("MergeTailored: %v", err)
 	}
 
 	sections := CvSections(merged)
@@ -248,7 +248,7 @@ func TestVerifyRendercvGrounding_RejectsFabricatedCompany(t *testing.T) {
 	exp := AsSliceOfMaps(sections["experience"])
 	exp[0]["company"] = "Fabricated Co"
 
-	violations := verifyRendercvGrounding(master, merged, GroundingModerate)
+	violations := VerifyRendercvGrounding(master, merged, GroundingModerate)
 	if len(violations) == 0 {
 		t.Fatal("expected a violation for a fabricated company")
 	}
@@ -264,12 +264,12 @@ func TestVerifyRendercvGrounding_StrictRejectsUnlistedSkill(t *testing.T) {
 	skills := AsSliceOfMaps(sections["skills"])
 	skills[0]["details"] = "Go, Rust, Kubernetes"
 
-	violations := verifyRendercvGrounding(master, merged, GroundingStrict)
+	violations := VerifyRendercvGrounding(master, merged, GroundingStrict)
 	if len(violations) == 0 {
 		t.Fatal("expected strict grounding to reject a skill token not in the master")
 	}
 
-	violationsModerate := verifyRendercvGrounding(master, merged, GroundingModerate)
+	violationsModerate := VerifyRendercvGrounding(master, merged, GroundingModerate)
 	if len(violationsModerate) != 0 {
 		t.Fatalf("moderate grounding should not check skill tokens, got %v", violationsModerate)
 	}
@@ -284,55 +284,15 @@ func TestVerifyRendercvGrounding_RejectsAddedSection(t *testing.T) {
 	sections := CvSections(merged)
 	sections["custom_section"] = []any{"some content"}
 
-	violations := verifyRendercvGrounding(master, merged, GroundingModerate)
+	violations := VerifyRendercvGrounding(master, merged, GroundingModerate)
 	if len(violations) == 0 {
 		t.Fatal("expected a violation for an added section not in master")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Prompt builders
+// RendercvToText
 // ---------------------------------------------------------------------------
-
-func TestBuildAnalyzePrompt_IncludesVacancyAndHints(t *testing.T) {
-	prompt := buildAnalyzePrompt("Looking for a Go backend engineer with Docker experience.", nil)
-	if !containsAll(prompt, "Go backend engineer", "Analyze this job vacancy") {
-		t.Fatalf("basic prompt missing expected content:\n%s", prompt)
-	}
-
-	hints := &VacancyHints{
-		RequiredSkills:  []string{"Go", "Docker"},
-		NiceToHave:      []string{"Kubernetes"},
-		ExperienceLevel: "senior",
-	}
-	promptWithHints := buildAnalyzePrompt("Looking for a Go backend engineer with Docker experience.", hints)
-	if !containsAll(promptWithHints, "Required skills (provided): Go, Docker", "Nice-to-have skills (provided): Kubernetes", "Experience level (provided): senior") {
-		t.Fatalf("hint prompt missing expected content:\n%s", promptWithHints)
-	}
-}
-
-func TestBuildSelectPrompt_IncludesSkillIndexesAndCompanies(t *testing.T) {
-	master := loadSampleMaster(t)
-	analysis := VacancyAnalysis{
-		RequiredSkills:   []string{"Go", "Postgres"},
-		NiceToHaveSkills: []string{"Docker"},
-		ExperienceLevel:  "senior",
-	}
-	prompt := buildSelectPrompt(master, analysis, GroundingModerate, nil)
-	if !containsAll(prompt, "[0] Backend", "[1] Frontend", "company: Acme Corp", "company: StartupX", "GROUNDING = MODERATE") {
-		t.Fatalf("prompt missing expected content:\n%s", prompt)
-	}
-}
-
-func TestBuildSelectPrompt_IncludesPreviousViolations(t *testing.T) {
-	master := loadSampleMaster(t)
-	analysis := VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "mid"}
-	violations := []string{`skill "rust" not in master`, `company "FakeCo" not in master`}
-	prompt := buildSelectPrompt(master, analysis, GroundingStrict, violations)
-	if !containsAll(prompt, `skill "rust" not in master`, `company "FakeCo" not in master`) {
-		t.Fatalf("prompt should include previous violations:\n%s", prompt)
-	}
-}
 
 func containsAll(s string, subs ...string) bool {
 	for _, sub := range subs {
