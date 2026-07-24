@@ -37,7 +37,11 @@ func stateToDto(s llmsettings.State) dto.LlmSettingsResponseDto {
 	for _, t := range s.Tasks {
 		tasks = append(tasks, dto.LlmTaskSettingDto{TaskKey: t.TaskKey, Provider: t.Provider, Model: t.Model})
 	}
-	return dto.LlmSettingsResponseDto{CredentialConfigured: s.CredentialConfigured, Tasks: tasks}
+	return dto.LlmSettingsResponseDto{
+		CredentialConfigured:           s.CredentialConfigured,
+		OpenRouterCredentialConfigured: s.OpenRouterCredentialConfigured,
+		Tasks:                          tasks,
+	}
 }
 
 func (h *LlmSettingsHandler) get(w http.ResponseWriter, r *http.Request) {
@@ -69,9 +73,13 @@ func (h *LlmSettingsHandler) update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LlmSettingsHandler) models(w http.ResponseWriter, r *http.Request) {
-	models := make([]dto.CerebrasModelDto, 0, len(llm.CerebrasModels))
+	cerebras := make([]dto.CerebrasModelDto, 0, len(llm.CerebrasModels))
 	for _, m := range llm.CerebrasModels {
-		models = append(models, dto.CerebrasModelDto{ID: m.ID, Label: m.Label, IsDefault: m.IsDefault})
+		cerebras = append(cerebras, dto.CerebrasModelDto{ID: m.ID, Label: m.Label, IsDefault: m.IsDefault})
 	}
-	writeJSON(w, http.StatusOK, dto.LlmModelsResponseDto{Cerebras: models})
+	openrouter := make([]dto.OpenRouterModelDto, 0, len(llm.OpenRouterModels))
+	for _, m := range llm.OpenRouterModels {
+		openrouter = append(openrouter, dto.OpenRouterModelDto{ID: m.ID, Label: m.Label, IsDefault: m.IsDefault})
+	}
+	writeJSON(w, http.StatusOK, dto.LlmModelsResponseDto{Cerebras: cerebras, OpenRouter: openrouter})
 }

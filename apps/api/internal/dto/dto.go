@@ -726,8 +726,9 @@ type OutreachToneOptionDto struct {
 
 // LlmTaskSettingDto is one chat task's assigned provider/model, served by
 // GET/PUT /v1/settings/llm. TaskKey is one of llmsettings.TaskKeys ("match",
-// "generation", "rephrase", "ghost", "default"); Provider is "ollama" or
-// "cerebras". Model is "" when the provider's own default model applies.
+// "generation", "rephrase", "ghost", "default"); Provider is "ollama",
+// "cerebras" or "openrouter". Model is "" when the provider's own default
+// model applies.
 type LlmTaskSettingDto struct {
 	TaskKey  string `json:"taskKey"`
 	Provider string `json:"provider"`
@@ -735,12 +736,13 @@ type LlmTaskSettingDto struct {
 }
 
 // LlmSettingsResponseDto is the GET/PUT /v1/settings/llm response.
-// CredentialConfigured reflects whether CEREBRAS_API_KEY was set at process
-// start — it is never the key itself, which never leaves the server
-// (FR-011, FR-013).
+// CredentialConfigured / OpenRouterCredentialConfigured reflect whether
+// CEREBRAS_API_KEY / OPENROUTER_API_KEY were set at process start — never the
+// keys themselves, which never leave the server (FR-011, FR-013).
 type LlmSettingsResponseDto struct {
-	CredentialConfigured bool                `json:"credentialConfigured"`
-	Tasks                []LlmTaskSettingDto `json:"tasks"`
+	CredentialConfigured           bool                `json:"credentialConfigured"`
+	OpenRouterCredentialConfigured bool                `json:"openRouterCredentialConfigured"`
+	Tasks                          []LlmTaskSettingDto `json:"tasks"`
 }
 
 // UpdateLlmSettingsRequestDto is the PUT /v1/settings/llm request body. Only
@@ -765,7 +767,17 @@ type CerebrasModelDto struct {
 	IsDefault bool   `json:"isDefault"`
 }
 
-// LlmModelsResponseDto is the GET /v1/settings/llm/models response.
+// OpenRouterModelDto is one curated OpenRouter model offered in the Settings
+// model selector, served by GET /v1/settings/llm/models.
+type OpenRouterModelDto struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	IsDefault bool   `json:"isDefault"`
+}
+
+// LlmModelsResponseDto is the GET /v1/settings/llm/models response: the
+// curated model list per remote provider.
 type LlmModelsResponseDto struct {
-	Cerebras []CerebrasModelDto `json:"cerebras"`
+	Cerebras   []CerebrasModelDto   `json:"cerebras"`
+	OpenRouter []OpenRouterModelDto `json:"openrouter"`
 }

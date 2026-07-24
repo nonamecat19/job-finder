@@ -625,19 +625,21 @@ export interface OutreachToneOptionDto {
 
 /** One chat task's assigned provider/model, served by GET/PUT
  * /v1/settings/llm. taskKey is "match" | "generation" | "rephrase" | "ghost"
- * | "default"; provider is "ollama" | "cerebras". model is "" when the
- * provider's own default model applies. */
+ * | "default"; provider is "ollama" | "cerebras" | "openrouter". model is ""
+ * when the provider's own default model applies. */
 export interface LlmTaskSettingDto {
   taskKey: string;
   provider: string;
   model: string;
 }
 
-/** GET/PUT /v1/settings/llm response. credentialConfigured reflects whether
- * CEREBRAS_API_KEY was set at process start — never the key itself, which
- * never leaves the server. */
+/** GET/PUT /v1/settings/llm response. credentialConfigured and
+ * openRouterCredentialConfigured reflect whether CEREBRAS_API_KEY /
+ * OPENROUTER_API_KEY were set at process start — never the keys themselves,
+ * which never leave the server. */
 export interface LlmSettingsResponseDto {
   credentialConfigured: boolean;
+  openRouterCredentialConfigured: boolean;
   tasks: LlmTaskSettingDto[];
 }
 
@@ -656,7 +658,17 @@ export interface CerebrasModelDto {
   isDefault: boolean;
 }
 
-/** GET /v1/settings/llm/models response. */
+/** One curated OpenRouter model offered in the Settings model selector,
+ * served by GET /v1/settings/llm/models. */
+export interface OpenRouterModelDto {
+  id: string;
+  label: string;
+  isDefault: boolean;
+}
+
+/** GET /v1/settings/llm/models response: the curated model list per remote
+ * provider. */
 export interface LlmModelsResponseDto {
   cerebras: CerebrasModelDto[];
+  openrouter: OpenRouterModelDto[];
 }
