@@ -29,7 +29,6 @@ services:
       DATABASE_URL: postgresql://jobfinder:${DB_PASSWORD}@postgres:5432/jobfinder
       REDIS_URL: redis://redis:6379
 #      OLLAMA_URL: http://localhost:11434
-      JOBSPY_URL: http://jobspy-sidecar:8000
       DOCUMENTS_DIR: /data/documents
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
@@ -42,7 +41,12 @@ services:
       redis:
         condition: service_started
       minio:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
       - documents:/data/documents
     ports:
@@ -55,10 +59,6 @@ services:
     depends_on: [api]
     ports:
       - "8080:80"
-
-  jobspy-sidecar:
-    build: apps/jobspy-sidecar
-    # internal only, no host port
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
@@ -76,6 +76,19 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    healthcheck:
+      # minio's image ships no curl/wget/mc; /bin/sh is bash, so probe
+      # /minio/health/live with bash's /dev/tcp pseudo-device instead.
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          'exec 3<>/dev/tcp/127.0.0.1/9000 && printf "GET /minio/health/live HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && read -r line <&3 && [[ "$$line" == *200* ]]',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # One-shot init that creates the documents bucket once MinIO is reachable.
   createbuckets:

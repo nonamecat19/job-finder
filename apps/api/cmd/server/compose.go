@@ -8,6 +8,9 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/minio/minio-go/v7"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/job-finder/api/internal/aifeature"
 	"github.com/job-finder/api/internal/applications"
 	"github.com/job-finder/api/internal/coach"
@@ -61,6 +64,7 @@ type App struct {
 	Outreach     *httpapi.OutreachHandler
 	LlmSettings  *httpapi.LlmSettingsHandler
 	AiFeatures   *httpapi.AiFeatureHandler
+	Health       *httpapi.HealthHandler
 
 	// Worker handlers (each exposes ProcessTask).
 	Ingestion  *ingestion.Handler
@@ -528,6 +532,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Outreach:     composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
 		LlmSettings:  llmH.SettingsHandler,
 		AiFeatures:   matchingH.AiFeatureHandler,
+		Health:       composeHealth(p),
 
 		Ingestion:  ingestionH.Handler,
 		Matching:   matchingH.Handler,
@@ -558,4 +563,36 @@ func extJWTSigningSecret(hexKey string) ([]byte, error) {
 		return nil, errors.New("EXT_JWT_SECRET must be a 32-byte hex string (openssl rand -hex 32)")
 	}
 	return secret, nil
+}
+
+// composeHealth wires the readiness endpoint's dependency pings. p.DB.Pool
+// already satisfies httpapi.Pinger directly (pgxpool.Pool.Ping(ctx) error);
+// Redis and MinIO need small adapters since their native clients don't match
+// that exact signature.
+func composeHealth(p *Platform) *httpapi.HealthHandler {
+	var minioPing httpapi.Pinger
+	if p.MinioReady != nil {
+		minioPing = minioPinger{client: p.MinioReady, bucket: p.Config.MinioBucket}
+	}
+	return &httpapi.HealthHandler{
+		Postgres: p.DB.Pool,
+		Redis:    redisPinger{client: p.RedisClient},
+		Minio:    minioPing,
+	}
+}
+
+type redisPinger struct{ client redis.UniversalClient }
+
+func (r redisPinger) Ping(ctx context.Context) error {
+	return r.client.Ping(ctx).Err()
+}
+
+type minioPinger struct {
+	client *minio.Client
+	bucket string
+}
+
+func (m minioPinger) Ping(ctx context.Context) error {
+	_, err := m.client.BucketExists(ctx, m.bucket)
+	return err
 }

@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       poppler-utils \
       ca-certificates \
       fonts-liberation \
+      curl \
     && rm -rf /var/lib/apt/lists/*
 
 # rendercv ships the Typst binary transitively via its `typst` PyPI dependency

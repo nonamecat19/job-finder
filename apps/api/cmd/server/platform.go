@@ -5,6 +5,9 @@ import (
 	"log/slog"
 
 	"github.com/hibiken/asynq"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
@@ -22,8 +25,15 @@ type Platform struct {
 	DB          *db.DB
 	Logger      *slog.Logger
 	RedisOpt    asynq.RedisClientOpt
+	RedisClient redis.UniversalClient
 	AsynqClient *asynq.Client
 	Scraping    *scraping.Service
+
+	// MinioReady is a lightweight client used only to probe MinIO connectivity
+	// for the readiness endpoint (see internal/httpapi/health.go). It is nil
+	// when cfg.MinioEndpoint is unset, matching the "MinIO disabled" convention
+	// used by internal/storage.NewMinioStore.
+	MinioReady *minio.Client
 
 	// DjinniSession is shared by pointer with every DjinniAdapter copy
 	// (registry + enrichment handler); its Sources back-reference is wired once
@@ -53,13 +63,28 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 
+	var minioReady *minio.Client
+	if cfg.MinioEndpoint != "" {
+		minioReady, err = minio.New(cfg.MinioEndpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
+			Secure: cfg.MinioUseSSL,
+		})
+		if err != nil {
+			database.Close()
+			scrapingSvc.Close()
+			return nil, err
+		}
+	}
+
 	return &Platform{
 		Config:          cfg,
 		DB:              database,
 		Logger:          slog.Default(),
 		RedisOpt:        redisOpt,
+		RedisClient:     redisOpt.MakeRedisClient().(redis.UniversalClient),
 		AsynqClient:     asynq.NewClient(redisOpt),
 		Scraping:        scrapingSvc,
+		MinioReady:      minioReady,
 		DjinniSession:   &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
 		JobLeadsSession: &adapters.JobLeadsSession{Email: cfg.JobLeadsEmail, Password: cfg.JobLeadsPassword, Key: "jobleads"},
 	}, nil
