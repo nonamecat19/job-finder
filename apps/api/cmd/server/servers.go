@@ -54,7 +54,7 @@ func buildServers(p *Platform, app *App) *Servers {
 		app.GhostJob.Mount, app.Coach.Mount,
 		app.ExtAuth.Mount, app.ExtProfile.Mount,
 		app.Contacts.Mount, app.Referral.Mount,
-		app.Outreach.Mount, app.LlmSettings.Mount, app.AutoGenerate.Mount,
+		app.Outreach.Mount, app.LlmSettings.Mount, app.AiFeatures.Mount,
 	)
 
 	srv := &http.Server{

@@ -751,12 +751,16 @@ type UpdateLlmSettingsRequestDto struct {
 	Tasks []LlmTaskSettingDto `json:"tasks"`
 }
 
-// AutoGenerateSettingDto is the GET/PUT /v1/settings/autogenerate response:
-// whether a resume is auto-enqueued when a job's match score reaches
-// Threshold (0-100).
-type AutoGenerateSettingDto struct {
-	Enabled   bool `json:"enabled"`
-	Threshold int  `json:"threshold"`
+// AiFeatureSettingDto is one row of the GET /v1/settings/ai-features response
+// / PUT /v1/settings/ai-features/{feature} body: whether an AI feature
+// (resume generation, cover letter generation, salary inference) is
+// auto-enqueued when a job's match score reaches Threshold (0-100). Below
+// the threshold, or when disabled, the feature only runs on-demand. Match
+// scoring itself has no entry — it always runs unconditionally.
+type AiFeatureSettingDto struct {
+	Feature   string `json:"feature"`
+	Enabled   bool   `json:"enabled"`
+	Threshold int    `json:"threshold"`
 }
 
 // CerebrasModelDto is one curated Cerebras free-tier model offered in the

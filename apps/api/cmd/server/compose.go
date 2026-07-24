@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/job-finder/api/internal/aifeature"
 	"github.com/job-finder/api/internal/applications"
-	"github.com/job-finder/api/internal/autogen"
 	"github.com/job-finder/api/internal/coach"
 	"github.com/job-finder/api/internal/companyintel"
 	"github.com/job-finder/api/internal/enrichment"
@@ -60,7 +60,7 @@ type App struct {
 	Referral     *httpapi.ReferralHandler
 	Outreach     *httpapi.OutreachHandler
 	LlmSettings  *httpapi.LlmSettingsHandler
-	AutoGenerate *httpapi.AutoGenerateHandler
+	AiFeatures   *httpapi.AiFeatureHandler
 
 	// Worker handlers (each exposes ProcessTask).
 	Ingestion  *ingestion.Handler
@@ -212,16 +212,17 @@ func composeProfile(p *Platform, ollama *llm.OllamaProvider) *profileHandles {
 }
 
 type matchingHandles struct {
-	Jobs                *jobs.Service
-	Notifier            *notifier.Service
-	Autogen             *autogen.Service
-	AutoGenerateHandler *httpapi.AutoGenerateHandler
-	Handler             *matching.Handler
+	Jobs             *jobs.Service
+	Notifier         *notifier.Service
+	AiFeatures       *aifeature.Service
+	AiFeatureHandler *httpapi.AiFeatureHandler
+	Handler          *matching.Handler
 }
 
-// composeMatching also owns jobs.Service: matchingHandler auto-enqueues a
-// resume via it when a job's score crosses the autogen threshold, so it must
-// exist before the matching handler.
+// composeMatching also owns jobs.Service: matchingHandler auto-enqueues
+// resume/cover-letter generation and salary inference via it when a job's
+// score crosses that feature's configurable threshold, so it must exist
+// before the matching handler.
 func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Service, matchRouter *llm.Router) (*matchingHandles, error) {
 	matchingSvc := matching.NewService(p.DB.Queries, profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
 	notifierSvc := notifier.NewService(p.DB.Queries,
@@ -527,7 +528,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Referral:     composeReferral(p),
 		Outreach:     composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
 		LlmSettings:  llmH.SettingsHandler,
-		AutoGenerate: matchingH.AutoGenerateHandler,
+		AiFeatures:   matchingH.AiFeatureHandler,
 
 		Ingestion:  ingestionH.Handler,
 		Matching:   matchingH.Handler,
