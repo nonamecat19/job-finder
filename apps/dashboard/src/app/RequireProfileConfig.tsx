@@ -1,12 +1,18 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useConfigStatus } from '../features/profile/hooks';
-import { EmptyState, Spinner } from '../components/ui';
+import { EmptyState, LoadingRegion, SkeletonBlock } from '../components/ui';
 
 export function RequireProfileConfig({ children }: { children: ReactNode }) {
   const { data, isLoading } = useConfigStatus();
 
-  if (isLoading) return <Spinner label="checking profile…" />;
+  if (isLoading) {
+    return (
+      <LoadingRegion label="checking profile…" className="space-y-3">
+        <SkeletonBlock className="h-24 w-full" />
+      </LoadingRegion>
+    );
+  }
 
   if (!data?.hasConfig) {
     return (

@@ -1,5 +1,5 @@
 import type { LlmTaskSettingDto } from '@job-finder/shared';
-import { Button, ErrorState, Select, Spinner, Surface } from '../../components/ui';
+import { Button, ErrorState, LoadingRegion, Select, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
 import { useLlmModels, useLlmSettings, useUpdateLlmSettings } from './hooks';
 
 const TASK_LABELS: Record<string, string> = {
@@ -24,7 +24,11 @@ export default function LlmSettingsCard() {
   if (settings.isPending) {
     return (
       <Surface>
-        <Spinner label="Loading AI model settings…" />
+        <LoadingRegion label="Loading AI model settings…" className="space-y-2">
+          <SkeletonLine width="w-1/3" className="h-5" />
+          <SkeletonBlock className="h-10 w-full" />
+          <SkeletonBlock className="h-10 w-full" />
+        </LoadingRegion>
       </Surface>
     );
   }

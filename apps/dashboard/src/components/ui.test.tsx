@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ScoreBadge, GhostBadge, Chip, Spinner, Button } from './ui'
+import { ScoreBadge, GhostBadge, Chip, Spinner, Button, SkeletonLine, SkeletonBlock, SkeletonCircle, LoadingRegion } from './ui'
 
 describe('ScoreBadge', () => {
   it('renders em-dash for null score', () => {
@@ -120,6 +120,49 @@ describe('Spinner', () => {
   it('renders with label', () => {
     render(<Spinner label="loading…" />)
     expect(screen.getByText('loading…')).toBeInTheDocument()
+  })
+})
+
+describe('SkeletonLine', () => {
+  it('renders a pulsing placeholder', () => {
+    const { container } = render(<SkeletonLine />)
+    expect(container.querySelector('.animate-pulse')).toBeInTheDocument()
+  })
+
+  it('is hidden from assistive tech', () => {
+    const { container } = render(<SkeletonLine />)
+    expect(container.firstChild).toHaveAttribute('aria-hidden', 'true')
+  })
+})
+
+describe('SkeletonBlock', () => {
+  it('renders a pulsing placeholder hidden from assistive tech', () => {
+    const { container } = render(<SkeletonBlock className="h-24 w-full" />)
+    const el = container.firstChild as HTMLElement
+    expect(el.className).toContain('animate-pulse')
+    expect(el).toHaveAttribute('aria-hidden', 'true')
+  })
+})
+
+describe('SkeletonCircle', () => {
+  it('renders a pulsing circular placeholder', () => {
+    const { container } = render(<SkeletonCircle />)
+    const el = container.firstChild as HTMLElement
+    expect(el.className).toContain('animate-pulse')
+    expect(el.className).toContain('rounded-full')
+  })
+})
+
+describe('LoadingRegion', () => {
+  it('exposes a status role and busy state with an accessible label', () => {
+    render(
+      <LoadingRegion label="loading jobs…">
+        <SkeletonBlock className="h-10 w-full" />
+      </LoadingRegion>,
+    )
+    const region = screen.getByRole('status')
+    expect(region).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByText('loading jobs…')).toBeInTheDocument()
   })
 })
 

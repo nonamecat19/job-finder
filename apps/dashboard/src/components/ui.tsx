@@ -68,6 +68,41 @@ export function Spinner({ label }: { label?: string }) {
   );
 }
 
+export function SkeletonLine({ width, className }: { width?: string; className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn('h-3 animate-pulse rounded bg-overlay', width ?? 'w-full', className)}
+    />
+  );
+}
+
+export function SkeletonBlock({ className }: { className?: string }) {
+  return <div aria-hidden="true" className={cn('animate-pulse rounded-xl bg-overlay', className)} />;
+}
+
+export function SkeletonCircle({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
+  const dim = { sm: 'h-6 w-6', md: 'h-8 w-8', lg: 'h-12 w-12' }[size];
+  return <div aria-hidden="true" className={cn('animate-pulse rounded-full bg-overlay', dim, className)} />;
+}
+
+export function LoadingRegion({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div role="status" aria-busy="true" className={className}>
+      <span className="sr-only">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 export function Button({
   children,
   onClick,

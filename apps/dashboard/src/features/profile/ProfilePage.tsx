@@ -2,7 +2,7 @@ import { FileUp, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
 import type { ProfileDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { Button, EmptyState, ErrorState, Spinner, Surface } from '../../components/ui';
+import { Button, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
 import { useDeleteProfile, useProfiles, useUploadConfig } from './hooks';
 
 export default function ProfilePage() {
@@ -44,7 +44,12 @@ export default function ProfilePage() {
       {uploadConfig.error ? <ErrorState error={uploadConfig.error} /> : null}
       {error ? <ErrorState error={error} /> : null}
 
-      {isLoading ? <Spinner label="loading profile…" /> : null}
+      {isLoading ? (
+        <LoadingRegion label="loading profile…">
+          <SkeletonLine width="w-1/3" className="h-5" />
+          <SkeletonBlock className="mt-3 h-32 w-full" />
+        </LoadingRegion>
+      ) : null}
 
       {!isLoading && !profile ? (
         <EmptyState>Upload your RenderCV config (.yaml) to begin.</EmptyState>

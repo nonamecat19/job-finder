@@ -1,10 +1,20 @@
-import { Chip, Spinner, Surface } from '../../components/ui';
+import { Chip, LoadingRegion, SkeletonBlock, Surface } from '../../components/ui';
 import { usePostAgeSignal } from './hooks';
 
 export default function PostAgeSignal() {
   const { data, isLoading, error } = usePostAgeSignal();
 
-  if (isLoading) return <Spinner label="loading response rate…" />;
+  if (isLoading) {
+    return (
+      <Surface>
+        <LoadingRegion label="loading response rate…" className="space-y-2">
+          <SkeletonBlock className="h-8 w-full" />
+          <SkeletonBlock className="h-8 w-full" />
+          <SkeletonBlock className="h-8 w-full" />
+        </LoadingRegion>
+      </Surface>
+    );
+  }
   if (error) return null;
   if (!data) return null;
 

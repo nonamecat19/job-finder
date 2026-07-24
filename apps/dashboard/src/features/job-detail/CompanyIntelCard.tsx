@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, ExternalLink, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { Button, Chip, Spinner, Surface } from '../../components/ui';
+import { Button, Chip, LoadingRegion, Spinner, SkeletonLine, Surface } from '../../components/ui';
 import { useCompanyIntel, useRefreshCompanyIntel } from './hooks';
 
 const STALE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -46,7 +46,11 @@ export default function CompanyIntelCard({ jobId }: { jobId: string }) {
   if (isLoading) {
     return (
       <Surface>
-        <Spinner label="loading company intel…" />
+        <LoadingRegion label="loading company intel…" className="space-y-2">
+          <SkeletonLine width="w-1/2" />
+          <SkeletonLine width="w-1/3" />
+          <SkeletonLine width="w-2/5" />
+        </LoadingRegion>
       </Surface>
     );
   }

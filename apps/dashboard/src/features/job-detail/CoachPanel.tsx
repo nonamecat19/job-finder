@@ -1,7 +1,7 @@
 import { Sparkles } from 'lucide-react';
 import type { FitGapEvidence, FitGapItem, FitGapProximity } from '@job-finder/shared';
 import { SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, ErrorState, ScoreBadge, Spinner, Surface } from '../../components/ui';
+import { Button, Chip, ErrorState, LoadingRegion, ScoreBadge, Spinner, SkeletonLine, Surface } from '../../components/ui';
 import { emitToast, toErrorMessage } from '../../lib/toastBus';
 import { useAssessCoach, useCoachAssessment } from './hooks';
 
@@ -40,7 +40,10 @@ export default function CoachPanel({ jobId }: { jobId: string | undefined }) {
       </div>
 
       {isLoading ? (
-        <Spinner label="loading fit-gap assessment…" />
+        <LoadingRegion label="loading fit-gap assessment…" className="space-y-2">
+          <SkeletonLine width="w-2/3" />
+          <SkeletonLine width="w-1/2" />
+        </LoadingRegion>
       ) : assess.isError ? (
         <ErrorState error={assess.error} />
       ) : !assessed ? (

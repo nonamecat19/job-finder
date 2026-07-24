@@ -1,7 +1,7 @@
 import { Bell, Check, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Chip, Spinner, Surface } from '../../components/ui';
+import { Button, Chip, LoadingRegion, SkeletonLine, Surface } from '../../components/ui';
 import { useMarkNotificationSeen, useNotifications, useUnseenNotificationCount } from './hooks';
 
 export default function NotificationBell() {
@@ -43,9 +43,11 @@ export default function NotificationBell() {
             </div>
             <div className="max-h-80 overflow-y-auto">
               {isLoading ? (
-                <div className="p-4">
-                  <Spinner label="loading…" />
-                </div>
+                <LoadingRegion label="loading notifications…" className="space-y-2 p-4">
+                  <SkeletonLine width="w-3/4" />
+                  <SkeletonLine width="w-1/2" />
+                  <SkeletonLine width="w-2/3" />
+                </LoadingRegion>
               ) : notifications && notifications.length > 0 ? (
                 notifications.map((n) => (
                   <div

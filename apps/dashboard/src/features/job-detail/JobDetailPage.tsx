@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, ScoreBadge, Spinner, Surface, Textarea } from '../../components/ui';
+import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Surface, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import {
   useGenerateDocument,
@@ -57,7 +57,17 @@ export default function JobDetailPage() {
     }
   }, [generate.isSuccess, generate.variables, generating, documents, countAtGenerate]);
 
-  if (isLoading || !job) return <Spinner label="loading job…" />;
+  if (isLoading || !job) {
+    return (
+      <LoadingRegion label="loading job…" className="space-y-5">
+        <SkeletonLine width="w-1/2" className="h-6" />
+        <SkeletonLine width="w-1/3" />
+        <SkeletonBlock className="h-24 w-full" />
+        <SkeletonBlock className="h-24 w-full" />
+        <SkeletonBlock className="h-40 w-full" />
+      </LoadingRegion>
+    );
+  }
 
   return (
     <div className="space-y-5">

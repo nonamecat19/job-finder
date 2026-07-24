@@ -1,7 +1,7 @@
 import { ArrowRight, Users } from 'lucide-react';
 import type { ReferralContactDto, ReferralPathDto } from '@job-finder/shared';
 import { SectionTitle } from '../../components/layout/PageHeader';
-import { Chip, Spinner, Surface } from '../../components/ui';
+import { Chip, LoadingRegion, SkeletonLine, Surface } from '../../components/ui';
 import { useReferralPaths } from './hooks';
 
 function strengthTone(score: number): 'green' | 'red' | 'slate' {
@@ -22,7 +22,10 @@ export default function ReferralPathsCard({ jobId }: { jobId: string | undefined
   if (isLoading) {
     return (
       <Surface>
-        <Spinner label="looking for warm paths…" />
+        <LoadingRegion label="looking for warm paths…" className="space-y-2">
+          <SkeletonLine width="w-2/3" />
+          <SkeletonLine width="w-1/2" />
+        </LoadingRegion>
       </Surface>
     );
   }

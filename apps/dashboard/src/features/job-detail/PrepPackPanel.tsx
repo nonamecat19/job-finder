@@ -8,7 +8,7 @@ import type {
   QuestionCategory,
 } from '@job-finder/shared';
 import { SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, ScoreBadge, Spinner, Surface } from '../../components/ui';
+import { Button, Chip, LoadingRegion, ScoreBadge, SkeletonLine, Surface } from '../../components/ui';
 import { useInterviewPrep } from './hooks';
 
 const CATEGORY_LABEL: Record<QuestionCategory, string> = {
@@ -35,7 +35,11 @@ export default function PrepPackPanel({ jobId }: { jobId: string | undefined }) 
   if (isLoading) {
     return (
       <Surface>
-        <Spinner label="Preparing interview pack…" />
+        <LoadingRegion label="Preparing interview pack…" className="space-y-2">
+          <SkeletonLine width="w-1/2" />
+          <SkeletonLine width="w-2/3" />
+          <SkeletonLine width="w-1/3" />
+        </LoadingRegion>
       </Surface>
     );
   }

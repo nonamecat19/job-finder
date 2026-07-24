@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AiFeatureKey, AiFeatureSettingDto } from '@job-finder/shared';
-import { Button, Checkbox, ErrorState, Field, Input, Spinner, Surface } from '../../components/ui';
+import { Button, Checkbox, ErrorState, Field, Input, LoadingRegion, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
 import { useAiFeatureSettings, useUpdateAiFeatureSetting } from './hooks';
 
 const FEATURE_LABELS: Record<AiFeatureKey, { title: string; description: string }> = {
@@ -80,7 +80,11 @@ export default function AiFeatureSettingsCard() {
   if (settings.isPending) {
     return (
       <Surface>
-        <Spinner label="Loading AI feature settings…" />
+        <LoadingRegion label="Loading AI feature settings…" className="space-y-2">
+          <SkeletonLine width="w-1/3" className="h-5" />
+          <SkeletonBlock className="h-10 w-full" />
+          <SkeletonBlock className="h-10 w-full" />
+        </LoadingRegion>
       </Surface>
     );
   }

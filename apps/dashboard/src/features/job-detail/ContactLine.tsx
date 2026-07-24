@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import type { JobContactDto } from '@job-finder/shared';
-import { Button, Chip, Spinner, Surface } from '../../components/ui';
+import { Button, Chip, LoadingRegion, Spinner, SkeletonCircle, SkeletonLine, Surface } from '../../components/ui';
 import { useJobContacts, useRefreshJobContacts } from './hooks';
 
 // pickHeadline returns the highest-confidence contact. useJobContacts
@@ -56,7 +56,10 @@ export default function ContactLine({ jobId }: { jobId: string | undefined }) {
   if (isLoading) {
     return (
       <Surface>
-        <Spinner label="loading contact…" />
+        <LoadingRegion label="loading contact…" className="flex items-center gap-2">
+          <SkeletonCircle size="sm" />
+          <SkeletonLine width="w-1/3" />
+        </LoadingRegion>
       </Surface>
     );
   }

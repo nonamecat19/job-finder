@@ -127,6 +127,7 @@ export interface JobDto {
   id: string;
   dedupeKey: string;
   sourceKey: string;
+  subscriptionId: string | null;
   title: string;
   company: string;
   location: string | null;
