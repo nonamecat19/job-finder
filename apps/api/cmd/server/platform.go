@@ -21,13 +21,14 @@ import (
 // headless-scraping service, and the djinni session shared by pointer across
 // the adapter registry and the enrichment handler.
 type Platform struct {
-	Config      *config.Config
-	DB          *db.DB
-	Logger      *slog.Logger
-	RedisOpt    asynq.RedisClientOpt
-	RedisClient redis.UniversalClient
-	AsynqClient *asynq.Client
-	Scraping    *scraping.Service
+	Config         *config.Config
+	DB             *db.DB
+	Logger         *slog.Logger
+	RedisOpt       asynq.RedisClientOpt
+	RedisClient    redis.UniversalClient
+	AsynqClient    *asynq.Client
+	AsynqInspector *asynq.Inspector
+	Scraping       *scraping.Service
 
 	// MinioReady is a lightweight client used only to probe MinIO connectivity
 	// for the readiness endpoint (see internal/httpapi/health.go). It is nil
@@ -83,6 +84,7 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		RedisOpt:        redisOpt,
 		RedisClient:     redisOpt.MakeRedisClient().(redis.UniversalClient),
 		AsynqClient:     asynq.NewClient(redisOpt),
+		AsynqInspector:  asynq.NewInspector(redisOpt),
 		Scraping:        scrapingSvc,
 		MinioReady:      minioReady,
 		DjinniSession:   &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},

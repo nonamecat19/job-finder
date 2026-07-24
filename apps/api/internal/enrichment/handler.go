@@ -391,8 +391,11 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, job sqlcgen.Jo
 	if err != nil {
 		return
 	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, matchPayload),
-		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
+	opts := []asynq.Option{asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)}
+	if actID != nil {
+		opts = append(opts, asynq.TaskID(*actID))
+	}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, matchPayload), opts...); err != nil {
 		slog.Warn("enrichment: enqueue match failed", "job", jobID, "error", err)
 	}
 }
@@ -416,8 +419,11 @@ func (h *Handler) EnqueueBackfill(ctx context.Context, sourceKey string, limit i
 		if err != nil {
 			continue
 		}
-		if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload),
-			asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)); err != nil {
+		opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)}
+		if actID != nil {
+			opts = append(opts, asynq.TaskID(*actID))
+		}
+		if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload), opts...); err != nil {
 			return n, fmt.Errorf("enrichment: enqueue backfill: %w", err)
 		}
 		n++

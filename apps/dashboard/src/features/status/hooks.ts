@@ -17,3 +17,19 @@ export function useRetryActivity() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.activity.all }),
   });
 }
+
+export function useCancelActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.activity.cancel(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.activity.all }),
+  });
+}
+
+export function useCancelAllActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.activity.cancelAll(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.activity.all }),
+  });
+}

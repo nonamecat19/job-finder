@@ -63,6 +63,32 @@ func (q *Queries) FinishActivityRunOk(ctx context.Context, arg FinishActivityRun
 	return err
 }
 
+const getActivityRun = `-- name: GetActivityRun :one
+SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt" FROM "ActivityRun" WHERE "id" = $1
+`
+
+func (q *Queries) GetActivityRun(ctx context.Context, id pgtype.UUID) (ActivityRun, error) {
+	row := q.db.QueryRow(ctx, getActivityRun, id)
+	var i ActivityRun
+	err := row.Scan(
+		&i.ID,
+		&i.Op,
+		&i.State,
+		&i.Label,
+		&i.Step,
+		&i.JobId,
+		&i.SourceKey,
+		&i.QueueTaskId,
+		&i.RefId,
+		&i.Error,
+		&i.Meta,
+		&i.CreatedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
 const insertActivityRun = `-- name: InsertActivityRun :one
 INSERT INTO "ActivityRun" ("op", "label", "jobId", "sourceKey", "queueTaskId", "meta")
 VALUES ($1, $2, $3, $4, $5, $6)

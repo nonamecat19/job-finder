@@ -18,6 +18,9 @@ UPDATE "ActivityRun" SET "state" = 'failed', "error" = $2, "finishedAt" = now() 
 -- name: FinishActivityRunCancelled :exec
 UPDATE "ActivityRun" SET "state" = 'cancelled', "error" = $2, "finishedAt" = now() WHERE "id" = $1;
 
+-- name: GetActivityRun :one
+SELECT * FROM "ActivityRun" WHERE "id" = $1;
+
 -- name: ListActiveActivityRuns :many
 SELECT * FROM "ActivityRun" WHERE "state" IN ('queued', 'running') ORDER BY "createdAt" DESC;
 

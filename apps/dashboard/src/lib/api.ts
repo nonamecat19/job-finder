@@ -180,6 +180,10 @@ export const api = {
       request<ActivityListResponse>(`/activity${limit ? `?limit=${limit}` : ''}`),
     retry: (op?: string) =>
       request<{ retried: number; skipped: number }>(`/activity/retry${op ? `?op=${op}` : ''}`, { method: 'POST' }),
+    cancel: (id: string) =>
+      request<{ cancelled: boolean }>(`/activity/${id}/cancel`, { method: 'POST' }),
+    cancelAll: () =>
+      request<{ cancelled: number }>('/activity/cancel-all', { method: 'POST' }),
   },
   companies: {
     intel: (jobId: string) => request<CompanyIntelDto>(`/companies/${jobId}/intel`),

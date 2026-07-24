@@ -518,7 +518,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Jobs:         jobsHandler,
 		Applications: composeApplications(p),
 		Subs:         composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
-		Activity:     httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient),
+		Activity:     httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector),
 		Keyword:      keywordH.Handler,
 		PostAge:      composePostAge(p),
 		Notification: composeNotifications(p),

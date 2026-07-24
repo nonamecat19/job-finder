@@ -340,8 +340,11 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	if err != nil {
 		return nil, err
 	}
-	info, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload),
-		asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate))
+	genOpts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate)}
+	if actID != nil {
+		genOpts = append(genOpts, asynq.TaskID(*actID))
+	}
+	info, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload), genOpts...)
 	if err != nil {
 		return nil, err
 	}

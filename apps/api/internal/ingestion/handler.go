@@ -238,8 +238,11 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, j dto.Normaliz
 		return
 	}
 	// attempts: 2 with exponential backoff, matching matchQueue.add's options.
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload),
-		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
+	opts := []asynq.Option{asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)}
+	if actID != nil {
+		opts = append(opts, asynq.TaskID(*actID))
+	}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload), opts...); err != nil {
 		slog.Warn("ingestion: enqueue match failed", "job", jobID, "error", err)
 	}
 }
@@ -260,8 +263,11 @@ func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string) {
 	if err != nil {
 		return
 	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGhostScore, payload),
-		asynq.MaxRetry(0), asynq.Queue(queue.QueueGhostScore)); err != nil {
+	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGhostScore)}
+	if actID != nil {
+		opts = append(opts, asynq.TaskID(*actID))
+	}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGhostScore, payload), opts...); err != nil {
 		slog.Warn("ingestion: enqueue ghost score failed", "job", jobID, "error", err)
 	}
 }
@@ -281,8 +287,11 @@ func (h *Handler) enqueueEnrich(ctx context.Context, jobID string, j dto.Normali
 	if err != nil {
 		return err
 	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload),
-		asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)); err != nil {
+	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)}
+	if actID != nil {
+		opts = append(opts, asynq.TaskID(*actID))
+	}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload), opts...); err != nil {
 		return fmt.Errorf("ingestion: enqueue enrich: %w", err)
 	}
 	return nil

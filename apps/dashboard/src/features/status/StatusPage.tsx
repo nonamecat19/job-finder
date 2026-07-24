@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RotateCw } from 'lucide-react';
+import { RotateCw, X } from 'lucide-react';
 import type { ActivityOp, ActivityRunDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { Button, Chip, EmptyState, ErrorState, Spinner, Surface } from '../../components/ui';
-import { useActivity, useRetryActivity } from './hooks';
+import { useActivity, useCancelActivity, useCancelAllActivity, useRetryActivity } from './hooks';
 
 const OP_LABELS: Record<ActivityOp, string> = {
   ingest: 'Ingest',
@@ -27,6 +27,7 @@ const OP_TONES: Record<ActivityOp, 'green' | 'red' | 'slate'> = {
 export default function StatusPage() {
   const { data, isLoading, error } = useActivity(100);
   const retry = useRetryActivity();
+  const cancelAll = useCancelAllActivity();
 
   const failed = data?.recent.filter((r) => r.state === 'failed' || r.state === 'cancelled') ?? [];
   const failedByOp = failed.reduce<Record<string, number>>((acc, r) => {
@@ -85,7 +86,18 @@ export default function StatusPage() {
       ) : null}
 
       <section className="mb-8">
-        <SectionTitle>Active</SectionTitle>
+        <div className="mb-3 flex items-center justify-between">
+          <SectionTitle>Active</SectionTitle>
+          {data && data.active.length > 0 ? (
+            <Button
+              variant="secondary"
+              onClick={() => cancelAll.mutate()}
+              disabled={cancelAll.isPending}
+            >
+              <X className="h-3 w-3" /> cancel all ({data.active.length})
+            </Button>
+          ) : null}
+        </div>
         {data && data.active.length === 0 ? (
           <EmptyState>Nothing running.</EmptyState>
         ) : (
@@ -111,6 +123,7 @@ export default function StatusPage() {
 
 function ActiveCard({ run }: { run: ActivityRunDto }) {
   const elapsed = useLiveElapsed(run.startedAt);
+  const cancel = useCancelActivity();
   return (
     <Surface>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -119,6 +132,7 @@ function ActiveCard({ run }: { run: ActivityRunDto }) {
             <Chip tone={OP_TONES[run.op as ActivityOp] ?? 'slate'}>
               {OP_LABELS[run.op as ActivityOp] ?? run.op}
             </Chip>
+            {run.state === 'queued' ? <Chip tone="slate">queued</Chip> : null}
             {run.jobId ? (
               <Link to={`/jobs/${run.jobId}`} className="font-semibold text-primary hover:underline">
                 {run.label}
@@ -131,7 +145,14 @@ function ActiveCard({ run }: { run: ActivityRunDto }) {
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {elapsed !== null ? <span className="text-xs tabular-nums text-faint">{elapsed}</span> : null}
-          <Spinner />
+          {run.state === 'running' ? <Spinner /> : null}
+          <Button
+            variant="ghost"
+            onClick={() => cancel.mutate(run.id)}
+            disabled={cancel.isPending}
+          >
+            <X className="h-3 w-3" /> cancel
+          </Button>
         </div>
       </div>
     </Surface>

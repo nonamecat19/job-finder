@@ -207,8 +207,11 @@ func (s *Service) RunSearch(ctx context.Context, searchID string) ([]string, err
 			return nil, err
 		}
 		// attempts: 1 (no retry), matching ingestQueue.add's { attempts: 1 }.
-		if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
-			asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)); err != nil {
+		opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)}
+		if activityID != nil {
+			opts = append(opts, asynq.TaskID(*activityID))
+		}
+		if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload), opts...); err != nil {
 			return nil, fmt.Errorf("ingestion: enqueue %s: %w", key, err)
 		}
 	}
@@ -246,8 +249,11 @@ func (s *Service) RunSource(ctx context.Context, sourceKey string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
-		asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)); err != nil {
+	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)}
+	if activityID != nil {
+		opts = append(opts, asynq.TaskID(*activityID))
+	}
+	if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload), opts...); err != nil {
 		return fmt.Errorf("ingestion: enqueue source %s: %w", sourceKey, err)
 	}
 	return nil
@@ -296,8 +302,11 @@ func (s *Service) RunSubscription(ctx context.Context, subscriptionID string) er
 	if err != nil {
 		return err
 	}
-	if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
-		asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)); err != nil {
+	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)}
+	if activityID != nil {
+		opts = append(opts, asynq.TaskID(*activityID))
+	}
+	if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload), opts...); err != nil {
 		return fmt.Errorf("ingestion: enqueue subscription %s: %w", subscriptionID, err)
 	}
 	return nil

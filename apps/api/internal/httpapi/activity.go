@@ -3,12 +3,14 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -21,6 +23,7 @@ import (
 // *sqlcgen.Queries satisfies it structurally.
 type ActivityProvider interface {
 	activity.Store
+	GetActivityRun(ctx context.Context, id pgtype.UUID) (sqlcgen.ActivityRun, error)
 	ListActiveActivityRuns(ctx context.Context) ([]sqlcgen.ActivityRun, error)
 	ListRecentActivityRuns(ctx context.Context, limit int32) ([]sqlcgen.ActivityRun, error)
 	ListFailedActivityRuns(ctx context.Context, op *string) ([]sqlcgen.ActivityRun, error)
@@ -31,18 +34,113 @@ type ActivityEnqueuer interface {
 	EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error)
 }
 
-type ActivityHandler struct {
-	q      ActivityProvider
-	client ActivityEnqueuer
+// ActivityInspector cancels an in-flight or still-queued asynq task.
+// *asynq.Inspector satisfies it. Every enqueue call across the codebase sets
+// asynq.TaskID(<activity run id>), so the ActivityRun's own id doubles as the
+// asynq task id — no extra column lookup needed.
+type ActivityInspector interface {
+	CancelProcessing(id string) error
+	DeleteTask(queue, id string) error
 }
 
-func NewActivityHandler(q ActivityProvider, client ActivityEnqueuer) *ActivityHandler {
-	return &ActivityHandler{q: q, client: client}
+// queueForOp maps an ActivityRun.Op back to the asynq queue it was enqueued
+// on, so a pending (not yet running) task can be found and deleted.
+var queueForOp = map[string]string{
+	"ingest":       queue.QueueIngest,
+	"match":        queue.QueueMatch,
+	"generate":     queue.QueueGenerate,
+	"enrich":       queue.QueueEnrich,
+	"ghost_score":  queue.QueueGhostScore,
+	"salary_infer": queue.QueueSalaryInfer,
+}
+
+type ActivityHandler struct {
+	q         ActivityProvider
+	client    ActivityEnqueuer
+	inspector ActivityInspector
+}
+
+func NewActivityHandler(q ActivityProvider, client ActivityEnqueuer, inspector ActivityInspector) *ActivityHandler {
+	return &ActivityHandler{q: q, client: client, inspector: inspector}
 }
 
 func (h *ActivityHandler) Mount(r chi.Router) {
 	r.Get("/activity", h.list)
 	r.Post("/activity/retry", h.retry)
+	r.Post("/activity/cancel-all", h.cancelAll)
+	r.Post("/activity/{id}/cancel", h.cancel)
+}
+
+// cancel stops an active (queued or running) run: it asks asynq to cancel a
+// running task via its context (best-effort — the handler must still notice
+// ctx.Done() and return), or deletes a still-pending one outright, then marks
+// the ActivityRun row "cancelled" regardless of whether asynq's side
+// succeeded, so the UI reflects the user's intent immediately.
+func (h *ActivityHandler) cancel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	uid, err := dbutil.ParseUUID(id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid activity id")
+		return
+	}
+
+	row, err := h.q.GetActivityRun(r.Context(), uid)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "activity run not found")
+		return
+	}
+	if row.State != "queued" && row.State != "running" {
+		writeError(w, http.StatusConflict, "activity run is not active")
+		return
+	}
+
+	h.cancelOne(r.Context(), id, row.Op)
+	writeJSON(w, http.StatusOK, map[string]bool{"cancelled": true})
+}
+
+// cancelAll stops every currently active (queued or running) run in one
+// batch request, rather than making the client fire one cancel call per row.
+func (h *ActivityHandler) cancelAll(w http.ResponseWriter, r *http.Request) {
+	active, err := h.q.ListActiveActivityRuns(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list active activity runs: "+err.Error())
+		return
+	}
+
+	for _, row := range active {
+		h.cancelOne(r.Context(), dbutil.UUIDString(row.ID), row.Op)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]int{"cancelled": len(active)})
+}
+
+// cancelOne asks asynq to stop the run's task (best-effort) and marks the
+// ActivityRun row "cancelled" regardless of whether asynq's side succeeded,
+// so the UI reflects the user's intent immediately.
+//
+// It tries both CancelProcessing (running) and DeleteTask (still queued)
+// unconditionally rather than branching on a state snapshot: a queued row
+// can flip to running between being listed and being cancelled here (the
+// worker may grab it in that window), and gating on the stale state left
+// the task to run to completion untouched while the row was marked
+// cancelled underneath it. Each call is a no-op/logged-warning when it
+// doesn't apply to the task's actual current state.
+func (h *ActivityHandler) cancelOne(ctx context.Context, id string, op string) {
+	if h.inspector != nil {
+		if err := h.inspector.CancelProcessing(id); err != nil {
+			slog.Warn("activity: cancel processing failed", "id", id, "error", err)
+		}
+		if qname, ok := queueForOp[op]; ok {
+			if err := h.inspector.DeleteTask(qname, id); err != nil {
+				slog.Warn("activity: delete pending task failed", "id", id, "queue", qname, "error", err)
+			}
+		}
+	}
+
+	rec := activity.FromID(h.q, id)
+	if rec != nil {
+		rec.Cancel(ctx, "cancelled by user")
+	}
 }
 
 func (h *ActivityHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -160,8 +258,11 @@ func (h *ActivityHandler) retryOne(ctx context.Context, row sqlcgen.ActivityRun)
 		if err != nil {
 			return false
 		}
-		_, err = h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload),
-			asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate))
+		opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate)}
+		if actID != nil {
+			opts = append(opts, asynq.TaskID(*actID))
+		}
+		_, err = h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload), opts...)
 		return err == nil
 	case "ingest":
 		if row.SourceKey == nil {
@@ -177,8 +278,11 @@ func (h *ActivityHandler) retryOne(ctx context.Context, row sqlcgen.ActivityRun)
 		if err != nil {
 			return false
 		}
-		_, err = h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
-			asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest))
+		opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)}
+		if actID != nil {
+			opts = append(opts, asynq.TaskID(*actID))
+		}
+		_, err = h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload), opts...)
 		return err == nil
 	default:
 		return false
