@@ -47,6 +47,19 @@ type Config struct {
 	CerebrasAPIKey  string `mapstructure:"CEREBRAS_API_KEY"`
 	CerebrasBaseURL string `mapstructure:"CEREBRAS_BASE_URL"`
 
+	// OpenRouter: an optional third chat provider, selectable per task from
+	// dashboard Settings exactly like Cerebras. OpenRouterAPIKey is a secret
+	// with no default; when empty, OpenRouter is unavailable and tasks set to
+	// it resolve to Ollama. OpenRouterBaseURL defaults to the public API.
+	// OpenRouterSiteURL/OpenRouterAppName are optional attribution headers
+	// (HTTP-Referer / X-Title) OpenRouter uses for leaderboard ranking.
+	// OpenRouter has no embeddings endpoint, so EmbedURL/EmbedModel are
+	// unaffected by this provider.
+	OpenRouterAPIKey  string `mapstructure:"OPENROUTER_API_KEY"`
+	OpenRouterBaseURL string `mapstructure:"OPENROUTER_BASE_URL"`
+	OpenRouterSiteURL string `mapstructure:"OPENROUTER_SITE_URL"`
+	OpenRouterAppName string `mapstructure:"OPENROUTER_APP_NAME"`
+
 	// KeywordRephraseCacheTTLSec is the lifetime, in seconds, of a cached set of
 	// keyword-diff rephrase suggestions. Suggestions are generated async and
 	// cached because each is a live LLM call; a stale entry past this age is
@@ -145,6 +158,7 @@ var defaults = map[string]any{
 	"WORKUA_DETAIL_DELAY_MS":         2000,
 	"JOBSPY_URL":                     "http://localhost:8000",
 	"CEREBRAS_BASE_URL":              "https://api.cerebras.ai/v1",
+	"OPENROUTER_BASE_URL":            "https://openrouter.ai/api/v1",
 	// "/data/documents" is a container-only path (writable there because the
 	// Dockerfile/compose files run the API as root with a dedicated volume).
 	// On bare-metal dev or `go test`, the host user can't mkdir /data at all
@@ -170,6 +184,7 @@ var optionalKeys = []string{
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOBLEADS_EMAIL", "JOBLEADS_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
 	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
 	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD", "CEREBRAS_API_KEY",
+	"OPENROUTER_API_KEY", "OPENROUTER_SITE_URL", "OPENROUTER_APP_NAME",
 }
 
 // ModelOr returns m if set, otherwise the default LLMModel. Used to resolve a
