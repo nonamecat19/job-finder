@@ -45,6 +45,12 @@ var subscriptions = []subscriptionSeed{
 		url:       "https://remoteok.com/remote-golang-jobs",
 		enabled:   true,
 	},
+	{
+		sourceKey: "jobleads",
+		name:      "JobLeads Golang",
+		url:       "https://www.jobleads.com/job-search?q=golang",
+		enabled:   true,
+	},
 }
 
 func seedSubscriptions(ctx context.Context, q *sqlcgen.Queries) error {

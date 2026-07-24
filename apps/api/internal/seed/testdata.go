@@ -27,6 +27,7 @@ const (
 	uuidJob20   = "b0000000-0000-0000-0000-000000000020"
 	uuidJob21   = "b0000000-0000-0000-0000-000000000021"
 	uuidJob22   = "b0000000-0000-0000-0000-000000000022"
+	uuidJob23   = "b0000000-0000-0000-0000-000000000023"
 	uuidSearch1 = "c0000000-0000-0000-0000-000000000001"
 	uuidSearch2 = "c0000000-0000-0000-0000-000000000002"
 	uuidSearch3 = "c0000000-0000-0000-0000-000000000003"
@@ -245,6 +246,13 @@ var jobs = []jobSeed{
 		SalaryRaw: "$100000 - $140000", URL: "https://remoteok.com/remote-jobs/backend-engineer-go-pixelforge",
 		Desc:   "PixelForge is a fully distributed team building a Go-based event-processing platform. We're hiring a Backend Engineer to own core services, write idiomatic Go, and work directly with founders. 100% remote, async-first culture.",
 		Status: "found", PostedAt: now().AddDate(0, 0, -1),
+	},
+	{
+		UUID: uuidJob23, SourceKey: "jobleads", Title: "Senior Golang Engineer",
+		Company: "NovaTech LLC", Location: "Berlin, Germany (Remote)", Remote: true,
+		SalaryRaw: "€70,000 - €90,000 a year", URL: "https://www.jobleads.com/job/senior-golang-engineer-novatech-abc123",
+		Desc:   "We are looking for a Senior Golang Engineer to build and maintain our Go microservices platform, working closely with the infrastructure team to design scalable, well-tested services.",
+		Status: "found", PostedAt: now().AddDate(0, 0, -3),
 	},
 }
 
