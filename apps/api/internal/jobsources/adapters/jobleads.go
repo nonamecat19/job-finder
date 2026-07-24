@@ -46,6 +46,11 @@ type JobLeadsAdapter struct {
 func (JobLeadsAdapter) Key() string          { return "jobleads" }
 func (JobLeadsAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
+// NeedsDetail reports true: search results carry a teaser only; the full
+// posting body comes from FetchDetail, so ingestion defers match/ghost
+// scoring until enrichment has run.
+func (JobLeadsAdapter) NeedsDetail() bool { return true }
+
 // authHeaders builds request headers carrying the current session cookie,
 // logging in on demand when Session is set. Unlike djinni, a Session that
 // resolves to an empty cookie AND has no configured credentials is treated

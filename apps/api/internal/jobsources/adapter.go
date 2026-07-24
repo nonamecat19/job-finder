@@ -21,6 +21,26 @@ type Adapter interface {
 	HealthCheck(ctx context.Context, config map[string]any) (bool, error)
 }
 
+// DetailNeeder is an optional capability an Adapter implements when its
+// Search returns list-only rows — title/company/URL with a teaser or empty
+// description — so the full posting has to be fetched by a separate enrich
+// pass before the job text is worth matching or ghost-scoring.
+//
+// Declared as an optional interface (like the registry's HealthCheck
+// fallback) rather than a method on Adapter, so adapters returning complete
+// rows from Search need no change.
+type DetailNeeder interface {
+	NeedsDetail() bool
+}
+
+// NeedsDetail reports whether the adapter's Search rows are list-only and
+// must be enriched before downstream analysis. Adapters that don't implement
+// DetailNeeder return complete rows, so the answer is false.
+func NeedsDetail(a Adapter) bool {
+	dn, ok := a.(DetailNeeder)
+	return ok && dn.NeedsDetail()
+}
+
 // Registry holds every registered adapter keyed by its Key().
 type Registry struct {
 	byKey map[string]Adapter

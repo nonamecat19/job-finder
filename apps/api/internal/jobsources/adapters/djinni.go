@@ -97,6 +97,11 @@ func (d DjinniAdapter) fetchParse(ctx context.Context, pageURL string, headers m
 func (DjinniAdapter) Key() string          { return "djinni" }
 func (DjinniAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
+// NeedsDetail reports true: the list page carries a truncated description;
+// FetchDetail fetches the full one, so ingestion defers match/ghost scoring
+// until enrichment has run.
+func (DjinniAdapter) NeedsDetail() bool { return true }
+
 func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
 	headers, err := d.authHeaders(ctx)
 	if err != nil {

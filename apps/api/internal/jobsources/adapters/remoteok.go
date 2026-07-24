@@ -41,6 +41,11 @@ type RemoteOKAdapter struct {
 func (RemoteOKAdapter) Key() string          { return "remoteok" }
 func (RemoteOKAdapter) Kind() dto.SourceKind { return dto.SourceKindAPI }
 
+// NeedsDetail reports true: the feed endpoint truncates the description;
+// FetchDetail re-reads the full entry, so ingestion defers match/ghost
+// scoring until enrichment has run.
+func (RemoteOKAdapter) NeedsDetail() bool { return true }
+
 func (d RemoteOKAdapter) apiURL() string {
 	if d.APIURL != "" {
 		return d.APIURL

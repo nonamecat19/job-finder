@@ -36,6 +36,11 @@ type DouAdapter struct {
 func (DouAdapter) Key() string          { return "dou" }
 func (DouAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
+// NeedsDetail reports true: the list page has no description at all;
+// FetchDetail supplies it, so ingestion defers match/ghost scoring until
+// enrichment has run.
+func (DouAdapter) NeedsDetail() bool { return true }
+
 func (d DouAdapter) HealthCheck(ctx context.Context, config map[string]any) (bool, error) {
 	return true, nil
 }

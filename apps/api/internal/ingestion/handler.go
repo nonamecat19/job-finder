@@ -134,8 +134,15 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		subscriptionID = subscription.ID
 	}
 
+	// Adapters whose Search returns list-only rows get their downstream
+	// analysis deferred: enrichment fetches the real description first, then
+	// enqueues match + ghost itself. Scoring the teaser here as well would
+	// mean two LLM passes per job, the first one on text the job doesn't
+	// actually have.
+	needsDetail := jobsources.NeedsDetail(adapter)
+
 	for _, j := range jobs {
-		isNew, err := h.persistIfNew(ctx, j, subscriptionID)
+		isNew, err := h.persistIfNew(ctx, j, subscriptionID, needsDetail)
 		if err != nil {
 			h.finishError(ctx, run.ID, source, payload.SourceKey, err)
 			return err
@@ -171,7 +178,12 @@ func (h *Handler) finishError(ctx context.Context, runID pgtype.UUID, source sql
 // persistIfNew dedupes by sha256(lower(company)|lower(title)|canonicalUrl)
 // where canonicalUrl strips the query string and trailing slashes — must
 // match ingestion.processor.ts:74 exactly.
-func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob, subscriptionID pgtype.UUID) (bool, error) {
+//
+// needsDetail comes from the source's adapter: when true the row is a
+// list-only stub, so match and ghost scoring are left to enrichment (which
+// runs them once the real description has landed) instead of being enqueued
+// twice against two different versions of the same job.
+func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob, subscriptionID pgtype.UUID, needsDetail bool) (bool, error) {
 	dedupeKey := DedupeKey(j.Company, j.Title, j.URL)
 
 	_, err := h.q.GetJobByDedupeKey(ctx, dedupeKey)
@@ -214,14 +226,16 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob, subscri
 	}
 
 	jobID := dbutil.UUIDString(created.ID)
-	h.enqueueMatch(ctx, jobID, j)
-	h.enqueueGhostScore(ctx, jobID)
 
-	if j.SourceKey == "djinni" || j.SourceKey == "dou" || j.SourceKey == "indeed" || j.SourceKey == "remoteok" || j.SourceKey == "glassdoor" || j.SourceKey == "jobleads" {
+	if needsDetail {
 		if err := h.enqueueEnrich(ctx, jobID, j); err != nil {
 			return true, err
 		}
+		return true, nil
 	}
+
+	h.enqueueMatch(ctx, jobID, j)
+	h.enqueueGhostScore(ctx, jobID)
 	return true, nil
 }
 

@@ -41,6 +41,12 @@ type WorkUaAdapter struct {
 func (WorkUaAdapter) Key() string          { return "workua" }
 func (WorkUaAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
+// NeedsDetail reports true: the list page carries a snippet only, and
+// FetchDetail already backs the enrichment sweep for this source — declaring
+// the capability just lets ingestion queue that pass up front (paced by the
+// enrich queue's WorkUaMinDelay) instead of waiting for a manual backfill.
+func (WorkUaAdapter) NeedsDetail() bool { return true }
+
 func (d WorkUaAdapter) Search(ctx context.Context, query dto.SearchQuery, config map[string]any) ([]dto.NormalizedJob, error) {
 	if query.SubscriptionURL != "" {
 		jobs, err := d.scrapeWorkUaSubscription(ctx, query.SubscriptionURL)

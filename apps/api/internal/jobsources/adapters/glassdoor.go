@@ -48,6 +48,11 @@ type GlassdoorAdapter struct {
 func (GlassdoorAdapter) Key() string          { return "glassdoor" }
 func (GlassdoorAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
+// NeedsDetail reports true: the results page carries a snippet only;
+// FetchDetail fetches the posting body, so ingestion defers match/ghost
+// scoring until enrichment has run.
+func (GlassdoorAdapter) NeedsDetail() bool { return true }
+
 func (d GlassdoorAdapter) HealthCheck(ctx context.Context, config map[string]any) (bool, error) {
 	html, err := d.Scraping.FetchHTML(ctx, "https://www.glassdoor.com/", nil)
 	if err != nil {

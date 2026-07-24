@@ -40,10 +40,23 @@ func (f *enrichFakeRepo) InsertActivityRun(ctx context.Context, arg sqlcgen.Inse
 	return sqlcgen.ActivityRun{}, nil
 }
 
-type enrichFakeEnqueuer struct{ enrichment.Enqueuer }
+type enrichFakeEnqueuer struct {
+	enrichment.Enqueuer
+	enqueued []string
+}
 
 func (f *enrichFakeEnqueuer) EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error) {
+	f.enqueued = append(f.enqueued, task.Type())
 	return &asynq.TaskInfo{}, nil
+}
+
+func (f *enrichFakeEnqueuer) has(taskType string) bool {
+	for _, t := range f.enqueued {
+		if t == taskType {
+			return true
+		}
+	}
+	return false
 }
 
 func newIndeedEnrichTestUUID() pgtype.UUID {
@@ -219,5 +232,62 @@ func TestEnrichJobLeads_UnavailableDoesNotUpdate(t *testing.T) {
 	}
 	if repo.updateCalled {
 		t.Error("expected UpdateJobDetail NOT to be called when the listing is unavailable — existing summary data must be preserved")
+	}
+}
+
+// Ingestion no longer enqueues match/ghost for a NeedsDetail source — it
+// hands both to this handler. So enrichment owes every job it touches a match
+// and a ghost task, including on the give-up paths where the detail fetch
+// failed: otherwise the job carries no score at all and never surfaces in the
+// score-sorted feed.
+func TestEnrich_EnqueuesDownstreamEvenWhenFetchDetailFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("<html><body>gone</body></html>"))
+	}))
+	defer srv.Close()
+
+	repo := &enrichFakeRepo{job: sqlcgen.Job{
+		ID:        newIndeedEnrichTestUUID(),
+		SourceKey: "indeed",
+		Url:       srv.URL + "/viewjob?jk=gone",
+	}}
+	enq := &enrichFakeEnqueuer{}
+	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
+		adapters.IndeedAdapter{Scraping: scraping.New()}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, enq, 0, nil)
+
+	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
+	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+		t.Fatalf("ProcessTask returned error: %v", err)
+	}
+	if !enq.has(queue.TypeMatch) {
+		t.Error("expected a match task even though the detail fetch failed")
+	}
+	if !enq.has(queue.TypeGhostScore) {
+		t.Error("expected a ghost_score task even though the detail fetch failed")
+	}
+}
+
+// A source with no enrich branch must not strand the job either: ingestion
+// skipped its match/ghost on the promise that this handler would run them.
+func TestEnrich_UnknownSourceStillEnqueuesDownstream(t *testing.T) {
+	repo := &enrichFakeRepo{job: sqlcgen.Job{
+		ID:        newIndeedEnrichTestUUID(),
+		SourceKey: "some-future-source",
+		Url:       "https://example.test/job/1",
+	}}
+	enq := &enrichFakeEnqueuer{}
+	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
+		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, enq, 0, nil)
+
+	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
+	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+		t.Fatalf("ProcessTask returned error: %v", err)
+	}
+	if repo.updateCalled {
+		t.Error("expected no detail update for a source with no enrich branch")
+	}
+	if !enq.has(queue.TypeMatch) || !enq.has(queue.TypeGhostScore) {
+		t.Errorf("expected match + ghost_score to still be enqueued, got %v", enq.enqueued)
 	}
 }

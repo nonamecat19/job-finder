@@ -45,6 +45,11 @@ type IndeedAdapter struct {
 func (IndeedAdapter) Key() string          { return "indeed" }
 func (IndeedAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
+// NeedsDetail reports true: the results page carries a snippet only;
+// FetchDetail fetches the posting body, so ingestion defers match/ghost
+// scoring until enrichment has run.
+func (IndeedAdapter) NeedsDetail() bool { return true }
+
 func (d IndeedAdapter) HealthCheck(ctx context.Context, config map[string]any) (bool, error) {
 	html, err := d.Scraping.FetchHTML(ctx, "https://www.indeed.com/", nil)
 	if err != nil {

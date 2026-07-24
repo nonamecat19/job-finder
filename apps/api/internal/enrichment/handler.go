@@ -101,28 +101,38 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	switch job.SourceKey {
 	case "djinni":
 		err = h.enrichDjinni(ctx, payload, uid, job)
-		return err
 	case "dou":
 		err = h.enrichDOU(ctx, payload, uid, job)
-		return err
 	case "workua":
 		err = h.enrichWorkUa(ctx, payload, uid, job)
-		return err
 	case "indeed":
 		err = h.enrichIndeed(ctx, payload, uid, job)
-		return err
 	case "remoteok":
 		err = h.enrichRemoteOK(ctx, payload, uid, job)
-		return err
 	case "glassdoor":
 		err = h.enrichGlassdoor(ctx, payload, uid, job)
-		return err
 	case "jobleads":
 		err = h.enrichJobLeads(ctx, payload, uid, job)
-		return err
 	default:
-		return nil
+		// No enrich branch for this source. It still has to reach match and
+		// ghost scoring below: for a NeedsDetail adapter, ingestion skipped
+		// both on the assumption that this handler would run them, so
+		// returning early here would strand the job unscored forever.
+		slog.Warn("enrichment: no detail fetcher for source, scoring the listing as-is",
+			"job", payload.JobID, "source", job.SourceKey)
 	}
+	if err != nil {
+		return err
+	}
+
+	// Reached on every non-error path, including the ones where the detail
+	// fetch was skipped or gave up (fetch error, listing delisted). Scoring a
+	// stub description is worse than scoring a full one but far better than a
+	// job that never gets a score at all and so never surfaces in the
+	// score-sorted feed.
+	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueGhostScore(ctx, payload.JobID)
+	return nil
 }
 
 func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
@@ -158,7 +168,6 @@ func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload,
 		return fmt.Errorf("enrichment: update djinni job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: djinni complete", "job", payload.JobID)
 	return nil
 }
@@ -200,7 +209,6 @@ func (h *Handler) enrichDOU(ctx context.Context, payload queue.EnrichPayload, ui
 		return fmt.Errorf("enrichment: update dou job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: dou complete", "job", payload.JobID)
 	return nil
 }
@@ -234,7 +242,6 @@ func (h *Handler) enrichWorkUa(ctx context.Context, payload queue.EnrichPayload,
 		return fmt.Errorf("enrichment: update workua job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: workua complete", "job", payload.JobID)
 	return nil
 }
@@ -266,7 +273,6 @@ func (h *Handler) enrichIndeed(ctx context.Context, payload queue.EnrichPayload,
 		return fmt.Errorf("enrichment: update indeed job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: indeed complete", "job", payload.JobID)
 	return nil
 }
@@ -302,7 +308,6 @@ func (h *Handler) enrichRemoteOK(ctx context.Context, payload queue.EnrichPayloa
 		return fmt.Errorf("enrichment: update remoteok job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: remoteok complete", "job", payload.JobID)
 	return nil
 }
@@ -338,7 +343,6 @@ func (h *Handler) enrichJobLeads(ctx context.Context, payload queue.EnrichPayloa
 		return fmt.Errorf("enrichment: update jobleads job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: jobleads complete", "job", payload.JobID)
 	return nil
 }
@@ -374,7 +378,6 @@ func (h *Handler) enrichGlassdoor(ctx context.Context, payload queue.EnrichPaylo
 		return fmt.Errorf("enrichment: update glassdoor job detail: %w", err)
 	}
 
-	h.enqueueMatch(ctx, payload.JobID, job)
 	slog.Info("enrichment: glassdoor complete", "job", payload.JobID)
 	return nil
 }
@@ -397,6 +400,33 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, job sqlcgen.Jo
 	}
 	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, matchPayload), opts...); err != nil {
 		slog.Warn("enrichment: enqueue match failed", "job", jobID, "error", err)
+	}
+}
+
+// enqueueGhostScore queues the ghost-job detector (005) once the real
+// description has landed. Ingestion no longer does this for NeedsDetail
+// sources: the detector's cross-board signal is unmeasurable against a teaser
+// description (ghostjob.measureCrossBoard), so scoring at ingest time threw
+// away the signal it exists to read. As in ingestion, a failure here is
+// logged and swallowed — ghost scoring never blocks the job's own record.
+func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string) {
+	var actID *string
+	rec := activity.New(ctx, h.q, "ghost_score", "ghost score", &jobID, nil, "")
+	if rec != nil {
+		idStr := dbutil.UUIDString(rec.ID())
+		actID = &idStr
+	}
+
+	payload, err := json.Marshal(queue.GhostScorePayload{JobID: jobID, ActivityID: actID})
+	if err != nil {
+		return
+	}
+	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGhostScore)}
+	if actID != nil {
+		opts = append(opts, asynq.TaskID(*actID))
+	}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGhostScore, payload), opts...); err != nil {
+		slog.Warn("enrichment: enqueue ghost score failed", "job", jobID, "error", err)
 	}
 }
 
