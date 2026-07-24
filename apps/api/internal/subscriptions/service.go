@@ -110,6 +110,8 @@ func validateSubscriptionURL(sourceKey, rawURL string) error {
 		return validateIndeedSubscriptionURL(rawURL)
 	case "remoteok":
 		return validateRemoteOKSubscriptionURL(rawURL)
+	case "glassdoor":
+		return validateGlassdoorSubscriptionURL(rawURL)
 	case "jobleads":
 		return validateJobLeadsSubscriptionURL(rawURL)
 	default:
@@ -141,6 +143,21 @@ func validateRemoteOKSubscriptionURL(rawURL string) error {
 	if host != "remoteok.com" && !strings.HasSuffix(host, ".remoteok.com") &&
 		host != "remoteok.io" && !strings.HasSuffix(host, ".remoteok.io") {
 		return fmt.Errorf("remoteok subscription url %q must be a remoteok.com or remoteok.io url", rawURL)
+	}
+	return nil
+}
+
+func validateGlassdoorSubscriptionURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("glassdoor subscription url %q is not a valid URL", rawURL)
+	}
+	host := strings.ToLower(parsed.Host)
+	if host != "glassdoor.com" && !strings.HasSuffix(host, ".glassdoor.com") {
+		return fmt.Errorf("glassdoor subscription url %q must be a glassdoor.com search url", rawURL)
+	}
+	if strings.Contains(parsed.Path, "/job-listing/") {
+		return fmt.Errorf("glassdoor subscription url %q looks like a single job posting, not a search results page", rawURL)
 	}
 	return nil
 }

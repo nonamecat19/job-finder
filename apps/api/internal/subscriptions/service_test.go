@@ -111,6 +111,31 @@ func TestCreateRemoteOKSubscription_RejectsNonRemoteOKURL(t *testing.T) {
 	}
 }
 
+func TestCreateGlassdoorSubscription_ValidSearchURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	out, err := svc.Create(context.Background(), "glassdoor", "https://www.glassdoor.com/Job/remote-golang-jobs-SRCH_KO0,14.htm", nil, true)
+	if err != nil {
+		t.Fatalf("expected valid glassdoor search url to be accepted, got error: %v", err)
+	}
+	if out.SourceKey != "glassdoor" {
+		t.Errorf("sourceKey: got %q", out.SourceKey)
+	}
+}
+
+func TestCreateGlassdoorSubscription_RejectsNonGlassdoorURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "glassdoor", "https://www.indeed.com/jobs?q=golang", nil, true); err == nil {
+		t.Fatal("expected non-glassdoor url to be rejected")
+	}
+}
+
+func TestCreateGlassdoorSubscription_RejectsSingleJobPostingURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "glassdoor", "https://www.glassdoor.com/job-listing/senior-golang-developer-novatech-JV_KO0,24_KE25,41.htm?jl=123", nil, true); err == nil {
+		t.Fatal("expected single-job-posting glassdoor url to be rejected")
+	}
+}
+
 func TestCreateJobLeadsSubscription_ValidSearchURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
 	out, err := svc.Create(context.Background(), "jobleads", "https://www.jobleads.com/job-search?q=golang", nil, true)
