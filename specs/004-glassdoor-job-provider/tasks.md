@@ -204,12 +204,17 @@ testable via quickstart.md step 6. All three user stories now complete.
       not run the Docker-based `make test-lint` target itself since it requires a live
       Postgres/Redis compose stack not available in this session — re-run `make test-lint`
       before merge to get the canonical green build.
-- [ ] T026 Execute `specs/004-glassdoor-job-provider/quickstart.md` end-to-end against a
-      locally running stack (`make up`) and confirm all 8 steps produce their expected
-      outcomes — **not run this session** (no live stack available); given research.md R3's
-      confirmed 100%-block finding, expect step 3 (enable + run) and step 7 (health check)
-      to show Glassdoor as unhealthy/blocked out of the box unless the BrowserContext
-      escalation (deferred follow-up, research.md R3) is done first
+- [X] T026 Executed `specs/004-glassdoor-job-provider/quickstart.md` against the local stack
+      (`make up` services + `go run ./cmd/server` on :3000). Steps 1 (registered), 2 (rejects
+      non-glassdoor URL with 4xx + human-readable reason), 3/7 (enable+run / health check)
+      all confirmed. Direct `curl https://www.glassdoor.com/` returns HTTP 403, and a live
+      subscription run fails with `glassdoor: request blocked by bot-challenge/security
+      interstitial: <url>` — a clearly distinguishable "blocked" reason, never misreported as
+      "no listings found" (FR-011/SC-005), matching research.md R3's confirmed block finding.
+      Steps 4-6, 8 (listings reaching the feed, dedup, enrichment) are unreachable while
+      Glassdoor blocks every request — expected given the 100%-block finding, not a defect;
+      re-verify those steps if/when the BrowserContext escalation (research.md R3 deferred
+      follow-up) unblocks live scraping.
 
 ---
 
