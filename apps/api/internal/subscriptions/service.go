@@ -10,6 +10,8 @@ package subscriptions
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
@@ -42,8 +44,8 @@ func (s *Service) ListBySource(ctx context.Context, sourceKey string) ([]dto.Sub
 	return mapSubscriptions(rows), nil
 }
 
-func (s *Service) Create(ctx context.Context, sourceKey, url string, name *string, enabled bool) (*dto.SubscriptionDto, error) {
-	if sourceKey == "" || url == "" {
+func (s *Service) Create(ctx context.Context, sourceKey, rawURL string, name *string, enabled bool) (*dto.SubscriptionDto, error) {
+	if sourceKey == "" || rawURL == "" {
 		return nil, fmt.Errorf("sourceKey and url are required")
 	}
 	// Validate the source against the code-defined registry (not the db) and
@@ -51,10 +53,13 @@ func (s *Service) Create(ctx context.Context, sourceKey, url string, name *strin
 	if _, err := s.sources.GetByKey(ctx, sourceKey); err != nil {
 		return nil, fmt.Errorf("source '%s' not found", sourceKey)
 	}
+	if err := validateSubscriptionURL(sourceKey, rawURL); err != nil {
+		return nil, err
+	}
 	row, err := s.q.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{
 		SourceKey: sourceKey,
 		Name:      name,
-		Url:       url,
+		Url:       rawURL,
 		Enabled:   enabled,
 	})
 	if err != nil {
@@ -94,6 +99,27 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	return s.q.DeleteSubscription(ctx, uid)
+}
+
+// validateSubscriptionURL rejects a subscription URL that can't belong to
+// its declared source, at save time rather than at run time (FR-016). Only
+// Indeed currently has a source-specific rule; other sources are unchecked.
+func validateSubscriptionURL(sourceKey, rawURL string) error {
+	if sourceKey != "indeed" {
+		return nil
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("indeed subscription url %q is not a valid URL", rawURL)
+	}
+	host := strings.ToLower(parsed.Host)
+	if host != "indeed.com" && !strings.HasSuffix(host, ".indeed.com") {
+		return fmt.Errorf("indeed subscription url %q must be an indeed.com search url", rawURL)
+	}
+	if strings.Contains(parsed.Path, "/viewjob") || strings.Contains(parsed.Path, "/rc/clk") {
+		return fmt.Errorf("indeed subscription url %q looks like a single job posting, not a search results page", rawURL)
+	}
+	return nil
 }
 
 func mapSubscriptions(rows []sqlcgen.Subscription) []dto.SubscriptionDto {
