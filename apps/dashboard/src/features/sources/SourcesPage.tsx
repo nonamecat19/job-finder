@@ -11,7 +11,9 @@ import {
   Field,
   HealthDot,
   Input,
+  LoadingRegion,
   Spinner,
+  SkeletonBlock,
   Surface,
 } from '../../components/ui';
 import {
@@ -45,12 +47,22 @@ export default function SourcesPage() {
   );
 }
 
+function ListRowsSkeleton({ label }: { label: string }) {
+  return (
+    <LoadingRegion label={label} className="space-y-2">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <SkeletonBlock key={i} className="h-12 w-full" />
+      ))}
+    </LoadingRegion>
+  );
+}
+
 function SourcesPanel() {
   const { data: sources, isLoading, error } = useSources();
   const update = useUpdateSource();
   const test = useTestSource();
 
-  if (isLoading) return <Spinner label="loading sources…" />;
+  if (isLoading) return <ListRowsSkeleton label="loading sources…" />;
   if (error) return <ErrorState error={error} />;
   if (!sources?.length) return <EmptyState>No sources configured.</EmptyState>;
 
@@ -121,7 +133,7 @@ function SearchesPanel() {
 
       {showForm ? <NewSearchForm onSubmit={(q) => { create.mutate(q); setShowForm(false); }} /> : null}
 
-      {isLoading ? <Spinner label="loading searches…" /> : null}
+      {isLoading ? <ListRowsSkeleton label="loading searches…" /> : null}
       {error ? <ErrorState error={error} /> : null}
       {searches && searches.length === 0 && !showForm ? (
         <EmptyState>No saved searches. Create one to start finding jobs.</EmptyState>
@@ -235,7 +247,7 @@ function SubscriptionsPanel() {
 
       {showForm ? <NewSubscriptionForm onSubmit={(body) => { create.mutate(body); setShowForm(false); }} /> : null}
 
-      {isLoading ? <Spinner label="loading subscriptions…" /> : null}
+      {isLoading ? <ListRowsSkeleton label="loading subscriptions…" /> : null}
       {error ? <ErrorState error={error} /> : null}
       {subs && subs.length === 0 && !showForm ? (
         <EmptyState>No subscriptions. Add a DOU or Djinni subscription URL to scrape job listings.</EmptyState>
@@ -334,7 +346,7 @@ function RecentRunsPanel() {
   return (
     <Surface>
       <SectionTitle>Recent runs</SectionTitle>
-      {isLoading ? <Spinner label="loading…" /> : null}
+      {isLoading ? <ListRowsSkeleton label="loading recent runs…" /> : null}
       {runs && runs.length === 0 ? <EmptyState>No runs yet.</EmptyState> : null}
       <ul className="space-y-1">
         {runs?.map((r) => (
