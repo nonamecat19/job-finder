@@ -25,6 +25,7 @@ const (
 	uuidJob18   = "b0000000-0000-0000-0000-000000000018"
 	uuidJob19   = "b0000000-0000-0000-0000-000000000019"
 	uuidJob20   = "b0000000-0000-0000-0000-000000000020"
+	uuidJob21   = "b0000000-0000-0000-0000-000000000021"
 	uuidSearch1 = "c0000000-0000-0000-0000-000000000001"
 	uuidSearch2 = "c0000000-0000-0000-0000-000000000002"
 	uuidSearch3 = "c0000000-0000-0000-0000-000000000003"
@@ -229,6 +230,13 @@ var jobs = []jobSeed{
 		SalaryRaw: "€60k–€80k/yr", URL: "https://jooble.org/desc/data-engineer-insightlabs",
 		Desc:   "InsightLabs is hiring a data engineer to build and maintain our analytics platform. You will design ETL pipelines with Airflow, manage data warehouses in Snowflake, and build dbt models. Python, SQL, and cloud data services (AWS/GCP) required.",
 		Status: "found", PostedAt: now().AddDate(0, 0, -11),
+	},
+	{
+		UUID: uuidJob21, SourceKey: "indeed", Title: "Senior Golang Developer",
+		Company: "NovaTech LLC", Location: "Remote", Remote: true,
+		SalaryRaw: "$120,000 - $150,000 a year", URL: "https://www.indeed.com/rc/clk?jk=abc123golang",
+		Desc:   "NovaTech LLC is looking for a Senior Golang Developer to join our platform team, designing and building Go microservices handling millions of requests per day. 5+ years of professional Go experience required, fully remote in the United States.",
+		Status: "found", PostedAt: now().AddDate(0, 0, -3),
 	},
 }
 

@@ -33,6 +33,12 @@ var subscriptions = []subscriptionSeed{
 		url:       "https://arbeitnow.com/api/job-board-api",
 		enabled:   true,
 	},
+	{
+		sourceKey: "indeed",
+		name:      "Indeed Go Remote",
+		url:       "https://www.indeed.com/jobs?q=golang&l=remote",
+		enabled:   true,
+	},
 }
 
 func seedSubscriptions(ctx context.Context, q *sqlcgen.Queries) error {
