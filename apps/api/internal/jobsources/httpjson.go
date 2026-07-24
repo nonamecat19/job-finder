@@ -9,9 +9,18 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/job-finder/api/internal/ratelimit"
 )
 
-var defaultClient = &http.Client{Timeout: 30 * time.Second}
+// defaultClient paces its requests per host like the scraping service's
+// client does, so the JSON/API adapters that don't carry their own client
+// (and the enrichment fetches that reuse them) stay within a polite rate
+// rather than being bounded only by how fast the remote answers.
+var defaultClient = &http.Client{
+	Timeout:   30 * time.Second,
+	Transport: ratelimit.NewTransport(nil),
+}
 
 // GetJSON performs a GET with query params and decodes the JSON response
 // body into out. Equivalent to `axios.get(url, { params, timeout })`.

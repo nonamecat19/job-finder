@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+
+	"github.com/job-finder/api/internal/ratelimit"
 )
 
 const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -28,8 +30,14 @@ type Service struct {
 	browserCncl context.CancelFunc
 }
 
+// New builds the service with outbound requests paced per destination host.
+// The limiter lives in the transport rather than in FetchHTML so it also
+// covers adapters that take HTTPClient() and issue their own requests.
 func New() *Service {
-	return &Service{http: &http.Client{Timeout: 20 * time.Second}}
+	return &Service{http: &http.Client{
+		Timeout:   20 * time.Second,
+		Transport: ratelimit.NewTransport(nil),
+	}}
 }
 
 // HTTPClient returns the underlying *http.Client so adapters can make
