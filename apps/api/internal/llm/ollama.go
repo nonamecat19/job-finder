@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +22,9 @@ type OllamaProvider struct {
 	embedURL   string
 	modelName  string
 	embedModel string
+	// breaker guards Ollama Cloud's per-plan quota. A local server never
+	// returns 429, so it never trips there.
+	breaker rateLimitBreaker
 }
 
 // NewOllama builds a provider. embedURL empty falls back to baseURL; apiKey
@@ -85,6 +87,9 @@ type ollamaChatResponse struct {
 }
 
 func (o *OllamaProvider) chat(ctx context.Context, req ollamaChatRequest) (string, error) {
+	if o.breaker.tripped() {
+		return "", fmt.Errorf("%w: ollama: quota still cooling down", ErrRateLimited)
+	}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return "", err
@@ -96,19 +101,26 @@ func (o *OllamaProvider) chat(ctx context.Context, req ollamaChatRequest) (strin
 	o.setHeaders(httpReq)
 	res, err := o.http.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("ollama: chat request failed: %w", err)
+		// Server down / unreachable: retryable, not a permanent failure.
+		return "", fmt.Errorf("%w: ollama: chat request failed: %s", ErrProviderUnavailable, err)
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: ollama: reading chat response: %s", ErrProviderUnavailable, err)
+	}
+	if res.StatusCode == http.StatusTooManyRequests {
+		o.breaker.tripFor(retryAfter(res.Header))
 	}
 	if res.StatusCode >= 400 {
-		return "", fmt.Errorf("ollama: chat returned %d: %s", res.StatusCode, string(data))
+		return "", classifyProviderError("ollama", res.StatusCode, data)
 	}
 	var parsed ollamaChatResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return "", fmt.Errorf("ollama: invalid chat response: %w", err)
+		return "", fmt.Errorf("%w: ollama: %s", ErrInvalidResponse, err)
+	}
+	if parsed.Message.Content == "" {
+		return "", fmt.Errorf("%w: ollama: empty chat response", ErrInvalidResponse)
 	}
 	return parsed.Message.Content, nil
 }
@@ -165,22 +177,25 @@ func (o *OllamaProvider) Embed(ctx context.Context, text string) ([]float32, err
 	o.setHeaders(req)
 	res, err := o.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("ollama: embeddings request failed: %w", err)
+		return nil, fmt.Errorf("%w: ollama: embeddings request failed: %s", ErrProviderUnavailable, err)
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: ollama: reading embeddings response: %s", ErrProviderUnavailable, err)
+	}
+	if res.StatusCode == http.StatusTooManyRequests {
+		o.breaker.tripFor(retryAfter(res.Header))
 	}
 	if res.StatusCode >= 400 {
-		return nil, fmt.Errorf("ollama: embeddings returned %d: %s", res.StatusCode, string(data))
+		return nil, classifyProviderError("ollama", res.StatusCode, data)
 	}
 	var parsed ollamaEmbedResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return nil, fmt.Errorf("ollama: invalid embeddings response: %w", err)
+		return nil, fmt.Errorf("%w: ollama: %s", ErrInvalidResponse, err)
 	}
 	if len(parsed.Embedding) == 0 {
-		return nil, errors.New("ollama returned empty embedding")
+		return nil, fmt.Errorf("%w: ollama returned empty embedding", ErrInvalidResponse)
 	}
 	return parsed.Embedding, nil
 }

@@ -8,37 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync/atomic"
 	"time"
 )
-
-// ErrRateLimited is returned (wrapped) whenever Cerebras responds 429, or
-// while the process-wide breaker below is tripped from a prior 429. Callers
-// (the asynq task handlers) treat it as "skip this task" rather than "retry
-// it" — see rateLimitCooldown.
-var ErrRateLimited = errors.New("llm: cerebras rate limited")
-
-// rateLimitCooldown is how long the breaker stays tripped after a 429,
-// matching Cerebras free-tier's per-minute request quota.
-const rateLimitCooldown = 60 * time.Second
-
-// rateLimitBreaker is a tiny process-wide circuit breaker: the first 429 from
-// Cerebras trips it, and every other in-flight/queued task sharing this
-// *CerebrasProvider (there is exactly one per process, shared by every task
-// Router) immediately fails fast with ErrRateLimited instead of also burning
-// a request against the same exhausted quota.
-type rateLimitBreaker struct {
-	until atomic.Int64 // unix nano; 0 or in the past = not tripped
-}
-
-func (b *rateLimitBreaker) trip() {
-	b.until.Store(time.Now().Add(rateLimitCooldown).UnixNano())
-}
-
-func (b *rateLimitBreaker) tripped() bool {
-	u := b.until.Load()
-	return u != 0 && time.Now().UnixNano() < u
-}
 
 // CerebrasProvider talks to Cerebras's OpenAI-compatible /chat/completions
 // API. Cerebras has no embeddings endpoint, so Embed delegates to an Ollama
@@ -97,30 +68,6 @@ type cerebrasResponse struct {
 	} `json:"choices"`
 }
 
-// cerebrasErrMessage extracts a human-readable message from a Cerebras error
-// body when possible, falling back to the raw body. Never includes the
-// request (so the API key, sent only in the Authorization header, cannot
-// leak into an error string derived from the response).
-func cerebrasErrMessage(status int, body []byte) string {
-	var parsed struct {
-		Error struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &parsed); err == nil && parsed.Error.Message != "" {
-		switch {
-		case status == http.StatusTooManyRequests:
-			return fmt.Sprintf("cerebras: rate limit or quota exceeded: %s", parsed.Error.Message)
-		case status == http.StatusUnauthorized || status == http.StatusForbidden:
-			return fmt.Sprintf("cerebras: credential rejected: %s", parsed.Error.Message)
-		default:
-			return fmt.Sprintf("cerebras: returned %d: %s", status, parsed.Error.Message)
-		}
-	}
-	return fmt.Sprintf("cerebras: returned %d: %s", status, string(body))
-}
-
 func (c *CerebrasProvider) chat(ctx context.Context, req cerebrasRequest) (string, error) {
 	if c.breaker.tripped() {
 		return "", fmt.Errorf("%w: quota still cooling down", ErrRateLimited)
@@ -138,26 +85,29 @@ func (c *CerebrasProvider) chat(ctx context.Context, req cerebrasRequest) (strin
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	res, err := c.http.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("cerebras: request failed: %w", err)
+		// Transport failure (DNS, refused, timeout): the provider may well
+		// be back on the next attempt, so this is retryable.
+		return "", fmt.Errorf("%w: cerebras: request failed: %s", ErrProviderUnavailable, err)
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: cerebras: reading response: %s", ErrProviderUnavailable, err)
 	}
 	if res.StatusCode == http.StatusTooManyRequests {
-		c.breaker.trip()
-		return "", fmt.Errorf("%w: %s", ErrRateLimited, cerebrasErrMessage(res.StatusCode, data))
+		// Honour the provider's own reset hint when it sends one, so the
+		// breaker reopens as soon as the quota actually refills.
+		c.breaker.tripFor(retryAfter(res.Header))
 	}
 	if res.StatusCode >= 400 {
-		return "", errors.New(cerebrasErrMessage(res.StatusCode, data))
+		return "", classifyProviderError("cerebras", res.StatusCode, data)
 	}
 	var parsed cerebrasResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return "", fmt.Errorf("cerebras: invalid response: %w", err)
+		return "", fmt.Errorf("%w: cerebras: %s", ErrInvalidResponse, err)
 	}
 	if len(parsed.Choices) == 0 {
-		return "", errors.New("cerebras: no choices returned")
+		return "", fmt.Errorf("%w: cerebras: no choices returned", ErrInvalidResponse)
 	}
 	return parsed.Choices[0].Message.Content, nil
 }

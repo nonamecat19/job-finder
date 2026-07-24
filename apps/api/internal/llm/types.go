@@ -116,6 +116,10 @@ func CompleteStructured[T any](ctx context.Context, p Provider, prompt string, o
 
 		text, err := p.CompleteJSON(ctx, full, opts)
 		if err != nil {
+			// Provider-level failures (rate limit, bad credential, model
+			// gone, provider down) are already classified and are not
+			// fixable by re-prompting, so they propagate immediately —
+			// only malformed *content* is worth another attempt.
 			return zero, err
 		}
 
@@ -132,5 +136,5 @@ func CompleteStructured[T any](ctx context.Context, p Provider, prompt string, o
 		}
 		return result, nil
 	}
-	return zero, fmt.Errorf("LLM structured output failed after %d attempts: %s", structuredRetries+1, lastErr)
+	return zero, fmt.Errorf("%w: structured output failed after %d attempts: %s", ErrInvalidResponse, structuredRetries+1, lastErr)
 }
