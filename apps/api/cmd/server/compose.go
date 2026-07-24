@@ -74,14 +74,15 @@ type App struct {
 }
 
 type sourcesHandles struct {
-	Registry *jobsources.Registry
-	Sources  *jobsources.Service
-	Djinni   adapters.DjinniAdapter
-	Dou      adapters.DouAdapter
-	Workua   adapters.WorkUaAdapter
-	Indeed   adapters.IndeedAdapter
-	RemoteOK adapters.RemoteOKAdapter
-	JobLeads adapters.JobLeadsAdapter
+	Registry  *jobsources.Registry
+	Sources   *jobsources.Service
+	Djinni    adapters.DjinniAdapter
+	Dou       adapters.DouAdapter
+	Workua    adapters.WorkUaAdapter
+	Indeed    adapters.IndeedAdapter
+	RemoteOK  adapters.RemoteOKAdapter
+	Glassdoor adapters.GlassdoorAdapter
+	JobLeads  adapters.JobLeadsAdapter
 }
 
 // composeJobSources builds the adapter registry and jobsources.Service, then
@@ -93,6 +94,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	workuaAdapter := adapters.WorkUaAdapter{Scraping: p.Scraping}
 	indeedAdapter := adapters.IndeedAdapter{Scraping: p.Scraping}
 	remoteokAdapter := adapters.RemoteOKAdapter{Scraping: p.Scraping}
+	glassdoorAdapter := adapters.GlassdoorAdapter{Scraping: p.Scraping}
 	jobleadsAdapter := adapters.JobLeadsAdapter{Scraping: p.Scraping, Session: p.JobLeadsSession}
 	registry := jobsources.NewRegistry(
 		adapters.AdzunaAdapter{},
@@ -103,6 +105,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		workuaAdapter,
 		indeedAdapter,
 		remoteokAdapter,
+		glassdoorAdapter,
 		jobleadsAdapter,
 		adapters.RobotaAdapter{},
 		adapters.JobSpyAdapter{},
@@ -112,14 +115,15 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	p.DjinniSession.Sources = sourcesSvc
 	p.JobLeadsSession.Sources = sourcesSvc
 	return &sourcesHandles{
-		Registry: registry,
-		Sources:  sourcesSvc,
-		Djinni:   djinniAdapter,
-		Dou:      douAdapter,
-		Workua:   workuaAdapter,
-		Indeed:   indeedAdapter,
-		RemoteOK: remoteokAdapter,
-		JobLeads: jobleadsAdapter,
+		Registry:  registry,
+		Sources:   sourcesSvc,
+		Djinni:    djinniAdapter,
+		Dou:       douAdapter,
+		Workua:    workuaAdapter,
+		Indeed:    indeedAdapter,
+		RemoteOK:  remoteokAdapter,
+		Glassdoor: glassdoorAdapter,
+		JobLeads:  jobleadsAdapter,
 	}
 }
 
@@ -315,7 +319,7 @@ func composeEnrichment(p *Platform, sources *sourcesHandles) *enrichment.Handler
 	enrichDelays := map[string]time.Duration{
 		"workua": time.Duration(cfg.WorkUaDetailDelayMs) * time.Millisecond,
 	}
-	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, sources.Indeed, sources.RemoteOK, sources.JobLeads, p.AsynqClient, enrichDelay, enrichDelays)
+	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, sources.Indeed, sources.RemoteOK, sources.Glassdoor, sources.JobLeads, p.AsynqClient, enrichDelay, enrichDelays)
 }
 
 type salaryHandles struct {
