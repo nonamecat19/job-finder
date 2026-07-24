@@ -49,9 +49,19 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	doc, err := h.svc.Generate(ctx, payload.JobID, payload.Type, payload.ProfileID, rec)
 	if err != nil {
 		if errors.Is(err, llm.ErrRateLimited) {
-			slog.Warn("generation cancelled: cerebras rate limited", "jobId", payload.JobID, "type", payload.Type)
+			slog.Warn("generation cancelled: llm rate limited", "jobId", payload.JobID, "type", payload.Type, "error", err)
 			if rec != nil {
 				rec.Cancel(ctx, err.Error())
+			}
+			return nil
+		}
+		if llm.Terminal(err) {
+			// Bad credential / missing model / no credits: an asynq retry
+			// would fail identically, so record the reason for the operator
+			// and stop instead of handing the task back to the queue.
+			slog.Error("generation failed: llm misconfigured", "jobId", payload.JobID, "type", payload.Type, "error", err)
+			if rec != nil {
+				rec.Fail(ctx, err)
 			}
 			return nil
 		}

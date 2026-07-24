@@ -70,9 +70,18 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 			// The breaker is already tripped process-wide, so every other
 			// queued match task fails this same check and cancels too
 			// instead of each burning a request against the exhausted quota.
-			slog.Warn("matching cancelled: cerebras rate limited", "jobId", payload.JobID)
+			slog.Warn("matching cancelled: llm rate limited", "jobId", payload.JobID, "error", err)
 			if rec != nil {
 				rec.Cancel(ctx, err.Error())
+			}
+			return nil
+		}
+		if llm.Terminal(err) {
+			// Bad credential / missing model / no credits: an asynq retry
+			// would fail identically, so record the reason and stop.
+			slog.Error("matching failed: llm misconfigured", "jobId", payload.JobID, "error", err)
+			if rec != nil {
+				rec.Fail(ctx, err)
 			}
 			return nil
 		}

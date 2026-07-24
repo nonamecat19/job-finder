@@ -37,9 +37,18 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 
 	if err := h.svc.Infer(ctx, payload.JobID); err != nil {
 		if errors.Is(err, llm.ErrRateLimited) {
-			slog.Warn("salary: cancelled: cerebras rate limited", "job", payload.JobID)
+			slog.Warn("salary: cancelled: llm rate limited", "job", payload.JobID, "error", err)
 			if rec != nil {
 				rec.Cancel(ctx, err.Error())
+			}
+			return nil
+		}
+		if llm.Terminal(err) {
+			// Bad credential / missing model / no credits: retrying cannot
+			// help, so record the failure and stop.
+			slog.Error("salary: inference failed: llm misconfigured", "job", payload.JobID, "error", err)
+			if rec != nil {
+				rec.Fail(ctx, err)
 			}
 			return nil
 		}
