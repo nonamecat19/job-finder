@@ -10,6 +10,8 @@ const TASK_LABELS: Record<string, string> = {
   default: 'Other (recruiter, outreach, salary)',
 };
 
+type Provider = 'ollama' | 'cerebras' | 'openrouter';
+
 function taskLabel(taskKey: string): string {
   return TASK_LABELS[taskKey] ?? taskKey;
 }
@@ -34,11 +36,21 @@ export default function LlmSettingsCard() {
     );
   }
 
-  const { credentialConfigured, tasks } = settings.data;
+  const { credentialConfigured, openRouterCredentialConfigured, tasks } = settings.data;
   const cerebrasModels = models.data?.cerebras ?? [];
+  const openRouterModels = models.data?.openrouter ?? [];
   const anyCerebrasSelected = tasks.some((t) => t.provider === 'cerebras');
+  const anyOpenRouterSelected = tasks.some((t) => t.provider === 'openrouter');
 
-  function switchAll(provider: 'ollama' | 'cerebras') {
+  // Model choices are per-provider: a Cerebras model id is rejected for an
+  // OpenRouter task and vice versa, so switching provider also clears model.
+  function modelsFor(provider: string) {
+    if (provider === 'cerebras') return cerebrasModels;
+    if (provider === 'openrouter') return openRouterModels;
+    return [];
+  }
+
+  function switchAll(provider: Provider) {
     const next: LlmTaskSettingDto[] = tasks.map((t) => ({ taskKey: t.taskKey, provider, model: '' }));
     update.mutate(next);
   }
@@ -53,15 +65,18 @@ export default function LlmSettingsCard() {
     <Surface>
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted">
-          Choose which chat tasks run on the local Ollama model versus a Cerebras free-tier
-          model. Embeddings always stay on Ollama.
+          Choose which chat tasks run on the local Ollama model versus a Cerebras or OpenRouter
+          free-tier model. Embeddings always stay on Ollama.
         </p>
         <div className="flex shrink-0 gap-2">
           <Button variant="secondary" onClick={() => switchAll('ollama')} disabled={update.isPending}>
             Switch all to Ollama
           </Button>
-          <Button variant="primary" onClick={() => switchAll('cerebras')} disabled={update.isPending}>
+          <Button variant="secondary" onClick={() => switchAll('cerebras')} disabled={update.isPending}>
             Switch all to Cerebras
+          </Button>
+          <Button variant="primary" onClick={() => switchAll('openrouter')} disabled={update.isPending}>
+            Switch all to OpenRouter
           </Button>
         </div>
       </div>
@@ -73,6 +88,16 @@ export default function LlmSettingsCard() {
         >
           Cerebras credential not configured (CEREBRAS_API_KEY). Tasks set to Cerebras will keep
           running on Ollama until a key is added.
+        </div>
+      ) : null}
+
+      {!openRouterCredentialConfigured && anyOpenRouterSelected ? (
+        <div
+          data-testid="openrouter-credential-banner"
+          className="mt-4 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning"
+        >
+          OpenRouter credential not configured (OPENROUTER_API_KEY). Tasks set to OpenRouter will
+          keep running on Ollama until a key is added.
         </div>
       ) : null}
 
@@ -95,16 +120,17 @@ export default function LlmSettingsCard() {
             >
               <option value="ollama">Ollama</option>
               <option value="cerebras">Cerebras</option>
+              <option value="openrouter">OpenRouter</option>
             </Select>
             <Select
               aria-label={`${taskLabel(task.taskKey)} model`}
-              className="w-48"
+              className="w-64"
               value={task.model}
-              disabled={update.isPending || task.provider !== 'cerebras'}
+              disabled={update.isPending || task.provider === 'ollama'}
               onChange={(e) => setTask(task.taskKey, { model: e.target.value })}
             >
               <option value="">Default</option>
-              {cerebrasModels.map((m) => (
+              {modelsFor(task.provider).map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label}
                 </option>

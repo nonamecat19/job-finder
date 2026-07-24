@@ -59,9 +59,9 @@ export default function StatusPage() {
           </div>
           {anyCancelled ? (
             <p className="mb-3 text-xs text-muted">
-              Some of these were cancelled, not failed — an upstream provider (Cerebras) hit its
-              rate limit, so the rest of that batch was skipped instead of also erroring out.
-              Retry once the limit resets.
+              Some of these were cancelled, not failed — an upstream provider (Cerebras or
+              OpenRouter) hit its rate limit, so the rest of that batch was skipped instead of
+              also erroring out. Retry once the limit resets.
             </p>
           ) : null}
           <ul className="flex flex-wrap gap-2">

@@ -8,9 +8,11 @@ vi.mock('../../lib/api', () => ({
   api: {
     ext: { bootstrap: vi.fn() },
     settings: {
-      getLlm: vi.fn().mockResolvedValue({ credentialConfigured: false, tasks: [] }),
+      getLlm: vi
+        .fn()
+        .mockResolvedValue({ credentialConfigured: false, openRouterCredentialConfigured: false, tasks: [] }),
       putLlm: vi.fn(),
-      llmModels: vi.fn().mockResolvedValue({ cerebras: [] }),
+      llmModels: vi.fn().mockResolvedValue({ cerebras: [], openrouter: [] }),
     },
   },
 }))

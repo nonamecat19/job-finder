@@ -212,9 +212,10 @@ export const api = {
     githubSync: (contactId: string) =>
       request<GithubSyncResultDto>(`/contacts/${contactId}/github-sync`, { method: 'POST' }),
   },
-  // Cerebras free-tier model toggle (001-cerebras-model-toggle): per-task
-  // provider/model assignment. The Cerebras API key itself is never part of
-  // this API — it's env-only (CEREBRAS_API_KEY) and never leaves the server.
+  // Per-task chat provider/model assignment across Ollama, Cerebras and
+  // OpenRouter. The remote API keys themselves are never part of this API —
+  // they're env-only (CEREBRAS_API_KEY / OPENROUTER_API_KEY) and never leave
+  // the server.
   settings: {
     getLlm: () => request<LlmSettingsResponseDto>('/v1/settings/llm'),
     putLlm: (tasks: LlmTaskSettingDto[]) =>
