@@ -34,7 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               ))}
             </nav>
             <div className="mt-auto flex items-center justify-end px-1">
-              <NotificationBell />
+              <NotificationBell placement="top" />
             </div>
           </aside>
         )}

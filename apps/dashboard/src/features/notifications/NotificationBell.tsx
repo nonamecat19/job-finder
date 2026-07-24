@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Button, Chip, LoadingRegion, SkeletonLine, Surface } from '../../components/ui';
 import { useMarkNotificationSeen, useNotifications, useUnseenNotificationCount } from './hooks';
 
-export default function NotificationBell() {
+export default function NotificationBell({ placement = 'bottom' }: { placement?: 'top' | 'bottom' }) {
   const [open, setOpen] = useState(false);
 
   const { data: countData } = useUnseenNotificationCount();
@@ -31,7 +31,11 @@ export default function NotificationBell() {
       {open ? (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-border bg-surface shadow-xl shadow-black/30">
+          <div
+            className={`absolute right-0 z-40 w-80 rounded-xl border border-border bg-surface shadow-xl shadow-black/30 ${
+              placement === 'top' ? 'bottom-full mb-2' : 'mt-2'
+            }`}
+          >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h3 className="text-sm font-semibold text-fg">Notifications</h3>
               <button

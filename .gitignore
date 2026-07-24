@@ -17,3 +17,4 @@ resume/
 /apps/api/seed
 .aider*
 .opencode
+apps/api/data/
