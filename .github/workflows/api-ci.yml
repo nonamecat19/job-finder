@@ -43,3 +43,79 @@ jobs:
 
       - name: Check generated TypeScript matches Go DTOs
         run: ./scripts/tygo-check.sh
+
+  go-vet:
+    name: go vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+
+      - name: go vet ./...
+        working-directory: apps/api
+        run: go vet ./...
+
+  go-test:
+    name: go test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+
+      - name: go test ./...
+        working-directory: apps/api
+        run: go test ./...
+
+  frontend-test:
+    name: frontend test (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @job-finder/shared build
+
+      - name: Run dashboard tests
+        run: pnpm --filter @job-finder/dashboard test
+
+  frontend-typecheck:
+    name: frontend typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @job-finder/shared build
+
+      - name: Typecheck
+        run: pnpm typecheck
