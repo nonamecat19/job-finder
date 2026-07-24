@@ -69,8 +69,8 @@ export const queryKeys = {
     get: ['llmSettings', 'get'] as const,
     models: ['llmSettings', 'models'] as const,
   },
-  autoGenerate: {
-    all: ['autoGenerate'] as const,
-    get: ['autoGenerate', 'get'] as const,
+  aiFeatures: {
+    all: ['aiFeatures'] as const,
+    get: ['aiFeatures', 'get'] as const,
   },
 };

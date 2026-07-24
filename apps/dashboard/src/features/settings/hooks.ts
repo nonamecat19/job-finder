@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AutoGenerateSettingDto, LlmTaskSettingDto } from '@job-finder/shared';
+import type { AiFeatureSettingDto, LlmTaskSettingDto } from '@job-finder/shared';
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 
@@ -32,18 +32,20 @@ export function useUpdateLlmSettings() {
   });
 }
 
-// Auto-generate resume when a job's match score is very high.
-export function useAutoGenerateSettings() {
+// Per-feature "run automatically when a job's match score is high enough"
+// toggle and threshold (resume/cover-letter generation, salary inference).
+export function useAiFeatureSettings() {
   return useQuery({
-    queryKey: queryKeys.autoGenerate.get,
-    queryFn: api.settings.getAutoGenerate,
+    queryKey: queryKeys.aiFeatures.get,
+    queryFn: api.settings.getAiFeatures,
   });
 }
 
-export function useUpdateAutoGenerateSettings() {
+export function useUpdateAiFeatureSetting() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: AutoGenerateSettingDto) => api.settings.putAutoGenerate(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.autoGenerate.all }),
+    mutationFn: ({ feature, enabled, threshold }: AiFeatureSettingDto) =>
+      api.settings.putAiFeature(feature, { enabled, threshold }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.aiFeatures.all }),
   });
 }

@@ -17,7 +17,7 @@ import type {
   KeywordDiffResponse,
   LlmModelsResponseDto,
   LlmSettingsResponseDto,
-  AutoGenerateSettingDto,
+  AiFeatureSettingDto,
   LlmTaskSettingDto,
   OutreachDraftDto,
   OutreachToneOptionDto,
@@ -224,9 +224,9 @@ export const api = {
         body: JSON.stringify({ tasks }),
       }),
     llmModels: () => request<LlmModelsResponseDto>('/v1/settings/llm/models'),
-    getAutoGenerate: () => request<AutoGenerateSettingDto>('/v1/settings/autogenerate'),
-    putAutoGenerate: (body: AutoGenerateSettingDto) =>
-      request<AutoGenerateSettingDto>('/v1/settings/autogenerate', {
+    getAiFeatures: () => request<AiFeatureSettingDto[]>('/v1/settings/ai-features'),
+    putAiFeature: (feature: string, body: Pick<AiFeatureSettingDto, 'enabled' | 'threshold'>) =>
+      request<AiFeatureSettingDto>(`/v1/settings/ai-features/${feature}`, {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
