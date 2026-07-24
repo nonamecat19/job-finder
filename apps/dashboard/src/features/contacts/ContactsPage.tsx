@@ -2,7 +2,8 @@ import { RefreshCw, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { ReferralContactDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { Button, Chip, EmptyState, ErrorState, Spinner, Surface } from '../../components/ui';
+import { VirtualList } from '../../components/VirtualList';
+import { Button, Chip, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock, Surface } from '../../components/ui';
 import { useContacts, useGithubSync, useImportContactsCSV } from './hooks';
 
 export default function ContactsPage() {
@@ -52,19 +53,28 @@ export default function ContactsPage() {
       {importCsv.error ? <ErrorState error={importCsv.error} /> : null}
 
       {error ? <ErrorState error={error} /> : null}
-      {isLoading ? <Spinner label="loading contacts…" /> : null}
+      {isLoading ? (
+        <LoadingRegion label="loading contacts…" className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonBlock key={i} className="h-10 w-full" />
+          ))}
+        </LoadingRegion>
+      ) : null}
 
       {!isLoading && contacts && contacts.length === 0 ? (
         <EmptyState>No contacts yet. Import a CSV to get started.</EmptyState>
       ) : null}
 
       {contacts && contacts.length > 0 ? (
-        <Surface>
-          <ul className="divide-y divide-border">
-            {contacts.map((c) => (
-              <ContactRow key={c.id} contact={c} />
-            ))}
-          </ul>
+        <Surface className="p-0">
+          <VirtualList
+            items={contacts}
+            getKey={(c) => c.id}
+            estimateSize={48}
+            gap={0}
+            className="px-4"
+            renderItem={(c) => <ContactRow contact={c} />}
+          />
         </Surface>
       ) : null}
     </div>
@@ -75,7 +85,7 @@ function ContactRow({ contact }: { contact: ReferralContactDto }) {
   const githubSync = useGithubSync();
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-sm last:border-0">
       <div>
         <span className="font-medium text-fg">{contact.name}</span>
         {contact.role ? <span className="ml-1.5 text-muted">{contact.role}</span> : null}
@@ -101,6 +111,6 @@ function ContactRow({ contact }: { contact: ReferralContactDto }) {
           {githubSync.data.connectionsMade} new connection{githubSync.data.connectionsMade === 1 ? '' : 's'} found
         </span>
       ) : null}
-    </li>
+    </div>
   );
 }

@@ -3,7 +3,19 @@ import { Link } from 'react-router-dom';
 import { RotateCw, X } from 'lucide-react';
 import type { ActivityOp, ActivityRunDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, EmptyState, ErrorState, Spinner, Surface } from '../../components/ui';
+import { VirtualList } from '../../components/VirtualList';
+import {
+  Button,
+  Chip,
+  EmptyState,
+  ErrorState,
+  LoadingRegion,
+  Spinner,
+  SkeletonBlock,
+  SkeletonLine,
+  Surface,
+} from '../../components/ui';
+import { cn } from '../../lib/utils';
 import { useActivity, useCancelActivity, useCancelAllActivity, useRetryActivity } from './hooks';
 
 const OP_LABELS: Record<ActivityOp, string> = {
@@ -43,7 +55,7 @@ export default function StatusPage() {
         description="Live and recent activity across scraping, matching, generation and enrichment."
       />
 
-      {isLoading ? <Spinner label="loading activity…" /> : null}
+      {isLoading ? <ActivitySkeleton /> : null}
       {error ? <ErrorState error={error} /> : null}
 
       {failed.length > 0 ? (
@@ -101,11 +113,15 @@ export default function StatusPage() {
         {data && data.active.length === 0 ? (
           <EmptyState>Nothing running.</EmptyState>
         ) : (
-          <ul className="space-y-3">
-            {data?.active.map((run) => (
-              <ActiveCard key={run.id} run={run} />
-            ))}
-          </ul>
+          <VirtualList
+            items={data?.active ?? []}
+            getKey={(run) => run.id}
+            estimateSize={88}
+            gap={12}
+            maxHeight="32rem"
+            collapseThreshold={Infinity}
+            renderItem={(run) => <ActiveCard run={run} />}
+          />
         )}
       </section>
 
@@ -118,6 +134,19 @@ export default function StatusPage() {
         )}
       </section>
     </div>
+  );
+}
+
+function ActivitySkeleton() {
+  return (
+    <LoadingRegion label="loading activity…" className="mb-8 flex flex-col gap-3">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20">
+          <SkeletonLine width="w-1/3" />
+          <SkeletonBlock className="mt-2 h-4 w-1/2" />
+        </div>
+      ))}
+    </LoadingRegion>
   );
 }
 
@@ -159,55 +188,61 @@ function ActiveCard({ run }: { run: ActivityRunDto }) {
   );
 }
 
+const RECENT_ROW_GRID = 'grid grid-cols-[minmax(6rem,auto)_1fr_minmax(7rem,auto)_minmax(5rem,auto)] gap-2 px-4';
+
 function RecentTable({ runs }: { runs: ActivityRunDto[] }) {
   return (
     <Surface className="overflow-x-auto p-0">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-faint">
-            <th className="px-4 py-2">Op</th>
-            <th className="px-4 py-2">Label</th>
-            <th className="px-4 py-2">State</th>
-            <th className="px-4 py-2">Duration</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((run) => (
-            <tr key={run.id} className="border-b border-border last:border-0">
-              <td className="px-4 py-2">
-                <Chip tone={OP_TONES[run.op as ActivityOp] ?? 'slate'}>
-                  {OP_LABELS[run.op as ActivityOp] ?? run.op}
-                </Chip>
-              </td>
-              <td className="px-4 py-2">
-                {run.jobId ? (
-                  <Link to={`/jobs/${run.jobId}`} className="text-primary hover:underline">
-                    {run.label}
-                  </Link>
-                ) : (
-                  <span className="text-fg">{run.label}</span>
-                )}
-                {(run.state === 'failed' || run.state === 'cancelled') && run.error ? (
-                  <p className="mt-0.5 text-xs text-danger">{run.error}</p>
-                ) : null}
-              </td>
-              <td className="px-4 py-2">
-                {run.state === 'succeeded' ? (
-                  <span className="text-success">✓ succeeded</span>
-                ) : run.state === 'failed' ? (
-                  <span className="text-danger">✗ failed</span>
-                ) : run.state === 'cancelled' ? (
-                  <span className="text-amber-500">⊘ cancelled</span>
-                ) : (
-                  <span className="text-muted">{run.state}</span>
-                )}
-              </td>
-              <td className="px-4 py-2 tabular-nums text-muted">{formatDuration(run.elapsedMs)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className={cn(RECENT_ROW_GRID, 'border-b border-border py-2 text-left text-xs font-semibold uppercase tracking-wide text-faint')}>
+        <span>Op</span>
+        <span>Label</span>
+        <span>State</span>
+        <span>Duration</span>
+      </div>
+      <VirtualList
+        items={runs}
+        getKey={(run) => run.id}
+        estimateSize={44}
+        gap={0}
+        renderItem={(run) => <RecentRow run={run} />}
+      />
     </Surface>
+  );
+}
+
+function RecentRow({ run }: { run: ActivityRunDto }) {
+  return (
+    <div className={cn(RECENT_ROW_GRID, 'items-center border-b border-border py-2 text-sm last:border-0')}>
+      <span>
+        <Chip tone={OP_TONES[run.op as ActivityOp] ?? 'slate'}>
+          {OP_LABELS[run.op as ActivityOp] ?? run.op}
+        </Chip>
+      </span>
+      <span className="min-w-0">
+        {run.jobId ? (
+          <Link to={`/jobs/${run.jobId}`} className="text-primary hover:underline">
+            {run.label}
+          </Link>
+        ) : (
+          <span className="text-fg">{run.label}</span>
+        )}
+        {(run.state === 'failed' || run.state === 'cancelled') && run.error ? (
+          <p className="mt-0.5 text-xs text-danger">{run.error}</p>
+        ) : null}
+      </span>
+      <span>
+        {run.state === 'succeeded' ? (
+          <span className="text-success">✓ succeeded</span>
+        ) : run.state === 'failed' ? (
+          <span className="text-danger">✗ failed</span>
+        ) : run.state === 'cancelled' ? (
+          <span className="text-amber-500">⊘ cancelled</span>
+        ) : (
+          <span className="text-muted">{run.state}</span>
+        )}
+      </span>
+      <span className="tabular-nums text-muted">{formatDuration(run.elapsedMs)}</span>
+    </div>
   );
 }
 

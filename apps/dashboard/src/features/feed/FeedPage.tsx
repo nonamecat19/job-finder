@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import type { JobDto } from '@job-finder/shared';
 import { type JobFilters } from '../../lib/api';
 import { PageHeader } from '../../components/layout/PageHeader';
+import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
   Checkbox,
@@ -13,9 +14,11 @@ import {
   Field,
   GhostBadge,
   Input,
+  LoadingRegion,
   ScoreBadge,
   Select,
-  Spinner,
+  SkeletonBlock,
+  SkeletonLine,
   Surface,
 } from '../../components/ui';
 import {
@@ -177,22 +180,27 @@ export default function FeedPage() {
         </label>
       </Surface>
 
-      {isLoading ? <Spinner label="loading jobs…" /> : null}
+      {isLoading ? <JobListSkeleton /> : null}
       {error ? <ErrorState error={error} /> : null}
       {data && data.items.length === 0 ? (
         <EmptyState>No jobs yet. Add a saved search on the Sources page and hit "Run now".</EmptyState>
       ) : null}
 
-      <ul className="space-y-3">
-        {data?.items.map((job) => (
-          <JobCard
-            key={job.id}
-            job={job}
-            onShortlist={() => shortlist.mutate(job.id)}
-            onHide={() => hide.mutate(job.id)}
-          />
-        ))}
-      </ul>
+      {data && data.items.length > 0 ? (
+        <VirtualList
+          items={data.items}
+          getKey={(job) => job.id}
+          estimateSize={128}
+          gap={12}
+          renderItem={(job) => (
+            <JobCard
+              job={job}
+              onShortlist={() => shortlist.mutate(job.id)}
+              onHide={() => hide.mutate(job.id)}
+            />
+          )}
+        />
+      ) : null}
 
       {data && data.total > data.pageSize ? (
         <Pagination
@@ -243,6 +251,38 @@ function SalaryInfo({ job }: { job: JobDto }) {
   );
 }
 
+function JobListSkeleton() {
+  return (
+    <LoadingRegion label="loading jobs…" className="flex flex-col gap-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <JobCardSkeleton key={i} />
+      ))}
+    </LoadingRegion>
+  );
+}
+
+function JobCardSkeleton() {
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <SkeletonLine width="w-12" className="h-5 rounded-full" />
+            <SkeletonLine width="w-2/5" className="h-5" />
+          </div>
+          <SkeletonLine width="w-3/5" className="mt-2" />
+          <div className="mt-3 flex gap-1">
+            <SkeletonBlock className="h-5 w-16" />
+            <SkeletonBlock className="h-5 w-16" />
+            <SkeletonBlock className="h-5 w-16" />
+          </div>
+        </div>
+        <SkeletonBlock className="h-8 w-32 shrink-0" />
+      </div>
+    </div>
+  );
+}
+
 function JobCard({
   job,
   onShortlist,
@@ -253,7 +293,7 @@ function JobCard({
   onHide: () => void;
 }) {
   return (
-    <li className="group rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20 transition hover:border-primary/40 hover:bg-elevated">
+    <div className="group rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20 transition hover:border-primary/40 hover:bg-elevated">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -311,7 +351,7 @@ function JobCard({
           </a>
         </div>
       </div>
-    </li>
+    </div>
   );
 }
 

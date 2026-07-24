@@ -3,14 +3,17 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ApplicationDto, ApplicationStatus, StatsDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
   Chip,
   EmptyState,
   ErrorState,
   Field,
+  LoadingRegion,
   Select,
-  Spinner,
+  SkeletonBlock,
+  SkeletonLine,
   Surface,
   Textarea,
 } from '../../components/ui';
@@ -68,18 +71,36 @@ export default function TrackerPage() {
         </Field>
       </Surface>
 
-      {isLoading ? <Spinner label="loading applications…" /> : null}
+      {isLoading ? <ApplicationListSkeleton /> : null}
       {error ? <ErrorState error={error} /> : null}
       {applications && applications.length === 0 ? (
         <EmptyState>No applications yet. Shortlist jobs from the feed to start tracking.</EmptyState>
       ) : null}
 
-      <ul className="space-y-3">
-        {applications?.map((app) => (
-          <ApplicationCard key={app.id} application={app} />
-        ))}
-      </ul>
+      {applications && applications.length > 0 ? (
+        <VirtualList
+          items={applications}
+          getKey={(app) => app.id}
+          estimateSize={140}
+          gap={12}
+          renderItem={(app) => <ApplicationCard application={app} />}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function ApplicationListSkeleton() {
+  return (
+    <LoadingRegion label="loading applications…" className="flex flex-col gap-3">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20">
+          <SkeletonLine width="w-2/5" />
+          <SkeletonLine width="w-1/3" className="mt-2" />
+          <SkeletonBlock className="mt-3 h-5 w-24" />
+        </div>
+      ))}
+    </LoadingRegion>
   );
 }
 

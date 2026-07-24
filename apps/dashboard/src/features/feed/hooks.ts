@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type JobFilters } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 
@@ -6,6 +6,7 @@ export function useJobs(filters: JobFilters) {
   return useQuery({
     queryKey: queryKeys.jobs.list(filters),
     queryFn: () => api.jobs.list(filters),
+    placeholderData: keepPreviousData,
   });
 }
 
