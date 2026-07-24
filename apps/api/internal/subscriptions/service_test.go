@@ -78,3 +78,35 @@ func TestCreateDouSubscription_UnaffectedByIndeedValidation(t *testing.T) {
 		t.Fatalf("expected non-indeed source to be unaffected by indeed-specific validation, got: %v", err)
 	}
 }
+
+func TestCreateRemoteOKSubscription_ValidTagURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	out, err := svc.Create(context.Background(), "remoteok", "https://remoteok.com/remote-golang-jobs", nil, true)
+	if err != nil {
+		t.Fatalf("expected valid remoteok tag url to be accepted, got error: %v", err)
+	}
+	if out.SourceKey != "remoteok" {
+		t.Errorf("sourceKey: got %q", out.SourceKey)
+	}
+}
+
+func TestCreateRemoteOKSubscription_ValidAPIRootURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "remoteok", "https://remoteok.com/api", nil, true); err != nil {
+		t.Fatalf("expected valid remoteok api root url to be accepted, got error: %v", err)
+	}
+}
+
+func TestCreateRemoteOKSubscription_ValidIoDomain(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "remoteok", "https://remoteok.io/remote-golang-jobs", nil, true); err != nil {
+		t.Fatalf("expected valid remoteok.io url to be accepted, got error: %v", err)
+	}
+}
+
+func TestCreateRemoteOKSubscription_RejectsNonRemoteOKURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "remoteok", "https://example.com/not-remoteok", nil, true); err == nil {
+		t.Fatal("expected non-remoteok url to be rejected")
+	}
+}

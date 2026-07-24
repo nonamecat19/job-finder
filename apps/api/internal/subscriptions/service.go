@@ -102,12 +102,20 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 }
 
 // validateSubscriptionURL rejects a subscription URL that can't belong to
-// its declared source, at save time rather than at run time (FR-016). Only
-// Indeed currently has a source-specific rule; other sources are unchecked.
+// its declared source, at save time rather than at run time (FR-016 for
+// Indeed, FR-015 for RemoteOK). Other sources are unchecked.
 func validateSubscriptionURL(sourceKey, rawURL string) error {
-	if sourceKey != "indeed" {
+	switch sourceKey {
+	case "indeed":
+		return validateIndeedSubscriptionURL(rawURL)
+	case "remoteok":
+		return validateRemoteOKSubscriptionURL(rawURL)
+	default:
 		return nil
 	}
+}
+
+func validateIndeedSubscriptionURL(rawURL string) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Host == "" {
 		return fmt.Errorf("indeed subscription url %q is not a valid URL", rawURL)
@@ -118,6 +126,19 @@ func validateSubscriptionURL(sourceKey, rawURL string) error {
 	}
 	if strings.Contains(parsed.Path, "/viewjob") || strings.Contains(parsed.Path, "/rc/clk") {
 		return fmt.Errorf("indeed subscription url %q looks like a single job posting, not a search results page", rawURL)
+	}
+	return nil
+}
+
+func validateRemoteOKSubscriptionURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("remoteok subscription url %q is not a valid URL", rawURL)
+	}
+	host := strings.ToLower(parsed.Host)
+	if host != "remoteok.com" && !strings.HasSuffix(host, ".remoteok.com") &&
+		host != "remoteok.io" && !strings.HasSuffix(host, ".remoteok.io") {
+		return fmt.Errorf("remoteok subscription url %q must be a remoteok.com or remoteok.io url", rawURL)
 	}
 	return nil
 }
