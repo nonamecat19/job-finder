@@ -626,6 +626,73 @@ type FitGapAssessmentDto struct {
 	Gaps            []FitGapItemDto `json:"gaps"`
 }
 
+// ---------------------------------------------------------------------------
+// Interview prep pack
+// ---------------------------------------------------------------------------
+
+// StoryMappingDto is one STAR story matched to an interview question, with
+// its relevance score and the skills it shares with the question.
+type StoryMappingDto struct {
+	StoryID        string   `json:"storyId"`
+	StoryTitle     string   `json:"storyTitle"`
+	RelevanceScore float64  `json:"relevanceScore"`
+	MatchedSkills  []string `json:"matchedSkills"`
+	Excerpt        string   `json:"excerpt"`
+}
+
+// InterviewQuestionDto is one derived interview question with its best
+// matching STAR stories (empty when nothing in the profile covers it).
+type InterviewQuestionDto struct {
+	ID            string            `json:"id"`
+	Text          string            `json:"text"`
+	Category      string            `json:"category"`
+	Source        string            `json:"source"`
+	SourceExcerpt string            `json:"sourceExcerpt"`
+	MappedStories []StoryMappingDto `json:"mappedStories"`
+}
+
+// CompanyNewsItemDto is one company-intel signal reshaped as a briefing item
+// for the interview prep pack (spec 013 reuses 004's Company/CompanySignal
+// data rather than a dedicated news source).
+type CompanyNewsItemDto struct {
+	Kind      string `json:"kind"`
+	Label     string `json:"label"`
+	Value     string `json:"value"`
+	Source    string `json:"source"`
+	FetchedAt string `json:"fetchedAt"`
+}
+
+// KeywordGapSummaryDto reshapes the 008 keyword diff into the prep pack's
+// gap-awareness section: just the missing term strings, coverage, and a few
+// templated tips (there is no dedicated "tips" source, so these are derived
+// from the missing terms themselves).
+type KeywordGapSummaryDto struct {
+	MissingRequired  []string `json:"missingRequired"`
+	MissingPreferred []string `json:"missingPreferred"`
+	CoveragePct      float64  `json:"coveragePct"`
+	GapAwarenessTips []string `json:"gapAwarenessTips"`
+}
+
+// InterviewPrepMetadataDto carries the coverage counters and staleness flag
+// the panel renders in its header.
+type InterviewPrepMetadataDto struct {
+	TotalQuestions     int  `json:"totalQuestions"`
+	CoveredQuestions   int  `json:"coveredQuestions"`
+	UncoveredQuestions int  `json:"uncoveredQuestions"`
+	StaleNews          bool `json:"staleNews"`
+}
+
+// InterviewPrepPackDto is the full interview prep pack served by
+// GET /api/jobs/{id}/interview-prep (spec 013).
+type InterviewPrepPackDto struct {
+	JobID       string                   `json:"jobId"`
+	GeneratedAt string                   `json:"generatedAt"`
+	Questions   []InterviewQuestionDto   `json:"questions"`
+	CompanyNews []CompanyNewsItemDto     `json:"companyNews"`
+	KeywordGap  KeywordGapSummaryDto     `json:"keywordGap"`
+	Metadata    InterviewPrepMetadataDto `json:"metadata"`
+}
+
 // JobContactDto is one resolved recruiter/hiring-manager candidate served
 // by GET /api/jobs/{id}/contacts and POST /api/jobs/{id}/contacts/refresh
 // (spec 007). Nil fields mean that channel was never resolved — never

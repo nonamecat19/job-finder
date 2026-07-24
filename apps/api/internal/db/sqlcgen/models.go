@@ -282,6 +282,19 @@ type SourceRun struct {
 	Error      *string          `json:"error"`
 }
 
+type StarStory struct {
+	ID         pgtype.UUID      `json:"id"`
+	ProfileId  pgtype.UUID      `json:"profileId"`
+	Title      string           `json:"title"`
+	Situation  string           `json:"situation"`
+	Task       string           `json:"task"`
+	Action     string           `json:"action"`
+	Result     string           `json:"result"`
+	Skills     []byte           `json:"skills"`
+	Categories []byte           `json:"categories"`
+	CreatedAt  pgtype.Timestamp `json:"createdAt"`
+}
+
 type Subscription struct {
 	ID        pgtype.UUID      `json:"id"`
 	SourceKey string           `json:"sourceKey"`

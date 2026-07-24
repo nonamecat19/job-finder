@@ -6,24 +6,34 @@ import (
 	"strings"
 )
 
-// QuestionCategory classifies the type of interview question.
+// QuestionCategory classifies the type of interview question. Values mirror
+// the shared frontend union in packages/shared/src/index.ts.
 type QuestionCategory string
 
 const (
-	CategoryTechnical  QuestionCategory = "technical"
-	CategoryBehavioral QuestionCategory = "behavioral"
+	CategoryTechnical   QuestionCategory = "technical"
+	CategoryBehavioral  QuestionCategory = "behavioral"
+	CategoryExperience  QuestionCategory = "experience"
+	CategorySituational QuestionCategory = "situational"
+	CategoryCompany     QuestionCategory = "company"
+	CategoryGap         QuestionCategory = "gap"
 )
 
-// QuestionSource identifies what in the JD triggered this question.
+// QuestionSource identifies what in the JD triggered this question. Values
+// mirror the shared frontend union in packages/shared/src/index.ts.
 type QuestionSource string
 
 const (
 	SourceRequiredSkill  QuestionSource = "required_skill"
+	SourcePreferredSkill QuestionSource = "preferred_skill"
 	SourceResponsibility QuestionSource = "responsibility"
+	SourceCompanyContext QuestionSource = "company_context"
+	SourceGeneric        QuestionSource = "generic"
 )
 
 // InterviewQuestion is a derived interview question from the JD.
 type InterviewQuestion struct {
+	ID            string           `json:"id"`
 	Text          string           `json:"text"`
 	Category      QuestionCategory `json:"category"`
 	Source        QuestionSource   `json:"source"`
@@ -44,11 +54,12 @@ var respHeaderPattern = regexp.MustCompile(`(?i)^\s*(?:#{1,3}\s*|\*\*)?\s*(?:res
 func DeriveQuestions(classified []ClassifiedTerm, jd string) []InterviewQuestion {
 	var questions []InterviewQuestion
 
-	for _, ct := range classified {
+	for i, ct := range classified {
 		if ct.Class != ClassMustHave {
 			continue
 		}
 		questions = append(questions, InterviewQuestion{
+			ID:            fmt.Sprintf("required-skill-%d", i),
 			Text:          fmt.Sprintf("The role requires %s. Can you describe your experience with %s?", ct.Canonical, ct.Canonical),
 			Category:      CategoryTechnical,
 			Source:        SourceRequiredSkill,
@@ -56,8 +67,9 @@ func DeriveQuestions(classified []ClassifiedTerm, jd string) []InterviewQuestion
 		})
 	}
 
-	for _, bullet := range extractResponsibilityBullets(jd) {
+	for i, bullet := range extractResponsibilityBullets(jd) {
 		questions = append(questions, InterviewQuestion{
+			ID:            fmt.Sprintf("responsibility-%d", i),
 			Text:          fmt.Sprintf("Tell me about a time you had to %s.", lowerFirst(bullet)),
 			Category:      CategoryBehavioral,
 			Source:        SourceResponsibility,

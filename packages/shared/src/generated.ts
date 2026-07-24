@@ -150,6 +150,7 @@ export interface JobDto {
   id: string;
   dedupeKey: string;
   sourceKey: string;
+  subscriptionId?: string;
   title: string;
   company: string;
   location?: string;
@@ -549,6 +550,75 @@ export interface FitGapAssessmentDto {
   failedMustHaves: number /* int */;
   coveragePct: number /* float64 */;
   gaps: FitGapItemDto[];
+}
+/**
+ * StoryMappingDto is one STAR story matched to an interview question, with
+ * its relevance score and the skills it shares with the question.
+ */
+export interface StoryMappingDto {
+  storyId: string;
+  storyTitle: string;
+  relevanceScore: number /* float64 */;
+  matchedSkills: string[];
+  excerpt: string;
+}
+/**
+ * InterviewQuestionDto is one derived interview question with its best
+ * matching STAR stories (empty when nothing in the profile covers it).
+ */
+export interface InterviewQuestionDto {
+  id: string;
+  text: string;
+  category: string;
+  source: string;
+  sourceExcerpt: string;
+  mappedStories: StoryMappingDto[];
+}
+/**
+ * CompanyNewsItemDto is one company-intel signal reshaped as a briefing item
+ * for the interview prep pack (spec 013 reuses 004's Company/CompanySignal
+ * data rather than a dedicated news source).
+ */
+export interface CompanyNewsItemDto {
+  kind: string;
+  label: string;
+  value: string;
+  source: string;
+  fetchedAt: string;
+}
+/**
+ * KeywordGapSummaryDto reshapes the 008 keyword diff into the prep pack's
+ * gap-awareness section: just the missing term strings, coverage, and a few
+ * templated tips (there is no dedicated "tips" source, so these are derived
+ * from the missing terms themselves).
+ */
+export interface KeywordGapSummaryDto {
+  missingRequired: string[];
+  missingPreferred: string[];
+  coveragePct: number /* float64 */;
+  gapAwarenessTips: string[];
+}
+/**
+ * InterviewPrepMetadataDto carries the coverage counters and staleness flag
+ * the panel renders in its header.
+ */
+export interface InterviewPrepMetadataDto {
+  totalQuestions: number /* int */;
+  coveredQuestions: number /* int */;
+  uncoveredQuestions: number /* int */;
+  staleNews: boolean;
+}
+/**
+ * InterviewPrepPackDto is the full interview prep pack served by
+ * GET /api/jobs/{id}/interview-prep (spec 013).
+ */
+export interface InterviewPrepPackDto {
+  jobId: string;
+  generatedAt: string;
+  questions: InterviewQuestionDto[];
+  companyNews: CompanyNewsItemDto[];
+  keywordGap: KeywordGapSummaryDto;
+  metadata: InterviewPrepMetadataDto;
 }
 /**
  * JobContactDto is one resolved recruiter/hiring-manager candidate served

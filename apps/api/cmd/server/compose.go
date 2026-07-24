@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"time"
@@ -15,12 +16,14 @@ import (
 	"github.com/job-finder/api/internal/applications"
 	"github.com/job-finder/api/internal/coach"
 	"github.com/job-finder/api/internal/companyintel"
+	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/extauth"
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
+	"github.com/job-finder/api/internal/interviewprep"
 	"github.com/job-finder/api/internal/jobs"
 	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/jobsources/adapters"
@@ -43,28 +46,29 @@ import (
 // consumed by buildServers (router mounting + worker muxes) and runServers.
 type App struct {
 	// HTTP handlers (each exposes Mount).
-	Sources      *httpapi.SourcesHandler
-	Searches     *httpapi.SearchesHandler
-	Documents    *httpapi.DocumentsHandler
-	Profiles     *httpapi.ProfilesHandler
-	Jobs         *httpapi.JobsHandler
-	Applications *httpapi.ApplicationsHandler
-	Subs         *httpapi.SubscriptionsHandler
-	Activity     *httpapi.ActivityHandler
-	Keyword      *httpapi.KeywordHandler
-	PostAge      *httpapi.PostAgeHandler
-	Notification *httpapi.NotificationHandler
-	Companies    *httpapi.CompaniesHandler
-	GhostJob     *httpapi.GhostJobHandler
-	Coach        *httpapi.CoachHandler
-	ExtAuth      *httpapi.ExtAuthHandler
-	ExtProfile   *httpapi.ExtProfileHandler
-	Contacts     *httpapi.ContactsHandler
-	Referral     *httpapi.ReferralHandler
-	Outreach     *httpapi.OutreachHandler
-	LlmSettings  *httpapi.LlmSettingsHandler
-	AiFeatures   *httpapi.AiFeatureHandler
-	Health       *httpapi.HealthHandler
+	Sources       *httpapi.SourcesHandler
+	Searches      *httpapi.SearchesHandler
+	Documents     *httpapi.DocumentsHandler
+	Profiles      *httpapi.ProfilesHandler
+	Jobs          *httpapi.JobsHandler
+	Applications  *httpapi.ApplicationsHandler
+	Subs          *httpapi.SubscriptionsHandler
+	Activity      *httpapi.ActivityHandler
+	Keyword       *httpapi.KeywordHandler
+	PostAge       *httpapi.PostAgeHandler
+	Notification  *httpapi.NotificationHandler
+	Companies     *httpapi.CompaniesHandler
+	GhostJob      *httpapi.GhostJobHandler
+	Coach         *httpapi.CoachHandler
+	ExtAuth       *httpapi.ExtAuthHandler
+	ExtProfile    *httpapi.ExtProfileHandler
+	Contacts      *httpapi.ContactsHandler
+	Referral      *httpapi.ReferralHandler
+	Outreach      *httpapi.OutreachHandler
+	LlmSettings   *httpapi.LlmSettingsHandler
+	AiFeatures    *httpapi.AiFeatureHandler
+	InterviewPrep *httpapi.InterviewPrepHandler
+	Health        *httpapi.HealthHandler
 
 	// Worker handlers (each exposes ProcessTask).
 	Ingestion  *ingestion.Handler
@@ -391,6 +395,43 @@ func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, pro
 	return &httpapi.CoachHandler{Coach: coachAssessSvc}
 }
 
+// composeInterviewPrep builds the interview prep pack (013). Stories closes
+// over profileSvc rather than interviewprep importing internal/profile,
+// mirroring composeCoach's ProfileEntries closure.
+func composeInterviewPrep(p *Platform, profileSvc *profile.Service, companyIntelSvc *companyintel.Service) *httpapi.InterviewPrepHandler {
+	prepSvc := interviewprep.NewService(p.DB.Queries, p.DB.Queries, func(ctx context.Context) ([]keyword.StarStory, error) {
+		prof, err := profileSvc.GetDefault(ctx)
+		if err != nil {
+			// No profile yet is not an error — there is simply nothing to match.
+			return nil, nil
+		}
+		rows, err := p.DB.Queries.ListStarStoriesByProfile(ctx, prof.ID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]keyword.StarStory, 0, len(rows))
+		for _, row := range rows {
+			var skills []string
+			_ = json.Unmarshal(row.Skills, &skills)
+			var categories []keyword.StoryCategory
+			_ = json.Unmarshal(row.Categories, &categories)
+			out = append(out, keyword.StarStory{
+				ID:         dbutil.UUIDString(row.ID),
+				ProfileID:  dbutil.UUIDString(row.ProfileId),
+				Title:      row.Title,
+				Situation:  row.Situation,
+				Task:       row.Task,
+				Action:     row.Action,
+				Result:     row.Result,
+				Skills:     skills,
+				Categories: categories,
+			})
+		}
+		return out, nil
+	}, companyIntelSvc)
+	return &httpapi.InterviewPrepHandler{InterviewPrep: prepSvc}
+}
+
 func composePostAge(p *Platform) *httpapi.PostAgeHandler {
 	postageSvc := postage.NewService(p.DB.Queries)
 	return &httpapi.PostAgeHandler{PostAge: postageSvc}
@@ -511,28 +552,29 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	recruiterH := composeRecruiter(p, llmH.DefaultRouter)
 
 	return &App{
-		Sources:      ingestionH.Sources,
-		Searches:     ingestionH.Searches,
-		Documents:    generationH.Documents,
-		Profiles:     profileH.Handler,
-		Jobs:         jobsHandler,
-		Applications: composeApplications(p),
-		Subs:         composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
-		Activity:     httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector),
-		Keyword:      keywordH.Handler,
-		PostAge:      composePostAge(p),
-		Notification: composeNotifications(p),
-		Companies:    companyIntelH.Handler,
-		GhostJob:     ghostH.HTTPHandler,
-		Coach:        composeCoach(p, keywordH.RephraseModel, profileH.Profile),
-		ExtAuth:      extAuthH.Auth,
-		ExtProfile:   extAuthH.Profile,
-		Contacts:     recruiterH.Handler,
-		Referral:     composeReferral(p),
-		Outreach:     composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
-		LlmSettings:  llmH.SettingsHandler,
-		AiFeatures:   matchingH.AiFeatureHandler,
-		Health:       composeHealth(p),
+		Sources:       ingestionH.Sources,
+		Searches:      ingestionH.Searches,
+		Documents:     generationH.Documents,
+		Profiles:      profileH.Handler,
+		Jobs:          jobsHandler,
+		Applications:  composeApplications(p),
+		Subs:          composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
+		Activity:      httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector),
+		Keyword:       keywordH.Handler,
+		PostAge:       composePostAge(p),
+		Notification:  composeNotifications(p),
+		Companies:     companyIntelH.Handler,
+		GhostJob:      ghostH.HTTPHandler,
+		Coach:         composeCoach(p, keywordH.RephraseModel, profileH.Profile),
+		ExtAuth:       extAuthH.Auth,
+		ExtProfile:    extAuthH.Profile,
+		Contacts:      recruiterH.Handler,
+		Referral:      composeReferral(p),
+		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
+		LlmSettings:   llmH.SettingsHandler,
+		AiFeatures:    matchingH.AiFeatureHandler,
+		InterviewPrep: composeInterviewPrep(p, profileH.Profile, companyIntelH.Service),
+		Health:        composeHealth(p),
 
 		Ingestion:  ingestionH.Handler,
 		Matching:   matchingH.Handler,
@@ -543,26 +585,6 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 
 		Scheduler: ingestionH.Scheduler,
 	}, nil
-}
-
-// extJWTSigningSecret decodes a configured 32-byte hex EXT_JWT_SECRET, or
-// generates a random 32-byte secret when unset (dev/first-run convenience —
-// see the EXT_JWT_SECRET comment in .env.example and config.go).
-func extJWTSigningSecret(hexKey string) ([]byte, error) {
-	if hexKey == "" {
-		secret := make([]byte, 32)
-		if _, err := rand.Read(secret); err != nil {
-			return nil, err
-		}
-		slog.Warn("EXT_JWT_SECRET not set — using an ephemeral random secret; " +
-			"extension sessions will not survive a server restart")
-		return secret, nil
-	}
-	secret, err := hex.DecodeString(hexKey)
-	if err != nil || len(secret) != 32 {
-		return nil, errors.New("EXT_JWT_SECRET must be a 32-byte hex string (openssl rand -hex 32)")
-	}
-	return secret, nil
 }
 
 // composeHealth wires the readiness endpoint's dependency pings. p.DB.Pool
@@ -595,4 +617,24 @@ type minioPinger struct {
 func (m minioPinger) Ping(ctx context.Context) error {
 	_, err := m.client.BucketExists(ctx, m.bucket)
 	return err
+}
+
+// extJWTSigningSecret decodes a configured 32-byte hex EXT_JWT_SECRET, or
+// generates a random 32-byte secret when unset (dev/first-run convenience —
+// see the EXT_JWT_SECRET comment in .env.example and config.go).
+func extJWTSigningSecret(hexKey string) ([]byte, error) {
+	if hexKey == "" {
+		secret := make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			return nil, err
+		}
+		slog.Warn("EXT_JWT_SECRET not set — using an ephemeral random secret; " +
+			"extension sessions will not survive a server restart")
+		return secret, nil
+	}
+	secret, err := hex.DecodeString(hexKey)
+	if err != nil || len(secret) != 32 {
+		return nil, errors.New("EXT_JWT_SECRET must be a 32-byte hex string (openssl rand -hex 32)")
+	}
+	return secret, nil
 }
