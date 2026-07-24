@@ -682,11 +682,15 @@ export interface UpdateLlmSettingsRequestDto {
   tasks: LlmTaskSettingDto[];
 }
 /**
- * AutoGenerateSettingDto is the GET/PUT /v1/settings/autogenerate response:
- * whether a resume is auto-enqueued when a job's match score reaches
- * Threshold (0-100).
+ * AiFeatureSettingDto is one row of the GET /v1/settings/ai-features response
+ * / PUT /v1/settings/ai-features/{feature} body: whether an AI feature
+ * (resume generation, cover letter generation, salary inference) is
+ * auto-enqueued when a job's match score reaches Threshold (0-100). Below
+ * the threshold, or when disabled, the feature only runs on-demand. Match
+ * scoring itself has no entry — it always runs unconditionally.
  */
-export interface AutoGenerateSettingDto {
+export interface AiFeatureSettingDto {
+  feature: string;
   enabled: boolean;
   threshold: number /* int */;
 }

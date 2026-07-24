@@ -643,12 +643,20 @@ export interface LlmSettingsResponseDto {
   tasks: LlmTaskSettingDto[];
 }
 
-/** GET/PUT /v1/settings/autogenerate response: whether a resume is
- * auto-enqueued when a job's match score reaches threshold (0-100). */
-export interface AutoGenerateSettingDto {
+/** One row of the GET /v1/settings/ai-features response / PUT
+ * /v1/settings/ai-features/{feature} body: whether an AI feature (resume
+ * generation, cover letter generation, salary inference) is auto-enqueued
+ * when a job's match score reaches threshold (0-100). Below the threshold,
+ * or when disabled, the feature only runs on-demand. Match scoring itself
+ * has no entry — it always runs unconditionally. */
+export interface AiFeatureSettingDto {
+  feature: string;
   enabled: boolean;
   threshold: number;
 }
+
+export const AI_FEATURE_KEYS = ['resume', 'cover_letter', 'salary_infer'] as const;
+export type AiFeatureKey = (typeof AI_FEATURE_KEYS)[number];
 
 /** One curated Cerebras free-tier model offered in the Settings model
  * selector, served by GET /v1/settings/llm/models. */
