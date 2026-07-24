@@ -46,6 +46,12 @@ var subscriptions = []subscriptionSeed{
 		enabled:   true,
 	},
 	{
+		sourceKey: "glassdoor",
+		name:      "Glassdoor Go Remote",
+		url:       "https://www.glassdoor.com/Job/remote-golang-jobs-SRCH_KO0,14.htm",
+		enabled:   true,
+	},
+	{
 		sourceKey: "jobleads",
 		name:      "JobLeads Golang",
 		url:       "https://www.jobleads.com/job-search?q=golang",

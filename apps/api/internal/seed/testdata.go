@@ -28,6 +28,7 @@ const (
 	uuidJob21   = "b0000000-0000-0000-0000-000000000021"
 	uuidJob22   = "b0000000-0000-0000-0000-000000000022"
 	uuidJob23   = "b0000000-0000-0000-0000-000000000023"
+	uuidJob24   = "b0000000-0000-0000-0000-000000000024"
 	uuidSearch1 = "c0000000-0000-0000-0000-000000000001"
 	uuidSearch2 = "c0000000-0000-0000-0000-000000000002"
 	uuidSearch3 = "c0000000-0000-0000-0000-000000000003"
@@ -248,7 +249,14 @@ var jobs = []jobSeed{
 		Status: "found", PostedAt: now().AddDate(0, 0, -1),
 	},
 	{
-		UUID: uuidJob23, SourceKey: "jobleads", Title: "Senior Golang Engineer",
+		UUID: uuidJob23, SourceKey: "glassdoor", Title: "Senior Golang Developer",
+		Company: "NovaTech LLC", Location: "Remote", Remote: true,
+		SalaryRaw: "$120K - $150K (Employer est.)", URL: "https://www.glassdoor.com/job-listing/senior-golang-developer-novatech-JV_KO0,24_KE25,41.htm?jl=1010196986009",
+		Desc:   "NovaTech LLC is looking for a Senior Golang Developer to join our platform team, designing and building Go microservices handling millions of requests per day. 5+ years of professional Go experience required, fully remote in the United States.",
+		Status: "found", PostedAt: now().AddDate(0, 0, -3),
+	},
+	{
+		UUID: uuidJob24, SourceKey: "jobleads", Title: "Senior Golang Engineer",
 		Company: "NovaTech LLC", Location: "Berlin, Germany (Remote)", Remote: true,
 		SalaryRaw: "€70,000 - €90,000 a year", URL: "https://www.jobleads.com/job/senior-golang-engineer-novatech-abc123",
 		Desc:   "We are looking for a Senior Golang Engineer to build and maintain our Go microservices platform, working closely with the infrastructure team to design scalable, well-tested services.",
