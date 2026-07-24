@@ -31,14 +31,30 @@ Chat models are per-task: `LLM_MODEL_MATCH` (fit scoring), `LLM_MODEL_GENERATION
 `LLM_MODEL` as fallback; embeddings use `EMBED_MODEL`.
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 
-Ollama is the default, local-first provider. To additionally enable **Cerebras** free-tier
-models, set `CEREBRAS_API_KEY` (get one at cloud.cerebras.ai) — `CEREBRAS_BASE_URL` defaults to
-`https://api.cerebras.ai/v1`. With no key set, Cerebras is unavailable and every task runs on
-Ollama regardless of its saved setting. Once a key is set, open the dashboard's **Settings →
-AI models** page to assign each chat task (matching, generation, rephrase, ghost-job) to Ollama
-or a Cerebras free-tier model, or use "Switch all to Cerebras" to move every task at once — no
-restart needed, the choice is saved and applied immediately. Embeddings always stay on Ollama
-(Cerebras has no embeddings API), regardless of which provider chat tasks use.
+Ollama is the default, local-first provider. Two optional remote chat providers can be enabled
+alongside it:
+
+- **Cerebras** — set `CEREBRAS_API_KEY` (get one at cloud.cerebras.ai); `CEREBRAS_BASE_URL`
+  defaults to `https://api.cerebras.ai/v1`.
+- **OpenRouter** — set `OPENROUTER_API_KEY` (get one at openrouter.ai/keys); `OPENROUTER_BASE_URL`
+  defaults to `https://openrouter.ai/api/v1`. `OPENROUTER_SITE_URL` and `OPENROUTER_APP_NAME` are
+  optional attribution headers for OpenRouter's leaderboards.
+
+With a provider's key unset, that provider is unavailable and tasks assigned to it run on Ollama
+regardless of their saved setting. Once a key is set, open the dashboard's **Settings → AI models**
+page to assign each chat task (matching, generation, rephrase, ghost-job) to Ollama, Cerebras or
+OpenRouter, or use the "Switch all to …" buttons to move every task at once — no restart needed,
+the choice is saved and applied immediately. Model lists are per-provider, so switching a task's
+provider resets its model to that provider's default. Embeddings always stay on Ollama (neither
+remote provider has an embeddings API), regardless of which provider chat tasks use.
+
+Rate limits and provider errors are classified rather than blindly retried. A `429` trips a
+per-provider circuit breaker for as long as the provider's `Retry-After` / `X-RateLimit-Reset`
+header asks (falling back to 60s, capped at 15m), and queued tasks are *cancelled* instead of
+burning requests against the exhausted quota — the Status page offers "retry all" once the limit
+resets. Terminal problems (rejected key, out of credits, unknown model) fail the task immediately
+with the reason on its activity record instead of retrying forever; transient 5xx/network failures
+stay retryable.
 
 ## Dev workflow (api/dashboard on host)
 
