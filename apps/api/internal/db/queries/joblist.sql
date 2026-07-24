@@ -6,6 +6,7 @@ SELECT j.*, mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
 WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
+  AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
     OR (sqlc.narg('status')::text IS NULL AND j."status" != 'hidden')
@@ -36,6 +37,7 @@ SELECT j.*, mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
 WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
+  AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
     OR (sqlc.narg('status')::text IS NULL AND j."status" != 'hidden')
@@ -63,6 +65,7 @@ SELECT count(*)
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
 WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
+  AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
     OR (sqlc.narg('status')::text IS NULL AND j."status" != 'hidden')

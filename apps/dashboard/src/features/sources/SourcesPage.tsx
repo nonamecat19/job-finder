@@ -1,5 +1,6 @@
-import { CheckCircle, Play, Plus, RefreshCw, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+import { CheckCircle, ListFilter, Play, Plus, RefreshCw, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { JobSourceDto, SavedSearchDto, SearchQuery, SubscriptionDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import {
@@ -310,6 +311,12 @@ function SubscriptionRow({ sub, onRun, onDelete, running }: { sub: SubscriptionD
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <Link
+          to={`/?source=${sub.sourceKey}&subscriptionId=${sub.id}`}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition hover:bg-overlay"
+        >
+          <ListFilter className="h-3 w-3" /> view jobs
+        </Link>
         <Button variant="secondary" onClick={onRun} disabled={running}>
           <Play className="h-3 w-3" /> run now
         </Button>

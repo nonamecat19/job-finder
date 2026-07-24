@@ -41,14 +41,15 @@ func NewService(q Repository, client Enqueuer, salaryFloorUsd int) *Service {
 const ghostSignalKind = "ghost"
 
 type ListParams struct {
-	Sort     string // "score" | "date"
-	Source   *string
-	MinScore *int
-	Status   *string
-	Remote   *bool
-	Q        *string
-	Page     int
-	PageSize int
+	Sort           string // "score" | "date"
+	Source         *string
+	SubscriptionID *string
+	MinScore       *int
+	Status         *string
+	Remote         *bool
+	Q              *string
+	Page           int
+	PageSize       int
 	// ShowBelowFloor, when true, omits the salary-floor predicate so jobs
 	// below SALARY_FLOOR_USD are included (FR-016). Default (false) hides
 	// them, matching the "filter defaults to on" assumption.
@@ -93,6 +94,12 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		v := int32(*params.MinScore)
 		minScore = &v
 	}
+	var subscriptionID pgtype.UUID
+	if params.SubscriptionID != nil {
+		if uid, err := dbutil.ParseUUID(*params.SubscriptionID); err == nil {
+			subscriptionID = uid
+		}
+	}
 
 	// Floor 0 or the reveal toggle both mean "no predicate" — nil omits it
 	// entirely rather than evaluating ">= 0" (FR-018).
@@ -103,7 +110,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	}
 
 	count, err := s.q.CountJobs(ctx, sqlcgen.CountJobsParams{
-		Source: params.Source, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
+		Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
 		SalaryFloor: salaryFloor,
 	})
 	if err != nil {
@@ -116,7 +123,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	var rows []jobRow
 	if params.Sort == "date" {
 		r, err := s.q.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{
-			Source: params.Source, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
+			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
 			SalaryFloor: salaryFloor, Offset: offset, Limit: limit,
 		})
 		if err != nil {
@@ -130,7 +137,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 					SalaryRaw: x.SalaryRaw, Url: x.Url, Description: x.Description, Raw: x.Raw,
 					PostedAt: x.PostedAt, IngestedAt: x.IngestedAt, Embedding: x.Embedding, Status: x.Status,
 					SalaryMin: x.SalaryMin, SalaryMax: x.SalaryMax, SalaryCurrency: x.SalaryCurrency,
-					SalaryConfidence: x.SalaryConfidence, SalarySource: x.SalarySource,
+					SalaryConfidence: x.SalaryConfidence, SalarySource: x.SalarySource, SubscriptionId: x.SubscriptionId,
 				},
 				MrID: x.MrID, MrSimilarity: x.MrSimilarity, MrScore: x.MrScore,
 				MrMatchedSkills: x.MrMatchedSkills, MrMissingSkills: x.MrMissingSkills,
@@ -139,7 +146,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		}
 	} else {
 		r, err := s.q.ListJobsByScore(ctx, sqlcgen.ListJobsByScoreParams{
-			Source: params.Source, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
+			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
 			SalaryFloor: salaryFloor, Offset: offset, Limit: limit,
 		})
 		if err != nil {
@@ -153,7 +160,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 					SalaryRaw: x.SalaryRaw, Url: x.Url, Description: x.Description, Raw: x.Raw,
 					PostedAt: x.PostedAt, IngestedAt: x.IngestedAt, Embedding: x.Embedding, Status: x.Status,
 					SalaryMin: x.SalaryMin, SalaryMax: x.SalaryMax, SalaryCurrency: x.SalaryCurrency,
-					SalaryConfidence: x.SalaryConfidence, SalarySource: x.SalarySource,
+					SalaryConfidence: x.SalaryConfidence, SalarySource: x.SalarySource, SubscriptionId: x.SubscriptionId,
 				},
 				MrID: x.MrID, MrSimilarity: x.MrSimilarity, MrScore: x.MrScore,
 				MrMatchedSkills: x.MrMatchedSkills, MrMissingSkills: x.MrMissingSkills,
@@ -378,6 +385,7 @@ func jobToDto(j sqlcgen.Job) dto.JobDto {
 		PostedAt: dbutil.TimestampPtr(j.PostedAt), IngestedAt: dbutil.Timestamp(j.IngestedAt), Status: j.Status,
 		SalaryMin: int32PtrToIntPtr(j.SalaryMin), SalaryMax: int32PtrToIntPtr(j.SalaryMax),
 		SalaryCurrency: j.SalaryCurrency, SalaryConfidence: j.SalaryConfidence, SalarySource: j.SalarySource,
+		SubscriptionID: dbutil.UUIDStringPtr(j.SubscriptionId),
 	}
 	var rawFields struct {
 		DetailHTML *string `json:"detailHtml"`

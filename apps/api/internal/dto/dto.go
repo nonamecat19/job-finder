@@ -227,6 +227,7 @@ type JobDto struct {
 	ID              string                 `json:"id"`
 	DedupeKey       string                 `json:"dedupeKey"`
 	SourceKey       string                 `json:"sourceKey"`
+	SubscriptionID  *string                `json:"subscriptionId"`
 	Title           string                 `json:"title"`
 	Company         string                 `json:"company"`
 	Location        *string                `json:"location"`

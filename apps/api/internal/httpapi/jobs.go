@@ -49,6 +49,9 @@ func (h *JobsHandler) list(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("source"); v != "" {
 		params.Source = &v
 	}
+	if v := q.Get("subscriptionId"); v != "" {
+		params.SubscriptionID = &v
+	}
 	if v := q.Get("minScore"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			params.MinScore = &n

@@ -159,6 +159,7 @@ type Job struct {
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
 	SeenCount        int32            `json:"seenCount"`
+	SubscriptionId   pgtype.UUID      `json:"subscriptionId"`
 }
 
 type JobContact struct {

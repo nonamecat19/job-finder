@@ -43,6 +43,7 @@ export function mockJob(overrides: Partial<JobDto> = {}): JobDto {
     id: 'test-job-1',
     dedupeKey: 'abc123',
     sourceKey: 'remotive',
+    subscriptionId: null,
     title: 'Senior React Developer',
     company: 'Acme Corp',
     location: 'Remote',

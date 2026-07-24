@@ -7,9 +7,9 @@ SELECT "id" FROM "Job" WHERE "dedupeKey" = $1;
 -- name: InsertJob :one
 INSERT INTO "Job" (
   "dedupeKey", "sourceKey", "externalId", "title", "company", "location",
-  "remote", "salaryRaw", "url", "description", "raw", "postedAt"
+  "remote", "salaryRaw", "url", "description", "raw", "postedAt", "subscriptionId"
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
 RETURNING *;
 

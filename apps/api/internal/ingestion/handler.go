@@ -129,8 +129,13 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		rec.Step(ctx, fmt.Sprintf("persisting %d found jobs", len(jobs)), nil)
 	}
 
+	var subscriptionID pgtype.UUID
+	if subscription != nil {
+		subscriptionID = subscription.ID
+	}
+
 	for _, j := range jobs {
-		isNew, err := h.persistIfNew(ctx, j)
+		isNew, err := h.persistIfNew(ctx, j, subscriptionID)
 		if err != nil {
 			h.finishError(ctx, run.ID, source, payload.SourceKey, err)
 			return err
@@ -166,7 +171,7 @@ func (h *Handler) finishError(ctx context.Context, runID pgtype.UUID, source sql
 // persistIfNew dedupes by sha256(lower(company)|lower(title)|canonicalUrl)
 // where canonicalUrl strips the query string and trailing slashes — must
 // match ingestion.processor.ts:74 exactly.
-func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob) (bool, error) {
+func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob, subscriptionID pgtype.UUID) (bool, error) {
 	dedupeKey := DedupeKey(j.Company, j.Title, j.URL)
 
 	_, err := h.q.GetJobByDedupeKey(ctx, dedupeKey)
@@ -190,18 +195,19 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob) (bool, 
 	}
 
 	created, err := h.q.InsertJob(ctx, sqlcgen.InsertJobParams{
-		DedupeKey:   dedupeKey,
-		SourceKey:   j.SourceKey,
-		ExternalId:  j.ExternalID,
-		Title:       j.Title,
-		Company:     j.Company,
-		Location:    j.Location,
-		Remote:      j.Remote,
-		SalaryRaw:   j.SalaryRaw,
-		Url:         j.URL,
-		Description: j.Description,
-		Raw:         raw,
-		PostedAt:    dbutil.TimestampFromPtr(j.PostedAt),
+		DedupeKey:      dedupeKey,
+		SourceKey:      j.SourceKey,
+		ExternalId:     j.ExternalID,
+		Title:          j.Title,
+		Company:        j.Company,
+		Location:       j.Location,
+		Remote:         j.Remote,
+		SalaryRaw:      j.SalaryRaw,
+		Url:            j.URL,
+		Description:    j.Description,
+		Raw:            raw,
+		PostedAt:       dbutil.TimestampFromPtr(j.PostedAt),
+		SubscriptionId: subscriptionID,
 	})
 	if err != nil {
 		return false, fmt.Errorf("ingestion: insert job: %w", err)

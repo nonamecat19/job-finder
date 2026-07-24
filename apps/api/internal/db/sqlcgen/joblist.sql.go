@@ -17,38 +17,41 @@ SELECT count(*)
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
 WHERE ($1::text IS NULL OR j."sourceKey" = $1)
+  AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
-    ($2::text IS NOT NULL AND j."status" = $2)
-    OR ($2::text IS NULL AND j."status" != 'hidden')
+    ($3::text IS NOT NULL AND j."status" = $3)
+    OR ($3::text IS NULL AND j."status" != 'hidden')
   )
-  AND ($3::bool IS NULL OR j."remote" = $3)
+  AND ($4::bool IS NULL OR j."remote" = $4)
   AND (
-    $4::text IS NULL
-    OR j."title" ILIKE $4
-    OR j."company" ILIKE $4
-    OR j."description" ILIKE $4
+    $5::text IS NULL
+    OR j."title" ILIKE $5
+    OR j."company" ILIKE $5
+    OR j."description" ILIKE $5
   )
-  AND ($5::int IS NULL OR mr."score" >= $5)
+  AND ($6::int IS NULL OR mr."score" >= $6)
   AND (
-    $6::int IS NULL
+    $7::int IS NULL
     OR j."salaryMax" IS NULL
     OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $6
+    OR j."salaryMax" >= $7
   )
 `
 
 type CountJobsParams struct {
-	Source      *string `json:"source"`
-	Status      *string `json:"status"`
-	Remote      *bool   `json:"remote"`
-	Q           *string `json:"q"`
-	MinScore    *int32  `json:"min_score"`
-	SalaryFloor *int32  `json:"salary_floor"`
+	Source         *string     `json:"source"`
+	SubscriptionID pgtype.UUID `json:"subscription_id"`
+	Status         *string     `json:"status"`
+	Remote         *bool       `json:"remote"`
+	Q              *string     `json:"q"`
+	MinScore       *int32      `json:"min_score"`
+	SalaryFloor    *int32      `json:"salary_floor"`
 }
 
 func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countJobs,
 		arg.Source,
+		arg.SubscriptionID,
 		arg.Status,
 		arg.Remote,
 		arg.Q,
@@ -97,45 +100,47 @@ func (q *Queries) GetJobDocuments(ctx context.Context, jobid pgtype.UUID) ([]Gen
 }
 
 const listJobsByDate = `-- name: ListJobsByDate :many
-SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
+SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", j."subscriptionId", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
   mr."matchedSkills" AS mr_matched_skills, mr."missingSkills" AS mr_missing_skills,
   mr."summary" AS mr_summary, mr."redFlags" AS mr_red_flags, mr."model" AS mr_model,
   mr."createdAt" AS mr_created_at
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
 WHERE ($1::text IS NULL OR j."sourceKey" = $1)
+  AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
-    ($2::text IS NOT NULL AND j."status" = $2)
-    OR ($2::text IS NULL AND j."status" != 'hidden')
+    ($3::text IS NOT NULL AND j."status" = $3)
+    OR ($3::text IS NULL AND j."status" != 'hidden')
   )
-  AND ($3::bool IS NULL OR j."remote" = $3)
+  AND ($4::bool IS NULL OR j."remote" = $4)
   AND (
-    $4::text IS NULL
-    OR j."title" ILIKE $4
-    OR j."company" ILIKE $4
-    OR j."description" ILIKE $4
+    $5::text IS NULL
+    OR j."title" ILIKE $5
+    OR j."company" ILIKE $5
+    OR j."description" ILIKE $5
   )
-  AND ($5::int IS NULL OR mr."score" >= $5)
+  AND ($6::int IS NULL OR mr."score" >= $6)
   AND (
-    $6::int IS NULL
+    $7::int IS NULL
     OR j."salaryMax" IS NULL
     OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $6
+    OR j."salaryMax" >= $7
   )
 ORDER BY j."ingestedAt" DESC
-OFFSET $7
-LIMIT $8
+OFFSET $8
+LIMIT $9
 `
 
 type ListJobsByDateParams struct {
-	Source      *string `json:"source"`
-	Status      *string `json:"status"`
-	Remote      *bool   `json:"remote"`
-	Q           *string `json:"q"`
-	MinScore    *int32  `json:"min_score"`
-	SalaryFloor *int32  `json:"salary_floor"`
-	Offset      int32   `json:"offset"`
-	Limit       int32   `json:"limit"`
+	Source         *string     `json:"source"`
+	SubscriptionID pgtype.UUID `json:"subscription_id"`
+	Status         *string     `json:"status"`
+	Remote         *bool       `json:"remote"`
+	Q              *string     `json:"q"`
+	MinScore       *int32      `json:"min_score"`
+	SalaryFloor    *int32      `json:"salary_floor"`
+	Offset         int32       `json:"offset"`
+	Limit          int32       `json:"limit"`
 }
 
 type ListJobsByDateRow struct {
@@ -162,6 +167,7 @@ type ListJobsByDateRow struct {
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
 	SeenCount        int32            `json:"seenCount"`
+	SubscriptionId   pgtype.UUID      `json:"subscriptionId"`
 	MrID             pgtype.UUID      `json:"mr_id"`
 	MrSimilarity     *float64         `json:"mr_similarity"`
 	MrScore          *int32           `json:"mr_score"`
@@ -176,6 +182,7 @@ type ListJobsByDateRow struct {
 func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) ([]ListJobsByDateRow, error) {
 	rows, err := q.db.Query(ctx, listJobsByDate,
 		arg.Source,
+		arg.SubscriptionID,
 		arg.Status,
 		arg.Remote,
 		arg.Q,
@@ -215,6 +222,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 			&i.SalaryConfidence,
 			&i.SalarySource,
 			&i.SeenCount,
+			&i.SubscriptionId,
 			&i.MrID,
 			&i.MrSimilarity,
 			&i.MrScore,
@@ -236,45 +244,47 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 }
 
 const listJobsByScore = `-- name: ListJobsByScore :many
-SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
+SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", j."subscriptionId", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
   mr."matchedSkills" AS mr_matched_skills, mr."missingSkills" AS mr_missing_skills,
   mr."summary" AS mr_summary, mr."redFlags" AS mr_red_flags, mr."model" AS mr_model,
   mr."createdAt" AS mr_created_at
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
 WHERE ($1::text IS NULL OR j."sourceKey" = $1)
+  AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
-    ($2::text IS NOT NULL AND j."status" = $2)
-    OR ($2::text IS NULL AND j."status" != 'hidden')
+    ($3::text IS NOT NULL AND j."status" = $3)
+    OR ($3::text IS NULL AND j."status" != 'hidden')
   )
-  AND ($3::bool IS NULL OR j."remote" = $3)
+  AND ($4::bool IS NULL OR j."remote" = $4)
   AND (
-    $4::text IS NULL
-    OR j."title" ILIKE $4
-    OR j."company" ILIKE $4
-    OR j."description" ILIKE $4
+    $5::text IS NULL
+    OR j."title" ILIKE $5
+    OR j."company" ILIKE $5
+    OR j."description" ILIKE $5
   )
-  AND ($5::int IS NULL OR mr."score" >= $5)
+  AND ($6::int IS NULL OR mr."score" >= $6)
   AND (
-    $6::int IS NULL
+    $7::int IS NULL
     OR j."salaryMax" IS NULL
     OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $6
+    OR j."salaryMax" >= $7
   )
 ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
-OFFSET $7
-LIMIT $8
+OFFSET $8
+LIMIT $9
 `
 
 type ListJobsByScoreParams struct {
-	Source      *string `json:"source"`
-	Status      *string `json:"status"`
-	Remote      *bool   `json:"remote"`
-	Q           *string `json:"q"`
-	MinScore    *int32  `json:"min_score"`
-	SalaryFloor *int32  `json:"salary_floor"`
-	Offset      int32   `json:"offset"`
-	Limit       int32   `json:"limit"`
+	Source         *string     `json:"source"`
+	SubscriptionID pgtype.UUID `json:"subscription_id"`
+	Status         *string     `json:"status"`
+	Remote         *bool       `json:"remote"`
+	Q              *string     `json:"q"`
+	MinScore       *int32      `json:"min_score"`
+	SalaryFloor    *int32      `json:"salary_floor"`
+	Offset         int32       `json:"offset"`
+	Limit          int32       `json:"limit"`
 }
 
 type ListJobsByScoreRow struct {
@@ -301,6 +311,7 @@ type ListJobsByScoreRow struct {
 	SalaryConfidence *float64         `json:"salaryConfidence"`
 	SalarySource     *string          `json:"salarySource"`
 	SeenCount        int32            `json:"seenCount"`
+	SubscriptionId   pgtype.UUID      `json:"subscriptionId"`
 	MrID             pgtype.UUID      `json:"mr_id"`
 	MrSimilarity     *float64         `json:"mr_similarity"`
 	MrScore          *int32           `json:"mr_score"`
@@ -315,6 +326,7 @@ type ListJobsByScoreRow struct {
 func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams) ([]ListJobsByScoreRow, error) {
 	rows, err := q.db.Query(ctx, listJobsByScore,
 		arg.Source,
+		arg.SubscriptionID,
 		arg.Status,
 		arg.Remote,
 		arg.Q,
@@ -354,6 +366,7 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 			&i.SalaryConfidence,
 			&i.SalarySource,
 			&i.SeenCount,
+			&i.SubscriptionId,
 			&i.MrID,
 			&i.MrSimilarity,
 			&i.MrScore,

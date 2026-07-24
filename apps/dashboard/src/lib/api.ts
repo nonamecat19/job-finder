@@ -48,6 +48,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export interface JobFilters {
   sort?: 'score' | 'date';
   source?: string;
+  subscriptionId?: string;
   minScore?: number;
   status?: string;
   remote?: boolean;

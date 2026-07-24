@@ -38,7 +38,7 @@ func (q *Queries) GetJobByDedupeKey(ctx context.Context, dedupekey string) (pgty
 }
 
 const getJobByID = `-- name: GetJobByID :one
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount" FROM "Job" WHERE "id" = $1
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId" FROM "Job" WHERE "id" = $1
 `
 
 func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
@@ -68,6 +68,7 @@ func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
 		&i.SalaryConfidence,
 		&i.SalarySource,
 		&i.SeenCount,
+		&i.SubscriptionId,
 	)
 	return i, err
 }
@@ -75,26 +76,27 @@ func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
 const insertJob = `-- name: InsertJob :one
 INSERT INTO "Job" (
   "dedupeKey", "sourceKey", "externalId", "title", "company", "location",
-  "remote", "salaryRaw", "url", "description", "raw", "postedAt"
+  "remote", "salaryRaw", "url", "description", "raw", "postedAt", "subscriptionId"
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId"
 `
 
 type InsertJobParams struct {
-	DedupeKey   string           `json:"dedupeKey"`
-	SourceKey   string           `json:"sourceKey"`
-	ExternalId  *string          `json:"externalId"`
-	Title       string           `json:"title"`
-	Company     string           `json:"company"`
-	Location    *string          `json:"location"`
-	Remote      bool             `json:"remote"`
-	SalaryRaw   *string          `json:"salaryRaw"`
-	Url         string           `json:"url"`
-	Description string           `json:"description"`
-	Raw         []byte           `json:"raw"`
-	PostedAt    pgtype.Timestamp `json:"postedAt"`
+	DedupeKey      string           `json:"dedupeKey"`
+	SourceKey      string           `json:"sourceKey"`
+	ExternalId     *string          `json:"externalId"`
+	Title          string           `json:"title"`
+	Company        string           `json:"company"`
+	Location       *string          `json:"location"`
+	Remote         bool             `json:"remote"`
+	SalaryRaw      *string          `json:"salaryRaw"`
+	Url            string           `json:"url"`
+	Description    string           `json:"description"`
+	Raw            []byte           `json:"raw"`
+	PostedAt       pgtype.Timestamp `json:"postedAt"`
+	SubscriptionId pgtype.UUID      `json:"subscriptionId"`
 }
 
 func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, error) {
@@ -111,6 +113,7 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, erro
 		arg.Description,
 		arg.Raw,
 		arg.PostedAt,
+		arg.SubscriptionId,
 	)
 	var i Job
 	err := row.Scan(
@@ -137,12 +140,13 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, erro
 		&i.SalaryConfidence,
 		&i.SalarySource,
 		&i.SeenCount,
+		&i.SubscriptionId,
 	)
 	return i, err
 }
 
 const listJobsNeedingDetail = `-- name: ListJobsNeedingDetail :many
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount" FROM "Job"
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId" FROM "Job"
 WHERE "sourceKey" = $1 AND "detailScrapedAt" IS NULL
 ORDER BY "ingestedAt" ASC
 LIMIT $2
@@ -186,6 +190,7 @@ func (q *Queries) ListJobsNeedingDetail(ctx context.Context, arg ListJobsNeeding
 			&i.SalaryConfidence,
 			&i.SalarySource,
 			&i.SeenCount,
+			&i.SubscriptionId,
 		); err != nil {
 			return nil, err
 		}
@@ -200,7 +205,7 @@ func (q *Queries) ListJobsNeedingDetail(ctx context.Context, arg ListJobsNeeding
 const recordJobRepost = `-- name: RecordJobRepost :one
 UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now()
 WHERE "dedupeKey" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId"
 `
 
 // Called by ingestion.persistIfNew when a job with this dedupeKey already
@@ -233,6 +238,7 @@ func (q *Queries) RecordJobRepost(ctx context.Context, dedupekey string) (Job, e
 		&i.SalaryConfidence,
 		&i.SalarySource,
 		&i.SeenCount,
+		&i.SubscriptionId,
 	)
 	return i, err
 }
@@ -247,7 +253,7 @@ UPDATE "Job" SET
   "postedAt" = COALESCE($6, "postedAt"),
   "detailScrapedAt" = now()
 WHERE "id" = $7
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId"
 `
 
 type UpdateJobDetailParams struct {
@@ -295,6 +301,7 @@ func (q *Queries) UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams
 		&i.SalaryConfidence,
 		&i.SalarySource,
 		&i.SeenCount,
+		&i.SubscriptionId,
 	)
 	return i, err
 }
@@ -315,7 +322,7 @@ func (q *Queries) UpdateJobEmbedding(ctx context.Context, arg UpdateJobEmbedding
 
 const updateJobStatus = `-- name: UpdateJobStatus :one
 UPDATE "Job" SET "status" = $2 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId"
 `
 
 type UpdateJobStatusParams struct {
@@ -350,6 +357,7 @@ func (q *Queries) UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams
 		&i.SalaryConfidence,
 		&i.SalarySource,
 		&i.SeenCount,
+		&i.SubscriptionId,
 	)
 	return i, err
 }

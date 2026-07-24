@@ -16,6 +16,13 @@ export function useFeedSources() {
   });
 }
 
+export function useFeedSubscriptions() {
+  return useQuery({
+    queryKey: queryKeys.subscriptions.list,
+    queryFn: () => api.subscriptions.list(),
+  });
+}
+
 export function useShortlistJob() {
   const qc = useQueryClient();
   return useMutation({

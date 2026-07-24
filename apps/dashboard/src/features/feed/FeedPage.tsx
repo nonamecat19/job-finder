@@ -1,6 +1,6 @@
 import { Clock, ExternalLink, EyeOff, Star, Trash2 } from 'lucide-react';
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { JobDto } from '@job-finder/shared';
 import { type JobFilters } from '../../lib/api';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -18,18 +18,66 @@ import {
   Spinner,
   Surface,
 } from '../../components/ui';
-import { useClearJobs, useFeedSources, useHideJob, useJobs, useShortlistJob } from './hooks';
+import {
+  useClearJobs,
+  useFeedSources,
+  useFeedSubscriptions,
+  useHideJob,
+  useJobs,
+  useShortlistJob,
+} from './hooks';
 import { postAgeLabel } from '../../lib/time';
 
+function filtersFromParams(params: URLSearchParams): JobFilters {
+  return {
+    sort: params.get('sort') === 'date' ? 'date' : 'score',
+    source: params.get('source') ?? undefined,
+    subscriptionId: params.get('subscriptionId') ?? undefined,
+    minScore: params.get('minScore') ? Number(params.get('minScore')) : undefined,
+    remote: params.get('remote') === 'true' ? true : undefined,
+    q: params.get('q') ?? undefined,
+    page: params.get('page') ? Number(params.get('page')) : 1,
+    showBelowFloor: params.get('showBelowFloor') === 'true' ? true : undefined,
+  };
+}
+
+function paramsFromFilters(filters: JobFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) {
+    if (v === undefined || v === '' || v === null) continue;
+    if (k === 'sort' && v === 'score') continue;
+    if (k === 'page' && v === 1) continue;
+    params.set(k, String(v));
+  }
+  return params;
+}
+
 export default function FeedPage() {
-  const [filters, setFilters] = useState<JobFilters>({ sort: 'score', page: 1 });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
   const { data, isLoading, error } = useJobs(filters);
   const { data: sources } = useFeedSources();
+  const { data: subscriptions } = useFeedSubscriptions();
   const shortlist = useShortlistJob();
   const hide = useHideJob();
   const clear = useClearJobs();
 
-  const set = (patch: Partial<JobFilters>) => setFilters((f) => ({ ...f, ...patch, page: 1 }));
+  const set = (patch: Partial<JobFilters>) =>
+    setSearchParams(paramsFromFilters({ ...filters, ...patch, page: 1 }), { replace: true });
+
+  const setPage = (page: number) => setSearchParams(paramsFromFilters({ ...filters, page }), { replace: true });
+
+  const [searchInput, setSearchInput] = useState(filters.q ?? '');
+  useEffect(() => {
+    setSearchInput(filters.q ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.q]);
+  useEffect(() => {
+    if (searchInput === (filters.q ?? '')) return;
+    const id = setTimeout(() => set({ q: searchInput || undefined }), 300);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
 
   const onClearAll = () => {
     if (window.confirm('Delete ALL vacancies and their match results, documents, and applications? This cannot be undone.')) {
@@ -51,18 +99,18 @@ export default function FeedPage() {
       />
 
       <Surface className="mb-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(14rem,1.4fr)_repeat(3,minmax(9rem,0.7fr))_auto] md:items-end">
+        <div className="grid gap-3 md:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(9rem,0.7fr))_auto] md:items-end">
           <Field label="Search">
             <Input
               placeholder="Search title/company…"
-              value={filters.q ?? ''}
-              onChange={(e) => set({ q: e.target.value || undefined })}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </Field>
           <Field label="Source">
             <Select
               value={filters.source ?? ''}
-              onChange={(e) => set({ source: e.target.value || undefined })}
+              onChange={(e) => set({ source: e.target.value || undefined, subscriptionId: undefined })}
               className="w-full"
             >
               <option value="">all sources</option>
@@ -71,6 +119,23 @@ export default function FeedPage() {
                   {s.key}
                 </option>
               ))}
+            </Select>
+          </Field>
+          <Field label="Subscription">
+            <Select
+              value={filters.subscriptionId ?? ''}
+              onChange={(e) => set({ subscriptionId: e.target.value || undefined })}
+              className="w-full"
+              disabled={!filters.source}
+            >
+              <option value="">all subscriptions</option>
+              {subscriptions
+                ?.filter((s) => s.sourceKey === filters.source)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name ?? s.sourceKey}
+                  </option>
+                ))}
             </Select>
           </Field>
           <Field label="Fit score">
@@ -135,8 +200,8 @@ export default function FeedPage() {
           total={data.total}
           pageSize={data.pageSize}
           currentPage={filters.page ?? 1}
-          onPrev={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
-          onNext={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
+          onPrev={() => setPage((filters.page ?? 1) - 1)}
+          onNext={() => setPage((filters.page ?? 1) + 1)}
         />
       ) : null}
     </div>
