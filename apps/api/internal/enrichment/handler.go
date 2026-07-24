@@ -159,7 +159,6 @@ func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload,
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
-	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: djinni complete", "job", payload.JobID)
 	return nil
 }
@@ -202,7 +201,6 @@ func (h *Handler) enrichDOU(ctx context.Context, payload queue.EnrichPayload, ui
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
-	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: dou complete", "job", payload.JobID)
 	return nil
 }
@@ -237,7 +235,6 @@ func (h *Handler) enrichWorkUa(ctx context.Context, payload queue.EnrichPayload,
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
-	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: workua complete", "job", payload.JobID)
 	return nil
 }
@@ -270,7 +267,6 @@ func (h *Handler) enrichIndeed(ctx context.Context, payload queue.EnrichPayload,
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
-	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: indeed complete", "job", payload.JobID)
 	return nil
 }
@@ -307,7 +303,6 @@ func (h *Handler) enrichRemoteOK(ctx context.Context, payload queue.EnrichPayloa
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
-	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: remoteok complete", "job", payload.JobID)
 	return nil
 }
@@ -344,7 +339,6 @@ func (h *Handler) enrichJobLeads(ctx context.Context, payload queue.EnrichPayloa
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
-	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: jobleads complete", "job", payload.JobID)
 	return nil
 }
@@ -381,7 +375,6 @@ func (h *Handler) enrichGlassdoor(ctx context.Context, payload queue.EnrichPaylo
 	}
 
 	h.enqueueMatch(ctx, payload.JobID, job)
-	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: glassdoor complete", "job", payload.JobID)
 	return nil
 }
@@ -401,24 +394,6 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, job sqlcgen.Jo
 	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, matchPayload),
 		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
 		slog.Warn("enrichment: enqueue match failed", "job", jobID, "error", err)
-	}
-}
-
-func (h *Handler) enqueueSalaryInfer(ctx context.Context, jobID string) {
-	var actID *string
-	rec := activity.New(ctx, h.q, "salary_infer", "salary infer", &jobID, nil, "")
-	if rec != nil {
-		idStr := dbutil.UUIDString(rec.ID())
-		actID = &idStr
-	}
-
-	payload, err := json.Marshal(queue.SalaryInferPayload{JobID: jobID, ActivityID: actID})
-	if err != nil {
-		return
-	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeSalaryInfer, payload),
-		asynq.MaxRetry(1), asynq.Queue(queue.QueueSalaryInfer)); err != nil {
-		slog.Warn("enrichment: enqueue salary infer failed", "job", jobID, "error", err)
 	}
 }
 

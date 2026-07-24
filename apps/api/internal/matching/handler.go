@@ -10,15 +10,17 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/aifeature"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/queue"
 )
 
-// AutoGenerateGate reports whether a job's score should trigger an
-// auto-enqueued resume, per the configurable Settings threshold.
-type AutoGenerateGate interface {
-	ShouldGenerate(score int) bool
+// FeatureGate reports whether a job's score should trigger an AI feature
+// (resume/cover-letter generation, salary inference) automatically, per the
+// configurable Settings threshold for that feature.
+type FeatureGate interface {
+	ShouldRun(feature string, score int) bool
 }
 
 // Generator enqueues a "generate" asynq task for a job. *jobs.Service
@@ -27,18 +29,25 @@ type Generator interface {
 	EnqueueGeneration(ctx context.Context, id, docType string, profileID *string) (map[string]any, error)
 }
 
+// SalaryEnqueuer enqueues a "salary_infer" asynq task for a job. *jobs.Service
+// satisfies it structurally.
+type SalaryEnqueuer interface {
+	EnqueueSalaryInfer(ctx context.Context, jobID string) error
+}
+
 // Handler processes "match" asynq tasks, mirroring matching.processor.ts
 // (concurrency 1: local LLM handles one request at a time comfortably —
 // enforced by the asynq server's queue concurrency configuration in main).
 type Handler struct {
 	svc       *Service
 	notifier  *notifier.Service
-	autogen   AutoGenerateGate
+	features  FeatureGate
 	generator Generator
+	salary    SalaryEnqueuer
 }
 
-func NewHandler(svc *Service, notifier *notifier.Service, autogen AutoGenerateGate, generator Generator) *Handler {
-	return &Handler{svc: svc, notifier: notifier, autogen: autogen, generator: generator}
+func NewHandler(svc *Service, notifier *notifier.Service, features FeatureGate, generator Generator, salary SalaryEnqueuer) *Handler {
+	return &Handler{svc: svc, notifier: notifier, features: features, generator: generator, salary: salary}
 }
 
 func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
@@ -100,11 +109,24 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	if result.Score != nil {
 		h.notifier.MaybeNotify(ctx, payload.JobID, result.ID, *result.Score)
 
-		if h.autogen != nil && h.generator != nil && h.autogen.ShouldGenerate(*result.Score) {
-			if _, err := h.generator.EnqueueGeneration(ctx, payload.JobID, "resume", nil); err != nil {
-				// Best-effort: no profile/RenderCV config yet, or another
-				// precondition failure. Never affects the match result itself.
-				slog.Warn("matching: auto-generate skipped", "jobId", payload.JobID, "score", *result.Score, "error", err)
+		if h.features != nil {
+			score := *result.Score
+			if h.generator != nil && h.features.ShouldRun(aifeature.Resume, score) {
+				if _, err := h.generator.EnqueueGeneration(ctx, payload.JobID, "resume", nil); err != nil {
+					// Best-effort: no profile/RenderCV config yet, or another
+					// precondition failure. Never affects the match result itself.
+					slog.Warn("matching: auto-generate resume skipped", "jobId", payload.JobID, "score", score, "error", err)
+				}
+			}
+			if h.generator != nil && h.features.ShouldRun(aifeature.CoverLetter, score) {
+				if _, err := h.generator.EnqueueGeneration(ctx, payload.JobID, "cover_letter", nil); err != nil {
+					slog.Warn("matching: auto-generate cover letter skipped", "jobId", payload.JobID, "score", score, "error", err)
+				}
+			}
+			if h.salary != nil && h.features.ShouldRun(aifeature.SalaryInfer, score) {
+				if err := h.salary.EnqueueSalaryInfer(ctx, payload.JobID); err != nil {
+					slog.Warn("matching: auto salary inference skipped", "jobId", payload.JobID, "score", score, "error", err)
+				}
 			}
 		}
 	}

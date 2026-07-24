@@ -341,6 +341,35 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	return map[string]any{"queued": true, "queueJobId": info.ID, "type": docType}, nil
 }
 
+// EnqueueSalaryInfer enqueues a "salary_infer" asynq task for a job, mirroring
+// enrichment.Handler.enqueueSalaryInfer (used there right after scraping;
+// used here for the on-demand/auto-generate-style trigger from matching once
+// a job's score is known).
+func (s *Service) EnqueueSalaryInfer(ctx context.Context, jobID string) error {
+	jobDto, err := s.Get(ctx, jobID)
+	if err != nil {
+		return err
+	}
+
+	rec := activity.New(ctx, s.q, "salary_infer", fmt.Sprintf("%s — %s", jobDto.Company, jobDto.Title), &jobID, nil, "")
+	var actID *string
+	if rec != nil {
+		idStr := dbutil.UUIDString(rec.ID())
+		actID = &idStr
+	}
+
+	payload, err := json.Marshal(queue.SalaryInferPayload{JobID: jobID, ActivityID: actID})
+	if err != nil {
+		return err
+	}
+	opts := []asynq.Option{asynq.MaxRetry(1), asynq.Queue(queue.QueueSalaryInfer)}
+	if actID != nil {
+		opts = append(opts, asynq.TaskID(*actID))
+	}
+	_, err = s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeSalaryInfer, payload), opts...)
+	return err
+}
+
 func jobToDto(j sqlcgen.Job) dto.JobDto {
 	out := dto.JobDto{
 		ID: dbutil.UUIDString(j.ID), DedupeKey: j.DedupeKey, SourceKey: j.SourceKey,
