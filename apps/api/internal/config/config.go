@@ -82,7 +82,11 @@ type Config struct {
 	// resulting sessionid cookie in the DB (never in env).
 	DjinniEmail    string `mapstructure:"DJINNI_EMAIL"`
 	DjinniPassword string `mapstructure:"DJINNI_PASSWORD"`
-	JoobleAPIKey   string `mapstructure:"JOOBLE_API_KEY"`
+	// JobLeads credentials: same pattern as Djinni — the adapter logs in with
+	// these and stores the resulting session cookie in the DB (never in env).
+	JobLeadsEmail    string `mapstructure:"JOBLEADS_EMAIL"`
+	JobLeadsPassword string `mapstructure:"JOBLEADS_PASSWORD"`
+	JoobleAPIKey     string `mapstructure:"JOOBLE_API_KEY"`
 	// DjinniDetailDelayMs is the pause before each detail-page fetch in the
 	// enrich queue (concurrency 1), to avoid rate-limiting/banning the
 	// authenticated djinni account.
@@ -163,7 +167,7 @@ var optionalKeys = []string{
 	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
 	"LLM_MODEL_REPHRASE", "LLM_MODEL_GHOST",
 	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "EXT_JWT_SECRET", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
-	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
+	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOBLEADS_EMAIL", "JOBLEADS_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
 	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
 	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD", "CEREBRAS_API_KEY",
 }

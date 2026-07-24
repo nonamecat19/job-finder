@@ -19,9 +19,9 @@ import (
 
 type enrichFakeRepo struct {
 	enrichment.Repository
-	job              sqlcgen.Job
-	updateCalled     bool
-	updatedDetail    sqlcgen.UpdateJobDetailParams
+	job           sqlcgen.Job
+	updateCalled  bool
+	updatedDetail sqlcgen.UpdateJobDetailParams
 }
 
 func (f *enrichFakeRepo) GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error) {
@@ -65,7 +65,7 @@ func TestEnrichIndeed_Success(t *testing.T) {
 		Company:   "Acme",
 	}}
 	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{Scraping: scraping.New()}, adapters.RemoteOKAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+		adapters.IndeedAdapter{Scraping: scraping.New()}, adapters.RemoteOKAdapter{}, adapters.JobLeadsAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -92,7 +92,7 @@ func TestEnrichIndeed_FetchDetailFailureDoesNotPropagate(t *testing.T) {
 		Url:       srv.URL + "/viewjob?jk=gone",
 	}}
 	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{Scraping: scraping.New()}, adapters.RemoteOKAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+		adapters.IndeedAdapter{Scraping: scraping.New()}, adapters.RemoteOKAdapter{}, adapters.JobLeadsAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -121,7 +121,7 @@ func TestEnrichRemoteOK_Success(t *testing.T) {
 		Company:   "NovaTech LLC",
 	}}
 	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}, &enrichFakeEnqueuer{}, 0, nil)
+		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}, adapters.JobLeadsAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -148,7 +148,7 @@ func TestEnrichRemoteOK_RotatedOutDoesNotUpdate(t *testing.T) {
 		Url:       "https://remoteok.com/remote-jobs/9999999-gone",
 	}}
 	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}, &enrichFakeEnqueuer{}, 0, nil)
+		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}, adapters.JobLeadsAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -156,5 +156,66 @@ func TestEnrichRemoteOK_RotatedOutDoesNotUpdate(t *testing.T) {
 	}
 	if repo.updateCalled {
 		t.Error("expected UpdateJobDetail NOT to be called when the listing has rotated out — existing summary data must be preserved")
+	}
+}
+
+// enrichJobLeadsFakeSession always returns a fixed cookie, bypassing the
+// real login flow so these tests only exercise FetchDetail/enrichment.
+type enrichJobLeadsFakeSession struct{ cookie string }
+
+func (s *enrichJobLeadsFakeSession) Ensure(_ context.Context) (string, error)  { return s.cookie, nil }
+func (s *enrichJobLeadsFakeSession) Refresh(_ context.Context) (string, error) { return s.cookie, nil }
+
+func TestEnrichJobLeads_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html><body><article class="job-detail">
+			<div class="job-detail__description"><p>Full Go role description text long enough to count as real detail content here.</p></div>
+			<time class="job-detail__date" datetime="2026-07-20T00:00:00Z"></time>
+		</article></body></html>`))
+	}))
+	defer srv.Close()
+
+	repo := &enrichFakeRepo{job: sqlcgen.Job{
+		ID:        newIndeedEnrichTestUUID(),
+		SourceKey: "jobleads",
+		Url:       srv.URL + "/job/senior-golang-engineer-abc123",
+		Title:     "Senior Golang Engineer",
+		Company:   "NovaTech LLC",
+	}}
+	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
+		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.JobLeadsAdapter{Scraping: scraping.New(), Session: &enrichJobLeadsFakeSession{cookie: "cookie-xyz"}}, &enrichFakeEnqueuer{}, 0, nil)
+
+	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
+	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+		t.Fatalf("ProcessTask returned error: %v", err)
+	}
+	if !repo.updateCalled {
+		t.Fatal("expected UpdateJobDetail to be called for a jobleads job still available")
+	}
+	if repo.updatedDetail.Description == "" {
+		t.Error("expected non-empty description to be persisted")
+	}
+}
+
+func TestEnrichJobLeads_UnavailableDoesNotUpdate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html><body><p>This job has been removed and is no longer available.</p></body></html>`))
+	}))
+	defer srv.Close()
+
+	repo := &enrichFakeRepo{job: sqlcgen.Job{
+		ID:        newIndeedEnrichTestUUID(),
+		SourceKey: "jobleads",
+		Url:       srv.URL + "/job/gone",
+	}}
+	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
+		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.JobLeadsAdapter{Scraping: scraping.New(), Session: &enrichJobLeadsFakeSession{cookie: "cookie-xyz"}}, &enrichFakeEnqueuer{}, 0, nil)
+
+	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
+	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+		t.Fatalf("expected unavailable listing to be swallowed (nil returned to asynq), got: %v", err)
+	}
+	if repo.updateCalled {
+		t.Error("expected UpdateJobDetail NOT to be called when the listing is unavailable — existing summary data must be preserved")
 	}
 }

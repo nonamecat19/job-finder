@@ -30,6 +30,10 @@ type Platform struct {
 	// jobsources.Service exists (see composeJobSources), breaking the
 	// adapter<->service construction cycle.
 	DjinniSession *adapters.DjinniSession
+
+	// JobLeadsSession is the same pattern as DjinniSession, for the
+	// login-gated JobLeads source.
+	JobLeadsSession *adapters.JobLeadsSession
 }
 
 // buildPlatform opens the shared infrastructure. Callers own the lifecycle:
@@ -50,12 +54,13 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 	}
 
 	return &Platform{
-		Config:        cfg,
-		DB:            database,
-		Logger:        slog.Default(),
-		RedisOpt:      redisOpt,
-		AsynqClient:   asynq.NewClient(redisOpt),
-		Scraping:      scrapingSvc,
-		DjinniSession: &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
+		Config:          cfg,
+		DB:              database,
+		Logger:          slog.Default(),
+		RedisOpt:        redisOpt,
+		AsynqClient:     asynq.NewClient(redisOpt),
+		Scraping:        scrapingSvc,
+		DjinniSession:   &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
+		JobLeadsSession: &adapters.JobLeadsSession{Email: cfg.JobLeadsEmail, Password: cfg.JobLeadsPassword, Key: "jobleads"},
 	}, nil
 }

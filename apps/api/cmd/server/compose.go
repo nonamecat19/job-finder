@@ -81,6 +81,7 @@ type sourcesHandles struct {
 	Workua   adapters.WorkUaAdapter
 	Indeed   adapters.IndeedAdapter
 	RemoteOK adapters.RemoteOKAdapter
+	JobLeads adapters.JobLeadsAdapter
 }
 
 // composeJobSources builds the adapter registry and jobsources.Service, then
@@ -92,6 +93,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	workuaAdapter := adapters.WorkUaAdapter{Scraping: p.Scraping}
 	indeedAdapter := adapters.IndeedAdapter{Scraping: p.Scraping}
 	remoteokAdapter := adapters.RemoteOKAdapter{Scraping: p.Scraping}
+	jobleadsAdapter := adapters.JobLeadsAdapter{Scraping: p.Scraping, Session: p.JobLeadsSession}
 	registry := jobsources.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
@@ -101,12 +103,14 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		workuaAdapter,
 		indeedAdapter,
 		remoteokAdapter,
+		jobleadsAdapter,
 		adapters.RobotaAdapter{},
 		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
 	)
 	sourcesSvc := jobsources.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc
+	p.JobLeadsSession.Sources = sourcesSvc
 	return &sourcesHandles{
 		Registry: registry,
 		Sources:  sourcesSvc,
@@ -115,6 +119,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		Workua:   workuaAdapter,
 		Indeed:   indeedAdapter,
 		RemoteOK: remoteokAdapter,
+		JobLeads: jobleadsAdapter,
 	}
 }
 
@@ -304,7 +309,7 @@ func composeEnrichment(p *Platform, sources *sourcesHandles) *enrichment.Handler
 	enrichDelays := map[string]time.Duration{
 		"workua": time.Duration(cfg.WorkUaDetailDelayMs) * time.Millisecond,
 	}
-	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, sources.Indeed, sources.RemoteOK, p.AsynqClient, enrichDelay, enrichDelays)
+	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, sources.Indeed, sources.RemoteOK, sources.JobLeads, p.AsynqClient, enrichDelay, enrichDelays)
 }
 
 type salaryHandles struct {
