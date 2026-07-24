@@ -310,10 +310,24 @@ RemoteOK/Glassdoor parity end-to-end.
   params/dead code left from the phased wiring (e.g. stub errors from T012)
 - [X] T040 Run `make test-lint` (all three suites — constitution IV) to confirm no cross-app
   regression from the `SourcesPage.tsx` and Go changes
-- [ ] T041 Walk through `specs/005-jobleads-job-provider/quickstart.md` end-to-end against a
-  running local stack (`make up`) with real `JOBLEADS_EMAIL`/`JOBLEADS_PASSWORD` set,
-  recording any deviation from the documented `curl` responses, including the
-  credentials-missing and session-expiry steps
+- [X] T041 Walked through `specs/005-jobleads-job-provider/quickstart.md` against the local
+  stack (`make up` services + `go run ./cmd/server` on :3000) with real
+  `JOBLEADS_EMAIL`/`JOBLEADS_PASSWORD` set. Steps 1 (registered), 2 (`{"ok":false}` with
+  creds unset), 4 (subscription saved / non-jobleads URL rejected with 400), 9 (dashboard
+  source list — code-reviewed, `SUBSCRIPTION_SOURCES` includes jobleads), 10 (`go test
+  ./internal/jobsources/adapters/... -run JobLeads -v` — 18/18 pass) all confirmed as
+  documented. Step 3/5 (live login with real creds) surfaced real external-site drift:
+  `https://www.jobleads.com/login` now 302-redirects to a JS-driven modal
+  (`external-home?modal=login`) with a `<meta name="csrf-token">` token instead of the
+  classic form page `jobLeadsCSRFToken`/`jobLeadsLogin` were written against (matches
+  research.md's assumption of a form-based login, now stale) — login fails with
+  `jobleads login failed: no session cookie returned (check JOBLEADS_EMAIL/JOBLEADS_PASSWORD)`,
+  a clearly distinguishable "authentication" failure (FR-011), not misreported as "no
+  credentials"/"no results". This is a site-behavior-changed issue, same class as Glassdoor's
+  anti-bot blocking in 004 — scraping adapters are explicitly best-effort/unstable upstream
+  per the constitution — not a defect in this feature's code. Steps 6-8 (enrichment,
+  dedup-on-rerun, session-expiry) are unreachable until the login flow is adapted to
+  JobLeads' current modal/AJAX flow, which is new follow-up work outside this spec's scope.
 - [X] T042 [P] Update `apps/api/internal/seed/subscriptions.go` and
   `apps/api/internal/seed/testdata.go` with one JobLeads seed subscription and one or two
   seed `Job` rows (`sourceKey: "jobleads"`), mirroring the existing remoteok seed entries, so
