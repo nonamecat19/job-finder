@@ -5,10 +5,10 @@ import "fmt"
 type SalarySource string
 
 const (
-	SourceLLM          SalarySource = "llm"
-	SourceLevelsFyi    SalarySource = "levels-fyi"
+	SourceLLM           SalarySource = "llm"
+	SourceLevelsFyi     SalarySource = "levels-fyi"
 	SourceIngestedCache SalarySource = "ingested-cache"
-	SourceBlended      SalarySource = "blended"
+	SourceBlended       SalarySource = "blended"
 )
 
 type SalaryBand struct {

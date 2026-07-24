@@ -398,15 +398,15 @@ func parseDouDetail(doc *goquery.Document, jobURL string) dto.NormalizedJob {
 	isRemote := douRemoteRe.MatchString(description) || douRemoteRe.MatchString(location)
 
 	return dto.NormalizedJob{
-		SourceKey:  "dou",
-		Title:      title,
-		Company:    company,
-		Location:   nilIfEmpty(location),
-		Remote:     isRemote,
-		SalaryRaw:  nilIfEmpty(salary),
-		URL:        jobURL,
+		SourceKey:   "dou",
+		Title:       title,
+		Company:     company,
+		Location:    nilIfEmpty(location),
+		Remote:      isRemote,
+		SalaryRaw:   nilIfEmpty(salary),
+		URL:         jobURL,
 		Description: description,
-		Raw:        map[string]string{"companyURL": companyURL},
+		Raw:         map[string]string{"companyURL": companyURL},
 	}
 }
 

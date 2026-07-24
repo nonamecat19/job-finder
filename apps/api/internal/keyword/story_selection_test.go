@@ -15,24 +15,24 @@ func TestSelectStories(t *testing.T) {
 	}
 
 	matchingStory := keyword.StarStory{
-		ID:     "story-1",
-		Title:  "Built data pipeline with Python",
-		Situation: "Our data team needed a real-time ETL pipeline to process 10M events daily.",
-		Task:   "Design and build the pipeline using Python and Apache Kafka.",
-		Action: "Wrote Python microservices with asyncio and deployed on Kubernetes.",
-		Result: "Reduced data latency from 2 hours to under 30 seconds.",
-		Skills: []string{"Python", "Kafka", "Kubernetes"},
+		ID:         "story-1",
+		Title:      "Built data pipeline with Python",
+		Situation:  "Our data team needed a real-time ETL pipeline to process 10M events daily.",
+		Task:       "Design and build the pipeline using Python and Apache Kafka.",
+		Action:     "Wrote Python microservices with asyncio and deployed on Kubernetes.",
+		Result:     "Reduced data latency from 2 hours to under 30 seconds.",
+		Skills:     []string{"Python", "Kafka", "Kubernetes"},
 		Categories: []keyword.StoryCategory{keyword.StoryTechnical},
 	}
 
 	unrelatedStory := keyword.StarStory{
-		ID:     "story-2",
-		Title:  "Resolved team conflict",
+		ID:        "story-2",
+		Title:     "Resolved team conflict",
 		Situation: "Two senior engineers disagreed on the architecture approach.",
-		Task:   "Facilitate a decision and restore team alignment.",
-		Action: "Organized a design review with benchmarks and consensus-building.",
-		Result: "Team agreed on a hybrid approach, shipped on schedule.",
-		Skills: []string{"Communication", "Mediation"},
+		Task:      "Facilitate a decision and restore team alignment.",
+		Action:    "Organized a design review with benchmarks and consensus-building.",
+		Result:    "Team agreed on a hybrid approach, shipped on schedule.",
+		Skills:    []string{"Communication", "Mediation"},
 		Categories: []keyword.StoryCategory{
 			keyword.StoryLeadership,
 			keyword.StoryConflictResolution,
@@ -40,13 +40,13 @@ func TestSelectStories(t *testing.T) {
 	}
 
 	partialMatchStory := keyword.StarStory{
-		ID:     "story-3",
-		Title:  "Containerized microservices with Docker",
-		Situation: "Monolithic app needed to be broken into microservices.",
-		Task:   "Containerize and orchestrate the microservices.",
-		Action: "Created Dockerfiles and Kubernetes manifests.",
-		Result: "Deployment time reduced from 30m to 5m.",
-		Skills: []string{"Docker", "Kubernetes"},
+		ID:         "story-3",
+		Title:      "Containerized microservices with Docker",
+		Situation:  "Monolithic app needed to be broken into microservices.",
+		Task:       "Containerize and orchestrate the microservices.",
+		Action:     "Created Dockerfiles and Kubernetes manifests.",
+		Result:     "Deployment time reduced from 30m to 5m.",
+		Skills:     []string{"Docker", "Kubernetes"},
 		Categories: []keyword.StoryCategory{keyword.StoryTechnical},
 	}
 
@@ -80,13 +80,13 @@ func TestSelectStories(t *testing.T) {
 		var manyStories []keyword.StarStory
 		for i := 0; i < 5; i++ {
 			manyStories = append(manyStories, keyword.StarStory{
-				ID:     "many-py",
-				Title:  "Python story",
-				Situation: "Something about Python development.",
-				Task:   "Write Python code.",
-				Action: "Wrote Python code.",
-				Result: "Shipped feature.",
-				Skills: []string{"Python"},
+				ID:         "many-py",
+				Title:      "Python story",
+				Situation:  "Something about Python development.",
+				Task:       "Write Python code.",
+				Action:     "Wrote Python code.",
+				Result:     "Shipped feature.",
+				Skills:     []string{"Python"},
 				Categories: []keyword.StoryCategory{keyword.StoryTechnical},
 			})
 		}
@@ -144,7 +144,7 @@ func TestSelectStories(t *testing.T) {
 			SourceExcerpt: "Lead cross-functional teams",
 		}
 		stories := []keyword.StarStory{
-			matchingStory, // technical, should not match behavioral
+			matchingStory,  // technical, should not match behavioral
 			unrelatedStory, // leadership+conflict, should match behavioral
 		}
 		result := keyword.SelectStories([]keyword.InterviewQuestion{bq}, stories, nil)
@@ -164,13 +164,13 @@ func TestSelectStories(t *testing.T) {
 		// Story with non-matching category (StoryTeamwork vs CategoryTechnical)
 		// and no skill overlap → score = 0.0 < 0.15
 		veryWeakMatch := keyword.StarStory{
-			ID:     "weak",
-			Title:  "Team collaboration",
-			Situation: "A story about teamwork.",
-			Task:   "Nothing related.",
-			Action: "Nothing related.",
-			Result: "Nothing related.",
-			Skills: []string{"Communication"},
+			ID:         "weak",
+			Title:      "Team collaboration",
+			Situation:  "A story about teamwork.",
+			Task:       "Nothing related.",
+			Action:     "Nothing related.",
+			Result:     "Nothing related.",
+			Skills:     []string{"Communication"},
 			Categories: []keyword.StoryCategory{keyword.StoryTeamwork},
 		}
 		stories := []keyword.StarStory{veryWeakMatch}
@@ -212,24 +212,24 @@ func TestSelectStoriesUncoveredQuestion(t *testing.T) {
 	}
 
 	technicalStory := keyword.StarStory{
-		ID:     "py-story",
-		Title:  "Built Python ETL pipeline",
-		Situation: "Data team needed automation.",
-		Task:   "Build the pipeline.",
-		Action: "Wrote Python ETL scripts.",
-		Result: "Automated data processing.",
-		Skills: []string{"Python"},
+		ID:         "py-story",
+		Title:      "Built Python ETL pipeline",
+		Situation:  "Data team needed automation.",
+		Task:       "Build the pipeline.",
+		Action:     "Wrote Python ETL scripts.",
+		Result:     "Automated data processing.",
+		Skills:     []string{"Python"},
 		Categories: []keyword.StoryCategory{keyword.StoryTechnical},
 	}
 
 	mentorStory := keyword.StarStory{
-		ID:     "mentor-story",
-		Title:  "Mentored junior engineer",
-		Situation: "Junior dev was struggling with onboarding.",
-		Task:   "Help them ramp up.",
-		Action: "Set up pair programming and weekly 1:1s.",
-		Result: "Engineer was productive within 6 weeks.",
-		Skills: []string{"Mentoring"},
+		ID:         "mentor-story",
+		Title:      "Mentored junior engineer",
+		Situation:  "Junior dev was struggling with onboarding.",
+		Task:       "Help them ramp up.",
+		Action:     "Set up pair programming and weekly 1:1s.",
+		Result:     "Engineer was productive within 6 weeks.",
+		Skills:     []string{"Mentoring"},
 		Categories: []keyword.StoryCategory{keyword.StoryMentoring},
 	}
 
@@ -296,35 +296,35 @@ func TestJaccardSimilarity(t *testing.T) {
 	}
 
 	highMatch := keyword.StarStory{
-		ID:     "hi",
-		Title:  "High match",
-		Situation: "Story with Python and Docker.",
-		Task:   "Task",
-		Action: "Action",
-		Result: "Result",
-		Skills: []string{"Python", "Docker"},
+		ID:         "hi",
+		Title:      "High match",
+		Situation:  "Story with Python and Docker.",
+		Task:       "Task",
+		Action:     "Action",
+		Result:     "Result",
+		Skills:     []string{"Python", "Docker"},
 		Categories: []keyword.StoryCategory{keyword.StoryTechnical},
 	}
 
 	lowMatch := keyword.StarStory{
-		ID:     "lo",
-		Title:  "Low match",
-		Situation: "Story with only one matching skill.",
-		Task:   "Task",
-		Action: "Action",
-		Result: "Result",
-		Skills: []string{"Python", "Rust", "Go"},
+		ID:         "lo",
+		Title:      "Low match",
+		Situation:  "Story with only one matching skill.",
+		Task:       "Task",
+		Action:     "Action",
+		Result:     "Result",
+		Skills:     []string{"Python", "Rust", "Go"},
 		Categories: []keyword.StoryCategory{keyword.StoryTechnical},
 	}
 
 	noMatch := keyword.StarStory{
-		ID:     "no",
-		Title:  "No match",
-		Situation: "Story with no matching skills.",
-		Task:   "Task",
-		Action: "Action",
-		Result: "Result",
-		Skills: []string{"React", "TypeScript"},
+		ID:         "no",
+		Title:      "No match",
+		Situation:  "Story with no matching skills.",
+		Task:       "Task",
+		Action:     "Action",
+		Result:     "Result",
+		Skills:     []string{"React", "TypeScript"},
 		Categories: []keyword.StoryCategory{keyword.StoryTechnical},
 	}
 
@@ -381,13 +381,13 @@ func TestJaccardSimilarity(t *testing.T) {
 
 func TestStoryExcerpt(t *testing.T) {
 	story := keyword.StarStory{
-		ID:     "long-story",
-		Title:  "Long story",
-		Situation: "This is a very long situation string that exceeds the two hundred character excerpt limit and should be truncated to show only the first part with an ellipsis character appended at the truncation point. The remaining content of the situation field is not included in the excerpt.",
-		Task:   "Task",
-		Action: "Action",
-		Result: "Result",
-		Skills: []string{"Python"},
+		ID:         "long-story",
+		Title:      "Long story",
+		Situation:  "This is a very long situation string that exceeds the two hundred character excerpt limit and should be truncated to show only the first part with an ellipsis character appended at the truncation point. The remaining content of the situation field is not included in the excerpt.",
+		Task:       "Task",
+		Action:     "Action",
+		Result:     "Result",
+		Skills:     []string{"Python"},
 		Categories: []keyword.StoryCategory{keyword.StoryTechnical},
 	}
 	q := keyword.InterviewQuestion{

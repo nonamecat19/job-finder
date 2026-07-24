@@ -63,10 +63,10 @@ type EmbeddingSimilarityFunc func(questionText string, story StarStory) float64
 
 // scoring weights from spec §3.3
 const (
-	skillOverlapWeight   = 0.5
-	categoryMatchWeight  = 0.3
-	embeddingSimWeight   = 0.2
-	minRelevanceScore    = 0.15
+	skillOverlapWeight    = 0.5
+	categoryMatchWeight   = 0.3
+	embeddingSimWeight    = 0.2
+	minRelevanceScore     = 0.15
 	maxStoriesPerQuestion = 3
 )
 
@@ -238,4 +238,3 @@ func truncate(s string, n int) string {
 	}
 	return string(runes[:n]) + "…"
 }
-

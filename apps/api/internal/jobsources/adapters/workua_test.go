@@ -231,5 +231,3 @@ func TestWorkUaSubscriptionMalformedURL(t *testing.T) {
 		t.Errorf("error should contain the offending URL, got: %v", err)
 	}
 }
-
-

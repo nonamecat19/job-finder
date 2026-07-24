@@ -21,15 +21,15 @@ type Service struct {
 // seniorityLevel maps job-title seniority prefixes to a numeric rank.
 // Higher rank = more senior. Used to detect seniority inflation.
 var seniorityLevel = map[string]int{
-	"junior":     0,
-	"associate":  0,
-	"entry":      0,
-	"mid":        1,
-	"senior":     2,
-	"lead":       3,
-	"staff":      3,
-	"principal":  4,
-	"architect":  4,
+	"junior":        0,
+	"associate":     0,
+	"entry":         0,
+	"mid":           1,
+	"senior":        2,
+	"lead":          3,
+	"staff":         3,
+	"principal":     4,
+	"architect":     4,
 	"distinguished": 4,
 }
 

@@ -11,11 +11,11 @@ import "github.com/job-finder/api/internal/keyword"
 // FitGapAssessment is the coach output: failure summary + per-gap adjacent
 // evidence (spec 009 §1).
 type FitGapAssessment struct {
-	JobID            string    `json:"jobId"`
-	TotalMustHaves   int       `json:"totalMustHaves"`
-	FailedMustHaves  int       `json:"failedMustHaves"`
-	CoveragePct      float64   `json:"coveragePct"`
-	Gaps             []GapItem `json:"gaps"`
+	JobID           string    `json:"jobId"`
+	TotalMustHaves  int       `json:"totalMustHaves"`
+	FailedMustHaves int       `json:"failedMustHaves"`
+	CoveragePct     float64   `json:"coveragePct"`
+	Gaps            []GapItem `json:"gaps"`
 }
 
 // GapItem is one missing must-have with up to 3 adjacent evidence items.

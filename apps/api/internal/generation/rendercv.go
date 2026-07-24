@@ -106,10 +106,10 @@ var levelRules = map[GroundingLevel]string{
 // protectedSections can never be dropped by the LLM — they are core to any
 // resume regardless of the target role.
 var protectedSections = map[string]bool{
-	"summary":   true,
+	"summary":    true,
 	"experience": true,
-	"education": true,
-	"skills":    true,
+	"education":  true,
+	"skills":     true,
 }
 
 func CvSections(master RendercvMaster) map[string]any {

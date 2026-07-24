@@ -9,12 +9,12 @@ import (
 // questionFixture reuses the same 8 JD fixtures from the 008-3 extractor and
 // 009-2 classifier tests. Each must-have term must yield at least one question.
 type questionFixture struct {
-	name              string
-	jd                string
-	mustHave          []string
-	minQuestions      int
-	expectCategories  []keyword.QuestionCategory
-	expectSources     []keyword.QuestionSource
+	name             string
+	jd               string
+	mustHave         []string
+	minQuestions     int
+	expectCategories []keyword.QuestionCategory
+	expectSources    []keyword.QuestionSource
 }
 
 func TestDeriveQuestionsFromMustHaves(t *testing.T) {

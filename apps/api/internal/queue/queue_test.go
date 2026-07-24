@@ -117,9 +117,9 @@ func TestGeneratePayloadWithoutProfile(t *testing.T) {
 
 func TestRedisOpt(t *testing.T) {
 	tests := []struct {
-		name    string
+		name     string
 		redisURL string
-		wantErr bool
+		wantErr  bool
 	}{
 		{
 			name:     "default URL",
