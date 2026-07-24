@@ -204,6 +204,7 @@ const SUBSCRIPTION_SOURCES = [
   { key: 'djinni', label: 'Djinni', placeholder: 'https://djinni.co/my/dashboard/subs/{id}/' },
   { key: 'indeed', label: 'Indeed', placeholder: 'https://www.indeed.com/jobs?q=golang&l=remote' },
   { key: 'remoteok', label: 'RemoteOK', placeholder: 'https://remoteok.com/remote-golang-jobs' },
+  { key: 'jobleads', label: 'JobLeads', placeholder: 'https://www.jobleads.com/job-search?q=golang' },
 ];
 
 function SubscriptionsPanel() {
