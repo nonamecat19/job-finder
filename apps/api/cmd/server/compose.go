@@ -80,6 +80,7 @@ type sourcesHandles struct {
 	Dou      adapters.DouAdapter
 	Workua   adapters.WorkUaAdapter
 	Indeed   adapters.IndeedAdapter
+	RemoteOK adapters.RemoteOKAdapter
 }
 
 // composeJobSources builds the adapter registry and jobsources.Service, then
@@ -90,6 +91,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	douAdapter := adapters.DouAdapter{Scraping: p.Scraping}
 	workuaAdapter := adapters.WorkUaAdapter{Scraping: p.Scraping}
 	indeedAdapter := adapters.IndeedAdapter{Scraping: p.Scraping}
+	remoteokAdapter := adapters.RemoteOKAdapter{Scraping: p.Scraping}
 	registry := jobsources.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
@@ -98,6 +100,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		douAdapter,
 		workuaAdapter,
 		indeedAdapter,
+		remoteokAdapter,
 		adapters.RobotaAdapter{},
 		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
@@ -111,6 +114,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		Dou:      douAdapter,
 		Workua:   workuaAdapter,
 		Indeed:   indeedAdapter,
+		RemoteOK: remoteokAdapter,
 	}
 }
 
@@ -300,7 +304,7 @@ func composeEnrichment(p *Platform, sources *sourcesHandles) *enrichment.Handler
 	enrichDelays := map[string]time.Duration{
 		"workua": time.Duration(cfg.WorkUaDetailDelayMs) * time.Millisecond,
 	}
-	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, sources.Indeed, p.AsynqClient, enrichDelay, enrichDelays)
+	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, sources.Indeed, sources.RemoteOK, p.AsynqClient, enrichDelay, enrichDelays)
 }
 
 type salaryHandles struct {
