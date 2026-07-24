@@ -203,6 +203,7 @@ const SUBSCRIPTION_SOURCES = [
   { key: 'dou', label: 'DOU.ua', placeholder: 'https://jobs.dou.ua/vacancies/?category=Node.js' },
   { key: 'djinni', label: 'Djinni', placeholder: 'https://djinni.co/my/dashboard/subs/{id}/' },
   { key: 'indeed', label: 'Indeed', placeholder: 'https://www.indeed.com/jobs?q=golang&l=remote' },
+  { key: 'remoteok', label: 'RemoteOK', placeholder: 'https://remoteok.com/remote-golang-jobs' },
 ];
 
 function SubscriptionsPanel() {
