@@ -26,6 +26,7 @@ const (
 	uuidJob19   = "b0000000-0000-0000-0000-000000000019"
 	uuidJob20   = "b0000000-0000-0000-0000-000000000020"
 	uuidJob21   = "b0000000-0000-0000-0000-000000000021"
+	uuidJob22   = "b0000000-0000-0000-0000-000000000022"
 	uuidSearch1 = "c0000000-0000-0000-0000-000000000001"
 	uuidSearch2 = "c0000000-0000-0000-0000-000000000002"
 	uuidSearch3 = "c0000000-0000-0000-0000-000000000003"
@@ -237,6 +238,13 @@ var jobs = []jobSeed{
 		SalaryRaw: "$120,000 - $150,000 a year", URL: "https://www.indeed.com/rc/clk?jk=abc123golang",
 		Desc:   "NovaTech LLC is looking for a Senior Golang Developer to join our platform team, designing and building Go microservices handling millions of requests per day. 5+ years of professional Go experience required, fully remote in the United States.",
 		Status: "found", PostedAt: now().AddDate(0, 0, -3),
+	},
+	{
+		UUID: uuidJob22, SourceKey: "remoteok", Title: "Backend Engineer (Go)",
+		Company: "PixelForge", Location: "", Remote: true,
+		SalaryRaw: "$100000 - $140000", URL: "https://remoteok.com/remote-jobs/backend-engineer-go-pixelforge",
+		Desc:   "PixelForge is a fully distributed team building a Go-based event-processing platform. We're hiring a Backend Engineer to own core services, write idiomatic Go, and work directly with founders. 100% remote, async-first culture.",
+		Status: "found", PostedAt: now().AddDate(0, 0, -1),
 	},
 }
 
