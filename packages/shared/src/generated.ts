@@ -62,7 +62,6 @@ export interface SearchQuery {
   salaryMin?: number /* float64 */;
   country?: string;
   sources?: string[];
-  site?: string; // 'linkedin' | 'indeed' | 'glassdoor'
   /**
    * SubscriptionURL, when set, tells an adapter to scrape this saved-filter
    * URL (e.g. a djinni subs page) instead of running a keyword search.

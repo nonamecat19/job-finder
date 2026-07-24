@@ -109,8 +109,7 @@ type Config struct {
 	// clamps it so a misconfigured env var cannot go below the floor.
 	WorkUaDetailDelayMs int `mapstructure:"WORKUA_DETAIL_DELAY_MS"`
 
-	// Sidecar / optional services
-	JobspyURL       string `mapstructure:"JOBSPY_URL"`
+	// Optional services
 	FlaresolverrURL string `mapstructure:"FLARESOLVERR_URL"`
 
 	// Paths
@@ -156,7 +155,6 @@ var defaults = map[string]any{
 	"ADZUNA_COUNTRY":                 "gb",
 	"DJINNI_DETAIL_DELAY_MS":         1500,
 	"WORKUA_DETAIL_DELAY_MS":         2000,
-	"JOBSPY_URL":                     "http://localhost:8000",
 	"CEREBRAS_BASE_URL":              "https://api.cerebras.ai/v1",
 	"OPENROUTER_BASE_URL":            "https://openrouter.ai/api/v1",
 	// "/data/documents" is a container-only path (writable there because the

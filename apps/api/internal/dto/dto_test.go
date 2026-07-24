@@ -256,17 +256,6 @@ func TestApplicationStatuses(t *testing.T) {
 	}
 }
 
-func TestSearchQueryWithSite(t *testing.T) {
-	query := SearchQuery{
-		Keywords: "developer",
-		Site:     strPtr("linkedin"),
-	}
-
-	if query.Site == nil || *query.Site != "linkedin" {
-		t.Error("expected site 'linkedin'")
-	}
-}
-
 func TestSearchQueryWithSubscriptionURL(t *testing.T) {
 	query := SearchQuery{
 		SubscriptionURL: "https://djinni.co/my/dashboard/subs/123/",
@@ -293,11 +282,11 @@ func TestMatchResultDto(t *testing.T) {
 
 func TestJobDto(t *testing.T) {
 	job := JobDto{
-		ID:       "job-1",
-		Title:    "Go Developer",
-		Company:  "Tech Corp",
-		Status:   string(StatusFound),
-		Remote:   true,
+		ID:        "job-1",
+		Title:     "Go Developer",
+		Company:   "Tech Corp",
+		Status:    string(StatusFound),
+		Remote:    true,
 		SalaryRaw: strPtr("$120k"),
 	}
 

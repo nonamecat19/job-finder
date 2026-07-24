@@ -10,7 +10,6 @@ no auto-apply, ever. Design docs live in [`plan/`](plan/00-overview.md).
 ```
 apps/api              NestJS backend (Drizzle + pgvector, BullMQ, Ollama, Playwright)
 apps/dashboard        React dashboard (Vite, Tailwind, TanStack Query, dnd-kit)
-apps/jobspy-sidecar   Python FastAPI wrapping JobSpy (LinkedIn/Indeed/Glassdoor, best-effort)
 packages/shared       Shared TS types (NormalizedJob, DTOs, JSON Resume subset)
 ```
 
@@ -119,7 +118,6 @@ array in `job-sources.module.ts`. Nothing downstream changes.
 ## Notes
 
 - Single user, LAN/localhost only — no auth in v1. Add basic auth at nginx if exposed wider.
-- LinkedIn/Indeed/Glassdoor go through the JobSpy sidecar and are best-effort: upstream
+- Scraped sources (Indeed, Glassdoor, dou, work.ua, ...) are best-effort: upstream markup
   breakage degrades those sources only (3 consecutive failures flag a source unhealthy).
 - Source credentials are encrypted at rest (aes-256-gcm) when `CONFIG_ENCRYPTION_KEY` is set.
-- Sidecar↔TS contract test: `pytest apps/jobspy-sidecar/test_contract.py`.

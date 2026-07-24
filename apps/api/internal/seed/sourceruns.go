@@ -28,9 +28,9 @@ var sourceRuns = []sourceRunSeed{
 	{sourceKey: "arbeitnow", searchID: "seed:arbeitnow:k8s"},
 	{sourceKey: "jooble", searchID: "seed:jooble:microservices"},
 	{sourceKey: "jooble", searchID: "seed:jooble:frontend-lead"},
-	{sourceKey: "jobspy", searchID: "seed:jobspy:ml-engineer"},
-	{sourceKey: "jobspy", searchID: "seed:jobspy:sre"},
-	{sourceKey: "jobspy", searchID: "seed:jobspy:backend-python"},
+	{sourceKey: "glassdoor", searchID: "seed:glassdoor:ml-engineer"},
+	{sourceKey: "indeed", searchID: "seed:indeed:sre"},
+	{sourceKey: "indeed", searchID: "seed:indeed:backend-python"},
 }
 
 // seedSourceRuns links each run to the JobSource row lazily created by

@@ -65,7 +65,6 @@ func run() error {
 		adapters.DouAdapter{},
 		adapters.WorkUaAdapter{},
 		adapters.RobotaAdapter{},
-		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
 	)
 	sourcesSvc := jobsources.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)

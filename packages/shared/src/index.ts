@@ -47,8 +47,6 @@ export interface SearchQuery {
   country?: string; // ISO country code for country-scoped APIs (Adzuna)
   /** adapter keys to run; empty/undefined = all enabled sources */
   sources?: string[];
-  /** jobspy site selector when 'jobspy' is in sources */
-  site?: 'linkedin' | 'indeed' | 'glassdoor';
 }
 
 // ---------------------------------------------------------------------------

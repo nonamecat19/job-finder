@@ -12,7 +12,7 @@ test.describe('Sources page', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([
-          { key: 'indeed', kind: 'jobspy', enabled: true, healthy: true, config: {} },
+          { key: 'indeed', kind: 'scrape', enabled: true, healthy: true, config: {} },
         ]),
       });
     });

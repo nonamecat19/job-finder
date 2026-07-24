@@ -1,5 +1,5 @@
 .PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean \
-	test test-go test-react test-python test-integration test-e2e test-lint test-db-setup \
+	test test-go test-react test-integration test-e2e test-lint test-db-setup \
 	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install \
 	tygo-generate tygo-check tygo-install
 
@@ -28,7 +28,7 @@ build:
 typecheck:
 	pnpm typecheck
 
-# --- dev infra (postgres/redis/jobspy-sidecar) ---
+# --- dev infra (postgres/redis) ---
 up:
 	docker compose up -d
 
@@ -61,7 +61,7 @@ test-db-setup: up
 	@docker compose exec -T postgres createdb -U jobfinder jobfinder_test
 
 # --- tests ---
-test: test-go test-react test-python
+test: test-go test-react
 
 test-go:
 	cd apps/api && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:${POSTGRES_HOST_PORT}/jobfinder_test \
@@ -70,9 +70,6 @@ test-go:
 
 test-react:
 	cd apps/dashboard && npx vitest run
-
-test-python:
-	cd apps/jobspy-sidecar && pytest
 
 test-integration: test-db-setup
 	@echo "Waiting for postgres to be healthy..."
@@ -90,7 +87,7 @@ test-e2e: test-db-setup
 		REDIS_URL=redis://localhost:6379/1 \
 		npx playwright test
 
-test-lint: test-go test-react test-python
+test-lint: test-go test-react
 
 # --- Go API server ---
 run-backend:

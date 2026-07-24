@@ -42,19 +42,19 @@ content damages user credibility and is the single biggest trust risk for an AI-
 job tool.
 
 ### III. Typed Contracts Across Service Boundaries
-Cross-language boundaries (Go API ↔ React dashboard ↔ Python jobspy-sidecar) MUST go
+Cross-language boundaries (Go API ↔ React dashboard) MUST go
 through generated or explicitly shared types — sqlc for DB-to-Go, tygo for Go-to-TS, and
 `packages/shared` as the single source of truth for TS-side DTOs/normalized job shapes.
 Hand-maintained duplicate type definitions across apps are not permitted; regenerate
 instead of hand-editing generated files.
-Rationale: the stack spans three runtimes with no shared compiler; type drift between
+Rationale: the stack spans two runtimes with no shared compiler; type drift between
 services is the most common source of silent integration bugs in this codebase.
 
 ### IV. Test Discipline Per Language, Enforced at the Boundary
 Each app tests in its native toolchain — `go test` for apps/api, `vitest` for the
-dashboard, `pytest` for jobspy-sidecar — and integration/e2e paths (`test-integration`,
+dashboard — and integration/e2e paths (`test-integration`,
 `test-e2e`) MUST exercise real Postgres/Redis via Docker Compose, not mocks, for
-cross-service behavior. `make test-lint` (all three suites) MUST pass before a change
+cross-service behavior. `make test-lint` (both suites) MUST pass before a change
 touching more than one app is considered done.
 Rationale: matches the existing Makefile-enforced workflow; per-language suites keep
 feedback fast, while Docker-backed integration tests catch the cross-service bugs unit
@@ -63,8 +63,8 @@ tests can't.
 ### V. Local-First, Self-Hosted by Default
 Core scoring and generation MUST run against the local Ollama instance and self-hosted
 Postgres/Redis; the system must remain fully operational with no calls to third-party
-paid AI APIs for its primary matching/generation flow. External sources (Adzuna,
-LinkedIn/Indeed/Glassdoor via JobSpy) are for job discovery only, not core inference.
+paid AI APIs for its primary matching/generation flow. External sources (Adzuna, Jooble,
+Indeed, Glassdoor, ...) are for job discovery only, not core inference.
 Rationale: stated project goal is a self-hosted platform the user fully controls; a
 hidden dependency on an external LLM API would silently break that guarantee and add
 cost/privacy exposure users didn't opt into.
@@ -74,9 +74,8 @@ cost/privacy exposure users didn't opt into.
 - Backend (`apps/api`): Go, sqlc for typed DB access, goose for migrations — migration
   version numbers MUST be unique and sequential; never reuse or duplicate a goose version.
 - Dashboard (`apps/dashboard`): React + Vite + TanStack Query + dnd-kit + Tailwind.
-- Job discovery sidecar (`apps/jobspy-sidecar`): Python FastAPI wrapping JobSpy; treated
-  as best-effort/unstable upstream (scraping targets change), not a hard dependency for
-  core functionality.
+- Scraping-based job sources: treated as best-effort/unstable upstream (scraping targets
+  change), not a hard dependency for core functionality.
 - `packages/shared`: shared TypeScript types (NormalizedJob, DTOs, JSON Resume subset) —
   the only place cross-app TS types are defined by hand; everything else generates from it
   or from Go via tygo.
@@ -110,7 +109,7 @@ wording/clarification only. Any amendment MUST re-check `.specify/templates/*.md
 installed `speckit-*` commands/skills for now-stale references and update them in the same
 change.
 
-All feature plans and PRs touching `apps/api`, `apps/dashboard`, or `apps/jobspy-sidecar`
+All feature plans and PRs touching `apps/api`, `apps/dashboard`, or `packages/shared`
 should be checked against the five Core Principles above before being marked ready for
 review; deviations must be justified in the plan's Complexity Tracking section (or PR
 description) rather than silently introduced.

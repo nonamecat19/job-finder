@@ -121,7 +121,6 @@ type SearchQuery struct {
 	SalaryMin *float64 `json:"salaryMin,omitempty"`
 	Country   *string  `json:"country,omitempty"`
 	Sources   []string `json:"sources,omitempty"`
-	Site      *string  `json:"site,omitempty"` // 'linkedin' | 'indeed' | 'glassdoor'
 	// SubscriptionURL, when set, tells an adapter to scrape this saved-filter
 	// URL (e.g. a djinni subs page) instead of running a keyword search.
 	SubscriptionURL string `json:"subscriptionUrl,omitempty"`

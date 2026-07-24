@@ -108,7 +108,6 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		glassdoorAdapter,
 		jobleadsAdapter,
 		adapters.RobotaAdapter{},
-		adapters.JobSpyAdapter{},
 		adapters.JoobleAdapter{},
 	)
 	sourcesSvc := jobsources.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
@@ -230,16 +229,16 @@ func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Servi
 		notifier.WithRateLimitCap(p.Config.MatchNotifyRateLimit),
 	)
 	jobsSvc := jobs.NewService(p.DB.Queries, p.AsynqClient, p.Config.SalaryFloorUsd)
-	autogenSvc, err := autogen.NewService(ctx, p.DB.Queries)
+	aiFeatureSvc, err := aifeature.NewService(ctx, p.DB.Queries)
 	if err != nil {
 		return nil, err
 	}
 	return &matchingHandles{
-		Jobs:                jobsSvc,
-		Notifier:            notifierSvc,
-		Autogen:             autogenSvc,
-		AutoGenerateHandler: &httpapi.AutoGenerateHandler{Settings: autogenSvc},
-		Handler:             matching.NewHandler(matchingSvc, notifierSvc, autogenSvc, jobsSvc),
+		Jobs:             jobsSvc,
+		Notifier:         notifierSvc,
+		AiFeatures:       aiFeatureSvc,
+		AiFeatureHandler: &httpapi.AiFeatureHandler{Settings: aiFeatureSvc},
+		Handler:          matching.NewHandler(matchingSvc, notifierSvc, aiFeatureSvc, jobsSvc, jobsSvc),
 	}, nil
 }
 

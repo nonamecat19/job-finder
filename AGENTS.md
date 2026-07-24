@@ -7,7 +7,6 @@ Context for AI coding agents working in this repo.
 - `apps/api` — Go backend (HTTP API, asynq workers, ingestion scheduler)
 - `apps/dashboard` — React/Vite dashboard
 - `apps/extension` — browser extension (autofill)
-- `apps/jobspy-sidecar` — Python scraping sidecar
 - `packages/shared` — shared TS types, generated from Go DTOs via tygo
 - `specs/` — per-feature specs (numbered)
 - `plans/` — implementation plans derived from specs
