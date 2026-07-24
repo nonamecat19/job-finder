@@ -26,6 +26,13 @@ type ActivityRun struct {
 	FinishedAt  pgtype.Timestamp `json:"finishedAt"`
 }
 
+type AiFeatureSetting struct {
+	FeatureKey string           `json:"featureKey"`
+	Enabled    bool             `json:"enabled"`
+	Threshold  int32            `json:"threshold"`
+	UpdatedAt  pgtype.Timestamp `json:"updatedAt"`
+}
+
 type Application struct {
 	ID        pgtype.UUID      `json:"id"`
 	JobId     pgtype.UUID      `json:"jobId"`
@@ -45,13 +52,6 @@ type ApplicationOutcome struct {
 	RecordedAt    pgtype.Timestamp `json:"recordedAt"`
 	Note          *string          `json:"note"`
 	CreatedAt     pgtype.Timestamp `json:"createdAt"`
-}
-
-type AutoGenerateSetting struct {
-	ID        string           `json:"id"`
-	Enabled   bool             `json:"enabled"`
-	Threshold int32            `json:"threshold"`
-	UpdatedAt pgtype.Timestamp `json:"updatedAt"`
 }
 
 type Company struct {
