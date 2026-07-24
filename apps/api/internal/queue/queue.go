@@ -38,6 +38,17 @@ const (
 	QueueGhostScore  = TypeGhostScore
 )
 
+// IngestMaxRetry is the asynq MaxRetry for ingest tasks: 3 deliveries total,
+// spaced by asynq's default exponential backoff.
+//
+// Ingest used to run with MaxRetry(0), inherited from the BullMQ setup's
+// `{ attempts: 1 }`. Scraping is the least reliable step in the pipeline and
+// the runs are hours apart, so a single 503 or timeout silently cost that
+// source its whole cron window. Errors that retrying cannot fix are wrapped
+// in asynq.SkipRetry by the handler instead (see ingestion.permanent), so the
+// retries only ever spend themselves on transient failures.
+const IngestMaxRetry = 2
+
 // IngestPayload mirrors IngestJobData. Exactly one of SearchID/SubscriptionID
 // is set for a saved-search or subscription run; both nil means "scrape with
 // an empty query" (e.g. a direct source test).

@@ -19,7 +19,37 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
+// unhealthyAfterConsecutiveFailures is how many consecutive failed source
+// runs flip a JobSource to unhealthy. Since ingest tasks retry (see
+// IngestMaxRetry), a full retry cycle that never succeeds produces this many
+// failed run rows on its own, so the flag now means "one scrape window failed
+// outright" rather than "three scheduled windows failed". It self-clears:
+// SetJobSourceHealthy(true) runs on the next successful run.
 const unhealthyAfterConsecutiveFailures = 3
+
+// permanent wraps an error so asynq drops the task instead of retrying it.
+// Use it for failures no amount of waiting can fix — an unparseable payload,
+// a source or adapter that isn't registered, a subscription that's gone. The
+// transient cases (HTTP 5xx, timeouts, rate limits, a login that needs
+// redoing) stay retryable, which is the whole point of retrying ingest: a
+// single blip used to cost the source its entire cron window.
+func permanent(err error) error {
+	return fmt.Errorf("%w: %w", asynq.SkipRetry, err)
+}
+
+// lastAttempt reports whether the current asynq delivery is the final one, so
+// bookkeeping that must not run per-attempt (flagging the source unhealthy)
+// happens once the retries are actually exhausted. Outside a worker context
+// both lookups fail and it reports true — a direct ProcessTask call in a test
+// is its own last attempt.
+func lastAttempt(ctx context.Context) bool {
+	retried, ok1 := asynq.GetRetryCount(ctx)
+	maxRetry, ok2 := asynq.GetMaxRetry(ctx)
+	if !ok1 || !ok2 {
+		return true
+	}
+	return retried >= maxRetry
+}
 
 // Handler processes "ingest" asynq tasks: adapter.Search -> dedupe -> persist
 // -> enqueue match. Mirrors ingestion.processor.ts.
@@ -37,7 +67,7 @@ func NewHandler(q Repository, registry *jobsources.Registry, sources *jobsources
 func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	var payload queue.IngestPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
-		return fmt.Errorf("ingestion: invalid payload: %w", err)
+		return permanent(fmt.Errorf("ingestion: invalid payload: %w", err))
 	}
 
 	var rec *activity.Recorder
@@ -54,7 +84,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		if rec != nil {
 			rec.Fail(ctx, err)
 		}
-		return err
+		return permanent(err)
 	}
 
 	run, err := h.q.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
@@ -97,12 +127,12 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		uid, err := dbutil.ParseUUID(*payload.SubscriptionID)
 		if err != nil {
 			h.finishError(ctx, run.ID, source, payload.SourceKey, err)
-			return err
+			return permanent(err)
 		}
 		sub, err := h.q.GetSubscription(ctx, uid)
 		if err != nil {
 			h.finishError(ctx, run.ID, source, payload.SourceKey, err)
-			return err
+			return permanent(err)
 		}
 		subscription = &sub
 		query.SubscriptionURL = sub.Url
@@ -111,7 +141,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	adapter, err := h.registry.Get(payload.SourceKey)
 	if err != nil {
 		h.finishError(ctx, run.ID, source, payload.SourceKey, err)
-		return err
+		return permanent(err)
 	}
 	config := h.sources.DecryptConfig(source.Config)
 
@@ -171,7 +201,13 @@ func (h *Handler) finishError(ctx context.Context, runID pgtype.UUID, source sql
 		msg = msg[:1000]
 	}
 	_ = h.q.FinishSourceRunError(ctx, sqlcgen.FinishSourceRunErrorParams{ID: runID, Error: &msg})
-	h.flagIfUnhealthy(ctx, source, sourceKey)
+	// Only judge the source's health once asynq has stopped retrying: an
+	// earlier attempt still has a chance to succeed and clear the flag, and
+	// flipping it mid-cycle would show the source as broken in the UI while
+	// the retry that fixes it is still queued.
+	if lastAttempt(ctx) {
+		h.flagIfUnhealthy(ctx, source, sourceKey)
+	}
 	slog.Error("ingest failed", "source", sourceKey, "error", msg)
 }
 

@@ -206,8 +206,7 @@ func (s *Service) RunSearch(ctx context.Context, searchID string) ([]string, err
 		if err != nil {
 			return nil, err
 		}
-		// attempts: 1 (no retry), matching ingestQueue.add's { attempts: 1 }.
-		opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)}
+		opts := []asynq.Option{asynq.MaxRetry(queue.IngestMaxRetry), asynq.Queue(queue.QueueIngest)}
 		if activityID != nil {
 			opts = append(opts, asynq.TaskID(*activityID))
 		}
@@ -249,7 +248,7 @@ func (s *Service) RunSource(ctx context.Context, sourceKey string) error {
 	if err != nil {
 		return err
 	}
-	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)}
+	opts := []asynq.Option{asynq.MaxRetry(queue.IngestMaxRetry), asynq.Queue(queue.QueueIngest)}
 	if activityID != nil {
 		opts = append(opts, asynq.TaskID(*activityID))
 	}
@@ -302,7 +301,7 @@ func (s *Service) RunSubscription(ctx context.Context, subscriptionID string) er
 	if err != nil {
 		return err
 	}
-	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)}
+	opts := []asynq.Option{asynq.MaxRetry(queue.IngestMaxRetry), asynq.Queue(queue.QueueIngest)}
 	if activityID != nil {
 		opts = append(opts, asynq.TaskID(*activityID))
 	}
