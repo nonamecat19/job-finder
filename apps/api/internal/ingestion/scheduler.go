@@ -68,6 +68,10 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		}
 	}
 
+	if _, err := s.service.ReconcileUnmatched(ctx); err != nil {
+		slog.Error("scheduler: reconcile unmatched jobs failed", "error", err)
+	}
+
 	cutoff := pgtype.Timestamp{Time: now.AddDate(0, 0, -7), Valid: true}
 	if err := s.q.DeleteActivityRunsBefore(ctx, cutoff); err != nil {
 		slog.Error("scheduler: activity retention sweep failed", "error", err)

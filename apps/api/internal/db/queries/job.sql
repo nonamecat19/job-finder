@@ -50,3 +50,24 @@ UPDATE "Job" SET
   "detailScrapedAt" = now()
 WHERE "id" = sqlc.arg('id')
 RETURNING *;
+
+-- name: ListJobsMissingMatch :many
+-- Jobs that were inserted but never produced a MatchResult row. Insert and
+-- enqueue aren't atomic, so a crash (or a Redis blip) between the two strands
+-- the job: no score, and therefore invisible in the score-sorted feed, with
+-- nothing to ever retry it. The scheduler re-enqueues these.
+--
+-- Note a prefiltered-out job is NOT missing a match: matching writes a row
+-- carrying just the similarity, so the sweep passes over it.
+--
+-- Bounded on both sides. "older_than" leaves in-flight jobs alone (including
+-- ones still queued behind enrichment); "newer_than" stops a job whose
+-- matching fails deterministically from being retried on every tick forever.
+SELECT j."id", j."company", j."title" FROM "Job" j
+LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
+WHERE mr."id" IS NULL
+  AND j."status" != 'hidden'
+  AND j."ingestedAt" < sqlc.arg('older_than')::timestamp
+  AND j."ingestedAt" > sqlc.arg('newer_than')::timestamp
+ORDER BY j."ingestedAt" DESC
+LIMIT sqlc.arg('limit');

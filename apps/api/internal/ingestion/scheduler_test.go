@@ -5,11 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/ingestion"
+	"github.com/job-finder/api/internal/queue"
 )
 
 // schedulerFakeRepo serves one due search and records whether the scheduler
@@ -22,6 +24,9 @@ type schedulerFakeRepo struct {
 	claimedWith pgtype.Timestamp
 	claimCalls  int
 	runStarted  bool
+
+	unmatched       []sqlcgen.ListJobsMissingMatchRow
+	reconcileWindow sqlcgen.ListJobsMissingMatchParams
 }
 
 func (f *schedulerFakeRepo) ListEnabledSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error) {
@@ -44,6 +49,15 @@ func (f *schedulerFakeRepo) GetSavedSearch(ctx context.Context, id pgtype.UUID) 
 
 func (f *schedulerFakeRepo) DeleteActivityRunsBefore(ctx context.Context, createdat pgtype.Timestamp) error {
 	return nil
+}
+
+func (f *schedulerFakeRepo) ListJobsMissingMatch(ctx context.Context, arg sqlcgen.ListJobsMissingMatchParams) ([]sqlcgen.ListJobsMissingMatchRow, error) {
+	f.reconcileWindow = arg
+	return f.unmatched, nil
+}
+
+func (f *schedulerFakeRepo) InsertActivityRun(ctx context.Context, arg sqlcgen.InsertActivityRunParams) (sqlcgen.ActivityRun, error) {
+	return sqlcgen.ActivityRun{}, nil
 }
 
 func dueSearch() sqlcgen.SavedSearch {
@@ -87,4 +101,57 @@ func TestTick_LostClaimSkipsRun(t *testing.T) {
 	if repo.runStarted {
 		t.Error("expected a lost claim to skip the run entirely")
 	}
+}
+
+// A job whose match task was lost between InsertJob and EnqueueContext has no
+// score, and an unscored job sorts last in the feed — so nothing surfaces the
+// breakage. Every tick sweeps for them and re-enqueues.
+func TestTick_ReconcilesJobsWithNoMatchResult(t *testing.T) {
+	repo := &schedulerFakeRepo{
+		search:   dueSearch(),
+		claimErr: pgx.ErrNoRows, // skip the run; this test is about the sweep
+		unmatched: []sqlcgen.ListJobsMissingMatchRow{
+			{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, Company: "Acme", Title: "Go Developer"},
+			{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, Company: "Globex", Title: "Backend Engineer"},
+		},
+	}
+	enq := &countingEnqueuer{}
+	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, enq))
+
+	s.Tick(context.Background())
+
+	if enq.count != 2 {
+		t.Fatalf("expected a match task per unmatched job, got %d", enq.count)
+	}
+	for _, task := range enq.types {
+		if task != queue.TypeMatch {
+			t.Errorf("expected only match tasks from the sweep, got %q", task)
+		}
+	}
+
+	// Both bounds must be set: without the lower one the sweep would fight
+	// with jobs still queued behind enrichment, without the upper one a
+	// permanently failing job would be retried on every tick forever.
+	w := repo.reconcileWindow
+	if !w.OlderThan.Valid || !w.NewerThan.Valid {
+		t.Fatalf("expected the sweep to be bounded on both sides, got %+v", w)
+	}
+	if !w.NewerThan.Time.Before(w.OlderThan.Time) {
+		t.Errorf("expected newer_than < older_than, got newer=%v older=%v", w.NewerThan.Time, w.OlderThan.Time)
+	}
+	if w.Limit <= 0 {
+		t.Errorf("expected a batch cap so a backlog drains over several ticks, got %d", w.Limit)
+	}
+}
+
+type countingEnqueuer struct {
+	ingestion.Enqueuer
+	count int
+	types []string
+}
+
+func (e *countingEnqueuer) EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error) {
+	e.count++
+	e.types = append(e.types, task.Type())
+	return &asynq.TaskInfo{}, nil
 }

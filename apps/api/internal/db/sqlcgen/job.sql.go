@@ -145,6 +145,60 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, erro
 	return i, err
 }
 
+const listJobsMissingMatch = `-- name: ListJobsMissingMatch :many
+SELECT j."id", j."company", j."title" FROM "Job" j
+LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
+WHERE mr."id" IS NULL
+  AND j."status" != 'hidden'
+  AND j."ingestedAt" < $1::timestamp
+  AND j."ingestedAt" > $2::timestamp
+ORDER BY j."ingestedAt" DESC
+LIMIT $3
+`
+
+type ListJobsMissingMatchParams struct {
+	OlderThan pgtype.Timestamp `json:"older_than"`
+	NewerThan pgtype.Timestamp `json:"newer_than"`
+	Limit     int32            `json:"limit"`
+}
+
+type ListJobsMissingMatchRow struct {
+	ID      pgtype.UUID `json:"id"`
+	Company string      `json:"company"`
+	Title   string      `json:"title"`
+}
+
+// Jobs that were inserted but never produced a MatchResult row. Insert and
+// enqueue aren't atomic, so a crash (or a Redis blip) between the two strands
+// the job: no score, and therefore invisible in the score-sorted feed, with
+// nothing to ever retry it. The scheduler re-enqueues these.
+//
+// Note a prefiltered-out job is NOT missing a match: matching writes a row
+// carrying just the similarity, so the sweep passes over it.
+//
+// Bounded on both sides. "older_than" leaves in-flight jobs alone (including
+// ones still queued behind enrichment); "newer_than" stops a job whose
+// matching fails deterministically from being retried on every tick forever.
+func (q *Queries) ListJobsMissingMatch(ctx context.Context, arg ListJobsMissingMatchParams) ([]ListJobsMissingMatchRow, error) {
+	rows, err := q.db.Query(ctx, listJobsMissingMatch, arg.OlderThan, arg.NewerThan, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobsMissingMatchRow
+	for rows.Next() {
+		var i ListJobsMissingMatchRow
+		if err := rows.Scan(&i.ID, &i.Company, &i.Title); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobsNeedingDetail = `-- name: ListJobsNeedingDetail :many
 SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId" FROM "Job"
 WHERE "sourceKey" = $1 AND "detailScrapedAt" IS NULL

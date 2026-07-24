@@ -30,6 +30,7 @@ type Repository interface {
 	InsertSourceRun(ctx context.Context, arg sqlcgen.InsertSourceRunParams) (sqlcgen.SourceRun, error)
 	RecordJobRepost(ctx context.Context, dedupekey string) (sqlcgen.Job, error)
 	ListEnabledSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error)
+	ListJobsMissingMatch(ctx context.Context, arg sqlcgen.ListJobsMissingMatchParams) ([]sqlcgen.ListJobsMissingMatchRow, error)
 	ListSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error)
 	ListSubscriptions(ctx context.Context) ([]sqlcgen.Subscription, error)
 	RecentRunsJoined(ctx context.Context, limit int32) ([]sqlcgen.RecentRunsJoinedRow, error)

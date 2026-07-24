@@ -8,8 +8,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -333,6 +336,75 @@ func (s *Service) RunAllSubscriptions(ctx context.Context) (int, error) {
 			continue
 		}
 		queued++
+	}
+	return queued, nil
+}
+
+// ---------------------------------------------------------------------------
+// ReconcileUnmatched: re-enqueue jobs whose match task went missing
+// ---------------------------------------------------------------------------
+
+const (
+	// reconcileMinAge is how long a job is left alone before the sweep treats
+	// a missing MatchResult as lost rather than in flight. It has to clear the
+	// slowest legitimate path to a score — sitting in the enrich queue behind
+	// a serialized, deliberately delayed detail fetch — without waiting so
+	// long the job goes stale in the feed.
+	reconcileMinAge = 30 * time.Minute
+	// reconcileMaxAge stops the sweep re-enqueueing a job whose matching fails
+	// the same way every time. Without it, one permanently broken job would
+	// take a match slot on every tick forever.
+	reconcileMaxAge = 7 * 24 * time.Hour
+	// reconcileBatch caps a single sweep so a large backlog drains over
+	// several ticks instead of flooding the match queue in one go — matching
+	// runs at concurrency 1 against a local LLM.
+	reconcileBatch = 50
+)
+
+// ReconcileUnmatched re-enqueues match tasks for jobs that were inserted but
+// never got a MatchResult. Inserting the job and enqueueing its match are two
+// separate operations, so a crash or a Redis blip between them leaves a job
+// nothing will ever score — and an unscored job sorts last in the feed, so it
+// is effectively invisible rather than visibly broken. Returns the number
+// re-enqueued.
+func (s *Service) ReconcileUnmatched(ctx context.Context) (int, error) {
+	now := time.Now()
+	rows, err := s.q.ListJobsMissingMatch(ctx, sqlcgen.ListJobsMissingMatchParams{
+		OlderThan: pgtype.Timestamp{Time: now.Add(-reconcileMinAge), Valid: true},
+		NewerThan: pgtype.Timestamp{Time: now.Add(-reconcileMaxAge), Valid: true},
+		Limit:     reconcileBatch,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	queued := 0
+	for _, row := range rows {
+		jobID := dbutil.UUIDString(row.ID)
+
+		var actID *string
+		rec := activity.New(ctx, s.q, "match", fmt.Sprintf("%s — %s", row.Company, row.Title), &jobID, nil, "")
+		if rec != nil {
+			idStr := dbutil.UUIDString(rec.ID())
+			actID = &idStr
+		}
+
+		payload, err := json.Marshal(queue.MatchPayload{JobID: jobID, ActivityID: actID})
+		if err != nil {
+			continue
+		}
+		opts := []asynq.Option{asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)}
+		if actID != nil {
+			opts = append(opts, asynq.TaskID(*actID))
+		}
+		if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload), opts...); err != nil {
+			slog.Warn("ingestion: reconcile enqueue match failed", "job", jobID, "error", err)
+			continue
+		}
+		queued++
+	}
+	if queued > 0 {
+		slog.Info("reconciled jobs with no match result", "count", queued)
 	}
 	return queued, nil
 }
