@@ -25,7 +25,11 @@ func (s *stubProvider) Embed(ctx context.Context, text string) ([]float32, error
 }
 
 func snapshotWith(tasks map[string]TaskSetting, credentialConfigured bool) RouterSnapshot {
-	return RouterSnapshot{Tasks: tasks, CredentialConfigured: credentialConfigured}
+	return RouterSnapshot{
+		Tasks:                          tasks,
+		CredentialConfigured:           credentialConfigured,
+		OpenRouterCredentialConfigured: credentialConfigured,
+	}
 }
 
 func TestRouterResolvesOllamaByDefault(t *testing.T) {
@@ -34,7 +38,7 @@ func TestRouterResolvesOllamaByDefault(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, true))
-	r := NewRouter("match", holder, ollama, cerebras)
+	r := NewRouter("match", holder, ollama, cerebras, nil)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -51,7 +55,7 @@ func TestRouterResolvesCerebrasWhenSelectedAndConfigured(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"generation": {Provider: TaskProviderCerebras, Model: "llama-3.3-70b"},
 	}, true))
-	r := NewRouter("generation", holder, ollama, cerebras)
+	r := NewRouter("generation", holder, ollama, cerebras, nil)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -72,7 +76,7 @@ func TestRouterFallsBackToOllamaWhenCredentialMissing(t *testing.T) {
 	}, false))
 	// cerebras provider is nil, exactly as main.go would construct it when
 	// CEREBRAS_API_KEY is unset.
-	r := NewRouter("ghost", holder, ollama, nil)
+	r := NewRouter("ghost", holder, ollama, nil, nil)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -83,12 +87,74 @@ func TestRouterFallsBackToOllamaWhenCredentialMissing(t *testing.T) {
 	}
 }
 
+func TestRouterResolvesOpenRouterWhenSelectedAndConfigured(t *testing.T) {
+	ollama := &stubProvider{name: "ollama"}
+	cerebras := &stubProvider{name: "cerebras"}
+	openrouter := &stubProvider{name: "openrouter"}
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"generation": {Provider: TaskProviderOpenRouter, Model: "deepseek/deepseek-r1:free"},
+	}, true))
+	r := NewRouter("generation", holder, ollama, cerebras, openrouter)
+
+	out, err := r.Complete(context.Background(), "hi", nil)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if out != "openrouter" {
+		t.Errorf("Complete() = %q, want openrouter", out)
+	}
+	if openrouter.gotModel != "deepseek/deepseek-r1:free" {
+		t.Errorf("model passed to provider = %q, want deepseek/deepseek-r1:free", openrouter.gotModel)
+	}
+}
+
+func TestRouterFallsBackToOllamaWhenOpenRouterCredentialMissing(t *testing.T) {
+	ollama := &stubProvider{name: "ollama"}
+	cerebras := &stubProvider{name: "cerebras"}
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"ghost": {Provider: TaskProviderOpenRouter, Model: "deepseek/deepseek-r1:free"},
+	}, false))
+	// openrouter provider is nil, as main.go constructs it when
+	// OPENROUTER_API_KEY is unset.
+	r := NewRouter("ghost", holder, ollama, cerebras, nil)
+
+	out, err := r.Complete(context.Background(), "hi", nil)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if out != "ollama" {
+		t.Errorf("Complete() = %q, want ollama (fallback)", out)
+	}
+	// The persisted OpenRouter model must not leak onto Ollama, which has no
+	// such model — the fallback uses Ollama's own default.
+	if ollama.gotModel != "" {
+		t.Errorf("gotModel = %q, want empty on fallback", ollama.gotModel)
+	}
+}
+
+func TestRouterEmbedAlwaysUsesOllamaForOpenRouterTask(t *testing.T) {
+	ollama := &stubProvider{name: "ollama"}
+	openrouter := &stubProvider{name: "openrouter"}
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"default": {Provider: TaskProviderOpenRouter},
+	}, true))
+	r := NewRouter("default", holder, ollama, nil, openrouter)
+
+	vec, err := r.Embed(context.Background(), "text")
+	if err != nil {
+		t.Fatalf("Embed: %v", err)
+	}
+	if len(vec) != 1 {
+		t.Errorf("Embed should delegate to ollama stub, got %v", vec)
+	}
+}
+
 func TestRouterEmptyModelUsesProviderDefault(t *testing.T) {
 	ollama := &stubProvider{name: "ollama"}
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"rephrase": {Provider: TaskProviderOllama, Model: ""},
 	}, true))
-	r := NewRouter("rephrase", holder, ollama, nil)
+	r := NewRouter("rephrase", holder, ollama, nil, nil)
 
 	if _, err := r.Complete(context.Background(), "hi", nil); err != nil {
 		t.Fatalf("Complete: %v", err)
@@ -104,7 +170,7 @@ func TestRouterEmbedAlwaysUsesOllama(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"default": {Provider: TaskProviderCerebras},
 	}, true))
-	r := NewRouter("default", holder, ollama, cerebras)
+	r := NewRouter("default", holder, ollama, cerebras, nil)
 
 	vec, err := r.Embed(context.Background(), "text")
 	if err != nil {
@@ -121,7 +187,7 @@ func TestRouterSnapshotSwapIsLive(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, true))
-	r := NewRouter("match", holder, ollama, cerebras)
+	r := NewRouter("match", holder, ollama, cerebras, nil)
 
 	out, _ := r.Complete(context.Background(), "hi", nil)
 	if out != "ollama" {

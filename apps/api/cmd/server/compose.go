@@ -157,11 +157,11 @@ type llmHandles struct {
 
 // composeLLM builds the shared providers and one llm.Router per named chat
 // task, all sharing a single settings snapshot so a dashboard change takes
-// effect for newly started tasks without a restart. Cerebras is nil when
-// unconfigured; the typed-nil is converted to a nil Provider interface so the
-// routers see a genuinely absent provider.
+// effect for newly started tasks without a restart. Cerebras and OpenRouter
+// are nil when unconfigured; each typed-nil is converted to a nil Provider
+// interface so the routers see a genuinely absent provider.
 func composeLLM(ctx context.Context, p *Platform) (*llmHandles, error) {
-	ollamaProvider, cerebrasProvider, err := llm.NewProviders(p.Config)
+	ollamaProvider, cerebrasProvider, openRouterProvider, err := llm.NewProviders(p.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -169,18 +169,24 @@ func composeLLM(ctx context.Context, p *Platform) (*llmHandles, error) {
 	if cerebrasProvider != nil {
 		cerebrasIface = cerebrasProvider
 	}
-	llmSettingsSvc, err := llmsettings.NewService(ctx, p.DB.Queries, p.Config.CerebrasAPIKey != "")
+	var openRouterIface llm.Provider
+	if openRouterProvider != nil {
+		openRouterIface = openRouterProvider
+	}
+	llmSettingsSvc, err := llmsettings.NewService(
+		ctx, p.DB.Queries, p.Config.CerebrasAPIKey != "", p.Config.OpenRouterAPIKey != "",
+	)
 	if err != nil {
 		return nil, err
 	}
 	llmHolder := llmSettingsSvc.Holder()
 	return &llmHandles{
 		Ollama:           ollamaProvider,
-		MatchRouter:      llm.NewRouter("match", llmHolder, ollamaProvider, cerebrasIface),
-		GenerationRouter: llm.NewRouter("generation", llmHolder, ollamaProvider, cerebrasIface),
-		RephraseRouter:   llm.NewRouter("rephrase", llmHolder, ollamaProvider, cerebrasIface),
-		GhostRouter:      llm.NewRouter("ghost", llmHolder, ollamaProvider, cerebrasIface),
-		DefaultRouter:    llm.NewRouter("default", llmHolder, ollamaProvider, cerebrasIface),
+		MatchRouter:      llm.NewRouter("match", llmHolder, ollamaProvider, cerebrasIface, openRouterIface),
+		GenerationRouter: llm.NewRouter("generation", llmHolder, ollamaProvider, cerebrasIface, openRouterIface),
+		RephraseRouter:   llm.NewRouter("rephrase", llmHolder, ollamaProvider, cerebrasIface, openRouterIface),
+		GhostRouter:      llm.NewRouter("ghost", llmHolder, ollamaProvider, cerebrasIface, openRouterIface),
+		DefaultRouter:    llm.NewRouter("default", llmHolder, ollamaProvider, cerebrasIface, openRouterIface),
 		Settings:         llmSettingsSvc,
 		SettingsHandler:  &httpapi.LlmSettingsHandler{Settings: llmSettingsSvc},
 	}, nil

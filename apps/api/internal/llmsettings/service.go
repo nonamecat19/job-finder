@@ -30,8 +30,8 @@ func isKnownTaskKey(key string) bool {
 
 var (
 	ErrUnknownTaskKey  = errors.New("llmsettings: unknown task key")
-	ErrInvalidProvider = errors.New("llmsettings: provider must be \"ollama\" or \"cerebras\"")
-	ErrInvalidModel    = errors.New("llmsettings: model is not a supported Cerebras free-tier model")
+	ErrInvalidProvider = errors.New("llmsettings: provider must be \"ollama\", \"cerebras\" or \"openrouter\"")
+	ErrInvalidModel    = errors.New("llmsettings: model is not a supported model for the selected provider")
 )
 
 // TaskUpdate is one task's requested provider/model assignment (PUT body).
@@ -44,29 +44,32 @@ type TaskUpdate struct {
 // State is the full current settings view returned to callers (GET/PUT
 // response per contracts/llm-settings.md).
 type State struct {
-	CredentialConfigured bool
-	Tasks                []TaskUpdate
+	CredentialConfigured           bool // Cerebras
+	OpenRouterCredentialConfigured bool
+	Tasks                          []TaskUpdate
 }
 
 // Service loads persisted per-task settings into a shared llm.SnapshotHolder
 // at startup and keeps it in sync on every Update.
 type Service struct {
-	q                    Repository
-	holder               *llm.SnapshotHolder
-	credentialConfigured bool
+	q             Repository
+	holder        *llm.SnapshotHolder
+	cerebrasKey   bool
+	openRouterKey bool
 }
 
 // NewService loads all rows via q and builds the initial snapshot.
-// credentialConfigured reflects whether config.CerebrasAPIKey was set at
-// process start (a restart is required to change the credential itself,
-// since it is env-only — see spec FR-013).
-func NewService(ctx context.Context, q Repository, credentialConfigured bool) (*Service, error) {
+// cerebrasConfigured/openRouterConfigured reflect whether
+// config.CerebrasAPIKey / config.OpenRouterAPIKey were set at process start
+// (a restart is required to change a credential itself, since both are
+// env-only — see spec FR-013).
+func NewService(ctx context.Context, q Repository, cerebrasConfigured, openRouterConfigured bool) (*Service, error) {
 	rows, err := q.ListLlmTaskSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("llmsettings: load: %w", err)
 	}
-	holder := llm.NewSnapshotHolder(snapshotFromRows(rows, credentialConfigured))
-	return &Service{q: q, holder: holder, credentialConfigured: credentialConfigured}, nil
+	holder := llm.NewSnapshotHolder(snapshotFromRows(rows, cerebrasConfigured, openRouterConfigured))
+	return &Service{q: q, holder: holder, cerebrasKey: cerebrasConfigured, openRouterKey: openRouterConfigured}, nil
 }
 
 // Holder returns the shared snapshot holder every task's llm.Router reads
@@ -82,25 +85,36 @@ func (s *Service) Get() State {
 		t := snap.Tasks[key]
 		tasks = append(tasks, TaskUpdate{TaskKey: key, Provider: string(t.Provider), Model: t.Model})
 	}
-	return State{CredentialConfigured: snap.CredentialConfigured, Tasks: tasks}
+	return State{
+		CredentialConfigured:           snap.CredentialConfigured,
+		OpenRouterCredentialConfigured: snap.OpenRouterCredentialConfigured,
+		Tasks:                          tasks,
+	}
 }
 
 // Update validates and persists the given task assignments (a subset of
 // TaskKeys is fine; omitted tasks are unchanged), then reloads the shared
 // snapshot so every Router sees the change on its next call (FR-005). A task
-// may be set to "cerebras" even when no credential is configured (FR-008) —
-// the Router keeps such a task on Ollama until a key is added; State's
-// CredentialConfigured tells the caller why.
+// may be set to a remote provider even when no credential is configured
+// (FR-008) — the Router keeps such a task on Ollama until a key is added;
+// State's *CredentialConfigured flags tell the caller why.
 func (s *Service) Update(ctx context.Context, updates []TaskUpdate) (State, error) {
 	for _, u := range updates {
 		if !isKnownTaskKey(u.TaskKey) {
 			return State{}, fmt.Errorf("%w: %q", ErrUnknownTaskKey, u.TaskKey)
 		}
-		if u.Provider != string(llm.TaskProviderOllama) && u.Provider != string(llm.TaskProviderCerebras) {
+		switch llm.TaskProvider(u.Provider) {
+		case llm.TaskProviderOllama:
+		case llm.TaskProviderCerebras:
+			if !llm.IsSupportedCerebrasModel(u.Model) {
+				return State{}, fmt.Errorf("%w: %q", ErrInvalidModel, u.Model)
+			}
+		case llm.TaskProviderOpenRouter:
+			if !llm.IsSupportedOpenRouterModel(u.Model) {
+				return State{}, fmt.Errorf("%w: %q", ErrInvalidModel, u.Model)
+			}
+		default:
 			return State{}, fmt.Errorf("%w: %q", ErrInvalidProvider, u.Provider)
-		}
-		if u.Provider == string(llm.TaskProviderCerebras) && !llm.IsSupportedCerebrasModel(u.Model) {
-			return State{}, fmt.Errorf("%w: %q", ErrInvalidModel, u.Model)
 		}
 	}
 
@@ -118,14 +132,18 @@ func (s *Service) Update(ctx context.Context, updates []TaskUpdate) (State, erro
 	if err != nil {
 		return State{}, fmt.Errorf("llmsettings: reload: %w", err)
 	}
-	s.holder.Store(snapshotFromRows(rows, s.credentialConfigured))
+	s.holder.Store(snapshotFromRows(rows, s.cerebrasKey, s.openRouterKey))
 	return s.Get(), nil
 }
 
-func snapshotFromRows(rows []sqlcgen.LlmTaskSetting, credentialConfigured bool) llm.RouterSnapshot {
+func snapshotFromRows(rows []sqlcgen.LlmTaskSetting, cerebrasConfigured, openRouterConfigured bool) llm.RouterSnapshot {
 	tasks := make(map[string]llm.TaskSetting, len(rows))
 	for _, r := range rows {
 		tasks[r.TaskKey] = llm.TaskSetting{Provider: llm.TaskProvider(r.Provider), Model: r.Model}
 	}
-	return llm.RouterSnapshot{Tasks: tasks, CredentialConfigured: credentialConfigured}
+	return llm.RouterSnapshot{
+		Tasks:                          tasks,
+		CredentialConfigured:           cerebrasConfigured,
+		OpenRouterCredentialConfigured: openRouterConfigured,
+	}
 }

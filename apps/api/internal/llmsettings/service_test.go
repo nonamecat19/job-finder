@@ -35,7 +35,7 @@ func (f *fakeRepo) UpsertLlmTaskSetting(ctx context.Context, arg sqlcgen.UpsertL
 }
 
 func TestNewServiceLoadsSeededDefaults(t *testing.T) {
-	svc, err := NewService(context.Background(), newFakeRepo(), false)
+	svc, err := NewService(context.Background(), newFakeRepo(), false, false)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestNewServiceLoadsSeededDefaults(t *testing.T) {
 
 func TestUpdatePersistsAndReloadsSnapshot(t *testing.T) {
 	repo := newFakeRepo()
-	svc, err := NewService(context.Background(), repo, true)
+	svc, err := NewService(context.Background(), repo, true, true)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestUpdatePersistsAndReloadsSnapshot(t *testing.T) {
 }
 
 func TestUpdateRejectsUnknownTaskKey(t *testing.T) {
-	svc, _ := NewService(context.Background(), newFakeRepo(), true)
+	svc, _ := NewService(context.Background(), newFakeRepo(), true, true)
 	_, err := svc.Update(context.Background(), []TaskUpdate{{TaskKey: "bogus", Provider: "ollama"}})
 	if !errors.Is(err, ErrUnknownTaskKey) {
 		t.Errorf("err = %v, want ErrUnknownTaskKey", err)
@@ -96,7 +96,7 @@ func TestUpdateRejectsUnknownTaskKey(t *testing.T) {
 }
 
 func TestUpdateRejectsInvalidProvider(t *testing.T) {
-	svc, _ := NewService(context.Background(), newFakeRepo(), true)
+	svc, _ := NewService(context.Background(), newFakeRepo(), true, true)
 	_, err := svc.Update(context.Background(), []TaskUpdate{{TaskKey: "match", Provider: "openai"}})
 	if !errors.Is(err, ErrInvalidProvider) {
 		t.Errorf("err = %v, want ErrInvalidProvider", err)
@@ -104,7 +104,7 @@ func TestUpdateRejectsInvalidProvider(t *testing.T) {
 }
 
 func TestUpdateRejectsUnsupportedCerebrasModel(t *testing.T) {
-	svc, _ := NewService(context.Background(), newFakeRepo(), true)
+	svc, _ := NewService(context.Background(), newFakeRepo(), true, true)
 	_, err := svc.Update(context.Background(), []TaskUpdate{
 		{TaskKey: "match", Provider: "cerebras", Model: "not-a-real-model"},
 	})
@@ -113,8 +113,58 @@ func TestUpdateRejectsUnsupportedCerebrasModel(t *testing.T) {
 	}
 }
 
+func TestUpdateAcceptsOpenRouter(t *testing.T) {
+	svc, _ := NewService(context.Background(), newFakeRepo(), true, true)
+	state, err := svc.Update(context.Background(), []TaskUpdate{
+		{TaskKey: "match", Provider: "openrouter", Model: "deepseek/deepseek-r1:free"},
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if !state.OpenRouterCredentialConfigured {
+		t.Error("OpenRouterCredentialConfigured should be true")
+	}
+	snap := svc.Holder().Load()
+	if snap.Tasks["match"].Provider != "openrouter" {
+		t.Errorf("match provider = %q, want openrouter", snap.Tasks["match"].Provider)
+	}
+	if snap.Tasks["match"].Model != "deepseek/deepseek-r1:free" {
+		t.Errorf("match model = %q", snap.Tasks["match"].Model)
+	}
+}
+
+func TestUpdateRejectsUnsupportedOpenRouterModel(t *testing.T) {
+	svc, _ := NewService(context.Background(), newFakeRepo(), true, true)
+	// A valid Cerebras model is still invalid for OpenRouter — validation is
+	// per-provider, not a shared allowlist.
+	_, err := svc.Update(context.Background(), []TaskUpdate{
+		{TaskKey: "match", Provider: "openrouter", Model: "gpt-oss-120b"},
+	})
+	if !errors.Is(err, ErrInvalidModel) {
+		t.Errorf("err = %v, want ErrInvalidModel", err)
+	}
+}
+
+func TestUpdateAllowsOpenRouterWithoutCredential(t *testing.T) {
+	svc, _ := NewService(context.Background(), newFakeRepo(), false, false)
+	state, err := svc.Update(context.Background(), []TaskUpdate{
+		{TaskKey: "ghost", Provider: "openrouter", Model: ""},
+	})
+	if err != nil {
+		t.Fatalf("Update should persist even without a configured credential: %v", err)
+	}
+	if state.OpenRouterCredentialConfigured {
+		t.Error("OpenRouterCredentialConfigured should stay false")
+	}
+	for _, task := range state.Tasks {
+		if task.TaskKey == "ghost" && task.Provider != "openrouter" {
+			t.Errorf("ghost provider = %q, want openrouter (persisted choice, Router falls back at call time)", task.Provider)
+		}
+	}
+}
+
 func TestUpdateAllowsCerebrasWithoutCredential(t *testing.T) {
-	svc, _ := NewService(context.Background(), newFakeRepo(), false)
+	svc, _ := NewService(context.Background(), newFakeRepo(), false, false)
 	state, err := svc.Update(context.Background(), []TaskUpdate{
 		{TaskKey: "ghost", Provider: "cerebras", Model: ""},
 	})
@@ -132,7 +182,7 @@ func TestUpdateAllowsCerebrasWithoutCredential(t *testing.T) {
 }
 
 func TestUpdateLeavesOmittedTasksUnchanged(t *testing.T) {
-	svc, _ := NewService(context.Background(), newFakeRepo(), true)
+	svc, _ := NewService(context.Background(), newFakeRepo(), true, true)
 	if _, err := svc.Update(context.Background(), []TaskUpdate{
 		{TaskKey: "match", Provider: "cerebras", Model: "gpt-oss-120b"},
 	}); err != nil {

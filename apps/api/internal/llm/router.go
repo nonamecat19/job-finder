@@ -9,8 +9,9 @@ import (
 type TaskProvider string
 
 const (
-	TaskProviderOllama   TaskProvider = "ollama"
-	TaskProviderCerebras TaskProvider = "cerebras"
+	TaskProviderOllama     TaskProvider = "ollama"
+	TaskProviderCerebras   TaskProvider = "cerebras"
+	TaskProviderOpenRouter TaskProvider = "openrouter"
 )
 
 // TaskSetting is the resolved {provider, model} for one chat task, as read
@@ -21,13 +22,18 @@ type TaskSetting struct {
 	Model    string
 }
 
-// RouterSnapshot is the full set of per-task settings plus whether a Cerebras
-// credential is configured. It is swapped atomically whenever settings
-// change, so in-flight Complete/CompleteJSON calls always see a consistent
-// view (research.md R4/R5).
+// RouterSnapshot is the full set of per-task settings plus whether each
+// remote provider's credential is configured. It is swapped atomically
+// whenever settings change, so in-flight Complete/CompleteJSON calls always
+// see a consistent view (research.md R4/R5).
+//
+// CredentialConfigured is Cerebras's flag (kept unprefixed for wire
+// compatibility with the existing /v1/settings/llm response);
+// OpenRouterCredentialConfigured is OpenRouter's.
 type RouterSnapshot struct {
-	Tasks                map[string]TaskSetting
-	CredentialConfigured bool
+	Tasks                          map[string]TaskSetting
+	CredentialConfigured           bool
+	OpenRouterCredentialConfigured bool
 }
 
 // SnapshotHolder is shared by every task Router for one process; updating it
@@ -62,30 +68,42 @@ func (h *SnapshotHolder) Store(s RouterSnapshot) {
 // any other Provider, so per-task runtime switching (FR-005/FR-014) needs no
 // change to call sites beyond construction.
 type Router struct {
-	taskKey  string
-	holder   *SnapshotHolder
-	ollama   Provider
-	cerebras Provider // nil when no Cerebras credential is configured
+	taskKey    string
+	holder     *SnapshotHolder
+	ollama     Provider
+	cerebras   Provider // nil when no Cerebras credential is configured
+	openrouter Provider // nil when no OpenRouter credential is configured
 }
 
 // NewRouter builds a Router for taskKey sharing holder (use the same holder
 // across all task Routers so one settings update reaches every task).
-func NewRouter(taskKey string, holder *SnapshotHolder, ollama, cerebras Provider) *Router {
-	return &Router{taskKey: taskKey, holder: holder, ollama: ollama, cerebras: cerebras}
+func NewRouter(taskKey string, holder *SnapshotHolder, ollama, cerebras, openrouter Provider) *Router {
+	return &Router{taskKey: taskKey, holder: holder, ollama: ollama, cerebras: cerebras, openrouter: openrouter}
 }
 
 // resolve returns the underlying provider and effective model for the
-// current snapshot. Cerebras selected without a configured credential falls
-// back to Ollama (FR-008) — the caller (httpapi layer) is responsible for
-// surfacing CredentialConfigured to the operator; the Router just keeps the
-// task working.
+// current snapshot. A remote provider selected without a configured
+// credential falls back to Ollama (FR-008) — the caller (httpapi layer) is
+// responsible for surfacing the *CredentialConfigured flags to the operator;
+// the Router just keeps the task working.
 func (r *Router) resolve() (Provider, string) {
 	snap := r.holder.Load()
-	setting, ok := snap.Tasks[r.taskKey]
-	if !ok || setting.Provider == TaskProviderOllama || r.cerebras == nil {
-		return r.ollama, setting.Model
+	setting := snap.Tasks[r.taskKey]
+	switch setting.Provider {
+	case TaskProviderCerebras:
+		if r.cerebras != nil {
+			return r.cerebras, setting.Model
+		}
+		// Credential missing: the persisted model names a Cerebras model
+		// Ollama has never heard of, so drop it and use Ollama's default.
+		return r.ollama, ""
+	case TaskProviderOpenRouter:
+		if r.openrouter != nil {
+			return r.openrouter, setting.Model
+		}
+		return r.ollama, ""
 	}
-	return r.cerebras, setting.Model
+	return r.ollama, setting.Model
 }
 
 func (r *Router) ModelName() string {
