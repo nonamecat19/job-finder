@@ -18,6 +18,7 @@ type Repository interface {
 	activity.Store
 
 	ClaimSavedSearchRun(ctx context.Context, arg sqlcgen.ClaimSavedSearchRunParams) (pgtype.UUID, error)
+	ClaimSubscriptionRun(ctx context.Context, arg sqlcgen.ClaimSubscriptionRunParams) (pgtype.UUID, error)
 	CreateSavedSearch(ctx context.Context, arg sqlcgen.CreateSavedSearchParams) (sqlcgen.SavedSearch, error)
 	DeleteActivityRunsBefore(ctx context.Context, createdat pgtype.Timestamp) error
 	DeleteSavedSearch(ctx context.Context, id pgtype.UUID) error
@@ -31,6 +32,7 @@ type Repository interface {
 	RecordJobRepost(ctx context.Context, dedupekey string) (sqlcgen.Job, error)
 	ListEnabledSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error)
 	ListJobsMissingMatch(ctx context.Context, arg sqlcgen.ListJobsMissingMatchParams) ([]sqlcgen.ListJobsMissingMatchRow, error)
+	ListEnabledSubscriptions(ctx context.Context) ([]sqlcgen.Subscription, error)
 	ListSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error)
 	ListSubscriptions(ctx context.Context) ([]sqlcgen.Subscription, error)
 	RecentRunsJoined(ctx context.Context, limit int32) ([]sqlcgen.RecentRunsJoinedRow, error)

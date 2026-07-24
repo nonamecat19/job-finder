@@ -118,6 +118,7 @@ export function mockSubscription(overrides: Partial<SubscriptionDto> = {}): Subs
     name: 'Remotive feed',
     url: 'https://remotive.com/rss',
     enabled: true,
+    cron: '0 */6 * * *',
     lastRunAt: null,
     ...overrides,
   }

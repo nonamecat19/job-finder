@@ -365,13 +365,15 @@ type SavedSearchDto struct {
 
 // SubscriptionDto is a URL-based subscription attached to a job source: a
 // saved-filter URL on the site itself (e.g. a djinni subs page or a dou
-// category listing). Fetching the URL is deferred; this is CRUD + enable only.
+// category listing). Cron is the schedule the ingestion scheduler scrapes it
+// on, same expression format as SavedSearchDto.Cron.
 type SubscriptionDto struct {
 	ID        string  `json:"id"`
 	SourceKey string  `json:"sourceKey"`
 	Name      *string `json:"name"`
 	URL       string  `json:"url"`
 	Enabled   bool    `json:"enabled"`
+	Cron      string  `json:"cron"`
 	LastRunAt *string `json:"lastRunAt"`
 }
 

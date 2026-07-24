@@ -14,7 +14,7 @@ import (
 type SubscriptionProvider interface {
 	List(ctx context.Context) ([]dto.SubscriptionDto, error)
 	ListBySource(ctx context.Context, sourceKey string) ([]dto.SubscriptionDto, error)
-	Create(ctx context.Context, sourceKey, url string, name *string, enabled bool) (*dto.SubscriptionDto, error)
+	Create(ctx context.Context, sourceKey, url string, name *string, enabled bool, cron string) (*dto.SubscriptionDto, error)
 	Update(ctx context.Context, id string, in subscriptions.UpdateInput) (*dto.SubscriptionDto, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -66,6 +66,7 @@ type createSubscriptionBody struct {
 	URL       string  `json:"url"`
 	Name      *string `json:"name"`
 	Enabled   *bool   `json:"enabled"`
+	Cron      *string `json:"cron"`
 }
 
 func (h *SubscriptionsHandler) create(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +79,11 @@ func (h *SubscriptionsHandler) create(w http.ResponseWriter, r *http.Request) {
 	if body.Enabled != nil {
 		enabled = *body.Enabled
 	}
-	out, err := h.Subs.Create(r.Context(), body.SourceKey, body.URL, body.Name, enabled)
+	var cron string
+	if body.Cron != nil {
+		cron = *body.Cron
+	}
+	out, err := h.Subs.Create(r.Context(), body.SourceKey, body.URL, body.Name, enabled, cron)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -90,6 +95,7 @@ type updateSubscriptionBody struct {
 	Name    *string `json:"name"`
 	URL     *string `json:"url"`
 	Enabled *bool   `json:"enabled"`
+	Cron    *string `json:"cron"`
 }
 
 func (h *SubscriptionsHandler) update(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +106,7 @@ func (h *SubscriptionsHandler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := h.Subs.Update(r.Context(), id, subscriptions.UpdateInput{
-		Name: body.Name, URL: body.URL, Enabled: body.Enabled,
+		Name: body.Name, URL: body.URL, Enabled: body.Enabled, Cron: body.Cron,
 	})
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())

@@ -49,7 +49,7 @@ func TestListError(t *testing.T) {
 
 func TestCreateIndeedSubscription_ValidURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	out, err := svc.Create(context.Background(), "indeed", "https://www.indeed.com/jobs?q=golang&l=remote", nil, true)
+	out, err := svc.Create(context.Background(), "indeed", "https://www.indeed.com/jobs?q=golang&l=remote", nil, true, "")
 	if err != nil {
 		t.Fatalf("expected valid indeed search url to be accepted, got error: %v", err)
 	}
@@ -60,28 +60,28 @@ func TestCreateIndeedSubscription_ValidURL(t *testing.T) {
 
 func TestCreateIndeedSubscription_RejectsNonIndeedURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "indeed", "https://example.com/not-indeed", nil, true); err == nil {
+	if _, err := svc.Create(context.Background(), "indeed", "https://example.com/not-indeed", nil, true, ""); err == nil {
 		t.Fatal("expected non-indeed url to be rejected")
 	}
 }
 
 func TestCreateIndeedSubscription_RejectsSingleJobPostingURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "indeed", "https://www.indeed.com/viewjob?jk=abc123", nil, true); err == nil {
+	if _, err := svc.Create(context.Background(), "indeed", "https://www.indeed.com/viewjob?jk=abc123", nil, true, ""); err == nil {
 		t.Fatal("expected single job-posting url to be rejected, want a search results url")
 	}
 }
 
 func TestCreateDouSubscription_UnaffectedByIndeedValidation(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "dou", "https://jobs.dou.ua/vacancies/?category=Golang", nil, true); err != nil {
+	if _, err := svc.Create(context.Background(), "dou", "https://jobs.dou.ua/vacancies/?category=Golang", nil, true, ""); err != nil {
 		t.Fatalf("expected non-indeed source to be unaffected by indeed-specific validation, got: %v", err)
 	}
 }
 
 func TestCreateRemoteOKSubscription_ValidTagURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	out, err := svc.Create(context.Background(), "remoteok", "https://remoteok.com/remote-golang-jobs", nil, true)
+	out, err := svc.Create(context.Background(), "remoteok", "https://remoteok.com/remote-golang-jobs", nil, true, "")
 	if err != nil {
 		t.Fatalf("expected valid remoteok tag url to be accepted, got error: %v", err)
 	}
@@ -92,28 +92,28 @@ func TestCreateRemoteOKSubscription_ValidTagURL(t *testing.T) {
 
 func TestCreateRemoteOKSubscription_ValidAPIRootURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "remoteok", "https://remoteok.com/api", nil, true); err != nil {
+	if _, err := svc.Create(context.Background(), "remoteok", "https://remoteok.com/api", nil, true, ""); err != nil {
 		t.Fatalf("expected valid remoteok api root url to be accepted, got error: %v", err)
 	}
 }
 
 func TestCreateRemoteOKSubscription_ValidIoDomain(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "remoteok", "https://remoteok.io/remote-golang-jobs", nil, true); err != nil {
+	if _, err := svc.Create(context.Background(), "remoteok", "https://remoteok.io/remote-golang-jobs", nil, true, ""); err != nil {
 		t.Fatalf("expected valid remoteok.io url to be accepted, got error: %v", err)
 	}
 }
 
 func TestCreateRemoteOKSubscription_RejectsNonRemoteOKURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "remoteok", "https://example.com/not-remoteok", nil, true); err == nil {
+	if _, err := svc.Create(context.Background(), "remoteok", "https://example.com/not-remoteok", nil, true, ""); err == nil {
 		t.Fatal("expected non-remoteok url to be rejected")
 	}
 }
 
 func TestCreateGlassdoorSubscription_ValidSearchURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	out, err := svc.Create(context.Background(), "glassdoor", "https://www.glassdoor.com/Job/remote-golang-jobs-SRCH_KO0,14.htm", nil, true)
+	out, err := svc.Create(context.Background(), "glassdoor", "https://www.glassdoor.com/Job/remote-golang-jobs-SRCH_KO0,14.htm", nil, true, "")
 	if err != nil {
 		t.Fatalf("expected valid glassdoor search url to be accepted, got error: %v", err)
 	}
@@ -124,21 +124,21 @@ func TestCreateGlassdoorSubscription_ValidSearchURL(t *testing.T) {
 
 func TestCreateGlassdoorSubscription_RejectsNonGlassdoorURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "glassdoor", "https://www.indeed.com/jobs?q=golang", nil, true); err == nil {
+	if _, err := svc.Create(context.Background(), "glassdoor", "https://www.indeed.com/jobs?q=golang", nil, true, ""); err == nil {
 		t.Fatal("expected non-glassdoor url to be rejected")
 	}
 }
 
 func TestCreateGlassdoorSubscription_RejectsSingleJobPostingURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "glassdoor", "https://www.glassdoor.com/job-listing/senior-golang-developer-novatech-JV_KO0,24_KE25,41.htm?jl=123", nil, true); err == nil {
+	if _, err := svc.Create(context.Background(), "glassdoor", "https://www.glassdoor.com/job-listing/senior-golang-developer-novatech-JV_KO0,24_KE25,41.htm?jl=123", nil, true, ""); err == nil {
 		t.Fatal("expected single-job-posting glassdoor url to be rejected")
 	}
 }
 
 func TestCreateJobLeadsSubscription_ValidSearchURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	out, err := svc.Create(context.Background(), "jobleads", "https://www.jobleads.com/job-search?q=golang", nil, true)
+	out, err := svc.Create(context.Background(), "jobleads", "https://www.jobleads.com/job-search?q=golang", nil, true, "")
 	if err != nil {
 		t.Fatalf("expected valid jobleads search url to be accepted, got error: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestCreateJobLeadsSubscription_ValidSearchURL(t *testing.T) {
 
 func TestCreateJobLeadsSubscription_RejectsNonJobLeadsURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
-	if _, err := svc.Create(context.Background(), "jobleads", "https://example.com/not-jobleads", nil, true); err == nil {
+	if _, err := svc.Create(context.Background(), "jobleads", "https://example.com/not-jobleads", nil, true, ""); err == nil {
 		t.Fatal("expected non-jobleads url to be rejected")
 	}
 }

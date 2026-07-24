@@ -11,10 +11,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimSubscriptionRun = `-- name: ClaimSubscriptionRun :one
+UPDATE "Subscription" SET "lastRunAt" = now()
+WHERE "id" = $1
+  AND "lastRunAt" IS NOT DISTINCT FROM $2::timestamp
+RETURNING "id"
+`
+
+type ClaimSubscriptionRunParams struct {
+	ID                pgtype.UUID      `json:"id"`
+	ExpectedLastRunAt pgtype.Timestamp `json:"expected_last_run_at"`
+}
+
+// Compare-and-swap on "lastRunAt", the subscription twin of
+// ClaimSavedSearchRun: the scheduler claims a due subscription before
+// enqueueing its ingest task, so concurrent schedulers can't both scrape it.
+func (q *Queries) ClaimSubscriptionRun(ctx context.Context, arg ClaimSubscriptionRunParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, claimSubscriptionRun, arg.ID, arg.ExpectedLastRunAt)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createSubscription = `-- name: CreateSubscription :one
-INSERT INTO "Subscription" ("sourceKey", "name", "url", "enabled")
-VALUES ($1, $2, $3, $4)
-RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt"
+INSERT INTO "Subscription" ("sourceKey", "name", "url", "enabled", "cron")
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron
 `
 
 type CreateSubscriptionParams struct {
@@ -22,6 +44,7 @@ type CreateSubscriptionParams struct {
 	Name      *string `json:"name"`
 	Url       string  `json:"url"`
 	Enabled   bool    `json:"enabled"`
+	Cron      string  `json:"cron"`
 }
 
 func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (Subscription, error) {
@@ -30,6 +53,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		arg.Name,
 		arg.Url,
 		arg.Enabled,
+		arg.Cron,
 	)
 	var i Subscription
 	err := row.Scan(
@@ -40,6 +64,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		&i.Enabled,
 		&i.LastRunAt,
 		&i.CreatedAt,
+		&i.Cron,
 	)
 	return i, err
 }
@@ -54,7 +79,7 @@ func (q *Queries) DeleteSubscription(ctx context.Context, id pgtype.UUID) error 
 }
 
 const getSubscription = `-- name: GetSubscription :one
-SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt" FROM "Subscription" WHERE "id" = $1
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron FROM "Subscription" WHERE "id" = $1
 `
 
 func (q *Queries) GetSubscription(ctx context.Context, id pgtype.UUID) (Subscription, error) {
@@ -68,12 +93,46 @@ func (q *Queries) GetSubscription(ctx context.Context, id pgtype.UUID) (Subscrip
 		&i.Enabled,
 		&i.LastRunAt,
 		&i.CreatedAt,
+		&i.Cron,
 	)
 	return i, err
 }
 
+const listEnabledSubscriptions = `-- name: ListEnabledSubscriptions :many
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron FROM "Subscription" WHERE "enabled" ORDER BY "createdAt" ASC
+`
+
+func (q *Queries) ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error) {
+	rows, err := q.db.Query(ctx, listEnabledSubscriptions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Subscription
+	for rows.Next() {
+		var i Subscription
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceKey,
+			&i.Name,
+			&i.Url,
+			&i.Enabled,
+			&i.LastRunAt,
+			&i.CreatedAt,
+			&i.Cron,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSubscriptions = `-- name: ListSubscriptions :many
-SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt" FROM "Subscription" ORDER BY "createdAt" ASC
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron FROM "Subscription" ORDER BY "createdAt" ASC
 `
 
 func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error) {
@@ -93,6 +152,7 @@ func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error)
 			&i.Enabled,
 			&i.LastRunAt,
 			&i.CreatedAt,
+			&i.Cron,
 		); err != nil {
 			return nil, err
 		}
@@ -105,7 +165,7 @@ func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error)
 }
 
 const listSubscriptionsBySource = `-- name: ListSubscriptionsBySource :many
-SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt" FROM "Subscription" WHERE "sourceKey" = $1 ORDER BY "createdAt" ASC
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron FROM "Subscription" WHERE "sourceKey" = $1 ORDER BY "createdAt" ASC
 `
 
 func (q *Queries) ListSubscriptionsBySource(ctx context.Context, sourcekey string) ([]Subscription, error) {
@@ -125,6 +185,7 @@ func (q *Queries) ListSubscriptionsBySource(ctx context.Context, sourcekey strin
 			&i.Enabled,
 			&i.LastRunAt,
 			&i.CreatedAt,
+			&i.Cron,
 		); err != nil {
 			return nil, err
 		}
@@ -149,15 +210,17 @@ const updateSubscription = `-- name: UpdateSubscription :one
 UPDATE "Subscription" SET
   "name" = COALESCE($1, "name"),
   "url" = COALESCE($2, "url"),
-  "enabled" = COALESCE($3, "enabled")
-WHERE "id" = $4
-RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt"
+  "enabled" = COALESCE($3, "enabled"),
+  "cron" = COALESCE($4, "cron")
+WHERE "id" = $5
+RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron
 `
 
 type UpdateSubscriptionParams struct {
 	Name    *string     `json:"name"`
 	Url     *string     `json:"url"`
 	Enabled *bool       `json:"enabled"`
+	Cron    *string     `json:"cron"`
 	ID      pgtype.UUID `json:"id"`
 }
 
@@ -166,6 +229,7 @@ func (q *Queries) UpdateSubscription(ctx context.Context, arg UpdateSubscription
 		arg.Name,
 		arg.Url,
 		arg.Enabled,
+		arg.Cron,
 		arg.ID,
 	)
 	var i Subscription
@@ -177,6 +241,7 @@ func (q *Queries) UpdateSubscription(ctx context.Context, arg UpdateSubscription
 		&i.Enabled,
 		&i.LastRunAt,
 		&i.CreatedAt,
+		&i.Cron,
 	)
 	return i, err
 }

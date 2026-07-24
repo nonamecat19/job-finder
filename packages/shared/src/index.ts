@@ -227,6 +227,8 @@ export interface SubscriptionDto {
   name: string | null;
   url: string;
   enabled: boolean;
+  /** Cron the ingestion scheduler scrapes this subscription on. */
+  cron: string;
   lastRunAt: string | null;
 }
 
@@ -235,6 +237,8 @@ export interface SubscriptionInput {
   url: string;
   name?: string;
   enabled?: boolean;
+  /** Omitted means the server default: every six hours. */
+  cron?: string;
 }
 
 export interface SourceRunDto {

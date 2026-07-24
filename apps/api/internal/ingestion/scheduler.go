@@ -68,6 +68,8 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		}
 	}
 
+	s.tickSubscriptions(ctx, now)
+
 	if _, err := s.service.ReconcileUnmatched(ctx); err != nil {
 		slog.Error("scheduler: reconcile unmatched jobs failed", "error", err)
 	}
@@ -75,6 +77,43 @@ func (s *Scheduler) Tick(ctx context.Context) {
 	cutoff := pgtype.Timestamp{Time: now.AddDate(0, 0, -7), Valid: true}
 	if err := s.q.DeleteActivityRunsBefore(ctx, cutoff); err != nil {
 		slog.Error("scheduler: activity retention sweep failed", "error", err)
+	}
+}
+
+// tickSubscriptions runs the due-and-claim pass over enabled subscriptions.
+// Subscriptions have carried a "lastRunAt" since they were introduced, but
+// nothing ever set it on a schedule — only a manual Run did — so a
+// subscription silently stayed as stale as the last time someone pressed the
+// button. Same rules as saved searches: parse its cron, compare against
+// lastRunAt, claim the slot by CAS, then enqueue.
+func (s *Scheduler) tickSubscriptions(ctx context.Context, now time.Time) {
+	subs, err := s.q.ListEnabledSubscriptions(ctx)
+	if err != nil {
+		slog.Error("scheduler: list enabled subscriptions failed", "error", err)
+		return
+	}
+	for _, sub := range subs {
+		schedule, err := cron.ParseStandard(sub.Cron)
+		if err != nil {
+			slog.Error("scheduler: bad subscription cron expression", "subscription", sub.Url, "cron", sub.Cron, "error", err)
+			continue
+		}
+		if sub.LastRunAt.Valid && schedule.Next(sub.LastRunAt.Time).After(now) {
+			continue
+		}
+		if _, err := s.q.ClaimSubscriptionRun(ctx, sqlcgen.ClaimSubscriptionRunParams{
+			ID:                sub.ID,
+			ExpectedLastRunAt: sub.LastRunAt,
+		}); err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				slog.Error("scheduler: claim subscription failed", "subscription", sub.Url, "error", err)
+			}
+			continue
+		}
+		slog.Info("subscription due", "subscription", sub.Url, "source", sub.SourceKey, "cron", sub.Cron)
+		if err := s.service.RunSubscription(ctx, dbutil.UUIDString(sub.ID)); err != nil {
+			slog.Error("scheduler: run subscription failed", "subscription", sub.Url, "error", err)
+		}
 	}
 }
 

@@ -27,6 +27,11 @@ type schedulerFakeRepo struct {
 
 	unmatched       []sqlcgen.ListJobsMissingMatchRow
 	reconcileWindow sqlcgen.ListJobsMissingMatchParams
+
+	subs          []sqlcgen.Subscription
+	subClaimErr   error
+	subClaims     int
+	subRunStarted bool
 }
 
 func (f *schedulerFakeRepo) ListEnabledSavedSearches(ctx context.Context) ([]sqlcgen.SavedSearch, error) {
@@ -58,6 +63,31 @@ func (f *schedulerFakeRepo) ListJobsMissingMatch(ctx context.Context, arg sqlcge
 
 func (f *schedulerFakeRepo) InsertActivityRun(ctx context.Context, arg sqlcgen.InsertActivityRunParams) (sqlcgen.ActivityRun, error) {
 	return sqlcgen.ActivityRun{}, nil
+}
+
+func (f *schedulerFakeRepo) ListEnabledSubscriptions(ctx context.Context) ([]sqlcgen.Subscription, error) {
+	return f.subs, nil
+}
+
+func (f *schedulerFakeRepo) ClaimSubscriptionRun(ctx context.Context, arg sqlcgen.ClaimSubscriptionRunParams) (pgtype.UUID, error) {
+	f.subClaims++
+	if f.subClaimErr != nil {
+		return pgtype.UUID{}, f.subClaimErr
+	}
+	return arg.ID, nil
+}
+
+// GetSubscription is RunSubscription's first call, so it stands in for "the
+// run actually started". It hands back a disabled copy so RunSubscription
+// bails on the next line, before it would need a live jobsources.Service.
+func (f *schedulerFakeRepo) GetSubscription(ctx context.Context, id pgtype.UUID) (sqlcgen.Subscription, error) {
+	f.subRunStarted = true
+	if len(f.subs) == 0 {
+		return sqlcgen.Subscription{}, pgx.ErrNoRows
+	}
+	sub := f.subs[0]
+	sub.Enabled = false
+	return sub, nil
 }
 
 func dueSearch() sqlcgen.SavedSearch {
@@ -154,4 +184,65 @@ func (e *countingEnqueuer) EnqueueContext(ctx context.Context, task *asynq.Task,
 	e.count++
 	e.types = append(e.types, task.Type())
 	return &asynq.TaskInfo{}, nil
+}
+
+func dueSubscription() sqlcgen.Subscription {
+	return sqlcgen.Subscription{
+		ID:        pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
+		SourceKey: "djinni",
+		Url:       "https://djinni.co/jobs/?primary_keyword=Golang",
+		Enabled:   true,
+		Cron:      "0 */6 * * *",
+		LastRunAt: pgtype.Timestamp{Time: time.Now().Add(-24 * time.Hour), Valid: true},
+	}
+}
+
+// Subscriptions carried a lastRunAt but nothing scheduled them: they only ran
+// when someone pressed Run. They now go through the same due-then-claim pass
+// as saved searches.
+func TestTick_RunsDueSubscriptions(t *testing.T) {
+	repo := &schedulerFakeRepo{
+		search:   dueSearch(),
+		claimErr: pgx.ErrNoRows, // skip the search run; this test is about subs
+		subs:     []sqlcgen.Subscription{dueSubscription()},
+	}
+	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, &countingEnqueuer{}))
+
+	s.Tick(context.Background())
+
+	if repo.subClaims != 1 {
+		t.Fatalf("expected exactly one subscription claim, got %d", repo.subClaims)
+	}
+	if !repo.subRunStarted {
+		t.Error("expected a won claim to proceed into RunSubscription")
+	}
+}
+
+func TestTick_SkipsSubscriptionNotYetDue(t *testing.T) {
+	sub := dueSubscription()
+	sub.LastRunAt = pgtype.Timestamp{Time: time.Now(), Valid: true}
+	repo := &schedulerFakeRepo{search: dueSearch(), claimErr: pgx.ErrNoRows, subs: []sqlcgen.Subscription{sub}}
+	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, &countingEnqueuer{}))
+
+	s.Tick(context.Background())
+
+	if repo.subClaims != 0 {
+		t.Errorf("expected a subscription just run not to be claimed again, got %d claims", repo.subClaims)
+	}
+}
+
+func TestTick_LostSubscriptionClaimSkipsRun(t *testing.T) {
+	repo := &schedulerFakeRepo{
+		search:      dueSearch(),
+		claimErr:    pgx.ErrNoRows,
+		subs:        []sqlcgen.Subscription{dueSubscription()},
+		subClaimErr: pgx.ErrNoRows,
+	}
+	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, &countingEnqueuer{}))
+
+	s.Tick(context.Background())
+
+	if repo.subRunStarted {
+		t.Error("expected a lost subscription claim to skip the run entirely")
+	}
 }

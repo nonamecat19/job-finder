@@ -283,7 +283,8 @@ export interface SavedSearchDto {
 /**
  * SubscriptionDto is a URL-based subscription attached to a job source: a
  * saved-filter URL on the site itself (e.g. a djinni subs page or a dou
- * category listing). Fetching the URL is deferred; this is CRUD + enable only.
+ * category listing). Cron is the schedule the ingestion scheduler scrapes it
+ * on, same expression format as SavedSearchDto.Cron.
  */
 export interface SubscriptionDto {
   id: string;
@@ -291,6 +292,7 @@ export interface SubscriptionDto {
   name?: string;
   url: string;
   enabled: boolean;
+  cron: string;
   lastRunAt?: string;
 }
 export interface SourceRunDto {

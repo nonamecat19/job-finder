@@ -303,6 +303,7 @@ type Subscription struct {
 	Enabled   bool             `json:"enabled"`
 	LastRunAt pgtype.Timestamp `json:"lastRunAt"`
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
+	Cron      string           `json:"cron"`
 }
 
 type SynonymOverride struct {
