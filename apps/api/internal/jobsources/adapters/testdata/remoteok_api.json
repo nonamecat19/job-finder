@@ -1,0 +1,46 @@
+[
+  {
+    "legal": "By using this API you agree to RemoteOK's terms of service: https://remoteok.com/tos",
+    "api": "For more information, see https://remoteok.com/api"
+  },
+  {
+    "id": "1000001",
+    "slug": "novatech-senior-golang-developer",
+    "company": "NovaTech LLC",
+    "position": "Senior Golang Developer",
+    "tags": ["golang", "backend", "senior"],
+    "location": "",
+    "description": "<p>We are looking for a Senior Golang Developer to join our fully remote team. You will design and build backend services used by millions of users.</p>",
+    "url": "https://remoteok.com/remote-jobs/1000001-senior-golang-developer-novatech-llc",
+    "apply_url": "https://remoteok.com/l/1000001",
+    "date": "2026-07-20T10:00:00+00:00",
+    "salary_min": 90000,
+    "salary_max": 130000
+  },
+  {
+    "id": "1000002",
+    "slug": "brightlabs-frontend-engineer",
+    "company": "BrightLabs",
+    "position": "Frontend Engineer (React)",
+    "tags": ["react", "frontend", "javascript"],
+    "location": "Worldwide",
+    "description": "<p>Join BrightLabs as a Frontend Engineer working on our React-based dashboard product, 100% remote.</p>",
+    "url": "https://remoteok.com/remote-jobs/1000002-frontend-engineer-react-brightlabs",
+    "apply_url": "https://remoteok.com/l/1000002",
+    "date": "2026-07-21T08:30:00+00:00"
+  },
+  {
+    "id": "1000003",
+    "slug": "dataforge-data-scientist",
+    "company": "DataForge",
+    "position": "Data Scientist",
+    "tags": ["python", "data", "ml"],
+    "location": "EU only",
+    "description": "<p>DataForge is hiring a remote Data Scientist to work on demand-forecasting models.</p>",
+    "url": "https://remoteok.com/remote-jobs/1000003-data-scientist-dataforge",
+    "apply_url": "https://remoteok.com/l/1000003",
+    "date": "2026-07-22T14:15:00+00:00",
+    "salary_min": 70000,
+    "salary_max": 95000
+  }
+]
