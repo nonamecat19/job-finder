@@ -26,15 +26,16 @@ type Handler struct {
 	djinni       adapters.DjinniAdapter
 	dou          adapters.DouAdapter
 	workua       adapters.WorkUaAdapter
+	indeed       adapters.IndeedAdapter
 	client       Enqueuer
 	defaultDelay time.Duration
 	delays       map[string]time.Duration
 }
 
-func NewHandler(q Repository, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
+func NewHandler(q Repository, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, indeed adapters.IndeedAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
 	return &Handler{
 		q: q, sources: sources,
-		djinni: djinni, dou: dou, workua: workua,
+		djinni: djinni, dou: dou, workua: workua, indeed: indeed,
 		client: client,
 		defaultDelay: defaultDelay,
 		delays:       delays,
@@ -103,6 +104,9 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		return err
 	case "workua":
 		err = h.enrichWorkUa(ctx, payload, uid, job)
+		return err
+	case "indeed":
+		err = h.enrichIndeed(ctx, payload, uid, job)
 		return err
 	default:
 		return nil
@@ -223,6 +227,39 @@ func (h *Handler) enrichWorkUa(ctx context.Context, payload queue.EnrichPayload,
 	h.enqueueMatch(ctx, payload.JobID, job)
 	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: workua complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichIndeed(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	if delay := h.delayFor("indeed"); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	patch, err := h.indeed.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: indeed fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    patch.Location,
+		Remote:      patch.Remote,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update indeed job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
+	slog.Info("enrichment: indeed complete", "job", payload.JobID)
 	return nil
 }
 
