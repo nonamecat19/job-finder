@@ -17,6 +17,7 @@ import (
 type Repository interface {
 	activity.Store
 
+	ClaimSavedSearchRun(ctx context.Context, arg sqlcgen.ClaimSavedSearchRunParams) (pgtype.UUID, error)
 	CreateSavedSearch(ctx context.Context, arg sqlcgen.CreateSavedSearchParams) (sqlcgen.SavedSearch, error)
 	DeleteActivityRunsBefore(ctx context.Context, createdat pgtype.Timestamp) error
 	DeleteSavedSearch(ctx context.Context, id pgtype.UUID) error

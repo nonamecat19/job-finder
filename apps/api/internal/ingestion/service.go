@@ -189,6 +189,14 @@ func (s *Service) RunSearch(ctx context.Context, searchID string) ([]string, err
 		}
 	}
 
+	// Claim the slot up front. If an enqueue below fails partway through, the
+	// error propagates but the sources already queued stay queued — leaving
+	// lastRunAt untouched would make the next scheduler tick see the search
+	// as still due and scrape those sources a second time.
+	if err := s.q.TouchSavedSearchLastRun(ctx, uid); err != nil {
+		return nil, err
+	}
+
 	for _, key := range keys {
 		label := key + " scrape"
 		if search.Name != "" {
@@ -215,9 +223,6 @@ func (s *Service) RunSearch(ctx context.Context, searchID string) ([]string, err
 		}
 	}
 
-	if err := s.q.TouchSavedSearchLastRun(ctx, uid); err != nil {
-		return nil, err
-	}
 	return keys, nil
 }
 

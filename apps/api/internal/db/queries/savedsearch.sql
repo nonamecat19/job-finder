@@ -26,3 +26,17 @@ DELETE FROM "SavedSearch" WHERE "id" = $1;
 
 -- name: TouchSavedSearchLastRun :exec
 UPDATE "SavedSearch" SET "lastRunAt" = now() WHERE "id" = $1;
+
+-- name: ClaimSavedSearchRun :one
+-- Compare-and-swap on "lastRunAt", used by the scheduler to claim a due
+-- search before enqueueing anything for it. Two schedulers racing on the same
+-- due search both pass the same expected value; row-level locking serializes
+-- the UPDATEs, so the second one matches no row and returns pgx.ErrNoRows
+-- instead of double-scraping every source.
+--
+-- "IS NOT DISTINCT FROM" rather than "=" because a never-run search has a
+-- NULL "lastRunAt", and "NULL = NULL" is NULL, not true.
+UPDATE "SavedSearch" SET "lastRunAt" = now()
+WHERE "id" = sqlc.arg('id')
+  AND "lastRunAt" IS NOT DISTINCT FROM sqlc.narg('expected_last_run_at')::timestamp
+RETURNING "id";

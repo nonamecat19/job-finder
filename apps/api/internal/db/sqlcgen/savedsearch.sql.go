@@ -11,6 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimSavedSearchRun = `-- name: ClaimSavedSearchRun :one
+UPDATE "SavedSearch" SET "lastRunAt" = now()
+WHERE "id" = $1
+  AND "lastRunAt" IS NOT DISTINCT FROM $2::timestamp
+RETURNING "id"
+`
+
+type ClaimSavedSearchRunParams struct {
+	ID                pgtype.UUID      `json:"id"`
+	ExpectedLastRunAt pgtype.Timestamp `json:"expected_last_run_at"`
+}
+
+// Compare-and-swap on "lastRunAt", used by the scheduler to claim a due
+// search before enqueueing anything for it. Two schedulers racing on the same
+// due search both pass the same expected value; row-level locking serializes
+// the UPDATEs, so the second one matches no row and returns pgx.ErrNoRows
+// instead of double-scraping every source.
+//
+// "IS NOT DISTINCT FROM" rather than "=" because a never-run search has a
+// NULL "lastRunAt", and "NULL = NULL" is NULL, not true.
+func (q *Queries) ClaimSavedSearchRun(ctx context.Context, arg ClaimSavedSearchRunParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, claimSavedSearchRun, arg.ID, arg.ExpectedLastRunAt)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createSavedSearch = `-- name: CreateSavedSearch :one
 INSERT INTO "SavedSearch" ("name", "query", "cron", "enabled")
 VALUES ($1, $2, $3, $4)

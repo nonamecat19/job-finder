@@ -2,12 +2,15 @@ package ingestion
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron/v3"
 
+	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 )
 
@@ -44,6 +47,19 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		}
 		due := !search.LastRunAt.Valid || !schedule.Next(search.LastRunAt.Time).After(now)
 		if !due {
+			continue
+		}
+		// Claim the slot before enqueueing anything. The CAS fails for a
+		// second scheduler racing on the same search (and for this one if the
+		// search ran between the list and now), so a due search is scraped
+		// once per slot no matter how many API replicas are running.
+		if _, err := s.q.ClaimSavedSearchRun(ctx, sqlcgen.ClaimSavedSearchRunParams{
+			ID:                search.ID,
+			ExpectedLastRunAt: search.LastRunAt,
+		}); err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				slog.Error("scheduler: claim search failed", "search", search.Name, "error", err)
+			}
 			continue
 		}
 		slog.Info("search due", "search", search.Name, "cron", search.Cron)
