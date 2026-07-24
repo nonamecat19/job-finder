@@ -110,3 +110,21 @@ func TestCreateRemoteOKSubscription_RejectsNonRemoteOKURL(t *testing.T) {
 		t.Fatal("expected non-remoteok url to be rejected")
 	}
 }
+
+func TestCreateJobLeadsSubscription_ValidSearchURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	out, err := svc.Create(context.Background(), "jobleads", "https://www.jobleads.com/job-search?q=golang", nil, true)
+	if err != nil {
+		t.Fatalf("expected valid jobleads search url to be accepted, got error: %v", err)
+	}
+	if out.SourceKey != "jobleads" {
+		t.Errorf("sourceKey: got %q", out.SourceKey)
+	}
+}
+
+func TestCreateJobLeadsSubscription_RejectsNonJobLeadsURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "jobleads", "https://example.com/not-jobleads", nil, true); err == nil {
+		t.Fatal("expected non-jobleads url to be rejected")
+	}
+}
