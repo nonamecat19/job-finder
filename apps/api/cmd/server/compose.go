@@ -91,6 +91,7 @@ type sourcesHandles struct {
 	RemoteOK  adapters.RemoteOKAdapter
 	Glassdoor adapters.GlassdoorAdapter
 	JobLeads  adapters.JobLeadsAdapter
+	Himalayas adapters.HimalayasAdapter
 }
 
 // composeJobSources builds the adapter registry and jobsources.Service, then
@@ -104,6 +105,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	remoteokAdapter := adapters.RemoteOKAdapter{Scraping: p.Scraping}
 	glassdoorAdapter := adapters.GlassdoorAdapter{Scraping: p.Scraping}
 	jobleadsAdapter := adapters.JobLeadsAdapter{Scraping: p.Scraping, Session: p.JobLeadsSession}
+	himalayasAdapter := adapters.HimalayasAdapter{Scraping: p.Scraping}
 	registry := jobsources.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
@@ -117,6 +119,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		jobleadsAdapter,
 		adapters.RobotaAdapter{},
 		adapters.JoobleAdapter{},
+		himalayasAdapter,
 	)
 	sourcesSvc := jobsources.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc
@@ -131,6 +134,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		RemoteOK:  remoteokAdapter,
 		Glassdoor: glassdoorAdapter,
 		JobLeads:  jobleadsAdapter,
+		Himalayas: himalayasAdapter,
 	}
 }
 

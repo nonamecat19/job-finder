@@ -1,0 +1,53 @@
+{
+  "comments": "recorded fixture for himalayas_test.go — not live data",
+  "updatedAt": "2026-07-20T00:00:00.000Z",
+  "offset": 0,
+  "limit": 20,
+  "totalCount": 2,
+  "jobs": [
+    {
+      "title": "Senior Backend Engineer",
+      "excerpt": "We are looking for a senior backend engineer to join our team.",
+      "companyName": "Acme Corp",
+      "companySlug": "acme-corp",
+      "companyLogo": "https://himalayas.app/logos/acme-corp.png",
+      "employmentType": "Full-time",
+      "minSalary": 90000,
+      "maxSalary": 130000,
+      "salaryPeriod": "year",
+      "seniority": "Senior",
+      "currency": "USD",
+      "locationRestrictions": ["United Kingdom"],
+      "timezoneRestrictions": [-5, -8],
+      "categories": ["Engineering", "Backend-Engineering"],
+      "parentCategories": ["Developer"],
+      "description": "<h3>Overview</h3><p>Full description text for job A, including responsibilities and qualifications.</p>",
+      "pubDate": 1784964128,
+      "expiryDate": 0,
+      "applicationLink": "https://himalayas.app/companies/acme-corp/jobs/senior-backend-engineer",
+      "guid": "https://himalayas.app/companies/acme-corp/jobs/senior-backend-engineer"
+    },
+    {
+      "title": "Product Designer",
+      "excerpt": "We are looking for a product designer.",
+      "companyName": "Beta Inc",
+      "companySlug": "beta-inc",
+      "companyLogo": "https://himalayas.app/logos/beta-inc.png",
+      "employmentType": "Full-time",
+      "minSalary": 0,
+      "maxSalary": 0,
+      "salaryPeriod": "",
+      "seniority": "Mid-level",
+      "currency": "",
+      "locationRestrictions": [],
+      "timezoneRestrictions": [],
+      "categories": ["Design", "Product-Design"],
+      "parentCategories": ["Design"],
+      "description": "<p>Design job description with no salary or location restrictions.</p>",
+      "pubDate": 1784960000,
+      "expiryDate": 0,
+      "applicationLink": "https://himalayas.app/companies/beta-inc/jobs/product-designer",
+      "guid": "https://himalayas.app/companies/beta-inc/jobs/product-designer"
+    }
+  ]
+}

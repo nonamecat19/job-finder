@@ -153,3 +153,42 @@ func TestCreateJobLeadsSubscription_RejectsNonJobLeadsURL(t *testing.T) {
 		t.Fatal("expected non-jobleads url to be rejected")
 	}
 }
+
+func TestCreateHimalayasSubscription_ValidSearchURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	out, err := svc.Create(context.Background(), "himalayas", "https://himalayas.app/jobs?categories=Backend-Engineering", nil, true)
+	if err != nil {
+		t.Fatalf("expected valid himalayas search url to be accepted, got error: %v", err)
+	}
+	if out.SourceKey != "himalayas" {
+		t.Errorf("sourceKey: got %q", out.SourceKey)
+	}
+}
+
+func TestCreateHimalayasSubscription_ValidSubdomainURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "himalayas", "https://www.himalayas.app/jobs/remote?categories=Backend-Engineering,Design", nil, true); err != nil {
+		t.Fatalf("expected valid himalayas subdomain url to be accepted, got error: %v", err)
+	}
+}
+
+func TestCreateHimalayasSubscription_RejectsNonHimalayasURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "himalayas", "https://example.com/jobs?categories=Backend-Engineering", nil, true); err == nil {
+		t.Fatal("expected non-himalayas url to be rejected")
+	}
+}
+
+func TestCreateHimalayasSubscription_RejectsWrongPath(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "himalayas", "https://himalayas.app/companies/acme?categories=Backend-Engineering", nil, true); err == nil {
+		t.Fatal("expected non-/jobs path himalayas url to be rejected")
+	}
+}
+
+func TestCreateHimalayasSubscription_RejectsMissingCategories(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "himalayas", "https://himalayas.app/jobs", nil, true); err == nil {
+		t.Fatal("expected himalayas url missing 'categories' to be rejected")
+	}
+}

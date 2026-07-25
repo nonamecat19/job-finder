@@ -114,9 +114,29 @@ func validateSubscriptionURL(sourceKey, rawURL string) error {
 		return validateGlassdoorSubscriptionURL(rawURL)
 	case "jobleads":
 		return validateJobLeadsSubscriptionURL(rawURL)
+	case "himalayas":
+		return validateHimalayasSubscriptionURL(rawURL)
 	default:
 		return nil
 	}
+}
+
+func validateHimalayasSubscriptionURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("himalayas subscription url %q is not a valid URL", rawURL)
+	}
+	host := strings.ToLower(parsed.Host)
+	if host != "himalayas.app" && !strings.HasSuffix(host, ".himalayas.app") {
+		return fmt.Errorf("himalayas subscription url %q must be a himalayas.app url", rawURL)
+	}
+	if parsed.Path != "/jobs" && !strings.HasPrefix(parsed.Path, "/jobs/") {
+		return fmt.Errorf("himalayas subscription url %q must be a /jobs search url", rawURL)
+	}
+	if strings.TrimSpace(parsed.Query().Get("categories")) == "" {
+		return fmt.Errorf("himalayas subscription url %q must include a 'categories' query parameter", rawURL)
+	}
+	return nil
 }
 
 func validateIndeedSubscriptionURL(rawURL string) error {
