@@ -202,6 +202,108 @@ export interface ProfileDto {
   updatedAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Structured, fully-editable Resume (spec 009-editable-resume-profile)
+// ---------------------------------------------------------------------------
+
+/** One of the 9 canonical RenderCV entry types. A Section holds entries of
+ * exactly one EntryType (see specs/009-editable-resume-profile/data-model.md). */
+export const ENTRY_TYPES = [
+  'education',
+  'experience',
+  'normal',
+  'publication',
+  'one_line',
+  'bullet',
+  'numbered',
+  'reversed_numbered',
+  'text',
+] as const;
+export type EntryType = (typeof ENTRY_TYPES)[number];
+
+export interface SocialNetwork {
+  network: string;
+  username: string;
+}
+
+/** A network not in RenderCV's built-in social_networks list (e.g. Telegram
+ * in some configs) — display label, link, and fontawesome icon name. */
+export interface CustomConnection {
+  placeholder: string;
+  url: string;
+  icon?: string;
+}
+
+/** Which fields are meaningful depends on the parent Section's entryType. */
+export interface Entry {
+  // education
+  institution?: string;
+  area?: string;
+  degree?: string;
+  // experience
+  company?: string;
+  position?: string;
+  // normal (projects)
+  name?: string;
+  // publication
+  title?: string;
+  authors?: string[];
+  doi?: string;
+  journal?: string;
+  // publication, normal
+  url?: string;
+  // one_line (skills)
+  label?: string;
+  details?: string;
+  // bullet
+  bullet?: string;
+  // numbered
+  number?: string;
+  // reversed_numbered — value is a talk title/description, not a number
+  // (RenderCV naming quirk, preserved as-is for round-trip fidelity).
+  reversedNumber?: string;
+  // text
+  text?: string;
+  // education, experience, normal, publication
+  date?: string;
+  // education, experience, normal
+  startDate?: string;
+  endDate?: string;
+  location?: string;
+  // education, experience, normal, publication
+  summary?: string;
+  // education, experience, normal
+  highlights?: string[];
+  // Any fields present in imported data that don't map to a field above
+  // (FR-009) — never silently dropped.
+  unrecognized?: Record<string, unknown>;
+}
+
+export interface Section {
+  name: string;
+  entryType: EntryType;
+  entries: Entry[];
+}
+
+/** Top-level structured, editable view of a Profile's resume content. */
+export interface Resume {
+  name: string;
+  headline?: string;
+  location?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  photo?: string;
+  socialNetworks?: SocialNetwork[];
+  customConnections?: CustomConnection[];
+  sections: Section[];
+  unrecognized?: Record<string, unknown>;
+}
+
+export interface ResumeDto {
+  resume: Resume;
+}
+
 export interface JobSourceDto {
   id: string;
   key: string;

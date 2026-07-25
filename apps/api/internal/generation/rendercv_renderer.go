@@ -49,7 +49,11 @@ func (r *RenderCvRenderer) Render(ctx context.Context, master RendercvMaster, ba
 	yamlPath = filepath.Join(outDir, baseName+".yaml")
 	pdfPath = filepath.Join(outDir, baseName+".pdf")
 
-	data, err := yaml.Marshal(map[string]any(master))
+	prepared, err := PrepareMasterForMarshal(master)
+	if err != nil {
+		return "", "", fmt.Errorf("rendercv: prepare master: %w", err)
+	}
+	data, err := yaml.Marshal(map[string]any(prepared))
 	if err != nil {
 		return "", "", err
 	}

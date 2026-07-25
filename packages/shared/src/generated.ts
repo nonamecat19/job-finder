@@ -791,3 +791,154 @@ export interface LlmModelsResponseDto {
   cerebras: CerebrasModelDto[];
   openrouter: OpenRouterModelDto[];
 }
+
+//////////
+// source: resume.go
+
+/**
+ * EntryType is one of the 9 canonical RenderCV entry types. A Section holds
+ * entries of exactly one EntryType (see spec 009 data-model.md).
+ */
+export type EntryType = string;
+export const EntryEducation: EntryType = "education";
+export const EntryExperience: EntryType = "experience";
+export const EntryNormal: EntryType = "normal";
+export const EntryPublication: EntryType = "publication";
+export const EntryOneLine: EntryType = "one_line";
+export const EntryBullet: EntryType = "bullet";
+export const EntryNumbered: EntryType = "numbered";
+export const EntryReversedNumbered: EntryType = "reversed_numbered";
+export const EntryText: EntryType = "text";
+/**
+ * SocialNetwork mirrors RenderCV's cv.social_networks entries.
+ */
+export interface SocialNetwork {
+  network: string;
+  username: string;
+}
+/**
+ * CustomConnection mirrors RenderCV's cv.custom_connections entries: a
+ * display label (placeholder), a link, and a fontawesome icon name — used
+ * for networks not in RenderCV's built-in social_networks list (e.g.
+ * Telegram in some configs).
+ */
+export interface CustomConnection {
+  placeholder: string;
+  url: string;
+  icon?: string;
+}
+/**
+ * Entry is a tagged-union-by-convention struct: which fields are meaningful
+ * depends on the parent Section's EntryType. Represented as one flat struct
+ * (rather than a Go interface) so it tygo-generates into a single, simple TS
+ * type the dashboard can pattern-match on `entryType`.
+ */
+export interface Entry {
+  /**
+   * education
+   */
+  institution?: string;
+  area?: string;
+  degree?: string;
+  /**
+   * experience
+   */
+  company?: string;
+  position?: string;
+  /**
+   * normal (projects)
+   */
+  name?: string;
+  /**
+   * publication
+   */
+  title?: string;
+  authors?: string[];
+  doi?: string;
+  journal?: string;
+  /**
+   * publication, normal
+   */
+  url?: string;
+  /**
+   * one_line (skills)
+   */
+  label?: string;
+  details?: string;
+  /**
+   * bullet
+   */
+  bullet?: string;
+  /**
+   * numbered
+   */
+  number?: string;
+  /**
+   * reversed_numbered — field is named "reversed_number" in RenderCV YAML;
+   * its value is a talk title/description, not a number (RenderCV naming
+   * quirk, preserved as-is for round-trip fidelity).
+   */
+  reversedNumber?: string;
+  /**
+   * text
+   */
+  text?: string;
+  /**
+   * education, experience, normal, publication
+   */
+  date?: string;
+  /**
+   * education, experience, normal
+   */
+  startDate?: string;
+  endDate?: string;
+  location?: string;
+  /**
+   * education, experience, normal, publication
+   */
+  summary?: string;
+  /**
+   * education, experience, normal
+   */
+  highlights?: string[];
+  /**
+   * Unrecognized carries any fields present in imported data that don't map
+   * to a field above, so nothing is silently dropped (FR-009).
+   */
+  unrecognized?: { [key: string]: any};
+}
+/**
+ * Section is a named, ordered group of same-typed Entries (FR-005, FR-006).
+ */
+export interface Section {
+  name: string;
+  entryType: EntryType;
+  entries: Entry[];
+}
+/**
+ * Resume is the top-level structured, editable view of a Profile's resume
+ * content (maps to cv.* in the RendercvMaster, minus design/locale/settings,
+ * which stay out of scope for this feature).
+ */
+export interface Resume {
+  name: string;
+  headline?: string;
+  location?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  photo?: string;
+  socialNetworks?: SocialNetwork[];
+  customConnections?: CustomConnection[];
+  sections: Section[];
+  /**
+   * Unrecognized carries any top-level cv.* keys not modeled above.
+   */
+  unrecognized?: { [key: string]: any};
+}
+/**
+ * ResumeDto wraps Resume for the GET/PUT /profiles/{id}/resume endpoints.
+ */
+export interface ResumeDto {
+  resume: Resume;
+}

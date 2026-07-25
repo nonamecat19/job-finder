@@ -16,8 +16,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/strutil"
-
-	"gopkg.in/yaml.v3"
 )
 
 const groundingAttempts = 2
@@ -92,11 +90,11 @@ func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMas
 	if err != nil {
 		return nil, fmt.Errorf("generation: read master resume from %s: %w", s.masterPath, err)
 	}
-	var master map[string]any
-	if err := yaml.Unmarshal(data, &master); err != nil {
+	master, err := ParseRendercv(string(data))
+	if err != nil {
 		return nil, fmt.Errorf("generation: parse master resume: %w", err)
 	}
-	return RendercvMaster(NormalizeYAMLMap(master).(map[string]any)), nil
+	return master, nil
 }
 
 // GenerateAdHoc tailors a resume and writes a cover letter from pasted

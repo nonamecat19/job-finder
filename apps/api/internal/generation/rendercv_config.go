@@ -25,7 +25,51 @@ func ParseRendercv(yamlText string) (RendercvMaster, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("rendercv yaml: missing required 'cv.name' field")
 	}
+
+	if sections, ok := cv["sections"].(map[string]any); ok {
+		if order := sectionOrderFromYAML(yamlText); len(order) > 0 {
+			orderAny := make([]any, len(order))
+			for i, k := range order {
+				orderAny[i] = k
+			}
+			sections[sectionOrderKey] = orderAny
+		}
+	}
+
 	return RendercvMaster(m), nil
+}
+
+// sectionOrderFromYAML walks the raw YAML (before it's flattened into an
+// unordered map[string]any) to recover the original cv.sections key order,
+// which rendercv uses to decide the order sections are rendered in.
+func sectionOrderFromYAML(yamlText string) []string {
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(yamlText), &doc); err != nil || len(doc.Content) == 0 {
+		return nil
+	}
+	root := doc.Content[0]
+	cvNode := findYAMLMapValue(root, "cv")
+	sectionsNode := findYAMLMapValue(cvNode, "sections")
+	if sectionsNode == nil || sectionsNode.Kind != yaml.MappingNode {
+		return nil
+	}
+	keys := make([]string, 0, len(sectionsNode.Content)/2)
+	for i := 0; i+1 < len(sectionsNode.Content); i += 2 {
+		keys = append(keys, sectionsNode.Content[i].Value)
+	}
+	return keys
+}
+
+func findYAMLMapValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return node.Content[i+1]
+		}
+	}
+	return nil
 }
 
 func RendercvToText(master RendercvMaster) string {
