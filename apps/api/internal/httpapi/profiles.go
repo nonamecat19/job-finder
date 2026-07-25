@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/profile"
 )
 
@@ -20,6 +21,9 @@ type ProfileProvider interface {
 	Update(ctx context.Context, id string, in profile.UpdateInput) (dto.ProfileDto, error)
 	Remove(ctx context.Context, id string) error
 	SaveConfig(ctx context.Context, yamlText string) (dto.ProfileDto, error)
+	GetResume(ctx context.Context, id string) (dto.Resume, error)
+	UpdateResume(ctx context.Context, id string, resume dto.Resume) (dto.Resume, error)
+	HasResumeContent(ctx context.Context, id string) (bool, error)
 }
 
 // ProfilesHandler wires /api/profiles, mirroring profiles.controller.ts.
@@ -35,6 +39,8 @@ func (h *ProfilesHandler) Mount(r chi.Router) {
 	r.Delete("/profiles/{id}", h.remove)
 	r.Post("/profiles/config", h.uploadConfig)
 	r.Get("/profiles/config/status", h.configStatus)
+	r.Get("/profiles/{id}/resume", h.getResume)
+	r.Put("/profiles/{id}/resume", h.updateResume)
 }
 
 func (h *ProfilesHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -170,16 +176,47 @@ func (h *ProfilesHandler) uploadConfig(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) configStatus(w http.ResponseWriter, r *http.Request) {
 	profiles, err := h.Profiles.List(r.Context())
 	if err != nil || len(profiles) == 0 {
-		writeJSON(w, http.StatusOK, map[string]bool{"hasConfig": false})
+		writeJSON(w, http.StatusOK, map[string]bool{"hasConfig": false, "hasExistingContent": false})
 		return
 	}
-	// Since we got at least one profile, check if hasConfig is true
 	has := false
+	hasContent := false
 	for _, p := range profiles {
 		if p.HasConfig {
 			has = true
-			break
+		}
+		if content, err := h.Profiles.HasResumeContent(r.Context(), p.ID); err == nil && content {
+			hasContent = true
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"hasConfig": has})
+	writeJSON(w, http.StatusOK, map[string]bool{"hasConfig": has, "hasExistingContent": hasContent})
+}
+
+func (h *ProfilesHandler) getResume(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	resume, err := h.Profiles.GetResume(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, dto.ResumeDto{Resume: resume})
+}
+
+func (h *ProfilesHandler) updateResume(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body dto.ResumeDto
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	resume, err := h.Profiles.UpdateResume(r.Context(), id, body.Resume)
+	if err != nil {
+		if verr, ok := err.(*generation.ValidationError); ok {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"path": verr.Path, "message": verr.Message})
+			return
+		}
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, dto.ResumeDto{Resume: resume})
 }
