@@ -31,6 +31,7 @@ var sourceRuns = []sourceRunSeed{
 	{sourceKey: "glassdoor", searchID: "seed:glassdoor:ml-engineer"},
 	{sourceKey: "indeed", searchID: "seed:indeed:sre"},
 	{sourceKey: "indeed", searchID: "seed:indeed:backend-python"},
+	{sourceKey: "wellfound", searchID: "seed:wellfound:golang-engineer"},
 }
 
 // seedSourceRuns links each run to the JobSource row lazily created by

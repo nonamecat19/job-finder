@@ -27,7 +27,7 @@ type fakeEnqueuer struct {
 
 // NewHandler accepts the ports, not concrete infra values.
 func TestNewHandlerAcceptsPorts(t *testing.T) {
-	h := enrichment.NewHandler(&fakeRepo{}, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{}, adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, &fakeEnqueuer{}, time.Second, nil)
+	h := enrichment.NewHandler(&fakeRepo{}, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{}, adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, adapters.WellfoundAdapter{}, &fakeEnqueuer{}, time.Second, nil)
 	if h == nil {
 		t.Fatal("NewHandler returned nil")
 	}

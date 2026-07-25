@@ -217,7 +217,7 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob, subscri
 	h.enqueueMatch(ctx, jobID, j)
 	h.enqueueGhostScore(ctx, jobID)
 
-	if j.SourceKey == "djinni" || j.SourceKey == "dou" || j.SourceKey == "indeed" || j.SourceKey == "remoteok" || j.SourceKey == "glassdoor" || j.SourceKey == "jobleads" {
+	if j.SourceKey == "djinni" || j.SourceKey == "dou" || j.SourceKey == "indeed" || j.SourceKey == "remoteok" || j.SourceKey == "glassdoor" || j.SourceKey == "jobleads" || j.SourceKey == "wellfound" {
 		if err := h.enqueueEnrich(ctx, jobID, j); err != nil {
 			return true, err
 		}

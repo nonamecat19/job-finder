@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -114,6 +115,8 @@ func validateSubscriptionURL(sourceKey, rawURL string) error {
 		return validateGlassdoorSubscriptionURL(rawURL)
 	case "jobleads":
 		return validateJobLeadsSubscriptionURL(rawURL)
+	case "wellfound":
+		return validateWellfoundSubscriptionURL(rawURL)
 	default:
 		return nil
 	}
@@ -158,6 +161,31 @@ func validateGlassdoorSubscriptionURL(rawURL string) error {
 	}
 	if strings.Contains(parsed.Path, "/job-listing/") {
 		return fmt.Errorf("glassdoor subscription url %q looks like a single job posting, not a search results page", rawURL)
+	}
+	return nil
+}
+
+// validateWellfoundSubscriptionURL mirrors validateGlassdoorSubscriptionURL
+// (specs/010-wellfound-job-provider/research.md R6). The legacy angel.co
+// host is accepted alongside wellfound.com/*.wellfound.com since Wellfound
+// was previously branded AngelList/angel.co and old saved-search links may
+// still use it. A path shaped like a single job-detail page (e.g.
+// "/jobs/12345-role-slug") is rejected in favor of a search-results page
+// (e.g. "/role/r/golang-engineer").
+var wellfoundJobDetailPathRe = regexp.MustCompile(`/jobs/\d`)
+
+func validateWellfoundSubscriptionURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("wellfound subscription url %q is not a valid URL", rawURL)
+	}
+	host := strings.ToLower(parsed.Host)
+	if host != "wellfound.com" && !strings.HasSuffix(host, ".wellfound.com") &&
+		host != "angel.co" && !strings.HasSuffix(host, ".angel.co") {
+		return fmt.Errorf("wellfound subscription url %q must be a wellfound.com (or legacy angel.co) search url", rawURL)
+	}
+	if wellfoundJobDetailPathRe.MatchString(parsed.Path) {
+		return fmt.Errorf("wellfound subscription url %q looks like a single job posting, not a search results page", rawURL)
 	}
 	return nil
 }

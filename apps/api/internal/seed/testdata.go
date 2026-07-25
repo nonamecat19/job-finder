@@ -29,6 +29,7 @@ const (
 	uuidJob22   = "b0000000-0000-0000-0000-000000000022"
 	uuidJob23   = "b0000000-0000-0000-0000-000000000023"
 	uuidJob24   = "b0000000-0000-0000-0000-000000000024"
+	uuidJob25   = "b0000000-0000-0000-0000-000000000025"
 	uuidSearch1 = "c0000000-0000-0000-0000-000000000001"
 	uuidSearch2 = "c0000000-0000-0000-0000-000000000002"
 	uuidSearch3 = "c0000000-0000-0000-0000-000000000003"
@@ -260,6 +261,13 @@ var jobs = []jobSeed{
 		Company: "NovaTech LLC", Location: "Berlin, Germany (Remote)", Remote: true,
 		SalaryRaw: "€70,000 - €90,000 a year", URL: "https://www.jobleads.com/job/senior-golang-engineer-novatech-abc123",
 		Desc:   "We are looking for a Senior Golang Engineer to build and maintain our Go microservices platform, working closely with the infrastructure team to design scalable, well-tested services.",
+		Status: "found", PostedAt: now().AddDate(0, 0, -3),
+	},
+	{
+		UUID: uuidJob25, SourceKey: "wellfound", Title: "Senior Golang Engineer",
+		Company: "NovaTech Labs", Location: "Remote", Remote: true,
+		SalaryRaw: "$130K – $160K • 0.10% – 0.25%", URL: "https://wellfound.com/jobs/wf-1001-senior-golang-engineer",
+		Desc:   "NovaTech Labs is looking for a senior Golang engineer to help scale our core services and mentor junior engineers on distributed systems design.",
 		Status: "found", PostedAt: now().AddDate(0, 0, -3),
 	},
 }
