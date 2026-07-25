@@ -39,7 +39,7 @@ beforeEach(() => {
   vi.mocked(api.searches.list).mockResolvedValue([])
   vi.mocked(api.searches.recentRuns).mockResolvedValue([])
   vi.mocked(api.profiles.list).mockResolvedValue([])
-  vi.mocked(api.profiles.configStatus).mockResolvedValue({ hasConfig: true })
+  vi.mocked(api.profiles.configStatus).mockResolvedValue({ hasConfig: true, hasExistingContent: true })
   vi.mocked(api.subscriptions.list).mockResolvedValue([])
   vi.mocked(api.applications.list).mockResolvedValue([])
   vi.mocked(api.notifications.unseenCount).mockResolvedValue({ count: 0 })

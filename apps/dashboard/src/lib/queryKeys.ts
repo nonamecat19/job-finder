@@ -32,6 +32,7 @@ export const queryKeys = {
     all: ['profiles'] as const,
     list: ['profiles', 'list'] as const,
     configStatus: ['profiles', 'configStatus'] as const,
+    resume: (id: string | undefined) => ['profiles', 'resume', id] as const,
   },
   applications: {
     all: ['applications'] as const,

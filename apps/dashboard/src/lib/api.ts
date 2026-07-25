@@ -23,6 +23,8 @@ import type {
   OutreachToneOptionDto,
   PostAgeResponseDto,
   ProfileDto,
+  Resume,
+  ResumeDto,
   ReferralContactDto,
   ReferralPathDto,
   SavedSearchDto,
@@ -123,7 +125,7 @@ export const api = {
   },
   profiles: {
     list: () => request<ProfileDto[]>('/profiles'),
-    create: (body: { name: string; rendercvYaml: string; extraNotes?: string }) =>
+    create: (body: { name: string; rendercvYaml?: string; extraNotes?: string }) =>
       request<ProfileDto>('/profiles', { method: 'POST', body: JSON.stringify(body) }),
     update: (id: string, body: { name?: string; rendercvYaml?: string; extraNotes?: string | null }) =>
       request<ProfileDto>(`/profiles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
@@ -133,7 +135,10 @@ export const api = {
       fd.append('file', file);
       return request<ProfileDto>('/profiles/config', { method: 'POST', body: fd });
     },
-    configStatus: () => request<{ hasConfig: boolean }>('/profiles/config/status'),
+    configStatus: () => request<{ hasConfig: boolean; hasExistingContent: boolean }>('/profiles/config/status'),
+    getResume: (id: string) => request<ResumeDto>(`/profiles/${id}/resume`),
+    updateResume: (id: string, resume: Resume) =>
+      request<ResumeDto>(`/profiles/${id}/resume`, { method: 'PUT', body: JSON.stringify({ resume }) }),
   },
   sources: {
     list: () => request<JobSourceDto[]>('/sources'),

@@ -1,40 +1,115 @@
-import { FileUp, Trash2 } from 'lucide-react';
-import { useRef } from 'react';
-import type { ProfileDto } from '@job-finder/shared';
-import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { FileUp, Trash2, Check, AlertCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import type { Resume } from '@job-finder/shared';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
-import { useDeleteProfile, useProfiles, useUploadConfig } from './hooks';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { IdentityForm } from './components/IdentityForm';
+import { SectionList } from './components/SectionList';
+import {
+  useConfigStatus,
+  useCreateProfile,
+  useDeleteProfile,
+  useProfiles,
+  useResume,
+  useUpdateResume,
+  useUploadConfig,
+} from './hooks';
+
+// Profile.name (the record label) is distinct from Resume.name (the person's
+// name on the resume itself, edited in IdentityForm) — this default is never
+// shown to the user, it just satisfies the backend's required-name field.
+const DEFAULT_PROFILE_NAME = 'My Profile';
 
 export default function ProfilePage() {
-  const { data: profiles, isLoading, error } = useProfiles();
-  const uploadConfig = useUploadConfig();
-  const fileRef = useRef<HTMLInputElement>(null);
-
+  const { data: profiles, isLoading: profilesLoading, error: profilesError } = useProfiles();
   const profile = profiles?.[0];
+
+  const createProfile = useCreateProfile();
+  const creatingRef = useRef(false);
+
+  useEffect(() => {
+    if (!profilesLoading && !profile && !creatingRef.current) {
+      // No profile yet: create a blank one silently so the user lands
+      // directly on the full editable form + import button (FR-001, FR-012)
+      // instead of being gated behind a "name it first" step.
+      creatingRef.current = true;
+      createProfile.mutate({ name: DEFAULT_PROFILE_NAME });
+    }
+  }, [profilesLoading, profile, createProfile]);
+
+  if (profilesLoading || !profile) {
+    return (
+      <div>
+        <PageHeader title="Profile" description="Your resume, fully editable." />
+        <LoadingRegion label="loading profile…">
+          <SkeletonLine width="w-1/3" className="h-5" />
+          <SkeletonBlock className="mt-3 h-32 w-full" />
+        </LoadingRegion>
+        {profilesError ? <ErrorState error={profilesError} /> : null}
+        {createProfile.error ? <ErrorState error={createProfile.error} /> : null}
+      </div>
+    );
+  }
+
+  return <ProfileEditor profileId={profile.id} profileName={profile.name} />;
+}
+
+function ProfileEditor({ profileId, profileName }: { profileId: string; profileName: string }) {
+  const { data: resumeDto, isLoading, error } = useResume(profileId);
+  const updateResume = useUpdateResume(profileId);
+  const uploadConfig = useUploadConfig();
+  const configStatus = useConfigStatus();
+  const removeProfile = useDeleteProfile();
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState<Resume | null>(null);
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [pendingRemove, setPendingRemove] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
+
+  useEffect(() => {
+    if (resumeDto) setDraft(resumeDto.resume);
+  }, [resumeDto]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    uploadConfig.mutate(file);
+    if (configStatus.data?.hasExistingContent) {
+      setPendingUploadFile(file);
+    } else {
+      uploadConfig.mutate(file);
+    }
     e.target.value = '';
+  };
+
+  const confirmUpload = () => {
+    if (pendingUploadFile) uploadConfig.mutate(pendingUploadFile);
+    setPendingUploadFile(null);
+  };
+
+  const handleSave = () => {
+    if (!draft) return;
+    setSaveState('idle');
+    updateResume.mutate(draft, {
+      onSuccess: () => setSaveState('saved'),
+      onError: () => setSaveState('error'),
+    });
   };
 
   return (
     <div>
       <PageHeader
         title="Profile"
-        description="Your RenderCV config is the single source of truth for matching and document generation."
+        description="Your resume, fully editable. Uploading a config is optional — it just pre-fills these fields."
         actions={
           <>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".yaml,.yml"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-            <Button onClick={() => fileRef.current?.click()} disabled={uploadConfig.isPending}>
-              <FileUp className="h-4 w-4" /> {profile?.hasConfig ? 'replace config' : 'upload config'}
+            <input ref={fileRef} type="file" accept=".yaml,.yml" className="hidden" onChange={handleFileChange} />
+            <Button variant="secondary" onClick={() => fileRef.current?.click()} disabled={uploadConfig.isPending}>
+              <FileUp className="h-4 w-4" /> import config
+            </Button>
+            <Button variant="ghost" onClick={() => setPendingRemove(true)}>
+              <Trash2 className="h-4 w-4 text-danger" /> delete profile
             </Button>
           </>
         }
@@ -44,95 +119,64 @@ export default function ProfilePage() {
       {uploadConfig.error ? <ErrorState error={uploadConfig.error} /> : null}
       {error ? <ErrorState error={error} /> : null}
 
-      {isLoading ? (
-        <LoadingRegion label="loading profile…">
+      {isLoading || !draft ? (
+        <LoadingRegion label="loading resume…">
           <SkeletonLine width="w-1/3" className="h-5" />
           <SkeletonBlock className="mt-3 h-32 w-full" />
         </LoadingRegion>
-      ) : null}
+      ) : (
+        <div className="space-y-4">
+          <Surface className="flex items-center justify-between">
+            <span className="text-sm text-muted">Profile: {profileName}</span>
+            <div className="flex items-center gap-2">
+              {saveState === 'saved' && !updateResume.isPending ? (
+                <span className="inline-flex items-center gap-1 text-sm text-success">
+                  <Check className="h-4 w-4" /> saved
+                </span>
+              ) : null}
+              {saveState === 'error' ? (
+                <span className="inline-flex items-center gap-1 text-sm text-danger">
+                  <AlertCircle className="h-4 w-4" /> save failed
+                </span>
+              ) : null}
+              <Button onClick={handleSave} disabled={updateResume.isPending}>
+                {updateResume.isPending ? <Spinner /> : 'save resume'}
+              </Button>
+            </div>
+          </Surface>
+          {updateResume.error ? <ErrorState error={updateResume.error} /> : null}
 
-      {!isLoading && !profile ? (
-        <EmptyState>Upload your RenderCV config (.yaml) to begin.</EmptyState>
-      ) : null}
+          <IdentityForm resume={draft} onChange={setDraft} />
 
-      {profile ? <ProfileCard profile={profile} /> : null}
+          {draft.sections.length === 0 ? (
+            <EmptyState>
+              This resume has no sections yet. Add one below to start building — this is a valid starting point, not an
+              error.
+            </EmptyState>
+          ) : null}
+          <SectionList sections={draft.sections} onChange={(sections) => setDraft({ ...draft, sections })} />
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={pendingUploadFile !== null}
+        title="Replace existing resume content?"
+        description="This profile already has resume content. Uploading a new config will overwrite it."
+        confirmLabel="Replace"
+        onConfirm={confirmUpload}
+        onCancel={() => setPendingUploadFile(null)}
+      />
+      <ConfirmDialog
+        open={pendingRemove}
+        title="Delete this profile?"
+        description="This permanently deletes the profile and its resume content."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          removeProfile.mutate(profileId);
+          setPendingRemove(false);
+        }}
+        onCancel={() => setPendingRemove(false)}
+      />
     </div>
   );
-}
-
-function ProfileCard({ profile }: { profile: ProfileDto }) {
-  const remove = useDeleteProfile();
-  const summary = profile.rendercvConfig;
-  const full = profile.rendercvFull;
-
-  return (
-    <Surface>
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold text-fg">{profile.name}</h3>
-          {summary?.headline ? <p className="text-sm text-muted">{summary.headline}</p> : null}
-          {profile.extraNotes ? <p className="mt-1 text-xs text-faint">Notes: {profile.extraNotes}</p> : null}
-          <p className="mt-1 text-xs text-faint">updated {new Date(profile.updatedAt).toLocaleString()}</p>
-        </div>
-        <Button variant="ghost" onClick={() => remove.mutate(profile.id)}>
-          <Trash2 className="h-4 w-4 text-danger" />
-        </Button>
-      </div>
-
-      {!profile.hasConfig ? (
-        <p className="mt-2 text-sm text-danger">No valid config uploaded yet.</p>
-      ) : null}
-
-      {full ? (
-        <div className="mt-3 space-y-3 text-sm">
-          {Object.entries(full).map(([key, value]) => (
-            <div key={key}>
-              <SectionTitle>{key}</SectionTitle>
-              <div className="mt-1 text-muted">
-                <DataValue value={value} />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </Surface>
-  );
-}
-
-function DataValue({ value }: { value: unknown }) {
-  if (value === null || value === undefined || value === '') return null;
-
-  if (Array.isArray(value)) {
-    if (value.length === 0) return null;
-    return (
-      <ul className="ml-3 list-disc space-y-1 marker:text-faint">
-        {value.map((item, i) => (
-          <li key={i}>{isPlainObject(item) || Array.isArray(item) ? <DataValue value={item} /> : String(item)}</li>
-        ))}
-      </ul>
-    );
-  }
-
-  if (isPlainObject(value)) {
-    const entries = Object.entries(value).filter(
-      ([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0),
-    );
-    if (entries.length === 0) return null;
-    return (
-      <dl className="ml-3 space-y-1">
-        {entries.map(([k, v]) => (
-          <div key={k} className="flex gap-1">
-            <dt className="shrink-0 text-faint">{k}:</dt>
-            <dd className="flex-1">{isPlainObject(v) || Array.isArray(v) ? <DataValue value={v} /> : String(v)}</dd>
-          </div>
-        ))}
-      </dl>
-    );
-  }
-
-  return <>{String(value)}</>;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

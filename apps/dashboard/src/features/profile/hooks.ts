@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Resume } from '@job-finder/shared';
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 
@@ -13,6 +14,17 @@ export function useConfigStatus() {
   return useQuery({
     queryKey: queryKeys.profiles.configStatus,
     queryFn: api.profiles.configStatus,
+  });
+}
+
+export function useCreateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; extraNotes?: string }) => api.profiles.create(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.profiles.all });
+      qc.invalidateQueries({ queryKey: queryKeys.profiles.configStatus });
+    },
   });
 }
 
@@ -43,6 +55,28 @@ export function useUploadConfig() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.profiles.all });
       qc.invalidateQueries({ queryKey: queryKeys.profiles.configStatus });
+      // Structured view must reflect newly-imported data immediately, not
+      // just the raw config summary (FR-002, spec 009).
+      qc.invalidateQueries({ queryKey: ['profiles', 'resume'] });
+    },
+  });
+}
+
+export function useResume(profileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.profiles.resume(profileId),
+    queryFn: () => api.profiles.getResume(profileId as string),
+    enabled: !!profileId,
+  });
+}
+
+export function useUpdateResume(profileId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (resume: Resume) => api.profiles.updateResume(profileId as string, resume),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.profiles.resume(profileId), data);
+      qc.invalidateQueries({ queryKey: queryKeys.profiles.all });
     },
   });
 }
