@@ -217,6 +217,7 @@ const SUBSCRIPTION_SOURCES = [
   { key: 'djinni', label: 'Djinni', placeholder: 'https://djinni.co/my/dashboard/subs/{id}/' },
   { key: 'indeed', label: 'Indeed', placeholder: 'https://www.indeed.com/jobs?q=golang&l=remote' },
   { key: 'remoteok', label: 'RemoteOK', placeholder: 'https://remoteok.com/remote-golang-jobs' },
+  { key: 'himalayas', label: 'Himalayas', placeholder: 'https://himalayas.app/jobs?categories=Backend-Engineering' },
   { key: 'glassdoor', label: 'Glassdoor', placeholder: 'https://www.glassdoor.com/Job/remote-golang-jobs-SRCH_KO0,14.htm' },
   { key: 'jobleads', label: 'JobLeads', placeholder: 'https://www.jobleads.com/job-search?q=golang' },
   { key: 'wellfound', label: 'Wellfound', placeholder: 'https://wellfound.com/role/r/golang-engineer' },

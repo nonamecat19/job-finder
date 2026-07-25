@@ -92,6 +92,7 @@ type sourcesHandles struct {
 	Glassdoor adapters.GlassdoorAdapter
 	JobLeads  adapters.JobLeadsAdapter
 	Wellfound adapters.WellfoundAdapter
+	Himalayas adapters.HimalayasAdapter
 }
 
 // composeJobSources builds the adapter registry and jobsources.Service, then
@@ -106,6 +107,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	glassdoorAdapter := adapters.GlassdoorAdapter{Scraping: p.Scraping}
 	jobleadsAdapter := adapters.JobLeadsAdapter{Scraping: p.Scraping, Session: p.JobLeadsSession}
 	wellfoundAdapter := adapters.WellfoundAdapter{Scraping: p.Scraping}
+	himalayasAdapter := adapters.HimalayasAdapter{Scraping: p.Scraping}
 	registry := jobsources.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
@@ -120,6 +122,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		adapters.RobotaAdapter{},
 		adapters.JoobleAdapter{},
 		wellfoundAdapter,
+		himalayasAdapter,
 	)
 	sourcesSvc := jobsources.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc
@@ -135,6 +138,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		Glassdoor: glassdoorAdapter,
 		JobLeads:  jobleadsAdapter,
 		Wellfound: wellfoundAdapter,
+		Himalayas: himalayasAdapter,
 	}
 }
 
