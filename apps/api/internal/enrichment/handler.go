@@ -30,15 +30,16 @@ type Handler struct {
 	remoteok     adapters.RemoteOKAdapter
 	glassdoor    adapters.GlassdoorAdapter
 	jobleads     adapters.JobLeadsAdapter
+	wellfound    adapters.WellfoundAdapter
 	client       Enqueuer
 	defaultDelay time.Duration
 	delays       map[string]time.Duration
 }
 
-func NewHandler(q Repository, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, indeed adapters.IndeedAdapter, remoteok adapters.RemoteOKAdapter, glassdoor adapters.GlassdoorAdapter, jobleads adapters.JobLeadsAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
+func NewHandler(q Repository, sources *jobsources.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, indeed adapters.IndeedAdapter, remoteok adapters.RemoteOKAdapter, glassdoor adapters.GlassdoorAdapter, jobleads adapters.JobLeadsAdapter, wellfound adapters.WellfoundAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
 	return &Handler{
 		q: q, sources: sources,
-		djinni: djinni, dou: dou, workua: workua, indeed: indeed, remoteok: remoteok, glassdoor: glassdoor, jobleads: jobleads,
+		djinni: djinni, dou: dou, workua: workua, indeed: indeed, remoteok: remoteok, glassdoor: glassdoor, jobleads: jobleads, wellfound: wellfound,
 		client:       client,
 		defaultDelay: defaultDelay,
 		delays:       delays,
@@ -113,6 +114,8 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		err = h.enrichGlassdoor(ctx, payload, uid, job)
 	case "jobleads":
 		err = h.enrichJobLeads(ctx, payload, uid, job)
+	case "wellfound":
+		err = h.enrichWellfound(ctx, payload, uid, job)
 	default:
 		// No enrich branch for this source. It still has to reach match and
 		// ghost scoring below: for a NeedsDetail adapter, ingestion skipped
@@ -379,6 +382,42 @@ func (h *Handler) enrichGlassdoor(ctx context.Context, payload queue.EnrichPaylo
 	}
 
 	slog.Info("enrichment: glassdoor complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichWellfound(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	if delay := h.delayFor("wellfound"); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	patch, err := h.wellfound.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: wellfound fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		return nil
+	}
+	if !patch.Available {
+		slog.Info("enrichment: wellfound listing no longer available, leaving existing data untouched", "job", payload.JobID, "url", job.Url)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    job.Location,
+		Remote:      job.Remote,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update wellfound job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	slog.Info("enrichment: wellfound complete", "job", payload.JobID)
 	return nil
 }
 

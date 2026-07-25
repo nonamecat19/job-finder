@@ -153,3 +153,42 @@ func TestCreateJobLeadsSubscription_RejectsNonJobLeadsURL(t *testing.T) {
 		t.Fatal("expected non-jobleads url to be rejected")
 	}
 }
+
+func TestCreateWellfoundSubscription_ValidSearchURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	out, err := svc.Create(context.Background(), "wellfound", "https://wellfound.com/role/r/golang-engineer", nil, true, "")
+	if err != nil {
+		t.Fatalf("expected valid wellfound search url to be accepted, got error: %v", err)
+	}
+	if out.SourceKey != "wellfound" {
+		t.Errorf("sourceKey: got %q", out.SourceKey)
+	}
+}
+
+func TestCreateWellfoundSubscription_ValidSubdomainURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "wellfound", "https://www.wellfound.com/role/r/golang-engineer", nil, true, ""); err != nil {
+		t.Fatalf("expected valid wellfound.com subdomain url to be accepted, got error: %v", err)
+	}
+}
+
+func TestCreateWellfoundSubscription_ValidLegacyAngelCoURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "wellfound", "https://angel.co/role/r/golang-engineer", nil, true, ""); err != nil {
+		t.Fatalf("expected valid legacy angel.co url to be accepted, got error: %v", err)
+	}
+}
+
+func TestCreateWellfoundSubscription_RejectsNonWellfoundURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "wellfound", "https://www.indeed.com/jobs?q=golang", nil, true, ""); err == nil {
+		t.Fatal("expected non-wellfound url to be rejected")
+	}
+}
+
+func TestCreateWellfoundSubscription_RejectsSingleJobPostingURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "wellfound", "https://wellfound.com/jobs/1234567-senior-golang-engineer", nil, true, ""); err == nil {
+		t.Fatal("expected single-job-posting wellfound url to be rejected")
+	}
+}
