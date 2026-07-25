@@ -146,6 +146,8 @@ func validateSubscriptionURL(sourceKey, rawURL string) error {
 		return validateWellfoundSubscriptionURL(rawURL)
 	case "himalayas":
 		return validateHimalayasSubscriptionURL(rawURL)
+	case "jobgether":
+		return validateJobgetherSubscriptionURL(rawURL)
 	default:
 		return nil
 	}
@@ -245,6 +247,27 @@ func validateJobLeadsSubscriptionURL(rawURL string) error {
 	host := strings.ToLower(parsed.Host)
 	if host != "jobleads.com" && !strings.HasSuffix(host, ".jobleads.com") {
 		return fmt.Errorf("jobleads subscription url %q must be a jobleads.com search url", rawURL)
+	}
+	return nil
+}
+
+// validateJobgetherSubscriptionURL rejects a Jobgether subscription URL that
+// isn't a jobgether.com search-results page, mirroring
+// validateGlassdoorSubscriptionURL's host + shape check (FR-015, research.md
+// R6). Jobgether search-results pages live under /jobs/search; a single
+// job-detail page (e.g. /jobs/<slug>-<id>) is rejected with a human-readable
+// reason.
+func validateJobgetherSubscriptionURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("jobgether subscription url %q is not a valid URL", rawURL)
+	}
+	host := strings.ToLower(parsed.Host)
+	if host != "jobgether.com" && !strings.HasSuffix(host, ".jobgether.com") {
+		return fmt.Errorf("jobgether subscription url %q must be a jobgether.com search url", rawURL)
+	}
+	if strings.HasPrefix(parsed.Path, "/jobs/") && !strings.HasPrefix(parsed.Path, "/jobs/search") {
+		return fmt.Errorf("jobgether subscription url %q looks like a single job posting, not a search results page", rawURL)
 	}
 	return nil
 }

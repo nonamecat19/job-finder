@@ -29,6 +29,7 @@ var sourceRuns = []sourceRunSeed{
 	{sourceKey: "jooble", searchID: "seed:jooble:microservices"},
 	{sourceKey: "jooble", searchID: "seed:jooble:frontend-lead"},
 	{sourceKey: "glassdoor", searchID: "seed:glassdoor:ml-engineer"},
+	{sourceKey: "jobgether", searchID: "seed:jobgether:go-remote"},
 	{sourceKey: "indeed", searchID: "seed:indeed:sre"},
 	{sourceKey: "indeed", searchID: "seed:indeed:backend-python"},
 	{sourceKey: "wellfound", searchID: "seed:wellfound:golang-engineer"},

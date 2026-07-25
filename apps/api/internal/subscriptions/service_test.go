@@ -165,6 +165,17 @@ func TestCreateWellfoundSubscription_ValidSearchURL(t *testing.T) {
 	}
 }
 
+func TestCreateJobgetherSubscription_ValidSearchURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	out, err := svc.Create(context.Background(), "jobgether", "https://jobgether.com/jobs/search?technology=go&remote=true", nil, true, "")
+	if err != nil {
+		t.Fatalf("expected valid jobgether search url to be accepted, got error: %v", err)
+	}
+	if out.SourceKey != "jobgether" {
+		t.Errorf("sourceKey: got %q", out.SourceKey)
+	}
+}
+
 func TestCreateHimalayasSubscription_ValidSearchURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
 	out, err := svc.Create(context.Background(), "himalayas", "https://himalayas.app/jobs?categories=Backend-Engineering", nil, true, "")
@@ -229,5 +240,26 @@ func TestCreateHimalayasSubscription_RejectsMissingCategories(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
 	if _, err := svc.Create(context.Background(), "himalayas", "https://himalayas.app/jobs", nil, true, ""); err == nil {
 		t.Fatal("expected himalayas url missing 'categories' to be rejected")
+	}
+}
+
+func TestCreateJobgetherSubscription_ValidSubdomainURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "jobgether", "https://www.jobgether.com/jobs/search?technology=go", nil, true, ""); err != nil {
+		t.Fatalf("expected valid jobgether subdomain search url to be accepted, got error: %v", err)
+	}
+}
+
+func TestCreateJobgetherSubscription_RejectsNonJobgetherURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "jobgether", "https://example.com/not-jobgether", nil, true, ""); err == nil {
+		t.Fatal("expected non-jobgether url to be rejected")
+	}
+}
+
+func TestCreateJobgetherSubscription_RejectsSingleJobPostingURL(t *testing.T) {
+	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+	if _, err := svc.Create(context.Background(), "jobgether", "https://jobgether.com/jobs/senior-backend-engineer-go-waveform-labs-77213", nil, true, ""); err == nil {
+		t.Fatal("expected single-job-posting jobgether url to be rejected")
 	}
 }

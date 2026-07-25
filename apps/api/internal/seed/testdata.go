@@ -30,6 +30,7 @@ const (
 	uuidJob23   = "b0000000-0000-0000-0000-000000000023"
 	uuidJob24   = "b0000000-0000-0000-0000-000000000024"
 	uuidJob25   = "b0000000-0000-0000-0000-000000000025"
+	uuidJob26   = "b0000000-0000-0000-0000-000000000026"
 	uuidSearch1 = "c0000000-0000-0000-0000-000000000001"
 	uuidSearch2 = "c0000000-0000-0000-0000-000000000002"
 	uuidSearch3 = "c0000000-0000-0000-0000-000000000003"
@@ -269,6 +270,13 @@ var jobs = []jobSeed{
 		SalaryRaw: "$130K – $160K • 0.10% – 0.25%", URL: "https://wellfound.com/jobs/wf-1001-senior-golang-engineer",
 		Desc:   "NovaTech Labs is looking for a senior Golang engineer to help scale our core services and mentor junior engineers on distributed systems design.",
 		Status: "found", PostedAt: now().AddDate(0, 0, -3),
+	},
+	{
+		UUID: uuidJob26, SourceKey: "jobgether", Title: "Senior Backend Engineer (Go)",
+		Company: "Waveform Labs", Location: "Remote", Remote: true,
+		SalaryRaw: "$130,000 - $160,000", URL: "https://jobgether.com/jobs/senior-backend-engineer-go-waveform-labs-77213",
+		Desc:   "Waveform Labs is looking for a Senior Backend Engineer to build our Go-based event pipeline, working closely with the platform team on high-throughput services processing millions of events per day. 5+ years of backend experience, including at least 2 with Go, are required. Fully remote.",
+		Status: "found", PostedAt: now().AddDate(0, 0, -2),
 	},
 }
 

@@ -221,6 +221,7 @@ const SUBSCRIPTION_SOURCES = [
   { key: 'glassdoor', label: 'Glassdoor', placeholder: 'https://www.glassdoor.com/Job/remote-golang-jobs-SRCH_KO0,14.htm' },
   { key: 'jobleads', label: 'JobLeads', placeholder: 'https://www.jobleads.com/job-search?q=golang' },
   { key: 'wellfound', label: 'Wellfound', placeholder: 'https://wellfound.com/role/r/golang-engineer' },
+  { key: 'jobgether', label: 'Jobgether', placeholder: 'https://jobgether.com/jobs/search?technology=go&remote=true' },
 ];
 
 function SubscriptionsPanel() {
