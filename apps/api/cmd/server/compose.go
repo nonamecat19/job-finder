@@ -91,6 +91,7 @@ type sourcesHandles struct {
 	RemoteOK  adapters.RemoteOKAdapter
 	Glassdoor adapters.GlassdoorAdapter
 	JobLeads  adapters.JobLeadsAdapter
+	Jobgether adapters.JobgetherAdapter
 }
 
 // composeJobSources builds the adapter registry and jobsources.Service, then
@@ -104,6 +105,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	remoteokAdapter := adapters.RemoteOKAdapter{Scraping: p.Scraping}
 	glassdoorAdapter := adapters.GlassdoorAdapter{Scraping: p.Scraping}
 	jobleadsAdapter := adapters.JobLeadsAdapter{Scraping: p.Scraping, Session: p.JobLeadsSession}
+	jobgetherAdapter := adapters.JobgetherAdapter{Scraping: p.Scraping}
 	registry := jobsources.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
@@ -117,6 +119,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		jobleadsAdapter,
 		adapters.RobotaAdapter{},
 		adapters.JoobleAdapter{},
+		jobgetherAdapter,
 	)
 	sourcesSvc := jobsources.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc
@@ -131,6 +134,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		RemoteOK:  remoteokAdapter,
 		Glassdoor: glassdoorAdapter,
 		JobLeads:  jobleadsAdapter,
+		Jobgether: jobgetherAdapter,
 	}
 }
 
@@ -327,7 +331,7 @@ func composeEnrichment(p *Platform, sources *sourcesHandles) *enrichment.Handler
 	enrichDelays := map[string]time.Duration{
 		"workua": time.Duration(cfg.WorkUaDetailDelayMs) * time.Millisecond,
 	}
-	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, sources.Indeed, sources.RemoteOK, sources.Glassdoor, sources.JobLeads, p.AsynqClient, enrichDelay, enrichDelays)
+	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, sources.Indeed, sources.RemoteOK, sources.Glassdoor, sources.JobLeads, sources.Jobgether, p.AsynqClient, enrichDelay, enrichDelays)
 }
 
 type salaryHandles struct {

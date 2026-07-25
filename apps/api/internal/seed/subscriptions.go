@@ -57,6 +57,12 @@ var subscriptions = []subscriptionSeed{
 		url:       "https://www.jobleads.com/job-search?q=golang",
 		enabled:   true,
 	},
+	{
+		sourceKey: "jobgether",
+		name:      "Jobgether Go Remote",
+		url:       "https://jobgether.com/jobs/search?technology=go&remote=true",
+		enabled:   true,
+	},
 }
 
 func seedSubscriptions(ctx context.Context, q *sqlcgen.Queries) error {
