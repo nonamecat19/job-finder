@@ -74,4 +74,13 @@ export const queryKeys = {
     all: ['aiFeatures'] as const,
     get: ['aiFeatures', 'get'] as const,
   },
+  roster: {
+    all: ['roster'] as const,
+    list: ['roster', 'list'] as const,
+    candidates: ['roster', 'candidates'] as const,
+  },
+  hosts: {
+    all: ['hosts'] as const,
+    retrievalStatus: (host: string) => ['hosts', 'retrieval-status', host] as const,
+  },
 };

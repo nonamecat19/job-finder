@@ -5,6 +5,7 @@ package ratelimit
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"sync"
@@ -76,9 +77,14 @@ func (t *Transport) limiterFor(host string) *rate.Limiter {
 		burst = DefaultBurst
 	}
 
-	l := rate.NewLimiter(rate.Limit(rps), burst)
+	l := rate.NewLimiter(rate.Limit(jitterRPS(rps)), burst)
 	t.limiters[host] = l
 	return l
+}
+
+func jitterRPS(rps float64) float64 {
+	scale := 0.75 + 0.5*rand.Float64()
+	return rps * scale
 }
 
 // RoundTrip waits for the destination host's token before delegating. It

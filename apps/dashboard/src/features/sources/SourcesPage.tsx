@@ -1,4 +1,4 @@
-import { CheckCircle, ListFilter, Play, Plus, RefreshCw, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, ListFilter, Play, Plus, RefreshCw, ToggleLeft, ToggleRight, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { JobSourceDto, SavedSearchDto, SearchQuery, SubscriptionDto } from '@job-finder/shared';
@@ -21,6 +21,10 @@ import {
   useCreateSubscription,
   useDeleteSearch,
   useDeleteSubscription,
+  useHostRetrievalStatus,
+  useClearRungPreference,
+  useClearCookies,
+  useOverrideCoolingOff,
   useRecentRuns,
   useRunSearch,
   useRunSubscription,
@@ -31,6 +35,8 @@ import {
   useTestSource,
   useUpdateSource,
 } from './hooks';
+import RosterPanel from './roster/RosterPanel';
+import CandidatesPanel from './roster/CandidatesPanel';
 
 export default function SourcesPage() {
   return (
@@ -40,6 +46,9 @@ export default function SourcesPage() {
         description="Configure which job boards to scrape and manage saved searches that run on a schedule."
       />
       <SourcesPanel />
+      <HostRetrievalPanel />
+      <RosterPanel />
+      <CandidatesPanel />
       <SubscriptionsPanel />
       <SearchesPanel />
       <RecentRunsPanel />
@@ -116,6 +125,101 @@ function SourceRow({
         </button>
       </div>
     </li>
+  );
+}
+
+function HostRetrievalPanel() {
+  const { data: sources } = useSources();
+  const [selectedHost, setSelectedHost] = useState<string | null>(null);
+  const { data: status, isLoading } = useHostRetrievalStatus(selectedHost ?? '');
+  const clearRung = useClearRungPreference();
+  const clearCookies = useClearCookies();
+  const overrideCooling = useOverrideCoolingOff();
+
+  if (!sources?.length) return null;
+
+  const hosts = [...new Set(sources.map((s) => s.key))];
+
+  return (
+    <Surface className="mb-5">
+      <SectionTitle>Host retrieval status</SectionTitle>
+      <div className="mb-3 flex flex-wrap gap-2">
+        {hosts.map((h) => (
+          <Button
+            key={h}
+            variant={selectedHost === h ? 'primary' : 'secondary'}
+            onClick={() => setSelectedHost(selectedHost === h ? null : h)}
+          >
+            {h}
+          </Button>
+        ))}
+      </div>
+
+      {selectedHost && isLoading ? (
+        <LoadingRegion label="loading host status…" className="space-y-2">
+          <SkeletonBlock className="h-20 w-full" />
+        </LoadingRegion>
+      ) : null}
+
+      {selectedHost && status ? (
+        <div className="rounded-lg border border-border bg-elevated/60 p-3 text-sm">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+            <span>
+              <span className="font-medium text-fg">Rung:</span> {status.currentRung}
+            </span>
+            <span>
+              <span className="font-medium text-fg">Budget:</span> {status.budgetUsed}/{status.budgetLimit}
+            </span>
+            <span>
+              <span className="font-medium text-fg">Budget resets:</span> {new Date(status.budgetResetsAt).toLocaleString()}
+            </span>
+          </div>
+
+          {status.lastBlockAt ? (
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+              <span className="text-warning">
+                <AlertTriangle className="mr-1 inline h-3 w-3" />
+                Blocked at {new Date(status.lastBlockAt).toLocaleString()}
+              </span>
+              {status.lastBlockReason ? (
+                <span className="text-faint">Reason: {status.lastBlockReason}</span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {status.coolingOffUntil ? (
+            <div className="mt-1 text-xs text-danger">
+              <Clock className="mr-1 inline h-3 w-3" />
+              Cooling off until {new Date(status.coolingOffUntil).toLocaleString()}
+            </div>
+          ) : null}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => clearRung.mutate(selectedHost)}
+              disabled={clearRung.isPending}
+            >
+              clear rung
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => clearCookies.mutate(selectedHost)}
+              disabled={clearCookies.isPending}
+            >
+              clear cookies
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => overrideCooling.mutate(selectedHost)}
+              disabled={overrideCooling.isPending}
+            >
+              override cooling-off
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </Surface>
   );
 }
 
@@ -352,22 +456,34 @@ function RecentRunsPanel() {
       {isLoading ? <ListRowsSkeleton label="loading recent runs…" /> : null}
       {runs && runs.length === 0 ? <EmptyState>No runs yet.</EmptyState> : null}
       <ul className="space-y-1">
-        {runs?.map((r) => (
-          <li key={r.id} className="flex items-center gap-2 text-sm text-muted">
-            {r.ok === true ? (
-              <CheckCircle className="h-4 w-4 text-success" />
-            ) : r.ok === false ? (
-              <RefreshCw className="h-4 w-4 text-danger" />
-            ) : (
-              <Spinner />
-            )}
-            <span className="font-medium">{r.sourceKey}</span>
-            <span className="text-xs text-muted">
-              found {r.found}, {r.new} new
-            </span>
-            <span className="text-xs text-faint">{new Date(r.startedAt).toLocaleString()}</span>
-          </li>
-        ))}
+        {runs?.map((r) => {
+          const verdict = r.verdict;
+          const isRunning = r.ok === null;
+          return (
+            <li key={r.id} className="flex items-center gap-2 text-sm text-muted">
+              {isRunning ? (
+                <Spinner />
+              ) : verdict === 'blocked' ? (
+                <XCircle className="h-4 w-4 text-danger" />
+              ) : verdict === 'success' || r.ok === true ? (
+                <CheckCircle className="h-4 w-4 text-success" />
+              ) : (
+                <RefreshCw className="h-4 w-4 text-danger" />
+              )}
+              <span className="font-medium">{r.sourceKey}</span>
+              <span className="text-xs text-muted">
+                found {r.found}, {r.new} new
+              </span>
+              {verdict ? <Chip tone={verdict === 'success' ? 'green' : verdict === 'blocked' ? 'red' : 'slate'}>{verdict}</Chip> : null}
+              {r.blockReason ? (
+                <span className="text-xs text-faint" title={r.blockReason}>
+                  {r.blockReason.slice(0, 40)}
+                </span>
+              ) : null}
+              <span className="text-xs text-faint">{new Date(r.startedAt).toLocaleString()}</span>
+            </li>
+          );
+        })}
       </ul>
     </Surface>
   );

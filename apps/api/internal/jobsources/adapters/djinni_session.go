@@ -14,13 +14,14 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
+	"github.com/job-finder/api/internal/retrieval"
 )
 
 const djinniBaseURL = "https://djinni.co"
 
-// djinniUserAgent mirrors scraping.userAgent (unexported there); the login flow
-// needs its own cookie-jar client, so it can't reuse scraping.Service.
-const djinniUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+// djinniUserAgent mirrors the shared BrowserIdentity User-Agent; the login
+// flow needs its own cookie-jar client, so it can't reuse scraping.Service.
+var djinniUserAgent = retrieval.Chrome126UserAgent
 
 // DjinniSessionProvider hands the adapter a valid session cookie, logging in
 // with stored credentials when none exists or the current one has expired.

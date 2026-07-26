@@ -102,6 +102,10 @@ func (DjinniAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 // until enrichment has run.
 func (DjinniAdapter) NeedsDetail() bool { return true }
 
+// UsesUserAccount reports true: Djinni uses login credentials (session cookie)
+// and the retrieval ladder must never escalate past the direct rung.
+func (DjinniAdapter) UsesUserAccount() bool { return true }
+
 func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
 	headers, err := d.authHeaders(ctx)
 	if err != nil {

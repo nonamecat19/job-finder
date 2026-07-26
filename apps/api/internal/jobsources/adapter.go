@@ -33,12 +33,55 @@ type DetailNeeder interface {
 	NeedsDetail() bool
 }
 
+// Credentialed is an optional interface an Adapter implements when it uses
+// user-account credentials (login session) to access the source. The
+// retrieval ladder never escalates past the direct rung for credentialed
+// adapters, since browser/FlareSolverr rungs can't carry session cookies
+// and would land on a login page instead of the intended content.
+type Credentialed interface {
+	UsesUserAccount() bool
+}
+
 // NeedsDetail reports whether the adapter's Search rows are list-only and
 // must be enriched before downstream analysis. Adapters that don't implement
 // DetailNeeder return complete rows, so the answer is false.
 func NeedsDetail(a Adapter) bool {
 	dn, ok := a.(DetailNeeder)
 	return ok && dn.NeedsDetail()
+}
+
+// IsCredentialed reports whether the adapter uses a user account.
+func IsCredentialed(a Adapter) bool {
+	c, ok := a.(Credentialed)
+	return ok && c.UsesUserAccount()
+}
+
+// EmployerOutcome is one employer's result within a single fan-out run.
+type EmployerOutcome string
+
+const (
+	EmployerOutcomeRead       EmployerOutcome = "read"
+	EmployerOutcomeNotFound   EmployerOutcome = "not_found"
+	EmployerOutcomeUnreadable EmployerOutcome = "unreadable"
+	EmployerOutcomeRefused    EmployerOutcome = "refused"
+	EmployerOutcomeNoPostings EmployerOutcome = "no_postings"
+)
+
+// EmployerRunOutcome is one roster employer's result from a single Search
+// call, keyed by the vendor-scoped identifier used in EmployerBoard.
+type EmployerRunOutcome struct {
+	EmployerIdentifier string          `json:"employerIdentifier"`
+	Outcome            EmployerOutcome `json:"outcome"`
+	PostingsFound      int             `json:"postingsFound"`
+}
+
+// EmployerReporter is implemented by adapters whose one Search call fans out
+// over multiple roster employers (the ATS board sources, 013) and can report
+// a per-employer outcome distinct from the aggregate found/new counts
+// (FR-019, FR-020). The ingestion handler type-asserts for it the same way it
+// already does for DetailNeeder.
+type EmployerReporter interface {
+	LastRunDetail() []EmployerRunOutcome
 }
 
 // Registry holds every registered adapter keyed by its Key().

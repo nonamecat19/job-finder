@@ -100,7 +100,7 @@ func TestParseJobLeadsListings_Empty(t *testing.T) {
 }
 
 func TestJobLeadsSearch_NoSubscriptionURL(t *testing.T) {
-	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: "cookie-abc"}}
+	adapter := JobLeadsAdapter{Scraping: scraping.New(nil), Session: &stubJobLeadsSession{cookie: "cookie-abc"}}
 	_, err := adapter.Search(context.Background(), dto.SearchQuery{}, nil)
 	if err == nil {
 		t.Fatal("expected error when SubscriptionURL is empty")
@@ -108,7 +108,7 @@ func TestJobLeadsSearch_NoSubscriptionURL(t *testing.T) {
 }
 
 func TestJobLeadsSearch_NoCredentials(t *testing.T) {
-	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: ""}}
+	adapter := JobLeadsAdapter{Scraping: scraping.New(nil), Session: &stubJobLeadsSession{cookie: ""}}
 	_, err := adapter.Search(context.Background(), dto.SearchQuery{SubscriptionURL: "https://www.jobleads.com/job-search?q=golang"}, nil)
 	if err == nil {
 		t.Fatal("expected error when no credentials are configured")
@@ -144,7 +144,7 @@ func TestJobLeadsSearch_AuthenticatedFetch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
+	adapter := JobLeadsAdapter{Scraping: scraping.New(nil), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
 	jobs, err := adapter.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/job-search?q=golang"}, nil)
 	if err != nil {
 		t.Fatalf("Search failed: %v", err)
@@ -164,12 +164,12 @@ func TestJobLeadsHealthCheck(t *testing.T) {
 	// TestGlassdoorHealthCheck's approach for an external dependency. The
 	// authenticated-fetch code path itself is exercised via
 	// TestJobLeadsSearch_AuthenticatedFetch against an httptest.Server.
-	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
+	adapter := JobLeadsAdapter{Scraping: scraping.New(nil), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
 	if _, err := adapter.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
 	}
 
-	noCredsAdapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: ""}}
+	noCredsAdapter := JobLeadsAdapter{Scraping: scraping.New(nil), Session: &stubJobLeadsSession{cookie: ""}}
 	healthy, err := noCredsAdapter.HealthCheck(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
@@ -185,7 +185,7 @@ func TestValidateJobLeadsSubscriptionURL_HostCheck(t *testing.T) {
 	// host — that's subscriptions.Service's job, covered in
 	// subscriptions/service_test.go; this just documents the parse-only
 	// behavior so a regression there is caught early too).
-	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
+	adapter := JobLeadsAdapter{Scraping: scraping.New(nil), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
 	_, err := adapter.scrapeSubscription(context.Background(), "://bad-url", map[string]string{})
 	if err == nil {
 		t.Fatal("expected error for an unparseable subscription URL")
@@ -199,7 +199,7 @@ func TestJobLeadsFetchDetail(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
+	adapter := JobLeadsAdapter{Scraping: scraping.New(nil), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
 	patch, err := adapter.FetchDetail(context.Background(), srv.URL+"/job/senior-golang-engineer-novatech-abc123", nil)
 	if err != nil {
 		t.Fatalf("FetchDetail failed: %v", err)
@@ -221,7 +221,7 @@ func TestJobLeadsFetchDetail_Unavailable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
+	adapter := JobLeadsAdapter{Scraping: scraping.New(nil), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
 	patch, err := adapter.FetchDetail(context.Background(), srv.URL+"/job/gone", nil)
 	if err != nil {
 		t.Fatalf("expected nil error for an unavailable listing, got %v", err)

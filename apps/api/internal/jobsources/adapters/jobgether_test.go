@@ -131,7 +131,7 @@ func TestJobgetherIsBlockedPage(t *testing.T) {
 }
 
 func TestJobgetherSearch_NoSubscriptionURL(t *testing.T) {
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	_, err := a.Search(context.Background(), dto.SearchQuery{}, nil)
 	if err == nil {
 		t.Fatal("expected error when SubscriptionURL is empty (keyword search out of scope)")
@@ -159,7 +159,7 @@ func TestJobgetherSearch_Pagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs/search?technology=go&remote=true"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -186,7 +186,7 @@ func TestJobgetherSearch_RespectsPageCap(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs/search?technology=go"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -210,7 +210,7 @@ func TestJobgetherSearch_Blocked(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	_, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs/search?technology=go"}, nil)
 	if err == nil {
 		t.Fatal("expected a distinguishable error when the response is a rate-limit/challenge page")
@@ -232,7 +232,7 @@ func TestJobgetherSearch_BlockedMidPagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs/search?technology=go"}, nil)
 	if err != nil {
 		t.Fatalf("expected page 1's results to be kept when a later page is blocked, got error: %v", err)
@@ -247,7 +247,7 @@ func TestJobgetherHealthCheck(t *testing.T) {
 	// sandboxed/offline test environment is not guaranteed, so this only
 	// asserts the "never a non-nil error" contract, matching
 	// GlassdoorAdapter's equivalent test.
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
 	}
@@ -261,7 +261,7 @@ func TestJobgetherFetchDetail(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	patch, err := a.FetchDetail(context.Background(), srv.URL+"/jobs/senior-backend-engineer-go-waveform-labs-77213", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -290,7 +290,7 @@ func TestJobgetherFetchDetail_NotFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	patch, err := a.FetchDetail(context.Background(), srv.URL+"/jobs/gone", nil)
 	if err != nil {
 		t.Fatalf("expected nil error for a gone/unavailable listing (FR-009 edge case), got %v", err)
@@ -308,7 +308,7 @@ func TestJobgetherFetchDetail_Blocked(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := JobgetherAdapter{Scraping: scraping.New()}
+	a := JobgetherAdapter{Scraping: scraping.New(nil)}
 	_, err := a.FetchDetail(context.Background(), srv.URL+"/jobs/x", nil)
 	if err == nil {
 		t.Fatal("expected a distinguishable error when the detail response is a rate-limit/challenge page")

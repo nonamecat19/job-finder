@@ -13,6 +13,7 @@ import (
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/adapters"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/scraping"
 )
 
@@ -29,6 +30,7 @@ type Platform struct {
 	AsynqClient    *asynq.Client
 	AsynqInspector *asynq.Inspector
 	Scraping       *scraping.Service
+	Retrieval      retrieval.Service
 
 	// MinioReady is a lightweight client used only to probe MinIO connectivity
 	// for the readiness endpoint (see internal/httpapi/health.go). It is nil
@@ -55,7 +57,24 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 
-	scrapingSvc := scraping.New()
+	// Initialise the browser identity and retrieval state store.
+	identityVersion := cfg.BrowserIdentityVersion
+	if identityVersion == "" {
+		identityVersion = "chrome126"
+	}
+	identity, err := retrieval.NewBrowserIdentity(identityVersion)
+	if err != nil {
+		database.Close()
+		return nil, err
+	}
+	stateStore := retrieval.NewStateStore(database.Queries, cfg.ConfigEncryptionKey)
+	retSvc, err := retrieval.NewServiceImpl(identity, stateStore, cfg)
+	if err != nil {
+		database.Close()
+		return nil, err
+	}
+
+	scrapingSvc := scraping.New(retSvc)
 
 	redisOpt, err := queue.RedisOpt(cfg.RedisURL)
 	if err != nil {
@@ -86,6 +105,7 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		AsynqClient:     asynq.NewClient(redisOpt),
 		AsynqInspector:  asynq.NewInspector(redisOpt),
 		Scraping:        scrapingSvc,
+		Retrieval:       retSvc,
 		MinioReady:      minioReady,
 		DjinniSession:   &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
 		JobLeadsSession: &adapters.JobLeadsSession{Email: cfg.JobLeadsEmail, Password: cfg.JobLeadsPassword, Key: "jobleads"},

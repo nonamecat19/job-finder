@@ -7,9 +7,11 @@ SELECT "id" FROM "Job" WHERE "dedupeKey" = $1;
 -- name: InsertJob :one
 INSERT INTO "Job" (
   "dedupeKey", "sourceKey", "externalId", "title", "company", "location",
-  "remote", "salaryRaw", "url", "description", "raw", "postedAt", "subscriptionId"
+  "remote", "salaryRaw", "url", "description", "raw", "postedAt", "subscriptionId",
+  "seenOnSources"
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+  ARRAY[$2]
 )
 RETURNING *;
 
@@ -49,6 +51,21 @@ UPDATE "Job" SET
   "postedAt" = COALESCE(sqlc.narg('postedAt'), "postedAt"),
   "detailScrapedAt" = now()
 WHERE "id" = sqlc.arg('id')
+RETURNING *;
+
+-- name: FindJobByCompany :one
+SELECT id, "sourceKey", "title" FROM "Job"
+WHERE LOWER("company") = LOWER($1)
+  AND "sourceKey" != $2
+ORDER BY "ingestedAt" DESC
+LIMIT 1;
+
+-- name: MergeJobBoard :one
+UPDATE "Job" SET
+  "url" = $2,
+  "sourceKey" = $3,
+  "seenOnSources" = array_append("seenOnSources", $4)
+WHERE "id" = $1
 RETURNING *;
 
 -- name: ListJobsMissingMatch :many

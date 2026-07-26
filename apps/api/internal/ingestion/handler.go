@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
@@ -150,6 +151,18 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	}
 
 	jobs, err = adapter.Search(ctx, query, config)
+
+	// ATS board adapters (013) fan one Search call out over many roster
+	// employers; capture their per-employer outcomes on the run regardless
+	// of whether the overall Search errored (FR-019, FR-020, FR-023) — a
+	// run-level error from a board adapter means "zero employers read"
+	// (FR-021), not "no detail worth keeping".
+	if reporter, ok := adapter.(jobsources.EmployerReporter); ok {
+		if detail, mErr := json.Marshal(reporter.LastRunDetail()); mErr == nil {
+			_ = h.q.SetSourceRunEmployerDetail(ctx, sqlcgen.SetSourceRunEmployerDetailParams{ID: run.ID, EmployerDetail: detail})
+		}
+	}
+
 	if err != nil {
 		h.finishError(ctx, run.ID, source, payload.SourceKey, err)
 		return err
@@ -187,6 +200,9 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	}); err != nil {
 		return err
 	}
+
+	verdict := computeVerdict(len(jobs), nil)
+	h.writeVerdict(ctx, run.ID, verdict, 0, "")
 	_ = h.q.SetJobSourceHealthy(ctx, sqlcgen.SetJobSourceHealthyParams{Key: payload.SourceKey, Healthy: true})
 	if subscription != nil {
 		_ = h.q.TouchSubscriptionLastRun(ctx, subscription.ID)
@@ -201,6 +217,10 @@ func (h *Handler) finishError(ctx context.Context, runID pgtype.UUID, source sql
 		msg = msg[:1000]
 	}
 	_ = h.q.FinishSourceRunError(ctx, sqlcgen.FinishSourceRunErrorParams{ID: runID, Error: &msg})
+
+	verdict, blockedCount, blockReason := computeErrorVerdict(cause)
+	h.writeVerdict(ctx, runID, verdict, blockedCount, blockReason)
+
 	// Only judge the source's health once asynq has stopped retrying: an
 	// earlier attempt still has a chance to succeed and clear the flag, and
 	// flipping it mid-cycle would show the source as broken in the UI while
@@ -224,17 +244,31 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob, subscri
 
 	_, err := h.q.GetJobByDedupeKey(ctx, dedupeKey)
 	if err == nil {
-		// Already exists: this is a repost. Bump "seenCount" so the
-		// ghost-job detector's repost signal (005, FR-002a) has something to
-		// measure — without this, dedupeKey's UNIQUE constraint means every
-		// count-by-dedupeKey query can only ever return 1.
 		if _, err := h.q.RecordJobRepost(ctx, dedupeKey); err != nil {
 			slog.Warn("ingestion: record repost failed", "dedupeKey", dedupeKey, "error", err)
 		}
-		return false, nil // already exists
+		return false, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return false, err
+	}
+
+	if IsBoardVendor(j.SourceKey) {
+		existingID, err := FindMergeCandidate(ctx, h.q, j)
+		if err != nil {
+			slog.Warn("ingestion: merge candidate check failed", "sourceKey", j.SourceKey, "company", j.Company, "error", err)
+		} else if existingID.Valid {
+			if _, err := h.q.MergeJobBoard(ctx, sqlcgen.MergeJobBoardParams{
+				ID:          existingID,
+				Url:         j.URL,
+				SourceKey:   j.SourceKey,
+				ArrayAppend: j.SourceKey,
+			}); err != nil {
+				return false, fmt.Errorf("ingestion: merge job: %w", err)
+			}
+			slog.Info("ingestion: merged board posting into existing job", "existing", dbutil.UUIDString(existingID), "sourceKey", j.SourceKey, "company", j.Company)
+			return false, nil
+		}
 	}
 
 	raw, err := json.Marshal(j.Raw)
@@ -368,4 +402,66 @@ func (h *Handler) flagIfUnhealthy(ctx context.Context, sourceID sqlcgen.JobSourc
 		_ = h.q.SetJobSourceHealthy(ctx, sqlcgen.SetJobSourceHealthyParams{Key: sourceKey, Healthy: false})
 		slog.Warn("source flagged unhealthy after consecutive failures", "source", sourceKey, "count", unhealthyAfterConsecutiveFailures)
 	}
+}
+
+func (h *Handler) writeVerdict(ctx context.Context, runID pgtype.UUID, verdict string, blockedCount int32, blockReason string) {
+	var reason *string
+	if blockReason != "" {
+		reason = &blockReason
+	}
+	v := verdict
+	_ = h.q.SetSourceRunVerdict(ctx, sqlcgen.SetSourceRunVerdictParams{
+		ID:           runID,
+		Verdict:      &v,
+		BlockedCount: blockedCount,
+		BlockReason:  reason,
+	})
+}
+
+func computeVerdict(found int, err error) string {
+	if err != nil {
+		errStr := err.Error()
+		if isBlockError(errStr) || isChallengeError(errStr) || isRefusedError(errStr) {
+			return "blocked"
+		}
+		return "blocked"
+	}
+	if found == 0 {
+		return "partial"
+	}
+	return "success"
+}
+
+func computeErrorVerdict(err error) (string, int32, string) {
+	if err == nil {
+		return "success", 0, ""
+	}
+	errStr := err.Error()
+	blockedCount := int32(1)
+	blockReason := errStr
+	if len(blockReason) > 500 {
+		blockReason = blockReason[:500]
+	}
+	return "blocked", blockedCount, blockReason
+}
+
+func isBlockError(errStr string) bool {
+	lower := strings.ToLower(errStr)
+	blockMarkers := []string{"blocked", "challenged", "refused", "deferred", "interstitial"}
+	for _, m := range blockMarkers {
+		if strings.Contains(lower, m) {
+			return true
+		}
+	}
+	return false
+}
+
+func isChallengeError(errStr string) bool {
+	lower := strings.ToLower(errStr)
+	return strings.Contains(lower, "challenged") || strings.Contains(lower, "challenge")
+}
+
+func isRefusedError(errStr string) bool {
+	lower := strings.ToLower(errStr)
+	return strings.Contains(lower, "refused")
 }

@@ -304,6 +304,27 @@ export interface ResumeDto {
   resume: Resume;
 }
 
+export interface EmployerBoardDto {
+  id: string;
+  vendor: string;
+  employerIdentifier: string;
+  displayName: string;
+  addedVia: string;
+  enabled: boolean;
+  lastSuccessAt?: string;
+  lastPostingCount: number;
+  stale: boolean;
+}
+
+export interface BoardCandidateDto {
+  id: string;
+  vendor: string;
+  employerIdentifier: string;
+  displayName: string;
+  inferredFromJobId?: string;
+  state: string;
+}
+
 export interface JobSourceDto {
   id: string;
   key: string;
@@ -353,6 +374,27 @@ export interface SourceRunDto {
   found: number;
   new: number;
   error: string | null;
+  verdict: string | null;
+  blockedCount: number;
+  blockReason: string | null;
+}
+
+export interface HostRetrievalStatusDto {
+  host: string;
+  identityVersion: string;
+  currentRung: string;
+  lastBlockAt: string | null;
+  lastBlockReason: string | null;
+  coolingOffUntil: string | null;
+  budgetUsed: number;
+  budgetLimit: number;
+  budgetResetsAt: string;
+}
+
+export interface RunVerdictDto {
+  verdict: string;
+  blockedCount: number;
+  blockReason: string | null;
 }
 
 export interface ApplicationDto {

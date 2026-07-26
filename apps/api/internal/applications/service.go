@@ -219,6 +219,7 @@ func (s *Service) Stats(ctx context.Context) (dto.StatsDto, error) {
 			ID: dbutil.UUIDString(r.ID), SourceKey: r.SourceKey, SearchID: r.SearchID,
 			StartedAt: dbutil.Timestamp(r.StartedAt), FinishedAt: dbutil.TimestampPtr(r.FinishedAt),
 			OK: r.Ok, Found: int(r.Found), New: int(r.New), Error: r.Error,
+			Verdict: r.Verdict, BlockedCount: int(r.BlockedCount), BlockReason: r.BlockReason,
 		})
 	}
 

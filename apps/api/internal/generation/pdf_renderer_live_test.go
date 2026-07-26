@@ -21,7 +21,7 @@ func strp2(s string) *string { return &s }
 
 func TestLive_HtmlPdfRenderer_RendersResume(t *testing.T) {
 	outDir := t.TempDir()
-	scrapingSvc := scraping.New()
+	scrapingSvc := scraping.New(nil)
 	defer scrapingSvc.Close()
 
 	renderer, err := NewHtmlPdfRenderer(scrapingSvc, outDir)

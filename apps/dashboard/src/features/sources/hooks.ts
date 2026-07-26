@@ -110,3 +110,92 @@ export function useRunAllSubscriptions() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.subscriptions.all }),
   });
 }
+
+export function useRoster() {
+  return useQuery({
+    queryKey: queryKeys.roster.list,
+    queryFn: api.roster.list,
+  });
+}
+
+export function useRegisterBoard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) => api.roster.register(url),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roster.all }),
+  });
+}
+
+export function useRemoveBoard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.roster.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roster.all }),
+  });
+}
+
+export function useCandidates() {
+  return useQuery({
+    queryKey: queryKeys.roster.candidates,
+    queryFn: api.roster.candidates,
+  });
+}
+
+export function useAcceptCandidate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.roster.accept(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.roster.all });
+      qc.invalidateQueries({ queryKey: queryKeys.roster.candidates });
+    },
+  });
+}
+
+export function useRejectCandidate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.roster.reject(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roster.candidates }),
+  });
+}
+
+export function useDiscoverCandidates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.roster.discover(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roster.candidates }),
+  });
+}
+
+export function useHostRetrievalStatus(host: string) {
+  return useQuery({
+    queryKey: queryKeys.hosts.retrievalStatus(host),
+    queryFn: () => api.hosts.retrievalStatus(host),
+    enabled: !!host,
+  });
+}
+
+export function useClearRungPreference() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) => api.hosts.clearRungPreference(host),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.hosts.all }),
+  });
+}
+
+export function useClearCookies() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) => api.hosts.clearCookies(host),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.hosts.all }),
+  });
+}
+
+export function useOverrideCoolingOff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) => api.hosts.overrideCoolingOff(host),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.hosts.all }),
+  });
+}

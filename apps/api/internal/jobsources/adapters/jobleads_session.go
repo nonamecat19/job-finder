@@ -14,13 +14,14 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
+	"github.com/job-finder/api/internal/retrieval"
 )
 
 const jobLeadsBaseURL = "https://www.jobleads.com"
 
-// jobLeadsUserAgent mirrors djinniUserAgent — the login flow needs its own
-// cookie-jar client, so it can't reuse scraping.Service.
-const jobLeadsUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+// jobLeadsUserAgent mirrors the shared BrowserIdentity User-Agent; the login
+// flow needs its own cookie-jar client, so it can't reuse scraping.Service.
+var jobLeadsUserAgent = retrieval.Chrome126UserAgent
 
 // JobLeadsSessionProvider hands the adapter a valid session cookie, logging
 // in with stored credentials when none exists or the current one has

@@ -47,7 +47,7 @@ func (p *Platform) worker(name, taskType, queueName string, concurrency int, han
 // buildServers mounts the router and constructs the six asynq worker servers.
 func buildServers(p *Platform, app *App) *Servers {
 	router := httpapi.NewRouter(
-		app.Sources.Mount, app.Searches.Mount, app.Documents.Mount,
+		app.Sources.Mount, app.Roster.Mount, app.Searches.Mount, app.Documents.Mount,
 		app.Profiles.Mount, app.Jobs.Mount, app.Applications.Mount,
 		app.Subs.Mount, app.Activity.Mount, app.Keyword.Mount,
 		app.PostAge.Mount, app.Notification.Mount, app.Companies.Mount,
@@ -56,6 +56,7 @@ func buildServers(p *Platform, app *App) *Servers {
 		app.Contacts.Mount, app.Referral.Mount,
 		app.Outreach.Mount, app.LlmSettings.Mount, app.AiFeatures.Mount,
 		app.InterviewPrep.Mount, app.Health.Mount,
+		app.Hosts.Mount,
 	)
 
 	srv := &http.Server{

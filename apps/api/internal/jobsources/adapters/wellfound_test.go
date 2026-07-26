@@ -10,6 +10,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/scraping"
 )
 
@@ -125,23 +126,23 @@ func TestParseWellfoundCards_MissingTitleOrURLSkipped(t *testing.T) {
 
 func TestWellfoundIsBlockedPage(t *testing.T) {
 	blocked := loadWellfoundFixture(t, "wellfound_blocked.html")
-	if !wellfoundIsBlockedPage(blocked) {
+	if !retrieval.IsChallenged(blocked, 0) {
 		t.Fatal("expected wellfound_blocked.html to be detected as a blocked/challenge page")
 	}
 
 	notBlocked := loadWellfoundFixture(t, "wellfound_list.html")
-	if wellfoundIsBlockedPage(notBlocked) {
+	if retrieval.IsChallenged(notBlocked, 0) {
 		t.Fatal("expected wellfound_list.html to NOT be detected as a blocked/challenge page")
 	}
 
 	empty := loadWellfoundFixture(t, "wellfound_empty.html")
-	if wellfoundIsBlockedPage(empty) {
+	if retrieval.IsChallenged(empty, 0) {
 		t.Fatal("expected a legitimate zero-results page to NOT be detected as blocked")
 	}
 }
 
 func TestWellfoundSearch_NoSubscriptionURL(t *testing.T) {
-	a := WellfoundAdapter{Scraping: scraping.New()}
+	a := WellfoundAdapter{Scraping: scraping.New(nil)}
 	_, err := a.Search(context.Background(), dto.SearchQuery{}, nil)
 	if err == nil {
 		t.Fatal("expected error when SubscriptionURL is empty (keyword search out of scope)")
@@ -169,7 +170,7 @@ func TestWellfoundSearch_Pagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := WellfoundAdapter{Scraping: scraping.New()}
+	a := WellfoundAdapter{Scraping: scraping.New(nil)}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/role/r/golang-engineer"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -190,7 +191,7 @@ func TestWellfoundSearch_Blocked(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := WellfoundAdapter{Scraping: scraping.New()}
+	a := WellfoundAdapter{Scraping: scraping.New(nil)}
 	_, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/role/r/golang-engineer"}, nil)
 	if err == nil {
 		t.Fatal("expected a distinguishable error when the response is a bot-challenge/rate-limit page")
@@ -205,7 +206,7 @@ func TestWellfoundSearch_EmptyResultsSucceeds(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := WellfoundAdapter{Scraping: scraping.New()}
+	a := WellfoundAdapter{Scraping: scraping.New(nil)}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/role/r/zzzznonexistentquery"}, nil)
 	if err != nil {
 		t.Fatalf("expected a legitimate zero-results page to succeed (not fail), got %v", err)
@@ -220,7 +221,7 @@ func TestWellfoundHealthCheck(t *testing.T) {
 	// sandboxed/offline test environment is not guaranteed, so this only
 	// asserts the "never a non-nil error" contract, matching GlassdoorAdapter's
 	// equivalent test.
-	a := WellfoundAdapter{Scraping: scraping.New()}
+	a := WellfoundAdapter{Scraping: scraping.New(nil)}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
 	}
@@ -232,7 +233,7 @@ func TestWellfoundHealthCheck_BlockedDetection(t *testing.T) {
 	// against a captured response shape instead of redirecting HealthCheck
 	// itself.
 	blocked := loadWellfoundFixture(t, "wellfound_blocked.html")
-	if !wellfoundIsBlockedPage(blocked) {
+	if !retrieval.IsChallenged(blocked, 0) {
 		t.Fatal("expected blocked fixture to be detected as blocked")
 	}
 }
@@ -245,7 +246,7 @@ func TestWellfoundFetchDetail(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := WellfoundAdapter{Scraping: scraping.New()}
+	a := WellfoundAdapter{Scraping: scraping.New(nil)}
 	patch, err := a.FetchDetail(context.Background(), srv.URL+"/jobs/wf-1001-senior-golang-engineer", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -274,7 +275,7 @@ func TestWellfoundFetchDetail_NotFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := WellfoundAdapter{Scraping: scraping.New()}
+	a := WellfoundAdapter{Scraping: scraping.New(nil)}
 	patch, err := a.FetchDetail(context.Background(), srv.URL+"/jobs/gone", nil)
 	if err != nil {
 		t.Fatalf("expected nil error for a gone/unavailable listing (FR-009 edge case), got %v", err)
@@ -292,7 +293,7 @@ func TestWellfoundFetchDetail_Blocked(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := WellfoundAdapter{Scraping: scraping.New()}
+	a := WellfoundAdapter{Scraping: scraping.New(nil)}
 	_, err := a.FetchDetail(context.Background(), srv.URL+"/jobs/x", nil)
 	if err == nil {
 		t.Fatal("expected a distinguishable error when the detail response is a bot-challenge/rate-limit page")

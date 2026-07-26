@@ -51,6 +51,10 @@ func (JobLeadsAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 // scoring until enrichment has run.
 func (JobLeadsAdapter) NeedsDetail() bool { return true }
 
+// UsesUserAccount reports true: JobLeads uses login credentials (session
+// cookie) and the retrieval ladder must never escalate past the direct rung.
+func (JobLeadsAdapter) UsesUserAccount() bool { return true }
+
 // authHeaders builds request headers carrying the current session cookie,
 // logging in on demand when Session is set. Unlike djinni, a Session that
 // resolves to an empty cookie AND has no configured credentials is treated

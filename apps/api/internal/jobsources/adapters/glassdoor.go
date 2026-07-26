@@ -26,6 +26,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
+	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/scraping"
 )
 
@@ -42,7 +43,8 @@ var glassdoorRemoteRe = regexp.MustCompile(`(?i)\bremote\b|work from home`)
 // GlassdoorAdapter — glassdoor.com, public search-results pages, no
 // credentials (FR-013).
 type GlassdoorAdapter struct {
-	Scraping *scraping.Service
+	Scraping  *scraping.Service
+	Retrieval retrieval.Service
 }
 
 func (GlassdoorAdapter) Key() string          { return "glassdoor" }
@@ -54,21 +56,45 @@ func (GlassdoorAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 func (GlassdoorAdapter) NeedsDetail() bool { return true }
 
 func (d GlassdoorAdapter) HealthCheck(ctx context.Context, config map[string]any) (bool, error) {
-	html, err := d.Scraping.FetchHTML(ctx, "https://www.glassdoor.com/", nil)
+	html, err := d.fetchPage(ctx, "https://www.glassdoor.com/", nil)
 	if err != nil {
 		return false, nil
 	}
-	if glassdoorIsBlockedPage(html) {
-		return false, nil
-	}
 	return strings.Contains(strings.ToLower(html), "glassdoor"), nil
+}
+
+func (d GlassdoorAdapter) fetchPage(ctx context.Context, url string, headers map[string]string) (string, error) {
+	if d.Retrieval != nil {
+		result, err := d.Retrieval.Fetch(ctx, retrieval.FetchRequest{URL: url, Headers: headers})
+		if err != nil {
+			return "", err
+		}
+		if result.Outcome.Status == retrieval.PageChallenged {
+			return "", fmt.Errorf("glassdoor: challenged: %s", result.Outcome.Reason)
+		}
+		if result.Outcome.Status == retrieval.PageRefused {
+			return "", fmt.Errorf("glassdoor: refused: %s", result.Outcome.Reason)
+		}
+		if result.Outcome.Status == retrieval.PageDeferred {
+			return "", fmt.Errorf("glassdoor: deferred: %s", result.Outcome.Reason)
+		}
+		return result.Body, nil
+	}
+	html, err := d.Scraping.FetchHTML(ctx, url, headers)
+	if err != nil {
+		return "", err
+	}
+	if glassdoorIsBlockedPage(html) {
+		return "", fmt.Errorf("glassdoor: request blocked by bot-challenge/security interstitial: %s", url)
+	}
+	return html, nil
 }
 
 // glassdoorIsBlockedPage reports whether an HTML response looks like
 // Glassdoor's bot-challenge/security-interstitial page rather than real
 // content, per the response actually captured during research.md R3's live
 // check: a "Security | Glassdoor" title combined with a noindex/nofollow
-// robots directive.
+// robots directive. Used as a fallback when Retrieval is nil (tests).
 func glassdoorIsBlockedPage(html string) bool {
 	lower := strings.ToLower(html)
 	return strings.Contains(lower, "security | glassdoor") &&
@@ -113,20 +139,12 @@ func (d GlassdoorAdapter) scrapeSubscription(ctx context.Context, subURL string)
 			time.Sleep(glassdoorRequestDelay)
 		}
 
-		htmlStr, err := d.Scraping.FetchHTML(ctx, pageURL.String(), nil)
+		htmlStr, err := d.fetchPage(ctx, pageURL.String(), nil)
 		if err != nil {
 			if page == 1 {
 				return nil, fmt.Errorf("glassdoor subscription fetch: %w", err)
 			}
 			slog.Warn("glassdoor subscription page fetch failed, stopping pagination", "url", pageURL.String(), "error", err)
-			break
-		}
-
-		if glassdoorIsBlockedPage(htmlStr) {
-			if page == 1 {
-				return nil, fmt.Errorf("glassdoor: request blocked by bot-challenge/security interstitial: %s", pageURL.String())
-			}
-			slog.Warn("glassdoor subscription page blocked mid-pagination, stopping pagination", "url", pageURL.String())
 			break
 		}
 
@@ -272,12 +290,9 @@ type GlassdoorDetailPatch struct {
 // it with nothing. Returns a non-nil error only on fetch failure or a
 // blocked/challenge response.
 func (d GlassdoorAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (GlassdoorDetailPatch, error) {
-	htmlStr, err := d.Scraping.FetchHTML(ctx, jobURL, nil)
+	htmlStr, err := d.fetchPage(ctx, jobURL, nil)
 	if err != nil {
 		return GlassdoorDetailPatch{}, fmt.Errorf("glassdoor detail fetch: %w", err)
-	}
-	if glassdoorIsBlockedPage(htmlStr) {
-		return GlassdoorDetailPatch{}, fmt.Errorf("glassdoor: detail request blocked by bot-challenge/security interstitial: %s", jobURL)
 	}
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))

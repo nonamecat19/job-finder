@@ -82,7 +82,7 @@ func TestParseRemoteOKJobs_Empty(t *testing.T) {
 }
 
 func TestRemoteOKSearch_NoSubscriptionURL(t *testing.T) {
-	a := RemoteOKAdapter{Scraping: scraping.New()}
+	a := RemoteOKAdapter{Scraping: scraping.New(nil)}
 	_, err := a.Search(context.Background(), dto.SearchQuery{}, nil)
 	if err == nil {
 		t.Fatal("expected error when SubscriptionURL is empty (keyword search out of scope)")
@@ -99,7 +99,7 @@ func TestRemoteOKSearch_TagResolution(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}
+	a := RemoteOKAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: "https://remoteok.com/remote-golang-jobs"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -136,7 +136,7 @@ func TestRemoteOKHealthCheck(t *testing.T) {
 	// HealthCheck targets the fixed remoteok.com API host; this test only
 	// exercises the "never a non-nil error" contract using the real host,
 	// matching TestIndeedHealthCheck's approach for an external dependency.
-	a := RemoteOKAdapter{Scraping: scraping.New()}
+	a := RemoteOKAdapter{Scraping: scraping.New(nil)}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
 	}
@@ -150,7 +150,7 @@ func TestRemoteOKFetchDetail(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}
+	a := RemoteOKAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
 	patch, err := a.FetchDetail(context.Background(), "https://remoteok.com/remote-jobs/1000001-senior-golang-developer-novatech-llc", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -174,7 +174,7 @@ func TestRemoteOKFetchDetail_RotatedOut(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}
+	a := RemoteOKAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
 	patch, err := a.FetchDetail(context.Background(), "https://remoteok.com/remote-jobs/9999999-gone", nil)
 	if err != nil {
 		t.Fatalf("expected nil error for a rotated-out listing, got %v", err)

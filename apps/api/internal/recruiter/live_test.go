@@ -29,7 +29,7 @@ func TestLive_CompanyPage(t *testing.T) {
 		t.Fatalf("llm new: %v", err)
 	}
 
-	scrapingSvc := scraping.New()
+	scrapingSvc := scraping.New(nil)
 	defer scrapingSvc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -77,7 +77,7 @@ func TestLive_LinkedIn(t *testing.T) {
 		t.Fatalf("llm new: %v", err)
 	}
 
-	scrapingSvc := scraping.New()
+	scrapingSvc := scraping.New(nil)
 	defer scrapingSvc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

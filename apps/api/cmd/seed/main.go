@@ -57,6 +57,7 @@ func run() error {
 	// are created lazily on first use, not seeded upfront. The fixtures below
 	// (SourceRun, Subscription) FK against those rows, so materialize one per
 	// adapter here via the same lazy GetByKey path the running server uses.
+	gh, lv, as, wk, sr, _ := adapters.NewBoardAdapters()
 	registry := jobsources.NewRegistry(
 		adapters.AdzunaAdapter{},
 		adapters.RemotiveAdapter{},
@@ -66,6 +67,7 @@ func run() error {
 		adapters.WorkUaAdapter{},
 		adapters.RobotaAdapter{},
 		adapters.JoobleAdapter{},
+		gh, lv, as, wk, sr,
 	)
 	sourcesSvc := jobsources.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
 	for _, a := range registry.All() {

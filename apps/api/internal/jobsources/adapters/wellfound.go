@@ -25,6 +25,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
+	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/scraping"
 )
 
@@ -47,7 +48,8 @@ var wellfoundAgeRe = regexp.MustCompile(`(?i)^(\d+)\s*([hd])\b`)
 // WellfoundAdapter — wellfound.com (and the legacy angel.co host), public
 // search-results pages, no credentials (FR-013).
 type WellfoundAdapter struct {
-	Scraping *scraping.Service
+	Scraping  *scraping.Service
+	Retrieval retrieval.Service
 }
 
 func (WellfoundAdapter) Key() string          { return "wellfound" }
@@ -58,43 +60,38 @@ func (WellfoundAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 func (WellfoundAdapter) NeedsDetail() bool { return true }
 
 func (d WellfoundAdapter) HealthCheck(ctx context.Context, _ map[string]any) (bool, error) {
-	html, err := d.Scraping.FetchHTML(ctx, "https://wellfound.com/", nil)
+	html, err := d.fetchPage(ctx, "https://wellfound.com/", nil)
 	if err != nil {
-		return false, nil
-	}
-	if wellfoundIsBlockedPage(html) {
 		return false, nil
 	}
 	return strings.Contains(strings.ToLower(html), "wellfound"), nil
 }
 
-// wellfoundIsBlockedPage reports whether an HTML response looks like a
-// bot-challenge/rate-limit interstitial rather than real search-results
-// content: the absence of any recognizable job-card markup combined with
-// challenge-page markers (research.md R3), not brittle single-template
-// string matching, since challenge pages change over time.
-func wellfoundIsBlockedPage(html string) bool {
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
-	if err != nil {
-		return false
-	}
-	if doc.Find(`[data-test="JobSearchResult"]`).Length() > 0 {
-		return false
-	}
-	lower := strings.ToLower(html)
-	challengeMarkers := []string{
-		"checking your browser",
-		"attention required",
-		"just a moment",
-		"cf-please-wait",
-		"verify you are human",
-	}
-	for _, marker := range challengeMarkers {
-		if strings.Contains(lower, marker) {
-			return true
+func (d WellfoundAdapter) fetchPage(ctx context.Context, url string, headers map[string]string) (string, error) {
+	if d.Retrieval != nil {
+		result, err := d.Retrieval.Fetch(ctx, retrieval.FetchRequest{URL: url, Headers: headers})
+		if err != nil {
+			return "", err
 		}
+		if result.Outcome.Status == retrieval.PageChallenged {
+			return "", fmt.Errorf("wellfound: challenged: %s", result.Outcome.Reason)
+		}
+		if result.Outcome.Status == retrieval.PageRefused {
+			return "", fmt.Errorf("wellfound: refused: %s", result.Outcome.Reason)
+		}
+		if result.Outcome.Status == retrieval.PageDeferred {
+			return "", fmt.Errorf("wellfound: deferred: %s", result.Outcome.Reason)
+		}
+		return result.Body, nil
 	}
-	return false
+	html, err := d.Scraping.FetchHTML(ctx, url, headers)
+	if err != nil {
+		return "", err
+	}
+	if retrieval.IsChallenged(html, 0) {
+		return "", fmt.Errorf("wellfound: request blocked by bot-challenge/rate-limit interstitial: %s", url)
+	}
+	return html, nil
 }
 
 // Search only supports the pasted-subscription-URL flow (FR-014); keyword
@@ -136,20 +133,12 @@ func (d WellfoundAdapter) scrapeSubscription(ctx context.Context, subURL string)
 			time.Sleep(wellfoundRequestDelay)
 		}
 
-		htmlStr, err := d.Scraping.FetchHTML(ctx, pageURL.String(), nil)
+		htmlStr, err := d.fetchPage(ctx, pageURL.String(), nil)
 		if err != nil {
 			if page == 1 {
 				return nil, fmt.Errorf("wellfound subscription fetch: %w", err)
 			}
 			slog.Warn("wellfound subscription page fetch failed, stopping pagination", "url", pageURL.String(), "error", err)
-			break
-		}
-
-		if wellfoundIsBlockedPage(htmlStr) {
-			if page == 1 {
-				return nil, fmt.Errorf("wellfound: request blocked by bot-challenge/rate-limit interstitial: %s", pageURL.String())
-			}
-			slog.Warn("wellfound subscription page blocked mid-pagination, stopping pagination", "url", pageURL.String())
 			break
 		}
 
@@ -291,12 +280,9 @@ type WellfoundDetailPatch struct {
 // rather than overwriting it with nothing. Returns a non-nil error only on
 // fetch failure or a blocked/challenge response.
 func (d WellfoundAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (WellfoundDetailPatch, error) {
-	htmlStr, err := d.Scraping.FetchHTML(ctx, jobURL, nil)
+	htmlStr, err := d.fetchPage(ctx, jobURL, nil)
 	if err != nil {
 		return WellfoundDetailPatch{}, fmt.Errorf("wellfound detail fetch: %w", err)
-	}
-	if wellfoundIsBlockedPage(htmlStr) {
-		return WellfoundDetailPatch{}, fmt.Errorf("wellfound: detail request blocked by bot-challenge/rate-limit interstitial: %s", jobURL)
 	}
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))

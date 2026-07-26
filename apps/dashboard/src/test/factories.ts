@@ -163,6 +163,9 @@ export function mockSourceRun(overrides: Partial<SourceRunDto> = {}): SourceRunD
     found: 10,
     new: 3,
     error: null,
+    verdict: null,
+    blockedCount: 0,
+    blockReason: null,
     ...overrides,
   }
 }

@@ -1,13 +1,16 @@
 import type {
   ActivityListResponse,
   ApplicationDto,
+  BoardCandidateDto,
   CompanyIntelDto,
   ContactImportResultDto,
   DocumentType,
+  EmployerBoardDto,
   FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
   GithubSyncResultDto,
+  HostRetrievalStatusDto,
   InterviewPrepPack,
   JobContactDto,
   JobDto,
@@ -44,7 +47,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.text().catch(() => '');
     throw new Error(`${res.status} ${res.statusText}: ${body.slice(0, 300)}`);
   }
-  return res.json() as Promise<T>;
+  const text = await res.text();
+  return text ? (JSON.parse(text) as T) : (undefined as unknown as T);
 }
 
 export interface JobFilters {
@@ -149,6 +153,16 @@ export const api = {
     enrich: (key: string, limit?: number) =>
       request<{ enqueued: number }>(`/sources/${key}/enrich${limit ? `?limit=${limit}` : ''}`, { method: 'POST' }),
   },
+  hosts: {
+    retrievalStatus: (host: string) =>
+      request<HostRetrievalStatusDto>(`/hosts/${encodeURIComponent(host)}/retrieval-status`),
+    clearRungPreference: (host: string) =>
+      request<void>(`/hosts/${encodeURIComponent(host)}/clear-rung-preference`, { method: 'POST' }),
+    clearCookies: (host: string) =>
+      request<void>(`/hosts/${encodeURIComponent(host)}/clear-cookies`, { method: 'POST' }),
+    overrideCoolingOff: (host: string) =>
+      request<{ remainingSeconds: number }>(`/hosts/${encodeURIComponent(host)}/override-cooling-off`, { method: 'POST' }),
+  },
   searches: {
     list: () => request<SavedSearchDto[]>('/searches'),
     create: (body: { name: string; query: SearchQuery; cron?: string; enabled?: boolean }) =>
@@ -221,6 +235,17 @@ export const api = {
     },
     githubSync: (contactId: string) =>
       request<GithubSyncResultDto>(`/contacts/${contactId}/github-sync`, { method: 'POST' }),
+  },
+  roster: {
+    list: () => request<{ employers: EmployerBoardDto[] }>('/roster'),
+    register: (url: string) =>
+      request<EmployerBoardDto>('/roster', { method: 'POST', body: JSON.stringify({ url }) }),
+    remove: (id: string) => request(`/roster/${id}`, { method: 'DELETE' }),
+    candidates: () => request<{ candidates: BoardCandidateDto[] }>('/roster/candidates'),
+    accept: (id: string) =>
+      request<EmployerBoardDto>(`/roster/candidates/${id}/accept`, { method: 'POST' }),
+    reject: (id: string) => request(`/roster/candidates/${id}/reject`, { method: 'POST' }),
+    discover: () => request<{ newCandidates: number }>('/roster/discover', { method: 'POST' }),
   },
   // Per-task chat provider/model assignment across Ollama, Cerebras and
   // OpenRouter. The remote API keys themselves are never part of this API —

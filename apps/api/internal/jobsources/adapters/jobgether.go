@@ -26,6 +26,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
+	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/scraping"
 )
 
@@ -45,7 +46,8 @@ var (
 // JobgetherAdapter — jobgether.com, public search-results pages, no
 // credentials (FR-013).
 type JobgetherAdapter struct {
-	Scraping *scraping.Service
+	Scraping  *scraping.Service
+	Retrieval retrieval.Service
 }
 
 func (JobgetherAdapter) Key() string          { return "jobgether" }
@@ -56,20 +58,45 @@ func (JobgetherAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 func (JobgetherAdapter) NeedsDetail() bool { return true }
 
 func (d JobgetherAdapter) HealthCheck(ctx context.Context, config map[string]any) (bool, error) {
-	html, err := d.Scraping.FetchHTML(ctx, "https://jobgether.com/", nil)
+	html, err := d.fetchPage(ctx, "https://jobgether.com/", nil)
 	if err != nil {
-		return false, nil
-	}
-	if jobgetherIsBlockedPage(html) {
 		return false, nil
 	}
 	return strings.Contains(strings.ToLower(html), "jobgether"), nil
 }
 
+func (d JobgetherAdapter) fetchPage(ctx context.Context, url string, headers map[string]string) (string, error) {
+	if d.Retrieval != nil {
+		result, err := d.Retrieval.Fetch(ctx, retrieval.FetchRequest{URL: url, Headers: headers})
+		if err != nil {
+			return "", err
+		}
+		if result.Outcome.Status == retrieval.PageChallenged {
+			return "", fmt.Errorf("jobgether: challenged: %s", result.Outcome.Reason)
+		}
+		if result.Outcome.Status == retrieval.PageRefused {
+			return "", fmt.Errorf("jobgether: refused: %s", result.Outcome.Reason)
+		}
+		if result.Outcome.Status == retrieval.PageDeferred {
+			return "", fmt.Errorf("jobgether: deferred: %s", result.Outcome.Reason)
+		}
+		return result.Body, nil
+	}
+	html, err := d.Scraping.FetchHTML(ctx, url, headers)
+	if err != nil {
+		return "", err
+	}
+	if jobgetherIsBlockedPage(html) {
+		return "", fmt.Errorf("jobgether: request blocked by rate-limit/challenge interstitial: %s", url)
+	}
+	return html, nil
+}
+
 // jobgetherIsBlockedPage reports whether an HTML response looks like
 // Jobgether's rate-limit/interstitial page rather than real content
 // (research.md R3): a "Rate Limit Exceeded" title/heading combined with body
-// text indicating too many requests.
+// text indicating too many requests. Used as a fallback when Retrieval is
+// nil (tests).
 func jobgetherIsBlockedPage(html string) bool {
 	lower := strings.ToLower(html)
 	return strings.Contains(lower, "rate limit exceeded") && strings.Contains(lower, "too many requests")
@@ -113,20 +140,12 @@ func (d JobgetherAdapter) scrapeSubscription(ctx context.Context, subURL string)
 			time.Sleep(jobgetherRequestDelay)
 		}
 
-		htmlStr, err := d.Scraping.FetchHTML(ctx, pageURL.String(), nil)
+		htmlStr, err := d.fetchPage(ctx, pageURL.String(), nil)
 		if err != nil {
 			if page == 1 {
 				return nil, fmt.Errorf("jobgether subscription fetch: %w", err)
 			}
 			slog.Warn("jobgether subscription page fetch failed, stopping pagination", "url", pageURL.String(), "error", err)
-			break
-		}
-
-		if jobgetherIsBlockedPage(htmlStr) {
-			if page == 1 {
-				return nil, fmt.Errorf("jobgether: request blocked by rate-limit/challenge interstitial: %s", pageURL.String())
-			}
-			slog.Warn("jobgether subscription page blocked mid-pagination, stopping pagination", "url", pageURL.String())
 			break
 		}
 
@@ -265,12 +284,9 @@ type JobgetherDetailPatch struct {
 // blocked/challenge response. Jobgether's match-percentage score, if present
 // on the detail page, is captured into Raw["jobgetherMatchScore"] (FR-012).
 func (d JobgetherAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (JobgetherDetailPatch, error) {
-	htmlStr, err := d.Scraping.FetchHTML(ctx, jobURL, nil)
+	htmlStr, err := d.fetchPage(ctx, jobURL, nil)
 	if err != nil {
 		return JobgetherDetailPatch{}, fmt.Errorf("jobgether detail fetch: %w", err)
-	}
-	if jobgetherIsBlockedPage(htmlStr) {
-		return JobgetherDetailPatch{}, fmt.Errorf("jobgether: detail request blocked by rate-limit/challenge interstitial: %s", jobURL)
 	}
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))

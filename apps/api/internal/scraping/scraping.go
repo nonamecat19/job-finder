@@ -14,15 +14,14 @@ import (
 
 	"github.com/chromedp/chromedp"
 
-	"github.com/job-finder/api/internal/ratelimit"
+	"github.com/job-finder/api/internal/retrieval"
 )
 
-const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-
-// Service bundles the HTTP fetcher and the lazily-launched shared Chromium
-// instance used for PDF rendering.
+// Service bundles the HTTP fetcher (via retrieval.Service) and the
+// lazily-launched shared Chromium instance used for PDF rendering.
 type Service struct {
-	http *http.Client
+	retrievalSvc retrieval.Service
+	httpFallback *http.Client
 
 	mu          sync.Mutex
 	allocCancel context.CancelFunc
@@ -33,39 +32,56 @@ type Service struct {
 // New builds the service with outbound requests paced per destination host.
 // The limiter lives in the transport rather than in FetchHTML so it also
 // covers adapters that take HTTPClient() and issue their own requests.
-func New() *Service {
-	return &Service{http: &http.Client{
-		Timeout:   20 * time.Second,
-		Transport: ratelimit.NewTransport(nil),
-	}}
+func New(retrievalSvc retrieval.Service) *Service {
+	return &Service{
+		retrievalSvc: retrievalSvc,
+		httpFallback: &http.Client{
+			Timeout:   20 * time.Second,
+			Transport: retrieval.DefaultTransport,
+		},
+	}
 }
 
 // HTTPClient returns the underlying *http.Client so adapters can make
 // arbitrary requests (POST, custom headers, etc.) using the same timeout and
 // connection pool.
 func (s *Service) HTTPClient() *http.Client {
-	return s.http
+	return s.httpFallback
 }
 
-// FetchHTML fetches server-rendered HTML over plain HTTP with a browser-like
-// UA. Only 5xx responses are treated as errors — 4xx pages are still
-// parseable HTML, matching axios's `validateStatus: (s) => s < 500`.
-func (s *Service) FetchHTML(ctx context.Context, url string, headers map[string]string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// FetchHTML fetches server-rendered HTML through the retrieval ladder (which
+// includes browser-identity TLS and headers), falling back to a plain HTTP
+// client when no retrieval service is configured. Only 5xx responses are
+// treated as errors — 4xx pages are still parseable HTML.
+func (s *Service) FetchHTML(ctx context.Context, rawURL string, headers map[string]string) (string, error) {
+	if s.retrievalSvc != nil {
+		result, err := s.retrievalSvc.Fetch(ctx, retrieval.FetchRequest{
+			URL:     rawURL,
+			Headers: headers,
+		})
+		if err != nil {
+			return "", fmt.Errorf("scraping: fetch %s failed: %w", rawURL, err)
+		}
+		if result.Outcome.Status == retrieval.PageRead || result.Outcome.Status == retrieval.PageUnparseable {
+			return result.Body, nil
+		}
+		return "", fmt.Errorf("scraping: fetch %s denied: %s (%s)", rawURL, result.Outcome.Status, result.Outcome.Reason)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", userAgent)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	res, err := s.http.Do(req)
+	res, err := s.httpFallback.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("scraping: fetch %s failed: %w", url, err)
+		return "", fmt.Errorf("scraping: fetch %s failed: %w", rawURL, err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode >= 500 {
-		return "", fmt.Errorf("scraping: fetch %s returned %d", url, res.StatusCode)
+		return "", fmt.Errorf("scraping: fetch %s returned %d", rawURL, res.StatusCode)
 	}
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
