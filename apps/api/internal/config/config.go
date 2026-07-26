@@ -6,6 +6,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -112,6 +113,25 @@ type Config struct {
 	// Optional services
 	FlaresolverrURL string `mapstructure:"FLARESOLVERR_URL"`
 
+	// Browser identity version — bumped whenever the UA/header/TLS profile changes.
+	BrowserIdentityVersion string `mapstructure:"BROWSER_IDENTITY_VERSION"`
+
+	// PerHostDailyBudgetDefault is the default daily request budget for a host
+	// that has no explicit limit set (FR-030).
+	PerHostDailyBudgetDefault int `mapstructure:"PER_HOST_DAILY_BUDGET_DEFAULT"`
+
+	// CoolingOffThreshold is the consecutive block count at which cooling-off
+	// kicks in (FR-026).
+	CoolingOffThreshold int `mapstructure:"COOLING_OFF_THRESHOLD"`
+
+	// CoolingOffBaseDuration is the base duration for the first cooling-off
+	// period; it doubles on each consecutive extension (FR-026).
+	CoolingOffBaseDuration time.Duration `mapstructure:"COOLING_OFF_BASE_DURATION"`
+
+	// CheapRungRetestInterval is how often a host pinned to an expensive rung
+	// re-tests the cheap rung (FR-014).
+	CheapRungRetestInterval time.Duration `mapstructure:"CHEAP_RUNG_RETEST_INTERVAL"`
+
 	// Paths
 	DocumentsDir string `mapstructure:"DOCUMENTS_DIR"`
 
@@ -140,53 +160,6 @@ type Config struct {
 	LinkedInScrapeEnabled bool `mapstructure:"LINKEDIN_SCRAPE_ENABLED"`
 }
 
-// defaults holds the code-level default for every key that has one. Keys
-// without an entry default to the zero value (and, where required, are
-// validated by the consuming binary).
-var defaults = map[string]any{
-	"PORT":                           3000,
-	"REDIS_URL":                      "redis://localhost:6379",
-	"OLLAMA_URL":                     "http://localhost:11434",
-	"LLM_MODEL":                      "qwen2.5:14b",
-	"EMBED_MODEL":                    "nomic-embed-text",
-	"EMBED_DIMS":                     768,
-	"MATCH_SIMILARITY_THRESHOLD":     0.35,
-	"KEYWORD_REPHRASE_CACHE_TTL_SEC": 900,
-	"ADZUNA_COUNTRY":                 "gb",
-	"DJINNI_DETAIL_DELAY_MS":         1500,
-	"WORKUA_DETAIL_DELAY_MS":         2000,
-	"CEREBRAS_BASE_URL":              "https://api.cerebras.ai/v1",
-	"OPENROUTER_BASE_URL":            "https://openrouter.ai/api/v1",
-	// "/data/documents" is a container-only path (writable there because the
-	// Dockerfile/compose files run the API as root with a dedicated volume).
-	// On bare-metal dev or `go test`, the host user can't mkdir /data at all
-	// ("mkdir /data: permission denied") — default to a repo-relative dir
-	// instead; docker-compose.yml / docker-compose.prod.yml / Dockerfile all
-	// set DOCUMENTS_DIR=/data/documents explicitly, so containers are unaffected.
-	"DOCUMENTS_DIR":           "./data/documents",
-	"MINIO_BUCKET":            "documents",
-	"MINIO_USE_SSL":           false,
-	"RESUME_MASTER_PATH":      "./resume/resume.yaml",
-	"RESUME_GROUNDING_LEVEL":  "moderate",
-	"RENDERCV_BIN":            "rendercv",
-	"LINKEDIN_SCRAPE_ENABLED": false,
-}
-
-// keys without a default (optional strings / required-by-consumer). Listed so
-// viper binds each to its env var even when unset — mapstructure only sees keys
-// viper knows about.
-var optionalKeys = []string{
-	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
-	"LLM_MODEL_REPHRASE", "LLM_MODEL_GHOST",
-	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "EXT_JWT_SECRET", "ADZUNA_APP_ID", "ADZUNA_APP_KEY",
-	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOBLEADS_EMAIL", "JOBLEADS_PASSWORD", "JOOBLE_API_KEY", "FLARESOLVERR_URL",
-	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
-	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD", "CEREBRAS_API_KEY",
-	"OPENROUTER_API_KEY", "OPENROUTER_SITE_URL", "OPENROUTER_APP_NAME",
-}
-
-// ModelOr returns m if set, otherwise the default LLMModel. Used to resolve a
-// per-task model env var that is allowed to be empty.
 func (c *Config) ModelOr(m string) string {
 	if m == "" {
 		return c.LLMModel

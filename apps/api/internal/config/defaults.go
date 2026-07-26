@@ -1,0 +1,41 @@
+package config
+
+var defaults = map[string]any{
+	"PORT":                           3000,
+	"REDIS_URL":                      "redis://localhost:6379",
+	"OLLAMA_URL":                     "http://localhost:11434",
+	"LLM_MODEL":                      "qwen2.5:14b",
+	"EMBED_MODEL":                    "nomic-embed-text",
+	"EMBED_DIMS":                     768,
+	"MATCH_SIMILARITY_THRESHOLD":     0.35,
+	"KEYWORD_REPHRASE_CACHE_TTL_SEC": 900,
+	"ADZUNA_COUNTRY":                 "gb",
+	"DJINNI_DETAIL_DELAY_MS":         1500,
+	"WORKUA_DETAIL_DELAY_MS":         2000,
+	"CEREBRAS_BASE_URL":              "https://api.cerebras.ai/v1",
+	"OPENROUTER_BASE_URL":            "https://openrouter.ai/api/v1",
+	"DOCUMENTS_DIR":                  "./data/documents",
+	"MINIO_BUCKET":                   "documents",
+	"MINIO_USE_SSL":                  false,
+	"RESUME_MASTER_PATH":             "./resume/resume.yaml",
+	"RESUME_GROUNDING_LEVEL":         "moderate",
+	"RENDERCV_BIN":                   "rendercv",
+	"LINKEDIN_SCRAPE_ENABLED":        false,
+	"PER_HOST_DAILY_BUDGET_DEFAULT":  200,
+	"COOLING_OFF_THRESHOLD":          3,
+	"COOLING_OFF_BASE_DURATION":      "1h",
+	"CHEAP_RUNG_RETEST_INTERVAL":     "24h",
+}
+
+var optionalKeys = []string{
+	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
+	"LLM_MODEL_REPHRASE", "LLM_MODEL_GHOST",
+	"EMBED_URL", "CONFIG_ENCRYPTION_KEY", "EXT_JWT_SECRET",
+	"ADZUNA_APP_ID", "ADZUNA_APP_KEY",
+	"DJINNI_EMAIL", "DJINNI_PASSWORD", "JOBLEADS_EMAIL", "JOBLEADS_PASSWORD",
+	"JOOBLE_API_KEY", "FLARESOLVERR_URL",
+	"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
+	"LEVELS_FYI_CSV", "SALARY_FLOOR_USD", "CEREBRAS_API_KEY",
+	"OPENROUTER_API_KEY", "OPENROUTER_SITE_URL", "OPENROUTER_APP_NAME",
+	"BROWSER_IDENTITY_VERSION",
+}
