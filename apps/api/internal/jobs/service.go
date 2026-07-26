@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/apperr"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
@@ -303,7 +304,7 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	} else {
 		p, err := s.q.GetDefaultProfile(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("precondition failed: no profile exists yet")
+			return nil, apperr.Precondition("no profile exists yet")
 		}
 		profID = dbutil.UUIDString(p.ID)
 	}
@@ -317,7 +318,7 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	}
 	b, _ := has.(bool)
 	if !b {
-		return nil, fmt.Errorf("precondition failed: profile has no RenderCV config")
+		return nil, apperr.Precondition("profile has no RenderCV config")
 	}
 
 	rec := activity.New(ctx, s.q, "generate", fmt.Sprintf("%s — %s", jobDto.Company, jobDto.Title), &id, nil, "")
