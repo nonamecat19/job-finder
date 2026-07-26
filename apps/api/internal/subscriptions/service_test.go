@@ -3,6 +3,7 @@ package subscriptions_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -261,5 +262,78 @@ func TestCreateJobgetherSubscription_RejectsSingleJobPostingURL(t *testing.T) {
 	svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
 	if _, err := svc.Create(context.Background(), "jobgether", "https://jobgether.com/jobs/senior-backend-engineer-go-waveform-labs-77213", nil, true, ""); err == nil {
 		t.Fatal("expected single-job-posting jobgether url to be rejected")
+	}
+}
+
+func TestValidateDjinniSubscriptionURL(t *testing.T) {
+	tests := []struct {
+		name        string
+		url         string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "dashboard URL accepted",
+			url:     "https://djinni.co/my/dashboard/subs/123/",
+			wantErr: false,
+		},
+		{
+			name:    "basic-search URL with all filters accepted",
+			url:     "https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Node.js&salary=3000&exp_level=2y&exp_level=3y&exp_level=4y&exp_level=5y&employment=remote",
+			wantErr: false,
+		},
+		{
+			name:    "basic-search URL with only search_type+primary_keyword accepted",
+			url:     "https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Golang",
+			wantErr: false,
+		},
+		{
+			name:    "basic-search URL with page=N already present accepted",
+			url:     "https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Golang&page=4",
+			wantErr: false,
+		},
+		{
+			name:        "neither-shape URL rejected",
+			url:         "https://djinni.co/some/random/path",
+			wantErr:     true,
+			errContains: "must be a /jobs basic-search URL or a /my/dashboard/subs",
+		},
+		{
+			name:        "non-djinni.co host rejected",
+			url:         "https://example.com/jobs",
+			wantErr:     true,
+			errContains: "must be a djinni.co url",
+		},
+		{
+			name:        "single-job-posting path without search_type rejected",
+			url:         "https://djinni.co/jobs/12345",
+			wantErr:     true,
+			errContains: "looks like a single job posting",
+		},
+		{
+			name:        "/companies path rejected",
+			url:         "https://djinni.co/companies/some-company",
+			wantErr:     true,
+			errContains: "must be a /jobs basic-search URL or a /my/dashboard/subs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := subscriptions.NewService(&fakeRepo{}, &fakeSources{})
+			_, err := svc.Create(context.Background(), "djinni", tt.url, nil, true, "")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected no error, got: %v", err)
+				}
+			}
+		})
 	}
 }

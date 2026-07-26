@@ -148,6 +148,8 @@ func validateSubscriptionURL(sourceKey, rawURL string) error {
 		return validateHimalayasSubscriptionURL(rawURL)
 	case "jobgether":
 		return validateJobgetherSubscriptionURL(rawURL)
+	case "djinni":
+		return validateDjinniSubscriptionURL(rawURL)
 	default:
 		return nil
 	}
@@ -249,6 +251,34 @@ func validateJobLeadsSubscriptionURL(rawURL string) error {
 		return fmt.Errorf("jobleads subscription url %q must be a jobleads.com search url", rawURL)
 	}
 	return nil
+}
+
+// validateDjinniSubscriptionURL accepts both the dashboard shape
+// (/my/dashboard/subs/<id>/) and the basic-search shape
+// (/jobs/?search_type=basic-search&...), and rejects neither-shape URLs with a
+// human-readable reason (spec FR-007, SC-007; contracts/djinni-url-shapes.md).
+func validateDjinniSubscriptionURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("djinni subscription url %q is not a valid URL", rawURL)
+	}
+	host := strings.ToLower(parsed.Host)
+	if host != "djinni.co" && host != "www.djinni.co" {
+		return fmt.Errorf("djinni subscription url %q must be a djinni.co url", rawURL)
+	}
+	if strings.HasPrefix(parsed.Path, "/my/dashboard/subs/") &&
+		strings.TrimPrefix(parsed.Path, "/my/dashboard/subs/") != "" {
+		return nil
+	}
+	if (parsed.Path == "/jobs" || parsed.Path == "/jobs/") &&
+		parsed.Query().Get("search_type") == "basic-search" {
+		return nil
+	}
+	if strings.HasPrefix(parsed.Path, "/jobs/") &&
+		parsed.Query().Get("search_type") != "basic-search" {
+		return fmt.Errorf("djinni subscription url %q looks like a single job posting, not a search results page", rawURL)
+	}
+	return fmt.Errorf("djinni subscription url %q must be a /jobs basic-search URL or a /my/dashboard/subs/<id>/ dashboard URL", rawURL)
 }
 
 // validateJobgetherSubscriptionURL rejects a Jobgether subscription URL that

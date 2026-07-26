@@ -113,11 +113,18 @@ func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[
 	}
 
 	if query.SubscriptionURL != "" {
-		jobs, err := d.scrapeSubscription(ctx, query.SubscriptionURL, headers)
-		if len(jobs) == 0 && err == nil {
-			slog.Warn("djinni subscription returned 0 jobs — markup may have changed", "url", query.SubscriptionURL)
+		parsed, err := url.Parse(query.SubscriptionURL)
+		if err != nil {
+			return nil, fmt.Errorf("djinni: invalid subscription url %q: %w", query.SubscriptionURL, err)
 		}
-		return jobs, err
+		switch djinniDetectShape(parsed) {
+		case DjinniModeDashboard:
+			return d.scrapeDashboard(ctx, query.SubscriptionURL, headers)
+		case DjinniModeBasicSearch:
+			return d.scrapeBasicSearch(ctx, query.SubscriptionURL, headers)
+		default:
+			return nil, fmt.Errorf("djinni subscription url is neither dashboard nor basic-search shape: %s", query.SubscriptionURL)
+		}
 	}
 
 	params := url.Values{}
@@ -140,15 +147,14 @@ func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[
 	return jobs, nil
 }
 
-// scrapeSubscription pages through a logged-in djinni "subs" listing
-// (https://djinni.co/my/dashboard/subs/{id}/) — same card markup as the
-// public /jobs/ search, reused via parseDjinniCards. Stops on an empty page,
-// a hard page cap, or the page redirecting back to an already-seen first
-// card (guards an infinite pagination loop).
-func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
-	base, err := url.Parse(subURL)
+// paginateDjinni pages through a djinni search-results URL starting from the
+// given firstPageURL. Stops on an empty page, a hard page cap (50), or the
+// page redirecting back to an already-seen first card (guards an infinite
+// pagination loop). Used by both scrapeDashboard and scrapeBasicSearch.
+func (d DjinniAdapter) paginateDjinni(ctx context.Context, firstPageURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
+	base, err := url.Parse(firstPageURL)
 	if err != nil {
-		return nil, fmt.Errorf("djinni: invalid subscription url %q: %w", subURL, err)
+		return nil, fmt.Errorf("djinni: invalid pagination url %q: %w", firstPageURL, err)
 	}
 
 	var jobs []dto.NormalizedJob
@@ -161,9 +167,6 @@ func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, he
 
 		doc, err := d.fetchDoc(ctx, pageURL.String(), headers)
 		if err != nil {
-			// The first page failing (login required, re-login failed, or an
-			// unreachable host) is fatal; a later page failing just ends
-			// pagination with whatever was collected.
 			if page == 1 {
 				return nil, err
 			}
@@ -183,6 +186,43 @@ func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, he
 		jobs = append(jobs, cards...)
 	}
 	return jobs, nil
+}
+
+// scrapeDashboard pages through a logged-in djinni dashboard subscription
+// (https://djinni.co/my/dashboard/subs/{id}/) — same card markup as the
+// public /jobs/ search, reused via parseDjinniCards.
+func (d DjinniAdapter) scrapeDashboard(ctx context.Context, subURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
+	slog.Info("djinni: running dashboard subscription", "url", subURL)
+	jobs, err := d.paginateDjinni(ctx, subURL, headers)
+	if len(jobs) == 0 && err == nil {
+		slog.Warn("djinni dashboard subscription returned 0 jobs — markup may have changed", "url", subURL)
+	}
+	return jobs, err
+}
+
+// scrapeBasicSearch pages through a public basic-search URL
+// (https://djinni.co/jobs/?search_type=basic-search&...). It forces pagination
+// starting at page=1 regardless of any page param in the saved URL (FR-003,
+// SC-002), preserves all other query params verbatim, and reuses the shared
+// paginateDjinni loop (including the single-page / empty-page / redirect-loop
+// / 50-page cap guards from research.md R1).
+func (d DjinniAdapter) scrapeBasicSearch(ctx context.Context, subURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
+	filters, _ := ParseBasicSearch(subURL)
+	slog.Info("djinni: running basic-search", "url", subURL, "filters", filters)
+
+	parsed, err := url.Parse(subURL)
+	if err != nil {
+		return nil, fmt.Errorf("djinni basic-search: invalid subscription url %q: %w", subURL, err)
+	}
+	q := parsed.Query()
+	q.Set("page", "1")
+	parsed.RawQuery = q.Encode()
+
+	jobs, err := d.paginateDjinni(ctx, parsed.String(), headers)
+	if len(jobs) == 0 && err == nil {
+		slog.Warn("djinni basic-search returned 0 jobs — markup may have changed", "url", subURL)
+	}
+	return jobs, err
 }
 
 // djinniIsLoginPage reports whether doc is djinni's /login page (served with a
