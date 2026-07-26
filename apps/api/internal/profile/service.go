@@ -13,6 +13,7 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/domain"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/llm"
@@ -44,14 +45,14 @@ func (s *Service) List(ctx context.Context) ([]dto.ProfileDto, error) {
 	return out, nil
 }
 
-func (s *Service) Get(ctx context.Context, id string) (sqlcgen.Profile, error) {
+func (s *Service) Get(ctx context.Context, id string) (domain.Profile, error) {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
-		return sqlcgen.Profile{}, err
+		return domain.Profile{}, err
 	}
 	row, err := s.q.GetProfile(ctx, uid)
 	if err != nil {
-		return sqlcgen.Profile{}, fmt.Errorf("profile %s not found", id)
+		return domain.Profile{}, fmt.Errorf("profile %s not found", id)
 	}
 	return row, nil
 }
@@ -64,10 +65,10 @@ func (s *Service) GetDto(ctx context.Context, id string) (dto.ProfileDto, error)
 	return s.toDto(row), nil
 }
 
-func (s *Service) GetDefault(ctx context.Context) (sqlcgen.Profile, error) {
+func (s *Service) GetDefault(ctx context.Context) (domain.Profile, error) {
 	row, err := s.q.GetDefaultProfile(ctx)
 	if err != nil {
-		return sqlcgen.Profile{}, fmt.Errorf("no profile exists yet — create one first")
+		return domain.Profile{}, fmt.Errorf("no profile exists yet — create one first")
 	}
 	return row, nil
 }
@@ -96,7 +97,7 @@ func (s *Service) Create(ctx context.Context, name string, rendercvYaml string, 
 	if err != nil {
 		return dto.ProfileDto{}, err
 	}
-	id := dbutil.UUIDString(row.ID)
+	id := row.ID
 	if rendercvYaml != "" {
 		if err := s.RefreshEmbedding(ctx, id); err != nil {
 			_ = err
@@ -155,7 +156,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Pr
 // masterFor loads and parses the profile's current RendercvMaster, returning
 // an empty (cv.name only) master if the profile has no config yet — a valid,
 // non-error state (FR-012).
-func (s *Service) masterFor(row sqlcgen.Profile) (generation.RendercvMaster, error) {
+func (s *Service) masterFor(row domain.Profile) (generation.RendercvMaster, error) {
 	if row.RendercvConfig == nil {
 		return generation.RendercvMaster{"cv": map[string]any{"name": row.Name}}, nil
 	}
@@ -270,12 +271,15 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 	}
 
 	// Check if a default profile exists to update
-	var profileRow sqlcgen.Profile
+	var profileRow domain.Profile
 	defaultProf, err := s.GetDefault(ctx)
 	if err == nil {
-		// Update existing profile
+		uid, parseErr := dbutil.ParseUUID(defaultProf.ID)
+		if parseErr != nil {
+			return dto.ProfileDto{}, parseErr
+		}
 		params := sqlcgen.UpdateProfileParams{
-			ID:             defaultProf.ID,
+			ID:             uid,
 			Name:           &name,
 			RendercvYaml:   &yamlText,
 			RendercvConfig: configJSON,
@@ -283,7 +287,7 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 		if err := s.q.UpdateProfile(ctx, params); err != nil {
 			return dto.ProfileDto{}, fmt.Errorf("failed to update profile: %w", err)
 		}
-		profileRow, err = s.Get(ctx, dbutil.UUIDString(defaultProf.ID))
+		profileRow, err = s.Get(ctx, defaultProf.ID)
 		if err != nil {
 			return dto.ProfileDto{}, err
 		}
@@ -300,7 +304,7 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 	}
 
 	// Refresh embedding
-	id := dbutil.UUIDString(profileRow.ID)
+	id := profileRow.ID
 	if err := s.RefreshEmbedding(ctx, id); err != nil {
 		slog.Error("failed to refresh embedding after config upload", "error", err)
 	}
@@ -380,12 +384,12 @@ func (s *Service) RefreshEmbedding(ctx context.Context, id string) error {
 	return s.q.UpdateProfileEmbedding(ctx, sqlcgen.UpdateProfileEmbeddingParams{ID: uid, Embedding: &vec, EmbedModel: &model})
 }
 
-func (s *Service) toDto(p sqlcgen.Profile) dto.ProfileDto {
+func (s *Service) toDto(p domain.Profile) dto.ProfileDto {
 	out := dto.ProfileDto{
-		ID:         dbutil.UUIDString(p.ID),
+		ID:         p.ID,
 		Name:       p.Name,
 		ExtraNotes: p.ExtraNotes,
-		UpdatedAt:  dbutil.Timestamp(p.UpdatedAt),
+		UpdatedAt:  p.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 	if p.RendercvConfig != nil {
 		var master generation.RendercvMaster

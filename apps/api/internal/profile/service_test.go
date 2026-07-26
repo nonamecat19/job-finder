@@ -5,17 +5,17 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/domain"
 	"github.com/job-finder/api/internal/profile"
 )
 
 type fakeRepo struct {
 	profile.Repository
-	rows    []sqlcgen.Profile
+	rows    []domain.Profile
 	listErr error
 }
 
-func (f *fakeRepo) ListProfiles(ctx context.Context) ([]sqlcgen.Profile, error) {
+func (f *fakeRepo) ListProfiles(ctx context.Context) ([]domain.Profile, error) {
 	return f.rows, f.listErr
 }
 

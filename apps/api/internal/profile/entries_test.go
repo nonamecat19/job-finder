@@ -5,19 +5,19 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/domain"
 	"github.com/job-finder/api/internal/profile"
 )
 
 type entriesFakeRepo struct {
 	profile.Repository
-	row    sqlcgen.Profile
+	row    domain.Profile
 	getErr error
 }
 
-func (f *entriesFakeRepo) GetDefaultProfile(ctx context.Context) (sqlcgen.Profile, error) {
+func (f *entriesFakeRepo) GetDefaultProfile(ctx context.Context) (domain.Profile, error) {
 	if f.getErr != nil {
-		return sqlcgen.Profile{}, f.getErr
+		return domain.Profile{}, f.getErr
 	}
 	return f.row, nil
 }
@@ -59,12 +59,11 @@ func TestProfileEntries_BuildsSourceLabel(t *testing.T) {
 			"company":   "StartupLab",
 			"position":  "Junior Developer",
 			"startDate": "2017-01-15",
-			// no end date -> "Present"
 			"highlights": []any{"Built MVPs for 4 early-stage startups"},
 		},
 	})
 
-	svc := profile.NewService(&entriesFakeRepo{row: sqlcgen.Profile{RendercvConfig: config}}, nil, "", "")
+	svc := profile.NewService(&entriesFakeRepo{row: domain.Profile{RendercvConfig: config}}, nil, "", "")
 	out, err := svc.ProfileEntries(context.Background())
 	if err != nil {
 		t.Fatalf("ProfileEntries: %v", err)
@@ -89,7 +88,7 @@ func TestProfileEntries_BuildsSourceLabel(t *testing.T) {
 }
 
 func TestProfileEntries_MissingConfig(t *testing.T) {
-	svc := profile.NewService(&entriesFakeRepo{row: sqlcgen.Profile{}}, nil, "", "")
+	svc := profile.NewService(&entriesFakeRepo{row: domain.Profile{}}, nil, "", "")
 	out, err := svc.ProfileEntries(context.Background())
 	if err != nil {
 		t.Fatalf("ProfileEntries: %v", err)

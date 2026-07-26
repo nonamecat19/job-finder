@@ -6,16 +6,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/domain"
 )
 
-// Repository is the outbound persistence port for the profile use-case.
-// *sqlcgen.Queries satisfies it structurally.
 type Repository interface {
-	CreateProfile(ctx context.Context, arg sqlcgen.CreateProfileParams) (sqlcgen.Profile, error)
+	CreateProfile(ctx context.Context, arg sqlcgen.CreateProfileParams) (domain.Profile, error)
 	DeleteProfile(ctx context.Context, id pgtype.UUID) error
-	GetDefaultProfile(ctx context.Context) (sqlcgen.Profile, error)
-	GetProfile(ctx context.Context, id pgtype.UUID) (sqlcgen.Profile, error)
-	ListProfiles(ctx context.Context) ([]sqlcgen.Profile, error)
+	GetDefaultProfile(ctx context.Context) (domain.Profile, error)
+	GetProfile(ctx context.Context, id pgtype.UUID) (domain.Profile, error)
+	ListProfiles(ctx context.Context) ([]domain.Profile, error)
 	ProfileHasConfig(ctx context.Context, id pgtype.UUID) (interface{}, error)
 	ProfileHasEmbedding(ctx context.Context, id pgtype.UUID) (interface{}, error)
 	ProfileSimilarity(ctx context.Context, arg sqlcgen.ProfileSimilarityParams) (float64, error)

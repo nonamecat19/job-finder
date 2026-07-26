@@ -8,29 +8,29 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/domain"
 	"github.com/job-finder/api/internal/profile"
 )
 
 type resumeFakeRepo struct {
 	profile.Repository
-	row sqlcgen.Profile
+	row domain.Profile
 }
 
-func (f *resumeFakeRepo) GetProfile(ctx context.Context, id pgtype.UUID) (sqlcgen.Profile, error) {
+func (f *resumeFakeRepo) GetProfile(ctx context.Context, id pgtype.UUID) (domain.Profile, error) {
 	return f.row, nil
 }
 
 func (f *resumeFakeRepo) UpdateProfile(ctx context.Context, params sqlcgen.UpdateProfileParams) error {
-	f.row.RendercvYaml = params.RendercvYaml
-	f.row.RendercvConfig = params.RendercvConfig
+	if v := params.RendercvYaml; v != nil {
+		f.row.RendercvYaml = v
+	}
+	if v := params.RendercvConfig; v != nil {
+		f.row.RendercvConfig = v
+	}
 	return nil
 }
 
-// TestGetResume_SocialNetworksSurfaced reproduces the reported bug (uploaded
-// config's LinkedIn/GitHub/Telegram not showing on the Profile tab) at the
-// full service level — profile.Service.GetResume, not just the generation
-// package's mapping function in isolation.
 func TestGetResume_SocialNetworksSurfaced(t *testing.T) {
 	master := map[string]any{
 		"cv": map[string]any{
@@ -47,11 +47,9 @@ func TestGetResume_SocialNetworksSurfaced(t *testing.T) {
 		t.Fatalf("marshal fixture: %v", err)
 	}
 
-	uid, err := dbutil.ParseUUID("00000000-0000-0000-0000-000000000001")
-	if err != nil {
-		t.Fatalf("ParseUUID: %v", err)
-	}
-	repo := &resumeFakeRepo{row: sqlcgen.Profile{ID: uid, Name: "Test User", RendercvConfig: configJSON}}
+	repo := &resumeFakeRepo{row: domain.Profile{
+		ID: "00000000-0000-0000-0000-000000000001", Name: "Test User", RendercvConfig: configJSON,
+	}}
 	svc := profile.NewService(repo, nil, "", "")
 
 	resume, err := svc.GetResume(context.Background(), "00000000-0000-0000-0000-000000000001")

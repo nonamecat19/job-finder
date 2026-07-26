@@ -6,9 +6,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/domain"
 	"github.com/job-finder/api/internal/profile"
 )
 
@@ -38,18 +37,14 @@ const testMasterYAMLAsJSON = `{
 
 type extProfileFakeRepo struct {
 	profile.Repository
-	row sqlcgen.Profile
+	row domain.Profile
 }
 
-func (f *extProfileFakeRepo) GetDefaultProfile(ctx context.Context) (sqlcgen.Profile, error) {
+func (f *extProfileFakeRepo) GetDefaultProfile(ctx context.Context) (domain.Profile, error) {
 	return f.row, nil
 }
 
-func (f *extProfileFakeRepo) GetProfile(ctx context.Context, id pgtype.UUID) (sqlcgen.Profile, error) {
-	return f.row, nil
-}
-
-func testProfileRow(t *testing.T) sqlcgen.Profile {
+func testProfileRow(t *testing.T) domain.Profile {
 	t.Helper()
 	var master map[string]any
 	if err := json.Unmarshal([]byte(testMasterYAMLAsJSON), &master); err != nil {
@@ -59,8 +54,8 @@ func testProfileRow(t *testing.T) sqlcgen.Profile {
 	if err != nil {
 		t.Fatalf("marshal fixture: %v", err)
 	}
-	return sqlcgen.Profile{
-		ID:             pgtype.UUID{Bytes: uuid.New(), Valid: true},
+	return domain.Profile{
+		ID:             uuid.New().String(),
 		Name:           "Default",
 		RendercvConfig: raw,
 	}
@@ -116,7 +111,7 @@ func TestExtProfile_MapsFields(t *testing.T) {
 }
 
 func TestExtProfile_NoConfig(t *testing.T) {
-	repo := &extProfileFakeRepo{row: sqlcgen.Profile{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Name: "Empty"}}
+	repo := &extProfileFakeRepo{row: domain.Profile{ID: uuid.New().String(), Name: "Empty"}}
 	svc := profile.NewService(repo, nil, "", "")
 
 	out, err := svc.ExtProfile(context.Background())
