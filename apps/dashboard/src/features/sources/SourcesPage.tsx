@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle, Clock, ListFilter, Play, Plus, RefreshCw, T
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { JobSourceDto, SavedSearchDto, SearchQuery, SubscriptionDto } from '@job-finder/shared';
+import { summarizeDjinniBasicSearch } from './djinniSearchSummary';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import {
   Button,
@@ -417,11 +418,19 @@ function NewSubscriptionForm({ onSubmit }: { onSubmit: (body: { sourceKey: strin
 }
 
 function SubscriptionRow({ sub, onRun, onDelete, running }: { sub: SubscriptionDto; onRun: () => void; onDelete: () => void; running: boolean }) {
+  const basicSearchLabel = sub.sourceKey === 'djinni' ? summarizeDjinniBasicSearch(sub.url) : null
+  const djinniModeMarker =
+    sub.sourceKey === 'djinni' ? (
+      <span className="ml-1 text-xs text-faint">
+        {basicSearchLabel !== null ? '· basic-search' : '· dashboard'}
+      </span>
+    ) : null
   return (
     <li className="flex flex-col gap-2 rounded-md border border-border bg-elevated/60 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <span className="font-medium text-fg">{sub.name ?? sub.sourceKey}</span>
+        <span className="font-medium text-fg">{basicSearchLabel ?? sub.name ?? sub.sourceKey}</span>
         <span className="ml-2 text-xs text-muted">{sub.sourceKey}</span>
+        {djinniModeMarker}
         <div className="truncate text-xs text-faint" title={sub.url}>{sub.url}</div>
         {sub.lastRunAt ? (
           <span className="mr-2 text-xs text-faint">
