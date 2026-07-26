@@ -4,21 +4,20 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/domain"
 )
 
 type ProfileStore interface {
-	Get(ctx context.Context, id string) (sqlcgen.Profile, error)
-	GetDefault(ctx context.Context) (sqlcgen.Profile, error)
+	Get(ctx context.Context, id string) (domain.Profile, error)
+	GetDefault(ctx context.Context) (domain.Profile, error)
 }
 
-func MasterFromProfile(prof sqlcgen.Profile) (RendercvMaster, error) {
-	if prof.RendercvConfig == nil {
+func MasterFromConfig(rendercvConfig []byte) (RendercvMaster, error) {
+	if rendercvConfig == nil {
 		return nil, nil
 	}
 	var master RendercvMaster
-	if err := json.Unmarshal(prof.RendercvConfig, &master); err != nil {
+	if err := json.Unmarshal(rendercvConfig, &master); err != nil {
 		return nil, err
 	}
 	return master, nil
@@ -29,9 +28,9 @@ func GetDefaultMasterID(ctx context.Context, store ProfileStore) (string, Render
 	if err != nil {
 		return "", nil, err
 	}
-	master, err := MasterFromProfile(prof)
+	master, err := MasterFromConfig(prof.RendercvConfig)
 	if err != nil {
 		return "", nil, err
 	}
-	return dbutil.UUIDString(prof.ID), master, nil
+	return prof.ID, master, nil
 }

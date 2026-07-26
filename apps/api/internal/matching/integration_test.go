@@ -86,7 +86,7 @@ func TestMatchJob_SkipsProfileWithoutConfig(t *testing.T) {
 	}
 
 	profiles := profile.NewService(testDB.Queries, noopLLM{}, "nomic-embed-text", "rendercv")
-	svc := matching.NewService(testDB.Queries, profiles, noopLLM{}, 0.5, "")
+	svc := matching.NewService(matching.NewSqlcRepository(testDB.Queries), profiles, noopLLM{}, 0.5, "")
 
 	_, err = svc.MatchJob(ctx, dbutil.UUIDString(job.ID), nil)
 	if err != matching.ErrNoProfileConfig {

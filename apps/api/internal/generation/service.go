@@ -13,6 +13,7 @@ import (
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/domain"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/strutil"
@@ -74,7 +75,7 @@ func sanitize(s string) string {
 }
 
 func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMaster, error) {
-	var prof sqlcgen.Profile
+	var prof domain.Profile
 	var err error
 	if profileID != nil && *profileID != "" {
 		prof, err = s.profiles.Get(ctx, *profileID)
@@ -82,7 +83,7 @@ func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMas
 		prof, err = s.profiles.GetDefault(ctx)
 	}
 	if err == nil && prof.RendercvConfig != nil {
-		return MasterFromProfile(prof)
+		return MasterFromConfig(prof.RendercvConfig)
 	}
 
 	// Dev fallback to masterPath if no profile exists
@@ -235,7 +236,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("job %s not found", jobID)
 	}
 
-	var prof sqlcgen.Profile
+	var prof domain.Profile
 	if profileID != nil {
 		prof, err = s.profiles.Get(ctx, *profileID)
 	} else {
@@ -247,7 +248,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	if prof.RendercvConfig == nil {
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("precondition failed: profile has no RenderCV config — upload one first")
 	}
-	master, err := MasterFromProfile(prof)
+	master, err := MasterFromConfig(prof.RendercvConfig)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
@@ -465,7 +466,7 @@ func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.Gene
 	if prof.RendercvConfig == nil {
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("profile has no RenderCV config")
 	}
-	master, err := MasterFromProfile(prof)
+	master, err := MasterFromConfig(prof.RendercvConfig)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
