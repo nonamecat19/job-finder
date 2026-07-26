@@ -30,6 +30,8 @@ vi.mock('./lib/api', () => ({
     stats: vi.fn(),
     postage: { responseRate: vi.fn() },
     notifications: { list: vi.fn(), markSeen: vi.fn(), unseenCount: vi.fn() },
+    roster: { list: vi.fn(), register: vi.fn(), remove: vi.fn(), candidates: vi.fn(), accept: vi.fn(), reject: vi.fn(), discover: vi.fn() },
+    hosts: { retrievalStatus: vi.fn(), clearRungPreference: vi.fn(), clearCookies: vi.fn(), overrideCoolingOff: vi.fn() },
   },
 }))
 
@@ -44,6 +46,8 @@ beforeEach(() => {
   vi.mocked(api.applications.list).mockResolvedValue([])
   vi.mocked(api.notifications.unseenCount).mockResolvedValue({ count: 0 })
   vi.mocked(api.notifications.list).mockResolvedValue([])
+  vi.mocked(api.roster.list).mockResolvedValue({ employers: [] })
+  vi.mocked(api.roster.candidates).mockResolvedValue({ candidates: [] })
   vi.mocked(api.postage.responseRate).mockResolvedValue({
     buckets: [],
     totalApps: 0,
