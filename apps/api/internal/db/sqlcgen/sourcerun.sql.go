@@ -45,7 +45,7 @@ func (q *Queries) FinishSourceRunOk(ctx context.Context, arg FinishSourceRunOkPa
 const insertSourceRun = `-- name: InsertSourceRun :one
 INSERT INTO "SourceRun" ("sourceId", "searchId")
 VALUES ($1, $2)
-RETURNING id, "sourceId", "searchId", "startedAt", "finishedAt", ok, found, new, error
+RETURNING id, "sourceId", "searchId", "startedAt", "finishedAt", ok, found, new, error, "employerDetail", verdict, "blockedCount", "blockReason"
 `
 
 type InsertSourceRunParams struct {
@@ -66,6 +66,10 @@ func (q *Queries) InsertSourceRun(ctx context.Context, arg InsertSourceRunParams
 		&i.Found,
 		&i.New,
 		&i.Error,
+		&i.EmployerDetail,
+		&i.Verdict,
+		&i.BlockedCount,
+		&i.BlockReason,
 	)
 	return i, err
 }
@@ -80,7 +84,10 @@ SELECT
   sr."ok" AS ok,
   sr."found" AS found,
   sr."new" AS new,
-  sr."error" AS error
+  sr."error" AS error,
+  sr."verdict" AS verdict,
+  sr."blockedCount" AS blocked_count,
+  sr."blockReason" AS block_reason
 FROM "SourceRun" sr
 JOIN "JobSource" js ON js."id" = sr."sourceId"
 ORDER BY sr."startedAt" DESC
@@ -88,15 +95,18 @@ LIMIT $1
 `
 
 type RecentRunsJoinedRow struct {
-	ID         pgtype.UUID      `json:"id"`
-	SourceKey  string           `json:"source_key"`
-	SearchID   *string          `json:"search_id"`
-	StartedAt  pgtype.Timestamp `json:"started_at"`
-	FinishedAt pgtype.Timestamp `json:"finished_at"`
-	Ok         *bool            `json:"ok"`
-	Found      int32            `json:"found"`
-	New        int32            `json:"new"`
-	Error      *string          `json:"error"`
+	ID           pgtype.UUID      `json:"id"`
+	SourceKey    string           `json:"source_key"`
+	SearchID     *string          `json:"search_id"`
+	StartedAt    pgtype.Timestamp `json:"started_at"`
+	FinishedAt   pgtype.Timestamp `json:"finished_at"`
+	Ok           *bool            `json:"ok"`
+	Found        int32            `json:"found"`
+	New          int32            `json:"new"`
+	Error        *string          `json:"error"`
+	Verdict      *string          `json:"verdict"`
+	BlockedCount int32            `json:"blocked_count"`
+	BlockReason  *string          `json:"block_reason"`
 }
 
 func (q *Queries) RecentRunsJoined(ctx context.Context, limit int32) ([]RecentRunsJoinedRow, error) {
@@ -118,6 +128,9 @@ func (q *Queries) RecentRunsJoined(ctx context.Context, limit int32) ([]RecentRu
 			&i.Found,
 			&i.New,
 			&i.Error,
+			&i.Verdict,
+			&i.BlockedCount,
+			&i.BlockReason,
 		); err != nil {
 			return nil, err
 		}
@@ -159,4 +172,45 @@ func (q *Queries) RecentSourceRunsForSource(ctx context.Context, arg RecentSourc
 		return nil, err
 	}
 	return items, nil
+}
+
+const setSourceRunEmployerDetail = `-- name: SetSourceRunEmployerDetail :exec
+UPDATE "SourceRun" SET "employerDetail" = $2 WHERE "id" = $1
+`
+
+type SetSourceRunEmployerDetailParams struct {
+	ID             pgtype.UUID `json:"id"`
+	EmployerDetail []byte      `json:"employerDetail"`
+}
+
+// Per-employer outcomes for a fan-out run (013, FR-020, FR-023) — set before
+// FinishSourceRunOk/Error so both terminal states carry the same detail.
+func (q *Queries) SetSourceRunEmployerDetail(ctx context.Context, arg SetSourceRunEmployerDetailParams) error {
+	_, err := q.db.Exec(ctx, setSourceRunEmployerDetail, arg.ID, arg.EmployerDetail)
+	return err
+}
+
+const setSourceRunVerdict = `-- name: SetSourceRunVerdict :exec
+UPDATE "SourceRun" SET
+    "verdict" = $2,
+    "blockedCount" = $3,
+    "blockReason" = $4
+WHERE "id" = $1
+`
+
+type SetSourceRunVerdictParams struct {
+	ID           pgtype.UUID `json:"id"`
+	Verdict      *string     `json:"verdict"`
+	BlockedCount int32       `json:"blockedCount"`
+	BlockReason  *string     `json:"blockReason"`
+}
+
+func (q *Queries) SetSourceRunVerdict(ctx context.Context, arg SetSourceRunVerdictParams) error {
+	_, err := q.db.Exec(ctx, setSourceRunVerdict,
+		arg.ID,
+		arg.Verdict,
+		arg.BlockedCount,
+		arg.BlockReason,
+	)
+	return err
 }

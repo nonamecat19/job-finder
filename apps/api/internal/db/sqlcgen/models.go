@@ -54,6 +54,16 @@ type ApplicationOutcome struct {
 	CreatedAt     pgtype.Timestamp `json:"createdAt"`
 }
 
+type BoardCandidate struct {
+	ID                 pgtype.UUID      `json:"id"`
+	Vendor             string           `json:"vendor"`
+	EmployerIdentifier string           `json:"employerIdentifier"`
+	InferredFromJobId  pgtype.UUID      `json:"inferredFromJobId"`
+	State              string           `json:"state"`
+	CreatedAt          pgtype.Timestamp `json:"createdAt"`
+	DecidedAt          pgtype.Timestamp `json:"decidedAt"`
+}
+
 type Company struct {
 	ID              pgtype.UUID      `json:"id"`
 	Name            string           `json:"name"`
@@ -92,6 +102,19 @@ type ContactConnection struct {
 	RelationshipType string           `json:"relationshipType"`
 	Strength         float32          `json:"strength"`
 	CreatedAt        pgtype.Timestamp `json:"createdAt"`
+}
+
+type EmployerBoard struct {
+	ID                   pgtype.UUID      `json:"id"`
+	Vendor               string           `json:"vendor"`
+	EmployerIdentifier   string           `json:"employerIdentifier"`
+	DisplayName          string           `json:"displayName"`
+	AddedVia             string           `json:"addedVia"`
+	Enabled              bool             `json:"enabled"`
+	LastSuccessAt        pgtype.Timestamp `json:"lastSuccessAt"`
+	LastPostingCount     int32            `json:"lastPostingCount"`
+	ConsecutiveEmptyRuns int32            `json:"consecutiveEmptyRuns"`
+	CreatedAt            pgtype.Timestamp `json:"createdAt"`
 }
 
 type ExtBootstrapCode struct {
@@ -135,6 +158,25 @@ type GeneratedDocument struct {
 	Vacancy   *string          `json:"vacancy"`
 }
 
+type HostRetrievalState struct {
+	ID                 pgtype.UUID        `json:"id"`
+	Host               string             `json:"host"`
+	IdentityVersion    string             `json:"identity_version"`
+	CurrentRung        string             `json:"current_rung"`
+	RungLastVerifiedAt pgtype.Timestamptz `json:"rung_last_verified_at"`
+	Cookies            []byte             `json:"cookies"`
+	ConsecutiveBlocks  int32              `json:"consecutive_blocks"`
+	CoolingOffUntil    pgtype.Timestamptz `json:"cooling_off_until"`
+	LastBlockAt        pgtype.Timestamptz `json:"last_block_at"`
+	LastBlockReason    *string            `json:"last_block_reason"`
+	CrawlDelaySeconds  *int32             `json:"crawl_delay_seconds"`
+	BudgetPeriodStart  pgtype.Timestamptz `json:"budget_period_start"`
+	BudgetUsed         int32              `json:"budget_used"`
+	BudgetLimit        int32              `json:"budget_limit"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Job struct {
 	ID               pgtype.UUID      `json:"id"`
 	DedupeKey        string           `json:"dedupeKey"`
@@ -160,6 +202,7 @@ type Job struct {
 	SalarySource     *string          `json:"salarySource"`
 	SeenCount        int32            `json:"seenCount"`
 	SubscriptionId   pgtype.UUID      `json:"subscriptionId"`
+	SeenOnSources    []string         `json:"seenOnSources"`
 }
 
 type JobContact struct {
@@ -271,15 +314,19 @@ type SavedSearch struct {
 }
 
 type SourceRun struct {
-	ID         pgtype.UUID      `json:"id"`
-	SourceId   pgtype.UUID      `json:"sourceId"`
-	SearchId   *string          `json:"searchId"`
-	StartedAt  pgtype.Timestamp `json:"startedAt"`
-	FinishedAt pgtype.Timestamp `json:"finishedAt"`
-	Ok         *bool            `json:"ok"`
-	Found      int32            `json:"found"`
-	New        int32            `json:"new"`
-	Error      *string          `json:"error"`
+	ID             pgtype.UUID      `json:"id"`
+	SourceId       pgtype.UUID      `json:"sourceId"`
+	SearchId       *string          `json:"searchId"`
+	StartedAt      pgtype.Timestamp `json:"startedAt"`
+	FinishedAt     pgtype.Timestamp `json:"finishedAt"`
+	Ok             *bool            `json:"ok"`
+	Found          int32            `json:"found"`
+	New            int32            `json:"new"`
+	Error          *string          `json:"error"`
+	EmployerDetail []byte           `json:"employerDetail"`
+	Verdict        *string          `json:"verdict"`
+	BlockedCount   int32            `json:"blockedCount"`
+	BlockReason    *string          `json:"blockReason"`
 }
 
 type StarStory struct {
