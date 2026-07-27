@@ -1,4 +1,4 @@
-.PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean \
+.PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean run-all \
 	test test-go test-react test-integration test-e2e test-lint test-db-setup \
 	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install \
 	tygo-generate tygo-check tygo-install
@@ -88,6 +88,12 @@ test-e2e: test-db-setup
 		npx playwright test
 
 test-lint: test-go test-react
+
+# --- run all (infra + backend + frontend) ---
+run-all: up
+	@echo "Starting backend and frontend..."
+	$(MAKE) run-backend &
+	$(MAKE) run-frontend
 
 # --- Go API server ---
 run-backend:
