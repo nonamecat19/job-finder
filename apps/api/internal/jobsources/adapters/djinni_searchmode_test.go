@@ -11,16 +11,6 @@ func TestDjinniDetect(t *testing.T) {
 		want DjinniSearchMode
 	}{
 		{
-			name: "dashboard URL",
-			url:  "https://djinni.co/my/dashboard/subs/123/",
-			want: DjinniModeDashboard,
-		},
-		{
-			name: "dashboard URL without trailing slash",
-			url:  "https://djinni.co/my/dashboard/subs/123",
-			want: DjinniModeDashboard,
-		},
-		{
 			name: "basic-search URL with all filters",
 			url:  "https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Node.js&salary=3000&exp_level=2y&exp_level=3y&exp_level=4y&exp_level=5y&employment=remote",
 			want: DjinniModeBasicSearch,
@@ -51,9 +41,14 @@ func TestDjinniDetect(t *testing.T) {
 			want: DjinniModeBasicSearch,
 		},
 		{
-			name: "www.djinni.co dashboard",
+			name: "dashboard URL — Unknown (no longer supported)",
+			url:  "https://djinni.co/my/dashboard/subs/123/",
+			want: DjinniModeUnknown,
+		},
+		{
+			name: "www.djinni.co dashboard — Unknown (no longer supported)",
 			url:  "https://www.djinni.co/my/dashboard/subs/42/",
-			want: DjinniModeDashboard,
+			want: DjinniModeUnknown,
 		},
 		{
 			name: "/companies/ path — Unknown",

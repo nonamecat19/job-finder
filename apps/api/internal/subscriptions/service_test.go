@@ -273,11 +273,6 @@ func TestValidateDjinniSubscriptionURL(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:    "dashboard URL accepted",
-			url:     "https://djinni.co/my/dashboard/subs/123/",
-			wantErr: false,
-		},
-		{
 			name:    "basic-search URL with all filters accepted",
 			url:     "https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Node.js&salary=3000&exp_level=2y&exp_level=3y&exp_level=4y&exp_level=5y&employment=remote",
 			wantErr: false,
@@ -293,10 +288,27 @@ func TestValidateDjinniSubscriptionURL(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:        "neither-shape URL rejected",
-			url:         "https://djinni.co/some/random/path",
+			name:    "basic-search URL with unrecognized extra param accepted",
+			url:     "https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Go&foo=bar",
+			wantErr: false,
+		},
+		{
+			name:        "dashboard URL rejected",
+			url:         "https://djinni.co/my/dashboard/subs/42/",
 			wantErr:     true,
-			errContains: "must be a /jobs basic-search URL or a /my/dashboard/subs",
+			errContains: "dashboard URLs are no longer supported",
+		},
+		{
+			name:        "single-job-posting path without search_type rejected",
+			url:         "https://djinni.co/jobs/12345",
+			wantErr:     true,
+			errContains: "dashboard URLs are no longer supported",
+		},
+		{
+			name:        "missing search_type rejected",
+			url:         "https://djinni.co/jobs/?primary_keyword=Golang",
+			wantErr:     true,
+			errContains: "dashboard URLs are no longer supported",
 		},
 		{
 			name:        "non-djinni.co host rejected",
@@ -305,16 +317,10 @@ func TestValidateDjinniSubscriptionURL(t *testing.T) {
 			errContains: "must be a djinni.co url",
 		},
 		{
-			name:        "single-job-posting path without search_type rejected",
-			url:         "https://djinni.co/jobs/12345",
-			wantErr:     true,
-			errContains: "looks like a single job posting",
-		},
-		{
 			name:        "/companies path rejected",
 			url:         "https://djinni.co/companies/some-company",
 			wantErr:     true,
-			errContains: "must be a /jobs basic-search URL or a /my/dashboard/subs",
+			errContains: "dashboard URLs are no longer supported",
 		},
 	}
 

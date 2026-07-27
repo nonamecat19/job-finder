@@ -37,7 +37,11 @@ LIMIT $2;
 -- Called by ingestion.persistIfNew when a job with this dedupeKey already
 -- exists: bumps "seenCount" and refreshes "ingestedAt" so the posting's
 -- reappearance is durable, feeding the ghost-job repost signal (005).
-UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now()
+-- Backfills "subscriptionId" when the job wasn't already attributed to one,
+-- so a job first seen by an unrelated run still surfaces under a subscription
+-- that later rediscovers it (dashboard "filter by Subscription").
+UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now(),
+  "subscriptionId" = COALESCE("subscriptionId", $2)
 WHERE "dedupeKey" = $1
 RETURNING *;
 

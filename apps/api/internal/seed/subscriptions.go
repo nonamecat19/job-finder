@@ -18,7 +18,7 @@ var subscriptions = []subscriptionSeed{
 	{
 		sourceKey: "djinni",
 		name:      "Djinni Go Jobs",
-		url:       "https://djinni.io/jobs?technology=golang&remote=true",
+		url:       "https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Golang&salary=1500&exp_level=1y&exp_level=2y&exp_level=3y&employment=remote",
 		enabled:   true,
 	},
 	{

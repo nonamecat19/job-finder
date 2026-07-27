@@ -244,7 +244,10 @@ func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob, subscri
 
 	_, err := h.q.GetJobByDedupeKey(ctx, dedupeKey)
 	if err == nil {
-		if _, err := h.q.RecordJobRepost(ctx, dedupeKey); err != nil {
+		if _, err := h.q.RecordJobRepost(ctx, sqlcgen.RecordJobRepostParams{
+			DedupeKey:      dedupeKey,
+			SubscriptionId: subscriptionID,
+		}); err != nil {
 			slog.Warn("ingestion: record repost failed", "dedupeKey", dedupeKey, "error", err)
 		}
 		return false, nil

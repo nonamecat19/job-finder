@@ -22,7 +22,6 @@ type DjinniSearchMode int
 
 const (
 	DjinniModeUnknown DjinniSearchMode = iota
-	DjinniModeDashboard
 	DjinniModeBasicSearch
 )
 
@@ -47,11 +46,6 @@ func DjinniDetect(rawURL string) DjinniSearchMode {
 // run-time Search() path can route subscriptions without re-validating the
 // host (which was already validated at save time). Called by DjinniDetect.
 func djinniDetectShape(parsed *url.URL) DjinniSearchMode {
-	if strings.HasPrefix(parsed.Path, "/my/dashboard/subs/") &&
-		strings.TrimPrefix(parsed.Path, "/my/dashboard/subs/") != "" {
-		return DjinniModeDashboard
-	}
-
 	if (parsed.Path == "/jobs" || parsed.Path == "/jobs/") &&
 		parsed.Query().Get("search_type") == "basic-search" {
 		return DjinniModeBasicSearch

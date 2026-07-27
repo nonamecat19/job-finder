@@ -342,16 +342,25 @@ func (q *Queries) MergeJobBoard(ctx context.Context, arg MergeJobBoardParams) (J
 }
 
 const recordJobRepost = `-- name: RecordJobRepost :one
-UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now()
+UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now(),
+  "subscriptionId" = COALESCE("subscriptionId", $2)
 WHERE "dedupeKey" = $1
 RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources"
 `
 
+type RecordJobRepostParams struct {
+	DedupeKey      string      `json:"dedupeKey"`
+	SubscriptionId pgtype.UUID `json:"subscriptionId"`
+}
+
 // Called by ingestion.persistIfNew when a job with this dedupeKey already
 // exists: bumps "seenCount" and refreshes "ingestedAt" so the posting's
 // reappearance is durable, feeding the ghost-job repost signal (005).
-func (q *Queries) RecordJobRepost(ctx context.Context, dedupekey string) (Job, error) {
-	row := q.db.QueryRow(ctx, recordJobRepost, dedupekey)
+// Backfills "subscriptionId" when the job wasn't already attributed to one,
+// so a job first seen by an unrelated run still surfaces under a subscription
+// that later rediscovers it (dashboard "filter by Subscription").
+func (q *Queries) RecordJobRepost(ctx context.Context, arg RecordJobRepostParams) (Job, error) {
+	row := q.db.QueryRow(ctx, recordJobRepost, arg.DedupeKey, arg.SubscriptionId)
 	var i Job
 	err := row.Scan(
 		&i.ID,

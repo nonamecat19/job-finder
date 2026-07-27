@@ -24,74 +24,9 @@ const djinniMaxSubscriptionPages = 50
 var djinniRemoteRe = regexp.MustCompile(`(?i)remote|віддалено`)
 
 // DjinniAdapter — djinni.co, Ukrainian dev job board, server-rendered HTML.
-// Session is a login-managed sessionid cookie (credentials in env, cookie in
-// the DB); a nil Session means anonymous access (public /jobs only). Selectors
-// are best-effort/defensive, matching djinni.adapter.ts.
+// Selectors are best-effort/defensive, matching djinni.adapter.ts.
 type DjinniAdapter struct {
 	Scraping *scraping.Service
-	Session  DjinniSessionProvider
-}
-
-// authHeaders builds request headers carrying the current session cookie,
-// logging in on demand when Session is set.
-func (d DjinniAdapter) authHeaders(ctx context.Context) (map[string]string, error) {
-	headers := map[string]string{}
-	if d.Session == nil {
-		return headers, nil
-	}
-	cookie, err := d.Session.Ensure(ctx)
-	if err != nil {
-		return nil, err
-	}
-	setDjinniCookie(headers, cookie)
-	return headers, nil
-}
-
-func setDjinniCookie(headers map[string]string, cookie string) {
-	if cookie != "" {
-		headers["Cookie"] = "sessionid=" + cookie
-	} else {
-		delete(headers, "Cookie")
-	}
-}
-
-// fetchDoc fetches and parses pageURL. If djinni serves its login page (an
-// expired/absent cookie is 302'd to /login, followed to a 200), it re-logs-in
-// once and retries, mutating headers in place with the fresh cookie so callers
-// keep reusing them.
-func (d DjinniAdapter) fetchDoc(ctx context.Context, pageURL string, headers map[string]string) (*goquery.Document, error) {
-	doc, err := d.fetchParse(ctx, pageURL, headers)
-	if err != nil {
-		return nil, err
-	}
-	if !djinniIsLoginPage(doc) {
-		return doc, nil
-	}
-	if d.Session == nil {
-		return nil, fmt.Errorf("djinni requires login but no credentials configured: set DJINNI_EMAIL and DJINNI_PASSWORD")
-	}
-	cookie, err := d.Session.Refresh(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("djinni session expired and re-login failed: %w", err)
-	}
-	setDjinniCookie(headers, cookie)
-
-	doc, err = d.fetchParse(ctx, pageURL, headers)
-	if err != nil {
-		return nil, err
-	}
-	if djinniIsLoginPage(doc) {
-		return nil, fmt.Errorf("djinni still at login after re-login (check DJINNI_EMAIL/DJINNI_PASSWORD)")
-	}
-	return doc, nil
-}
-
-func (d DjinniAdapter) fetchParse(ctx context.Context, pageURL string, headers map[string]string) (*goquery.Document, error) {
-	html, err := d.Scraping.FetchHTML(ctx, pageURL, headers)
-	if err != nil {
-		return nil, err
-	}
-	return goquery.NewDocumentFromReader(strings.NewReader(html))
 }
 
 func (DjinniAdapter) Key() string          { return "djinni" }
@@ -102,28 +37,17 @@ func (DjinniAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 // until enrichment has run.
 func (DjinniAdapter) NeedsDetail() bool { return true }
 
-// UsesUserAccount reports true: Djinni uses login credentials (session cookie)
-// and the retrieval ladder must never escalate past the direct rung.
-func (DjinniAdapter) UsesUserAccount() bool { return true }
-
 func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
-	headers, err := d.authHeaders(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	if query.SubscriptionURL != "" {
 		parsed, err := url.Parse(query.SubscriptionURL)
 		if err != nil {
 			return nil, fmt.Errorf("djinni: invalid subscription url %q: %w", query.SubscriptionURL, err)
 		}
 		switch djinniDetectShape(parsed) {
-		case DjinniModeDashboard:
-			return d.scrapeDashboard(ctx, query.SubscriptionURL, headers)
 		case DjinniModeBasicSearch:
-			return d.scrapeBasicSearch(ctx, query.SubscriptionURL, headers)
+			return d.scrapeBasicSearch(ctx, query.SubscriptionURL)
 		default:
-			return nil, fmt.Errorf("djinni subscription url is neither dashboard nor basic-search shape: %s", query.SubscriptionURL)
+			return nil, fmt.Errorf("djinni subscription url is not a basic-search shape: %s", query.SubscriptionURL)
 		}
 	}
 
@@ -136,7 +60,11 @@ func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[
 	}
 	pageURL := "https://djinni.co/jobs/?" + params.Encode()
 
-	doc, err := d.fetchDoc(ctx, pageURL, headers)
+	html, err := d.Scraping.FetchHTML(ctx, pageURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		return nil, err
 	}
@@ -150,8 +78,8 @@ func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[
 // paginateDjinni pages through a djinni search-results URL starting from the
 // given firstPageURL. Stops on an empty page, a hard page cap (50), or the
 // page redirecting back to an already-seen first card (guards an infinite
-// pagination loop). Used by both scrapeDashboard and scrapeBasicSearch.
-func (d DjinniAdapter) paginateDjinni(ctx context.Context, firstPageURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
+// pagination loop).
+func (d DjinniAdapter) paginateDjinni(ctx context.Context, firstPageURL string) ([]dto.NormalizedJob, error) {
 	base, err := url.Parse(firstPageURL)
 	if err != nil {
 		return nil, fmt.Errorf("djinni: invalid pagination url %q: %w", firstPageURL, err)
@@ -165,12 +93,20 @@ func (d DjinniAdapter) paginateDjinni(ctx context.Context, firstPageURL string, 
 		q.Set("page", strconv.Itoa(page))
 		pageURL.RawQuery = q.Encode()
 
-		doc, err := d.fetchDoc(ctx, pageURL.String(), headers)
+		html, err := d.Scraping.FetchHTML(ctx, pageURL.String(), nil)
 		if err != nil {
 			if page == 1 {
 				return nil, err
 			}
 			slog.Warn("djinni subscription page fetch failed, stopping pagination", "url", pageURL.String(), "error", err)
+			break
+		}
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+		if err != nil {
+			if page == 1 {
+				return nil, err
+			}
+			slog.Warn("djinni subscription page parse failed, stopping pagination", "url", pageURL.String(), "error", err)
 			break
 		}
 
@@ -188,25 +124,13 @@ func (d DjinniAdapter) paginateDjinni(ctx context.Context, firstPageURL string, 
 	return jobs, nil
 }
 
-// scrapeDashboard pages through a logged-in djinni dashboard subscription
-// (https://djinni.co/my/dashboard/subs/{id}/) — same card markup as the
-// public /jobs/ search, reused via parseDjinniCards.
-func (d DjinniAdapter) scrapeDashboard(ctx context.Context, subURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
-	slog.Info("djinni: running dashboard subscription", "url", subURL)
-	jobs, err := d.paginateDjinni(ctx, subURL, headers)
-	if len(jobs) == 0 && err == nil {
-		slog.Warn("djinni dashboard subscription returned 0 jobs — markup may have changed", "url", subURL)
-	}
-	return jobs, err
-}
-
 // scrapeBasicSearch pages through a public basic-search URL
 // (https://djinni.co/jobs/?search_type=basic-search&...). It forces pagination
 // starting at page=1 regardless of any page param in the saved URL (FR-003,
 // SC-002), preserves all other query params verbatim, and reuses the shared
 // paginateDjinni loop (including the single-page / empty-page / redirect-loop
 // / 50-page cap guards from research.md R1).
-func (d DjinniAdapter) scrapeBasicSearch(ctx context.Context, subURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
+func (d DjinniAdapter) scrapeBasicSearch(ctx context.Context, subURL string) ([]dto.NormalizedJob, error) {
 	filters, _ := ParseBasicSearch(subURL)
 	slog.Info("djinni: running basic-search", "url", subURL, "filters", filters)
 
@@ -218,18 +142,11 @@ func (d DjinniAdapter) scrapeBasicSearch(ctx context.Context, subURL string, hea
 	q.Set("page", "1")
 	parsed.RawQuery = q.Encode()
 
-	jobs, err := d.paginateDjinni(ctx, parsed.String(), headers)
+	jobs, err := d.paginateDjinni(ctx, parsed.String())
 	if len(jobs) == 0 && err == nil {
 		slog.Warn("djinni basic-search returned 0 jobs — markup may have changed", "url", subURL)
 	}
 	return jobs, err
-}
-
-// djinniIsLoginPage reports whether doc is djinni's /login page (served with a
-// 200 after an auth redirect). The password input is unique to that page and
-// never present on job-listing markup.
-func djinniIsLoginPage(doc *goquery.Document) bool {
-	return doc.Find(`input[name="password"]`).Length() > 0
 }
 
 // parseDjinniCards extracts job cards from a djinni listing page (shared by
@@ -301,11 +218,11 @@ type DjinniDetailPatch struct {
 // and defensive (unverified against live markup — see plan risk #2): a
 // missing field just stays empty rather than erroring.
 func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (DjinniDetailPatch, error) {
-	headers, err := d.authHeaders(ctx)
+	html, err := d.Scraping.FetchHTML(ctx, jobURL, nil)
 	if err != nil {
 		return DjinniDetailPatch{}, err
 	}
-	doc, err := d.fetchDoc(ctx, jobURL, headers)
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		return DjinniDetailPatch{}, err
 	}

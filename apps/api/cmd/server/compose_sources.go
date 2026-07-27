@@ -9,7 +9,7 @@ import (
 )
 
 func composeJobSources(p *Platform) *sourcesHandles {
-	djinniAdapter := adapters.DjinniAdapter{Scraping: p.Scraping, Session: p.DjinniSession}
+	djinniAdapter := adapters.DjinniAdapter{Scraping: p.Scraping}
 	douAdapter := adapters.DouAdapter{Scraping: p.Scraping}
 	workuaAdapter := adapters.WorkUaAdapter{Scraping: p.Scraping}
 	indeedAdapter := adapters.IndeedAdapter{Scraping: p.Scraping}
@@ -43,7 +43,6 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		gh, lv, as, wk, sr,
 	)
 	sourcesSvc := jobsources.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
-	p.DjinniSession.Sources = sourcesSvc
 	p.JobLeadsSession.Sources = sourcesSvc
 
 	return &sourcesHandles{

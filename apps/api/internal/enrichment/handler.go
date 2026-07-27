@@ -142,17 +142,11 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 }
 
 func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
-	source, err := h.sources.GetByKey(ctx, job.SourceKey)
-	if err != nil {
-		return err
-	}
-	config := h.sources.DecryptConfig(source.Config)
-
 	if delay := h.delayFor("djinni"); delay > 0 {
 		time.Sleep(delay)
 	}
 
-	patch, err := h.djinni.FetchDetail(ctx, job.Url, config)
+	patch, err := h.djinni.FetchDetail(ctx, job.Url, nil)
 	if err != nil {
 		slog.Warn("enrichment: djinni fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
 		return nil

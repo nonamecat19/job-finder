@@ -104,6 +104,14 @@ type ContactConnection struct {
 	CreatedAt        pgtype.Timestamp `json:"createdAt"`
 }
 
+type DjinniLegacySubAudit struct {
+	ID             pgtype.UUID        `json:"id"`
+	SubscriptionId pgtype.UUID        `json:"subscriptionId"`
+	Name           *string            `json:"name"`
+	Url            string             `json:"url"`
+	DeletedAt      pgtype.Timestamptz `json:"deletedAt"`
+}
+
 type EmployerBoard struct {
 	ID                   pgtype.UUID      `json:"id"`
 	Vendor               string           `json:"vendor"`

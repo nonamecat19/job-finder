@@ -60,10 +60,10 @@ func TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne(t *testing.T) {
 	dedupeKey := "ghostjob-repost-" + time.Now().Format("20060102150405.000000")
 	job := insertTestJob(t, q, dedupeKey, "RepostCo")
 
-	if _, err := q.RecordJobRepost(ctx, dedupeKey); err != nil {
+	if _, err := q.RecordJobRepost(ctx, sqlcgen.RecordJobRepostParams{DedupeKey: dedupeKey}); err != nil {
 		t.Fatalf("record repost 1: %v", err)
 	}
-	if _, err := q.RecordJobRepost(ctx, dedupeKey); err != nil {
+	if _, err := q.RecordJobRepost(ctx, sqlcgen.RecordJobRepostParams{DedupeKey: dedupeKey}); err != nil {
 		t.Fatalf("record repost 2: %v", err)
 	}
 
