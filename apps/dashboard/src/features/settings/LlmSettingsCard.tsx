@@ -1,5 +1,6 @@
 import type { LlmTaskSettingDto } from '@job-finder/shared';
-import { Button, ErrorState, LoadingRegion, Select, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
+import { ApiError } from '../../lib/api';
+import { Button, EmptyState, ErrorState, LoadingRegion, Select, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
 import { useLlmModels, useLlmSettings, useUpdateLlmSettings } from './hooks';
 
 const TASK_LABELS: Record<string, string> = {
@@ -33,6 +34,13 @@ export default function LlmSettingsCard() {
     );
   }
   if (settings.error) {
+    if (settings.error instanceof ApiError && settings.error.status === 404) {
+      return (
+        <Surface>
+          <EmptyState>AI model settings aren&apos;t available on this server yet.</EmptyState>
+        </Surface>
+      );
+    }
     return (
       <Surface>
         <ErrorState error={settings.error} />

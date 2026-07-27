@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AiFeatureKey, AiFeatureSettingDto } from '@job-finder/shared';
-import { Button, Checkbox, ErrorState, Field, Input, LoadingRegion, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
+import { ApiError } from '../../lib/api';
+import { Button, Checkbox, EmptyState, ErrorState, Field, Input, LoadingRegion, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
 import { useAiFeatureSettings, useUpdateAiFeatureSetting } from './hooks';
 
 const FEATURE_LABELS: Record<AiFeatureKey, { title: string; description: string }> = {
@@ -89,6 +90,13 @@ export default function AiFeatureSettingsCard() {
     );
   }
   if (settings.error) {
+    if (settings.error instanceof ApiError && settings.error.status === 404) {
+      return (
+        <Surface>
+          <EmptyState>AI feature settings aren&apos;t available on this server yet.</EmptyState>
+        </Surface>
+      );
+    }
     return (
       <Surface>
         <ErrorState error={settings.error} />

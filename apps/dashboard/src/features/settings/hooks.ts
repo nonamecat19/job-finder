@@ -14,6 +14,8 @@ export function useLlmSettings() {
   return useQuery({
     queryKey: queryKeys.llmSettings.get,
     queryFn: api.settings.getLlm,
+    retry: false,
+    meta: { silentOn404: true },
   });
 }
 
@@ -21,6 +23,8 @@ export function useLlmModels() {
   return useQuery({
     queryKey: queryKeys.llmSettings.models,
     queryFn: api.settings.llmModels,
+    retry: false,
+    meta: { silentOn404: true },
   });
 }
 
@@ -38,6 +42,8 @@ export function useAiFeatureSettings() {
   return useQuery({
     queryKey: queryKeys.aiFeatures.get,
     queryFn: api.settings.getAiFeatures,
+    retry: false,
+    meta: { silentOn404: true },
   });
 }
 

@@ -4,18 +4,23 @@ import { renderWithProviders } from '../../test/test-utils'
 import { api } from '../../lib/api'
 import SettingsPage from './SettingsPage'
 
-vi.mock('../../lib/api', () => ({
-  api: {
-    ext: { bootstrap: vi.fn() },
-    settings: {
-      getLlm: vi
-        .fn()
-        .mockResolvedValue({ credentialConfigured: false, openRouterCredentialConfigured: false, tasks: [] }),
-      putLlm: vi.fn(),
-      llmModels: vi.fn().mockResolvedValue({ cerebras: [], openrouter: [] }),
+vi.mock('../../lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/api')>()
+  return {
+    ...actual,
+    api: {
+      ext: { bootstrap: vi.fn() },
+      settings: {
+        getLlm: vi
+          .fn()
+          .mockResolvedValue({ credentialConfigured: false, openRouterCredentialConfigured: false, tasks: [] }),
+        putLlm: vi.fn(),
+        llmModels: vi.fn().mockResolvedValue({ cerebras: [], openrouter: [] }),
+        getAiFeatures: vi.fn().mockResolvedValue([]),
+      },
     },
-  },
-}))
+  }
+})
 
 describe('SettingsPage', () => {
   it('renders the pairing card without generating a code up front', () => {

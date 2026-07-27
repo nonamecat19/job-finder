@@ -38,6 +38,16 @@ import type {
   SubscriptionInput,
 } from '@job-finder/shared';
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, statusText: string, body: string) {
+    super(`${status} ${statusText}: ${body.slice(0, 300)}`);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: init?.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
@@ -45,7 +55,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`${res.status} ${res.statusText}: ${body.slice(0, 300)}`);
+    throw new ApiError(res.status, res.statusText, body);
   }
   const text = await res.text();
   return text ? (JSON.parse(text) as T) : (undefined as unknown as T);
