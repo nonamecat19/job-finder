@@ -1,1 +1,3 @@
-{"feature_directory":"specs/015-djinni-basic-search-mode"}
+{
+  "feature_directory": "specs/017-throttle-only-rate-control"
+}

@@ -70,9 +70,6 @@ func (s *StateStore) Upsert(ctx context.Context, host string, state *sqlcgen.Hos
 		LastBlockAt:        state.LastBlockAt,
 		LastBlockReason:    state.LastBlockReason,
 		CrawlDelaySeconds:  state.CrawlDelaySeconds,
-		BudgetPeriodStart:  state.BudgetPeriodStart,
-		BudgetUsed:         state.BudgetUsed,
-		BudgetLimit:        state.BudgetLimit,
 	}
 	return s.q.UpsertHostRetrievalState(ctx, params)
 }
@@ -101,89 +98,6 @@ func (s *StateStore) RecordSuccess(ctx context.Context, host string, rung string
 		Host:        host,
 		CurrentRung: rung,
 	})
-}
-
-func (s *StateStore) IncrementBudget(ctx context.Context, host string, count int32) error {
-	return s.q.IncrementHostBudget(ctx, sqlcgen.IncrementHostBudgetParams{
-		Host:       host,
-		BudgetUsed: count,
-	})
-}
-
-func (s *StateStore) CheckBudget(ctx context.Context, host string, count int32, defaultLimit int32) (allowed bool, remaining int, err error) {
-	reset, err := s.q.ResetHostBudget(ctx, sqlcgen.ResetHostBudgetParams{
-		Host:        host,
-		BudgetLimit: defaultLimit,
-	})
-	if err == nil && reset.BudgetLimit > 0 {
-		rem := int(reset.BudgetLimit) - int(count)
-		if rem < 0 {
-			rem = 0
-		}
-		return true, rem, nil
-	}
-
-	state, err := s.Get(ctx, host)
-	if err != nil {
-		return false, 0, fmt.Errorf("retrieval: check budget for %s: %w", host, err)
-	}
-
-	if !state.BudgetPeriodStart.Valid {
-		now := time.Now()
-		state.BudgetPeriodStart = pgtype.Timestamptz{Time: now, Valid: true}
-		state.BudgetUsed = 0
-		if state.BudgetLimit == 0 {
-			state.BudgetLimit = defaultLimit
-		}
-		total := int(state.BudgetUsed) + int(count)
-		if total > int(state.BudgetLimit) {
-			return false, 0, nil
-		}
-		_ = s.Upsert(ctx, host, state)
-		rem := int(state.BudgetLimit) - total
-		if rem < 0 {
-			rem = 0
-		}
-		return true, rem, nil
-	}
-
-	periodStart := state.BudgetPeriodStart.Time
-	if time.Since(periodStart) > 24*time.Hour {
-		now := time.Now()
-		state.BudgetPeriodStart = pgtype.Timestamptz{Time: now, Valid: true}
-		state.BudgetUsed = 0
-		if state.BudgetLimit == 0 {
-			state.BudgetLimit = defaultLimit
-		}
-		total := int(state.BudgetUsed) + int(count)
-		if total > int(state.BudgetLimit) {
-			return false, 0, nil
-		}
-		_ = s.Upsert(ctx, host, state)
-		rem := int(state.BudgetLimit) - total
-		if rem < 0 {
-			rem = 0
-		}
-		return true, rem, nil
-	}
-
-	if state.BudgetLimit == 0 {
-		state.BudgetLimit = defaultLimit
-	}
-
-	total := int(state.BudgetUsed) + int(count)
-	if total > int(state.BudgetLimit) {
-		return false, int(state.BudgetLimit) - int(state.BudgetUsed), nil
-	}
-	return true, int(state.BudgetLimit) - total, nil
-}
-
-func (s *StateStore) DeductBudget(ctx context.Context, host string, count int32) error {
-	_, err := s.q.DeductHostBudgetCheck(ctx, sqlcgen.DeductHostBudgetCheckParams{
-		Host:       host,
-		BudgetUsed: count,
-	})
-	return err
 }
 
 var crawlDelayRe = regexp.MustCompile(`(?im)^[Cc]rawl-[Dd]elay:\s*(\d+)`)

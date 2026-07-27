@@ -379,6 +379,12 @@ export interface SourceRunDto {
   blockReason: string | null;
 }
 
+export interface HostPacingDto {
+  requestsPerSecond: number;
+  intervalSeconds: number;
+  source: string;
+}
+
 export interface HostRetrievalStatusDto {
   host: string;
   identityVersion: string;
@@ -386,9 +392,8 @@ export interface HostRetrievalStatusDto {
   lastBlockAt: string | null;
   lastBlockReason: string | null;
   coolingOffUntil: string | null;
-  budgetUsed: number;
-  budgetLimit: number;
-  budgetResetsAt: string;
+  crawlDelaySeconds?: number;
+  pacing: HostPacingDto;
 }
 
 export interface RunVerdictDto {

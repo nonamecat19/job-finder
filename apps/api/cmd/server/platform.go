@@ -19,7 +19,7 @@ import (
 
 // Platform holds the process-wide shared infrastructure that every feature
 // composer draws on: the database pool, logger, Redis/asynq client, the
-// headless-scraping service, and the djinni session shared by pointer across
+// headless-scraping service, and the jobleads session shared by pointer across
 // the adapter registry and the enrichment handler.
 type Platform struct {
 	Config         *config.Config
@@ -37,12 +37,6 @@ type Platform struct {
 	// when cfg.MinioEndpoint is unset, matching the "MinIO disabled" convention
 	// used by internal/storage.NewMinioStore.
 	MinioReady *minio.Client
-
-	// DjinniSession is shared by pointer with every DjinniAdapter copy
-	// (registry + enrichment handler); its Sources back-reference is wired once
-	// jobsources.Service exists (see composeJobSources), breaking the
-	// adapter<->service construction cycle.
-	DjinniSession *adapters.DjinniSession
 
 	// JobLeadsSession is the same pattern as DjinniSession, for the
 	// login-gated JobLeads source.
@@ -68,6 +62,7 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 	stateStore := retrieval.NewStateStore(database.Queries, cfg.ConfigEncryptionKey)
+	retrieval.ConfigureDefaultTransport(stateStore, nil)
 	retSvc, err := retrieval.NewServiceImpl(identity, stateStore, cfg)
 	if err != nil {
 		database.Close()
@@ -107,7 +102,6 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		Scraping:        scrapingSvc,
 		Retrieval:       retSvc,
 		MinioReady:      minioReady,
-		DjinniSession:   &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
 		JobLeadsSession: &adapters.JobLeadsSession{Email: cfg.JobLeadsEmail, Password: cfg.JobLeadsPassword, Key: "jobleads"},
 	}, nil
 }

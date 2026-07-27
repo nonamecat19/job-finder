@@ -178,9 +178,6 @@ type HostRetrievalState struct {
 	LastBlockAt        pgtype.Timestamptz `json:"last_block_at"`
 	LastBlockReason    *string            `json:"last_block_reason"`
 	CrawlDelaySeconds  *int32             `json:"crawl_delay_seconds"`
-	BudgetPeriodStart  pgtype.Timestamptz `json:"budget_period_start"`
-	BudgetUsed         int32              `json:"budget_used"`
-	BudgetLimit        int32              `json:"budget_limit"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }

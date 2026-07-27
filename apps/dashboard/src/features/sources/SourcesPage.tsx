@@ -129,7 +129,17 @@ function SourceRow({
   );
 }
 
-function HostRetrievalPanel() {
+// formatPacing renders the interval form users can act on (FR-016) plus the
+// rate's provenance, e.g. "~1 request every 5s (site-requested)". The wire
+// contract sends both requestsPerSecond and intervalSeconds so the client
+// never has to derive one from the other.
+function formatPacing(pacing: { intervalSeconds: number; source: string }): string {
+  const rounded = Math.round(pacing.intervalSeconds * 10) / 10;
+  const interval = Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
+  return `~1 request every ${interval}s (${pacing.source})`;
+}
+
+export function HostRetrievalPanel() {
   const { data: sources } = useSources();
   const [selectedHost, setSelectedHost] = useState<string | null>(null);
   const { data: status, isLoading } = useHostRetrievalStatus(selectedHost ?? '');
@@ -169,10 +179,7 @@ function HostRetrievalPanel() {
               <span className="font-medium text-fg">Rung:</span> {status.currentRung}
             </span>
             <span>
-              <span className="font-medium text-fg">Budget:</span> {status.budgetUsed}/{status.budgetLimit}
-            </span>
-            <span>
-              <span className="font-medium text-fg">Budget resets:</span> {new Date(status.budgetResetsAt).toLocaleString()}
+              <span className="font-medium text-fg">Pace:</span> {formatPacing(status.pacing)}
             </span>
           </div>
 
@@ -319,7 +326,7 @@ function SearchRow({ search }: { search: SavedSearchDto }) {
 
 const SUBSCRIPTION_SOURCES = [
   { key: 'dou', label: 'DOU.ua', placeholder: 'https://jobs.dou.ua/vacancies/?category=Node.js' },
-  { key: 'djinni', label: 'Djinni', placeholder: 'https://djinni.co/my/dashboard/subs/{id}/' },
+  { key: 'djinni', label: 'Djinni', placeholder: 'https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Golang&salary=1500&exp_level=1y&exp_level=2y&exp_level=3y&employment=remote' },
   { key: 'indeed', label: 'Indeed', placeholder: 'https://www.indeed.com/jobs?q=golang&l=remote' },
   { key: 'remoteok', label: 'RemoteOK', placeholder: 'https://remoteok.com/remote-golang-jobs' },
   { key: 'himalayas', label: 'Himalayas', placeholder: 'https://himalayas.app/jobs?categories=Backend-Engineering' },
@@ -420,10 +427,8 @@ function NewSubscriptionForm({ onSubmit }: { onSubmit: (body: { sourceKey: strin
 function SubscriptionRow({ sub, onRun, onDelete, running }: { sub: SubscriptionDto; onRun: () => void; onDelete: () => void; running: boolean }) {
   const basicSearchLabel = sub.sourceKey === 'djinni' ? summarizeDjinniBasicSearch(sub.url) : null
   const djinniModeMarker =
-    sub.sourceKey === 'djinni' ? (
-      <span className="ml-1 text-xs text-faint">
-        {basicSearchLabel !== null ? '· basic-search' : '· dashboard'}
-      </span>
+    sub.sourceKey === 'djinni' && basicSearchLabel !== null ? (
+      <span className="ml-1 text-xs text-faint">· basic-search</span>
     ) : null
   return (
     <li className="flex flex-col gap-2 rounded-md border border-border bg-elevated/60 p-3 sm:flex-row sm:items-center sm:justify-between">

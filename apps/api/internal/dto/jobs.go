@@ -130,10 +130,14 @@ type HostRetrievalStatusDto struct {
 	LastBlockAt       *time.Time `json:"lastBlockAt,omitempty"`
 	LastBlockReason   *string    `json:"lastBlockReason,omitempty"`
 	CoolingOffUntil   *time.Time `json:"coolingOffUntil,omitempty"`
-	BudgetUsed        int        `json:"budgetUsed"`
-	BudgetLimit       int        `json:"budgetLimit"`
-	BudgetResetsAt    time.Time  `json:"budgetResetsAt"`
 	CrawlDelaySeconds *int       `json:"crawlDelaySeconds,omitempty"`
+	Pacing            HostPacingDto `json:"pacing"`
+}
+
+type HostPacingDto struct {
+	RequestsPerSecond float64 `json:"requestsPerSecond"`
+	IntervalSeconds   float64 `json:"intervalSeconds"`
+	Source            string  `json:"source"`
 }
 
 type EmployerBoardDto struct {

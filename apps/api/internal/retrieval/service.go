@@ -24,10 +24,16 @@ type HostStatus struct {
 	LastBlockAt       *time.Time
 	LastBlockReason   string
 	CoolingOffUntil   *time.Time
-	BudgetUsed        int
-	BudgetLimit       int
-	BudgetResetsAt    time.Time
 	CrawlDelaySeconds *int
+	Pacing            HostPacing
+}
+
+// HostPacing is the rate currently in force for a host and where it came
+// from. Derived on demand from the pacing transport; never persisted.
+type HostPacing struct {
+	RequestsPerSecond float64
+	IntervalSeconds   float64
+	Source            string
 }
 
 type Service interface {

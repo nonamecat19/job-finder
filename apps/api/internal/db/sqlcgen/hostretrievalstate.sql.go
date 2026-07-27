@@ -29,37 +29,8 @@ func (q *Queries) ClearHostRung(ctx context.Context, host string) error {
 	return err
 }
 
-const deductHostBudgetCheck = `-- name: DeductHostBudgetCheck :one
-UPDATE host_retrieval_state SET
-    budget_used = budget_used + $2,
-    updated_at = now()
-WHERE host = $1
-  AND budget_period_start IS NOT NULL
-  AND budget_period_start >= now() - INTERVAL '1 day'
-  AND (budget_used + $2) <= budget_limit
-RETURNING budget_used, budget_limit, budget_period_start
-`
-
-type DeductHostBudgetCheckParams struct {
-	Host       string `json:"host"`
-	BudgetUsed int32  `json:"budget_used"`
-}
-
-type DeductHostBudgetCheckRow struct {
-	BudgetUsed        int32              `json:"budget_used"`
-	BudgetLimit       int32              `json:"budget_limit"`
-	BudgetPeriodStart pgtype.Timestamptz `json:"budget_period_start"`
-}
-
-func (q *Queries) DeductHostBudgetCheck(ctx context.Context, arg DeductHostBudgetCheckParams) (DeductHostBudgetCheckRow, error) {
-	row := q.db.QueryRow(ctx, deductHostBudgetCheck, arg.Host, arg.BudgetUsed)
-	var i DeductHostBudgetCheckRow
-	err := row.Scan(&i.BudgetUsed, &i.BudgetLimit, &i.BudgetPeriodStart)
-	return i, err
-}
-
 const getHostRetrievalState = `-- name: GetHostRetrievalState :one
-SELECT id, host, identity_version, current_rung, rung_last_verified_at, cookies, consecutive_blocks, cooling_off_until, last_block_at, last_block_reason, crawl_delay_seconds, budget_period_start, budget_used, budget_limit, created_at, updated_at FROM host_retrieval_state WHERE host = $1
+SELECT id, host, identity_version, current_rung, rung_last_verified_at, cookies, consecutive_blocks, cooling_off_until, last_block_at, last_block_reason, crawl_delay_seconds, created_at, updated_at FROM host_retrieval_state WHERE host = $1
 `
 
 func (q *Queries) GetHostRetrievalState(ctx context.Context, host string) (HostRetrievalState, error) {
@@ -77,27 +48,10 @@ func (q *Queries) GetHostRetrievalState(ctx context.Context, host string) (HostR
 		&i.LastBlockAt,
 		&i.LastBlockReason,
 		&i.CrawlDelaySeconds,
-		&i.BudgetPeriodStart,
-		&i.BudgetUsed,
-		&i.BudgetLimit,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const incrementHostBudget = `-- name: IncrementHostBudget :exec
-UPDATE host_retrieval_state SET budget_used = budget_used + $2, updated_at = now() WHERE host = $1
-`
-
-type IncrementHostBudgetParams struct {
-	Host       string `json:"host"`
-	BudgetUsed int32  `json:"budget_used"`
-}
-
-func (q *Queries) IncrementHostBudget(ctx context.Context, arg IncrementHostBudgetParams) error {
-	_, err := q.db.Exec(ctx, incrementHostBudget, arg.Host, arg.BudgetUsed)
-	return err
 }
 
 const recordHostBlock = `-- name: RecordHostBlock :exec
@@ -138,35 +92,6 @@ func (q *Queries) RecordHostSuccess(ctx context.Context, arg RecordHostSuccessPa
 	return err
 }
 
-const resetHostBudget = `-- name: ResetHostBudget :one
-UPDATE host_retrieval_state SET
-    budget_used = 0,
-    budget_period_start = now(),
-    budget_limit = COALESCE(budget_limit, $2),
-    updated_at = now()
-WHERE host = $1
-  AND (budget_period_start IS NULL OR budget_period_start < now() - INTERVAL '1 day')
-RETURNING budget_used, budget_limit, budget_period_start
-`
-
-type ResetHostBudgetParams struct {
-	Host        string `json:"host"`
-	BudgetLimit int32  `json:"budget_limit"`
-}
-
-type ResetHostBudgetRow struct {
-	BudgetUsed        int32              `json:"budget_used"`
-	BudgetLimit       int32              `json:"budget_limit"`
-	BudgetPeriodStart pgtype.Timestamptz `json:"budget_period_start"`
-}
-
-func (q *Queries) ResetHostBudget(ctx context.Context, arg ResetHostBudgetParams) (ResetHostBudgetRow, error) {
-	row := q.db.QueryRow(ctx, resetHostBudget, arg.Host, arg.BudgetLimit)
-	var i ResetHostBudgetRow
-	err := row.Scan(&i.BudgetUsed, &i.BudgetLimit, &i.BudgetPeriodStart)
-	return i, err
-}
-
 const setHostCrawlDelay = `-- name: SetHostCrawlDelay :exec
 UPDATE host_retrieval_state SET crawl_delay_seconds = $2, updated_at = now() WHERE host = $1
 `
@@ -199,13 +124,11 @@ const upsertHostRetrievalState = `-- name: UpsertHostRetrievalState :exec
 INSERT INTO host_retrieval_state (
     host, identity_version, current_rung, rung_last_verified_at,
     cookies, consecutive_blocks, cooling_off_until,
-    last_block_at, last_block_reason, crawl_delay_seconds,
-    budget_period_start, budget_used, budget_limit
+    last_block_at, last_block_reason, crawl_delay_seconds
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7,
-    $8, $9, $10,
-    $11, $12, $13
+    $8, $9, $10
 ) ON CONFLICT (host) DO UPDATE SET
     identity_version = EXCLUDED.identity_version,
     current_rung = EXCLUDED.current_rung,
@@ -216,9 +139,6 @@ INSERT INTO host_retrieval_state (
     last_block_at = EXCLUDED.last_block_at,
     last_block_reason = EXCLUDED.last_block_reason,
     crawl_delay_seconds = EXCLUDED.crawl_delay_seconds,
-    budget_period_start = EXCLUDED.budget_period_start,
-    budget_used = EXCLUDED.budget_used,
-    budget_limit = EXCLUDED.budget_limit,
     updated_at = now()
 `
 
@@ -233,9 +153,6 @@ type UpsertHostRetrievalStateParams struct {
 	LastBlockAt        pgtype.Timestamptz `json:"last_block_at"`
 	LastBlockReason    *string            `json:"last_block_reason"`
 	CrawlDelaySeconds  *int32             `json:"crawl_delay_seconds"`
-	BudgetPeriodStart  pgtype.Timestamptz `json:"budget_period_start"`
-	BudgetUsed         int32              `json:"budget_used"`
-	BudgetLimit        int32              `json:"budget_limit"`
 }
 
 func (q *Queries) UpsertHostRetrievalState(ctx context.Context, arg UpsertHostRetrievalStateParams) error {
@@ -250,9 +167,6 @@ func (q *Queries) UpsertHostRetrievalState(ctx context.Context, arg UpsertHostRe
 		arg.LastBlockAt,
 		arg.LastBlockReason,
 		arg.CrawlDelaySeconds,
-		arg.BudgetPeriodStart,
-		arg.BudgetUsed,
-		arg.BudgetLimit,
 	)
 	return err
 }

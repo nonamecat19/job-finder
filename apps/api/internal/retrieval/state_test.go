@@ -101,7 +101,6 @@ func TestFetchRequest(t *testing.T) {
 
 func TestHostStatus(t *testing.T) {
 	now := time.Now()
-	resetAt := now.Add(24 * time.Hour)
 	cd := 2
 	s := HostStatus{
 		Host:              "example.com",
@@ -109,10 +108,8 @@ func TestHostStatus(t *testing.T) {
 		CurrentRung:       "direct",
 		LastBlockAt:       &now,
 		LastBlockReason:   "403",
-		BudgetUsed:        5,
-		BudgetLimit:       200,
-		BudgetResetsAt:    resetAt,
 		CrawlDelaySeconds: &cd,
+		Pacing:            HostPacing{RequestsPerSecond: 0.2, IntervalSeconds: 5, Source: "site-requested"},
 	}
 	if s.Host != "example.com" {
 		t.Error("Host not set")
@@ -120,14 +117,11 @@ func TestHostStatus(t *testing.T) {
 	if s.CurrentRung != "direct" {
 		t.Error("CurrentRung not set")
 	}
-	if s.BudgetUsed != 5 {
-		t.Error("BudgetUsed not set")
+	if s.Pacing.Source != "site-requested" {
+		t.Error("Pacing.Source not set")
 	}
-	if s.BudgetLimit != 200 {
-		t.Error("BudgetLimit not set")
-	}
-	if s.BudgetResetsAt.IsZero() {
-		t.Error("BudgetResetsAt not set")
+	if s.Pacing.RequestsPerSecond != 0.2 {
+		t.Error("Pacing.RequestsPerSecond not set")
 	}
 	if s.CrawlDelaySeconds == nil || *s.CrawlDelaySeconds != 2 {
 		t.Error("CrawlDelaySeconds not set correctly")

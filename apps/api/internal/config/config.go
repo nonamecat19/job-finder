@@ -68,7 +68,8 @@ type Config struct {
 	KeywordRephraseCacheTTLSec int `mapstructure:"KEYWORD_REPHRASE_CACHE_TTL_SEC"`
 
 	// EmbedURL is the endpoint for embeddings; empty means "same as OllamaURL".
-	// Embeddings run on Ollama Cloud only — no local Ollama fallback.
+	// Ollama Cloud serves no embedding models, so this can point at a local
+	// Ollama (http://localhost:11434) while chat stays on the cloud.
 	EmbedURL string `mapstructure:"EMBED_URL"`
 
 	EmbedDims                int     `mapstructure:"EMBED_DIMS"`
@@ -91,18 +92,13 @@ type Config struct {
 	AdzunaAppID   string `mapstructure:"ADZUNA_APP_ID"`
 	AdzunaAppKey  string `mapstructure:"ADZUNA_APP_KEY"`
 	AdzunaCountry string `mapstructure:"ADZUNA_COUNTRY"`
-	// Djinni credentials: the adapter logs in with these and stores the
-	// resulting sessionid cookie in the DB (never in env).
-	DjinniEmail    string `mapstructure:"DJINNI_EMAIL"`
-	DjinniPassword string `mapstructure:"DJINNI_PASSWORD"`
-	// JobLeads credentials: same pattern as Djinni — the adapter logs in with
-	// these and stores the resulting session cookie in the DB (never in env).
+	// JobLeads credentials: the adapter logs in with these and stores the
+	// resulting session cookie in the DB (never in env).
 	JobLeadsEmail    string `mapstructure:"JOBLEADS_EMAIL"`
 	JobLeadsPassword string `mapstructure:"JOBLEADS_PASSWORD"`
 	JoobleAPIKey     string `mapstructure:"JOOBLE_API_KEY"`
 	// DjinniDetailDelayMs is the pause before each detail-page fetch in the
-	// enrich queue (concurrency 1), to avoid rate-limiting/banning the
-	// authenticated djinni account.
+	// enrich queue (concurrency 1), to avoid rate-limiting/banning.
 	DjinniDetailDelayMs int `mapstructure:"DJINNI_DETAIL_DELAY_MS"`
 	// WorkUaDetailDelayMs is the pause before each work.ua detail-page fetch.
 	// 2000 matches work.ua's published Crawl-delay: 2; adapters.WorkUaMinDelay
@@ -114,10 +110,6 @@ type Config struct {
 
 	// Browser identity version — bumped whenever the UA/header/TLS profile changes.
 	BrowserIdentityVersion string `mapstructure:"BROWSER_IDENTITY_VERSION"`
-
-	// PerHostDailyBudgetDefault is the default daily request budget for a host
-	// that has no explicit limit set (FR-030).
-	PerHostDailyBudgetDefault int `mapstructure:"PER_HOST_DAILY_BUDGET_DEFAULT"`
 
 	// CoolingOffThreshold is the consecutive block count at which cooling-off
 	// kicks in (FR-026).

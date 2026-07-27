@@ -2,13 +2,11 @@ package retrieval
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/config"
@@ -69,6 +67,13 @@ func (s *ServiceImpl) Fetch(ctx context.Context, req FetchRequest) (FetchResult,
 		slog.Warn("retrieval: get state failed, proceeding with direct", "host", host, "error", err)
 	}
 
+	if state != nil && state.CrawlDelaySeconds == nil {
+		// First contact with this host: discover its advertised crawl
+		// delay out of band so no user-facing fetch waits on the
+		// robots.txt round trip (FR-009, research Finding 3).
+		go func(h string) { _ = s.store.FetchAndSetCrawlDelay(context.Background(), h) }(host)
+	}
+
 	if state != nil && state.CoolingOffUntil.Valid {
 		coolOff := state.CoolingOffUntil.Time
 		if time.Now().Before(coolOff) {
@@ -82,39 +87,6 @@ func (s *ServiceImpl) Fetch(ctx context.Context, req FetchRequest) (FetchResult,
 				},
 			}, nil
 		}
-	}
-
-	allowed, _, err := s.store.CheckBudget(ctx, host, 1, int32(s.cfg.PerHostDailyBudgetDefault))
-	if err != nil {
-		slog.Warn("retrieval: budget check failed, proceeding", "host", host, "error", err)
-	} else if !allowed {
-		used, limit := 0, 0
-		if state != nil {
-			used = int(state.BudgetUsed)
-			limit = int(state.BudgetLimit)
-		}
-		return FetchResult{
-			Outcome: PageOutcome{
-				Status: PageDeferred,
-				Method: "none",
-				Reason: fmt.Sprintf("daily budget exhausted (%d/%d)", used, limit),
-				URL:    req.URL,
-			},
-		}, nil
-	}
-
-	if err := s.store.DeductBudget(ctx, host, 1); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return FetchResult{
-				Outcome: PageOutcome{
-					Status: PageDeferred,
-					Method: "none",
-					Reason: "daily budget exhausted (deduct race)",
-					URL:    req.URL,
-				},
-			}, nil
-		}
-		slog.Warn("retrieval: budget deduct failed, proceeding", "host", host, "error", err)
 	}
 
 	startRung := RungDirect
@@ -275,11 +247,6 @@ func (s *ServiceImpl) HostStatus(ctx context.Context, host string) (HostStatus, 
 		Host:            host,
 		IdentityVersion: state.IdentityVersion,
 		CurrentRung:     state.CurrentRung,
-		BudgetUsed:      int(state.BudgetUsed),
-		BudgetLimit:     int(state.BudgetLimit),
-	}
-	if state.BudgetPeriodStart.Valid {
-		status.BudgetResetsAt = state.BudgetPeriodStart.Time.Add(24 * time.Hour)
 	}
 	if state.CrawlDelaySeconds != nil {
 		v := int(*state.CrawlDelaySeconds)
@@ -295,6 +262,12 @@ func (s *ServiceImpl) HostStatus(ctx context.Context, host string) (HostStatus, 
 	if state.CoolingOffUntil.Valid {
 		t := state.CoolingOffUntil.Time
 		status.CoolingOffUntil = &t
+	}
+	rps, source := DefaultTransport.RateFor(host)
+	status.Pacing = HostPacing{
+		RequestsPerSecond: rps,
+		IntervalSeconds:   1 / rps,
+		Source:            source,
 	}
 	return status, nil
 }

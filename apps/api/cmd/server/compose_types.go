@@ -151,10 +151,12 @@ func (a hostsAdapter) HostStatus(ctx context.Context, host string) (dto.HostRetr
 		IdentityVersion:   s.IdentityVersion,
 		CurrentRung:       s.CurrentRung,
 		LastBlockAt:       s.LastBlockAt,
-		BudgetUsed:        s.BudgetUsed,
-		BudgetLimit:       s.BudgetLimit,
-		BudgetResetsAt:    s.BudgetResetsAt,
 		CrawlDelaySeconds: s.CrawlDelaySeconds,
+		Pacing: dto.HostPacingDto{
+			RequestsPerSecond: s.Pacing.RequestsPerSecond,
+			IntervalSeconds:   s.Pacing.IntervalSeconds,
+			Source:            s.Pacing.Source,
+		},
 	}
 	if s.LastBlockReason != "" {
 		out.LastBlockReason = &s.LastBlockReason

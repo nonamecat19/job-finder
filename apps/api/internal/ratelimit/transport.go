@@ -9,9 +9,16 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
+
+// rateResolutionTTL bounds how long a resolved rate is trusted before the
+// resolver is consulted again. Short enough that a crawl delay discovered
+// mid-session takes effect without a restart; long enough that resolution
+// never sits in the per-request hot path.
+const rateResolutionTTL = 5 * time.Minute
 
 // DefaultRPS is the per-host request rate used for hosts without an explicit
 // override. Deliberately below one request per second: the scrapers are
@@ -44,9 +51,25 @@ type Transport struct {
 	// PerHostRPS overrides RPS for specific hosts (keyed as req.URL.Host,
 	// so "api.example.com" and "example.com" are separate entries).
 	PerHostRPS map[string]float64
+	// RateResolver optionally resolves a per-host rate from an external
+	// source (crawl-delay discovery, operator overrides) at limiter
+	// construction time, never per request. A nil resolver, or one that
+	// returns ok == false, falls through to RPS/DefaultRPS — the pre-existing
+	// behaviour, so existing callers are unaffected.
+	RateResolver func(host string) (rps float64, source string, ok bool)
 
 	mu       sync.Mutex
-	limiters map[string]*rate.Limiter
+	limiters map[string]*hostLimiter
+}
+
+// hostLimiter pairs a host's live token-bucket limiter with the resolved
+// rate that produced it, so RateFor can report the effective rate without
+// re-resolving, and limiterFor knows when the TTL calls for a refresh.
+type hostLimiter struct {
+	limiter    *rate.Limiter
+	rps        float64
+	source     string
+	resolvedAt time.Time
 }
 
 // NewTransport wraps base with the default pacing. Pass nil for base to wrap
@@ -59,27 +82,78 @@ func (t *Transport) limiterFor(host string) *rate.Limiter {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.limiters == nil {
-		t.limiters = make(map[string]*rate.Limiter)
-	}
-	if l, ok := t.limiters[host]; ok {
-		return l
+		t.limiters = make(map[string]*hostLimiter)
 	}
 
-	rps := t.RPS
-	if rps <= 0 {
-		rps = DefaultRPS
+	now := time.Now()
+	if hl, ok := t.limiters[host]; ok {
+		if now.Sub(hl.resolvedAt) < rateResolutionTTL {
+			return hl.limiter
+		}
+		rps, source := t.resolveRate(host)
+		if rps != hl.rps {
+			hl.limiter.SetLimit(rate.Limit(jitterRPS(rps)))
+		}
+		hl.rps = rps
+		hl.source = source
+		hl.resolvedAt = now
+		return hl.limiter
 	}
-	if override, ok := t.PerHostRPS[host]; ok && override > 0 {
-		rps = override
-	}
+
+	rps, source := t.resolveRate(host)
 	burst := t.Burst
 	if burst <= 0 {
 		burst = DefaultBurst
 	}
+	hl := &hostLimiter{
+		limiter:    rate.NewLimiter(rate.Limit(jitterRPS(rps)), burst),
+		rps:        rps,
+		source:     source,
+		resolvedAt: now,
+	}
+	t.limiters[host] = hl
+	return hl.limiter
+}
 
-	l := rate.NewLimiter(rate.Limit(jitterRPS(rps)), burst)
-	t.limiters[host] = l
-	return l
+// resolveRate determines the steady-state rate for host and where it came
+// from. Consulted only at limiter construction / TTL refresh, never per
+// request — resolution may involve a database lookup upstream.
+func (t *Transport) resolveRate(host string) (rps float64, source string) {
+	if t.RateResolver != nil {
+		if r, s, ok := t.RateResolver(host); ok {
+			return r, s
+		}
+		return t.baseRPS(), "default"
+	}
+	if override, ok := t.PerHostRPS[host]; ok && override > 0 {
+		return override, "override"
+	}
+	return t.baseRPS(), "default"
+}
+
+func (t *Transport) baseRPS() float64 {
+	if t.RPS > 0 {
+		return t.RPS
+	}
+	return DefaultRPS
+}
+
+// RateFor reports the rate currently in force for host and its source,
+// without issuing a request. Constructs the limiter (and so triggers
+// resolution) if this is the first time host has been seen.
+func (t *Transport) RateFor(host string) (rps float64, source string) {
+	hostname := host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		hostname = h
+	}
+	if isLoopback(hostname) {
+		return t.baseRPS(), "default"
+	}
+	t.limiterFor(host)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	hl := t.limiters[host]
+	return hl.rps, hl.source
 }
 
 func jitterRPS(rps float64) float64 {

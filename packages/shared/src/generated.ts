@@ -410,10 +410,13 @@ export interface HostRetrievalStatusDto {
   lastBlockAt?: string;
   lastBlockReason?: string;
   coolingOffUntil?: string;
-  budgetUsed: number /* int */;
-  budgetLimit: number /* int */;
-  budgetResetsAt: string;
   crawlDelaySeconds?: number /* int */;
+  pacing: HostPacingDto;
+}
+export interface HostPacingDto {
+  requestsPerSecond: number /* float64 */;
+  intervalSeconds: number /* float64 */;
+  source: string;
 }
 export interface EmployerBoardDto {
   id: string;
