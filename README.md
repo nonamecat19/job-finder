@@ -1,7 +1,7 @@
 # job-finder
 
 Self-hosted, modular AI job-search platform. Discovers jobs across multiple sources, scores
-them against your master profile with Ollama Cloud, generates grounded tailored
+them against your master profile with Ollama (local or Ollama Cloud), generates grounded tailored
 resumes + cover letters as PDFs, and tracks applications on a kanban. You apply manually —
 no auto-apply, ever. Design docs live in [`plan/`](plan/00-overview.md).
 
@@ -17,19 +17,20 @@ packages/shared       Shared TS types (NormalizedJob, DTOs, JSON Resume subset)
 
 ```bash
 cp .env.example .env       # set DB_PASSWORD, CONFIG_ENCRYPTION_KEY (openssl rand -hex 32),
-                           # OLLAMA_KEY (ollama.com), ADZUNA_APP_ID/KEY if you have them
-docker compose up --build
+                           # ADZUNA_APP_ID/KEY if you have them
+docker compose up --build  # first run pulls Ollama models (~10 GB for qwen2.5:14b)
 ```
 
 Dashboard: http://localhost:8080 · API: http://localhost:3000/api/health
 
-All LLM and embedding calls go to **Ollama Cloud**: set `OLLAMA_URL=https://ollama.com` +
-`OLLAMA_KEY=<key>` (get one at ollama.com) and use `-cloud` model tags. There is no local/Docker
-Ollama server. Chat models are per-task: `LLM_MODEL_MATCH` (fit scoring), `LLM_MODEL_GENERATION`
-(resume/cover), `LLM_MODEL` as fallback; embeddings use `EMBED_MODEL`.
+GPU strongly recommended for local Ollama (uncomment the `deploy` block in docker-compose.yml).
+To use **Ollama Cloud** instead, set `OLLAMA_URL=https://ollama.com` + `OLLAMA_KEY=<key>` and
+`-cloud` model tags. Cloud has no embedding models, so point `EMBED_URL` at a local Ollama.
+Chat models are per-task: `LLM_MODEL_MATCH` (fit scoring), `LLM_MODEL_GENERATION` (resume/cover),
+`LLM_MODEL` as fallback; embeddings use `EMBED_MODEL`.
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 
-Ollama Cloud is the default provider. Two optional remote chat providers can be enabled
+Ollama is the default, local-first provider. Two optional remote chat providers can be enabled
 alongside it:
 
 - **Cerebras** — set `CEREBRAS_API_KEY` (get one at cloud.cerebras.ai); `CEREBRAS_BASE_URL`
@@ -43,8 +44,8 @@ regardless of their saved setting. Once a key is set, open the dashboard's **Set
 page to assign each chat task (matching, generation, rephrase, ghost-job) to Ollama, Cerebras or
 OpenRouter, or use the "Switch all to …" buttons to move every task at once — no restart needed,
 the choice is saved and applied immediately. Model lists are per-provider, so switching a task's
-provider resets its model to that provider's default. Embeddings always stay on Ollama Cloud
-(neither remote provider has an embeddings API), regardless of which provider chat tasks use.
+provider resets its model to that provider's default. Embeddings always stay on Ollama (neither
+remote provider has an embeddings API), regardless of which provider chat tasks use.
 
 Rate limits and provider errors are classified rather than blindly retried. A `429` trips a
 per-provider circuit breaker for as long as the provider's `Retry-After` / `X-RateLimit-Reset`
@@ -57,7 +58,7 @@ stay retryable.
 ## Dev workflow (api/dashboard on host)
 
 ```bash
-docker compose up postgres redis
+docker compose up postgres redis ollama
 pnpm install
 pnpm --filter @job-finder/shared build
 cd apps/api && pnpm db:migrate && cd ../..

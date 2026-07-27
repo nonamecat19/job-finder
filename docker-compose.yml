@@ -20,6 +20,21 @@ services:
     ports:
       - "6379:6379"
 
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollamadata:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      # ollama's image ships no curl/wget; the `ollama` CLI itself talks to
+      # the local API server, so a successful `ollama list` proves the
+      # server is reachable.
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     profiles: [scraping-extras]
@@ -78,3 +93,4 @@ volumes:
   pgdata: {}
   documents: {}
   miniodata: {}
+  ollamadata: {}
