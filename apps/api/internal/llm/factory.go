@@ -5,7 +5,7 @@ import (
 )
 
 // New builds the Ollama Provider from config. Used by callers that only ever
-// need the local provider directly (cmd/llmsmoke, live smoke tests) and
+// need the Ollama provider directly (cmd/llmsmoke, live smoke tests) and
 // don't participate in the Cerebras toggle / per-task routing.
 func New(cfg *config.Config) (Provider, error) {
 	return NewOllama(cfg.OllamaURL, cfg.OllamaKey, cfg.LLMModel, cfg.EmbedModel, cfg.EmbedURL), nil

@@ -68,8 +68,7 @@ type Config struct {
 	KeywordRephraseCacheTTLSec int `mapstructure:"KEYWORD_REPHRASE_CACHE_TTL_SEC"`
 
 	// EmbedURL is the endpoint for embeddings; empty means "same as OllamaURL".
-	// Ollama Cloud serves no embedding models, so this can point at a local
-	// Ollama (http://localhost:11434) while chat stays on the cloud.
+	// Embeddings run on Ollama Cloud only — no local Ollama fallback.
 	EmbedURL string `mapstructure:"EMBED_URL"`
 
 	EmbedDims                int     `mapstructure:"EMBED_DIMS"`

@@ -77,8 +77,8 @@ export default function LlmSettingsCard() {
     <Surface>
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted">
-          Choose which chat tasks run on the local Ollama model versus a Cerebras or OpenRouter
-          free-tier model. Embeddings always stay on Ollama.
+          Choose which chat tasks run on Ollama Cloud versus a Cerebras or OpenRouter
+          free-tier model. Embeddings always stay on Ollama Cloud.
         </p>
         <div className="flex shrink-0 gap-2">
           <Button variant="secondary" onClick={() => switchAll('ollama')} disabled={update.isPending}>
