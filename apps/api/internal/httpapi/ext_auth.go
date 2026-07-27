@@ -28,7 +28,7 @@ type ExtAuthHandler struct {
 }
 
 func (h *ExtAuthHandler) Mount(r chi.Router) {
-	r.Route("/v1/ext/auth", func(auth chi.Router) {
+	r.Route("/ext/auth", func(auth chi.Router) {
 		// bootstrap is called by the dashboard (not the extension) to
 		// generate the one-time code shown as a QR/string (spec 2.1 step 2).
 		auth.Post("/bootstrap", h.bootstrap)

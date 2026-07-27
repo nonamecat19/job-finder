@@ -34,7 +34,7 @@ type ExtProfileHandler struct {
 }
 
 func (h *ExtProfileHandler) Mount(r chi.Router) {
-	r.Get("/v1/ext/profile", h.get)
+	r.Get("/ext/profile", h.get)
 }
 
 func (h *ExtProfileHandler) get(w http.ResponseWriter, r *http.Request) {

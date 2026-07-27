@@ -10,14 +10,21 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// SetupRouter creates a chi mux with /api prefix and mounts the given handlers.
+// SetupRouter mirrors production's NewRouter (httpapi/router.go): it mounts
+// the given handlers under both /api and /api/v1, since /api/v1 is a more
+// specific chi route than /api and shadows it for any /api/v1/* request.
+// A handler that hardcodes a "/v1/..." prefix in its own Mount pattern would
+// only be reachable at /api/v1/v1/... under this topology — mirroring it
+// here is what catches that class of bug instead of masking it.
 func SetupRouter(mounts ...func(chi.Router)) *chi.Mux {
 	r := chi.NewRouter()
-	r.Route("/api", func(api chi.Router) {
+	mountAll := func(api chi.Router) {
 		for _, mount := range mounts {
 			mount(api)
 		}
-	})
+	}
+	r.Route("/api", mountAll)
+	r.Route("/api/v1", mountAll)
 	return r
 }
 

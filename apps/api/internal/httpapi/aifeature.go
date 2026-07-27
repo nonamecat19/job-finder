@@ -27,8 +27,8 @@ type AiFeatureHandler struct {
 }
 
 func (h *AiFeatureHandler) Mount(r chi.Router) {
-	r.Get("/v1/settings/ai-features", h.list)
-	r.Put("/v1/settings/ai-features/{feature}", h.update)
+	r.Get("/settings/ai-features", h.list)
+	r.Put("/settings/ai-features/{feature}", h.update)
 }
 
 func stateToAiFeatureDto(s aifeature.State) dto.AiFeatureSettingDto {

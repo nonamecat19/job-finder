@@ -27,9 +27,9 @@ type LlmSettingsHandler struct {
 }
 
 func (h *LlmSettingsHandler) Mount(r chi.Router) {
-	r.Get("/v1/settings/llm", h.get)
-	r.Put("/v1/settings/llm", h.update)
-	r.Get("/v1/settings/llm/models", h.models)
+	r.Get("/settings/llm", h.get)
+	r.Put("/settings/llm", h.update)
+	r.Get("/settings/llm/models", h.models)
 }
 
 func stateToDto(s llmsettings.State) dto.LlmSettingsResponseDto {
