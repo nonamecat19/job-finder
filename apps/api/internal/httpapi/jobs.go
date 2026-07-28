@@ -101,7 +101,7 @@ func (h *JobsHandler) get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Jobs.Get(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "job not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -111,7 +111,7 @@ func (h *JobsHandler) shortlist(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Jobs.Shortlist(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "job not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -121,7 +121,7 @@ func (h *JobsHandler) hide(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Jobs.Hide(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "job not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

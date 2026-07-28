@@ -86,7 +86,7 @@ func (h *SearchesHandler) update(w http.ResponseWriter, r *http.Request) {
 		Name: body.Name, Query: body.Query, Cron: body.Cron, Enabled: body.Enabled,
 	})
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "search not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -105,7 +105,7 @@ func (h *SearchesHandler) run(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	keys, err := h.Ingestion.RunSearch(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "search not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enqueued": keys})

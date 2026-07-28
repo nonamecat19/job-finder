@@ -56,7 +56,7 @@ func (h *ProfilesHandler) get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Profiles.GetDto(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "profile not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -111,7 +111,7 @@ func (h *ProfilesHandler) update(w http.ResponseWriter, r *http.Request) {
 
 	out, err := h.Profiles.Update(r.Context(), id, in)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "profile not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -196,7 +196,7 @@ func (h *ProfilesHandler) getResume(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	resume, err := h.Profiles.GetResume(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "resume not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, dto.ResumeDto{Resume: resume})
@@ -215,7 +215,7 @@ func (h *ProfilesHandler) updateResume(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"path": verr.Path, "message": verr.Message})
 			return
 		}
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "profile not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, dto.ResumeDto{Resume: resume})

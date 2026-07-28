@@ -31,7 +31,7 @@ func (h *KeywordHandler) get(w http.ResponseWriter, r *http.Request) {
 	out, err := h.Diff.KeywordDiff(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, keyword.ErrDiffNotFound) {
-			writeError(w, http.StatusNotFound, "keyword diff not found for job")
+			writeError(w, http.StatusNotFound, "keyword diff not found for job: "+id)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err.Error())

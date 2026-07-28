@@ -54,7 +54,7 @@ func (h *AiFeatureHandler) update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !valid {
-		writeError(w, http.StatusNotFound, "unknown feature")
+		writeError(w, http.StatusNotFound, "unknown feature: "+feature)
 		return
 	}
 

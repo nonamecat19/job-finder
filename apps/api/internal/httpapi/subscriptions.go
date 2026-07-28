@@ -109,7 +109,7 @@ func (h *SubscriptionsHandler) update(w http.ResponseWriter, r *http.Request) {
 		Name: body.Name, URL: body.URL, Enabled: body.Enabled, Cron: body.Cron,
 	})
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "subscription not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

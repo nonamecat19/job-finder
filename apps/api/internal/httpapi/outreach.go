@@ -52,7 +52,7 @@ func (h *OutreachHandler) generate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, outreach.ErrContactNotFound):
-			writeError(w, http.StatusNotFound, "contact not found for this job")
+			writeError(w, http.StatusNotFound, "contact not found for job: "+jobID)
 		case errors.Is(err, outreach.ErrContactRequired):
 			writeError(w, http.StatusConflict, "multiple contacts resolved for this job — choose one via contactId")
 		default:

@@ -65,7 +65,7 @@ func (h *SourcesHandler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := h.Sources.Update(r.Context(), key, body.Enabled, body.Config)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "source not found: "+key)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

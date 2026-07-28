@@ -36,7 +36,7 @@ func (h *HostsHandler) retrievalStatus(w http.ResponseWriter, r *http.Request) {
 	status, err := h.Retrieval.HostStatus(r.Context(), host)
 	if err != nil {
 		if errors.Is(err, errHostNotFound) {
-			writeError(w, http.StatusNotFound, "host not found")
+			writeError(w, http.StatusNotFound, "host not found: "+host)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err.Error())

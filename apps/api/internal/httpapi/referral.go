@@ -84,7 +84,7 @@ func (h *ReferralHandler) githubSync(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, referral.ErrContactNotFound):
-			writeError(w, http.StatusNotFound, err.Error())
+			writeError(w, http.StatusNotFound, "contact not found: "+id)
 		case errors.Is(err, referral.ErrNoGithubUsername):
 			writeError(w, http.StatusUnprocessableEntity, err.Error())
 		default:

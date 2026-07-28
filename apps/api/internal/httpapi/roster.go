@@ -109,7 +109,7 @@ func (h *RosterHandler) register(w http.ResponseWriter, r *http.Request) {
 func (h *RosterHandler) remove(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.Roster.Remove(r.Context(), id); err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "candidate not found: "+id)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -132,7 +132,7 @@ func (h *RosterHandler) accept(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	board, err := h.Roster.Accept(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "candidate not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, toEmployerBoardDto(board))
@@ -141,7 +141,7 @@ func (h *RosterHandler) accept(w http.ResponseWriter, r *http.Request) {
 func (h *RosterHandler) reject(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.Roster.Reject(r.Context(), id); err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "candidate not found: "+id)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

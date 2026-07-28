@@ -40,7 +40,7 @@ func (h *CoachHandler) assess(w http.ResponseWriter, r *http.Request) {
 	out, err := h.Coach.Assess(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, coach.ErrNoDiff) {
-			writeError(w, http.StatusNotFound, "no keyword diff for job — run the keyword diff first")
+			writeError(w, http.StatusNotFound, "no keyword diff for job "+id+" — run the keyword diff first")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -54,7 +54,7 @@ func (h *CoachHandler) cached(w http.ResponseWriter, r *http.Request) {
 	out, err := h.Coach.CachedAssessment(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, coach.ErrNotAssessed) {
-			writeError(w, http.StatusNotFound, "no fit-gap assessment yet — assess this job first")
+			writeError(w, http.StatusNotFound, "no fit-gap assessment yet for job "+id+" — assess this job first")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err.Error())

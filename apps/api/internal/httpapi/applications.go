@@ -70,7 +70,7 @@ func (h *ApplicationsHandler) update(w http.ResponseWriter, r *http.Request) {
 		// value) is 400 — mirrors NotFoundException vs BadRequestException
 		// in applications.service.ts.
 		if errors.Is(err, applications.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err.Error())
+			writeError(w, http.StatusNotFound, "application not found: "+id)
 			return
 		}
 		writeError(w, http.StatusBadRequest, err.Error())
