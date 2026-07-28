@@ -23,6 +23,11 @@ docker compose up --build  # first run pulls Ollama models (~10 GB for qwen2.5:1
 
 Dashboard: http://localhost:8080 · API: http://localhost:3000/api/health
 
+Queue monitoring (dev only, not in `docker-compose.prod.yml`): asynqmon at
+http://localhost:8090 — live view of the six asynq queues (ingest, match, generate,
+enrich, salary, ghost), task inspection, retry/delete/archive actions, and per-queue
+history.
+
 GPU strongly recommended for local Ollama (uncomment the `deploy` block in docker-compose.yml).
 To use **Ollama Cloud** instead, set `OLLAMA_URL=https://ollama.com` + `OLLAMA_KEY=<key>` and
 `-cloud` model tags. Cloud has no embedding models, so point `EMBED_URL` at a local Ollama.

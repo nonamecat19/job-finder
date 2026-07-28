@@ -20,6 +20,22 @@ services:
     ports:
       - "6379:6379"
 
+  # Dev-only queue monitoring dashboard for the six asynq queues (ingest,
+  # match, generate, enrich, salary, ghost). Deliberately absent from
+  # docker-compose.prod.yml — no auth in front of it, so it must never ship
+  # to production.
+  # No healthcheck: the image is distroless (no shell/wget/curl to probe
+  # with), so readiness is verified externally (see quickstart.md).
+  asynqmon:
+    image: hibiken/asynqmon:0.7.2
+    # host port 8090, not 8080: 8080 is the dashboard's port in
+    # docker-compose.prod.yml / README.md, avoid colliding with it.
+    command: ["--redis-addr=redis:6379", "--port=8090"]
+    depends_on:
+      - redis
+    ports:
+      - "8090:8090"
+
   ollama:
     image: ollama/ollama:latest
     volumes:
