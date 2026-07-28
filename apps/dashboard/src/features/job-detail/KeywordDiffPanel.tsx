@@ -1,24 +1,26 @@
 import { Copy } from 'lucide-react';
 import type { KeywordDiffResponse, KeywordDiffTerm, KeywordRephraseSuggestion } from '@job-finder/shared';
 import { SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, ScoreBadge, Surface } from '../../components/ui';
+import { Button, Chip, EmptyState, ScoreBadge, Surface } from '../../components/ui';
 import { emitToast, toErrorMessage } from '../../lib/toastBus';
 import { useJobKeywordDiff } from './hooks';
 
-/**
- * KeywordDiffPanel renders the JD-ATS keyword diff (008): the three term
- * buckets (matched / missing-required / missing-preferred) with any advisory
- * rephrase suggestions shown inline beside the missing-required terms.
- *
- * Suggestions are advisory only — the user copies and edits them; nothing is
- * auto-written to the resume.
- */
 export default function KeywordDiffPanel({ jobId }: { jobId: string | undefined }) {
   const { data, isLoading, isError } = useJobKeywordDiff(jobId);
 
-  // No diff computed yet (404) or still loading → render nothing so the rest of
-  // the page is unaffected. This is advisory context, never a blocker.
-  if (isLoading || isError || !data) return null;
+  if (isLoading) return null;
+
+  if (isError || !data) {
+    return (
+      <Surface>
+        <SectionTitle className="mb-3">ATS keyword match</SectionTitle>
+        <EmptyState>
+          No keyword analysis yet. Run the keyword diff from the job page to compare your
+          resume against this job description.
+        </EmptyState>
+      </Surface>
+    );
+  }
 
   const { matched, missingRequired, missingPreferred, metadata, suggestions } = data;
 

@@ -8,7 +8,7 @@ import type {
   QuestionCategory,
 } from '@job-finder/shared';
 import { SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, LoadingRegion, ScoreBadge, SkeletonLine, Surface } from '../../components/ui';
+import { Button, Chip, EmptyState, LoadingRegion, ScoreBadge, SkeletonLine, Surface } from '../../components/ui';
 import { useInterviewPrep } from './hooks';
 
 const CATEGORY_LABEL: Record<QuestionCategory, string> = {
@@ -44,7 +44,17 @@ export default function PrepPackPanel({ jobId }: { jobId: string | undefined }) 
     );
   }
 
-  if (isError || !data) return null;
+  if (isError || !data) {
+    return (
+      <Surface>
+        <SectionTitle className="mb-0">Interview prep pack</SectionTitle>
+        <EmptyState>
+          No interview prep available yet. First run the keyword diff, then generate your
+          interview prep pack from the job page.
+        </EmptyState>
+      </Surface>
+    );
+  }
 
   return (
     <Surface className="print:border-none print:shadow-none">

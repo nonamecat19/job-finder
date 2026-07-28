@@ -185,12 +185,12 @@ describe('PrepPackPanel', () => {
     })
   })
 
-  it('renders nothing when the pack has not been computed', async () => {
+  it('shows empty state when the pack has not been computed', async () => {
     vi.mocked(api.jobs.interviewPrep).mockRejectedValue(new Error('404'))
-    const { container } = renderWithProviders(<PrepPackPanel jobId="job-1" />)
+    renderWithProviders(<PrepPackPanel jobId="job-1" />)
 
     await waitFor(() => {
-      expect(container).toBeEmptyDOMElement()
+      expect(screen.getByText(/no interview prep available yet/i)).toBeInTheDocument()
     })
   })
 

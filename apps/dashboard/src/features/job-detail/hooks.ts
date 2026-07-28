@@ -18,6 +18,7 @@ export function useJobKeywordDiff(id: string | undefined) {
     queryFn: () => api.jobs.keywordDiff(id!),
     enabled: !!id,
     retry: false,
+    meta: { silentOn404: true },
   });
 }
 
@@ -60,6 +61,7 @@ export function useInterviewPrep(id: string | undefined) {
     queryFn: () => api.jobs.interviewPrep(id!),
     enabled: !!id,
     retry: false,
+    meta: { silentOn404: true },
   });
 }
 
@@ -81,6 +83,7 @@ export function useCoachAssessment(jobId: string | undefined) {
     queryFn: () => api.coach.assessment(jobId!),
     enabled: !!jobId,
     retry: false,
+    meta: { silentOn404: true },
   });
 }
 
