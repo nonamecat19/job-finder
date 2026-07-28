@@ -40,9 +40,8 @@ func seededState(credentialConfigured bool) llmsettings.State {
 		tasks = append(tasks, llmsettings.TaskUpdate{TaskKey: k, Provider: "ollama", Model: ""})
 	}
 	return llmsettings.State{
-		CredentialConfigured:           credentialConfigured,
-		OpenRouterCredentialConfigured: credentialConfigured,
-		Tasks:                          tasks,
+		CredentialConfigured: credentialConfigured,
+		Tasks:                tasks,
 	}
 }
 
@@ -141,52 +140,13 @@ func TestLlmSettingsModels_ReturnsCuratedList(t *testing.T) {
 	if len(out.Cerebras) == 0 {
 		t.Fatal("expected at least one curated Cerebras model")
 	}
-	if len(out.OpenRouter) == 0 {
-		t.Fatal("expected at least one curated OpenRouter model")
-	}
-	var cerebrasDefaults, openRouterDefaults int
+	var cerebrasDefaults int
 	for _, m := range out.Cerebras {
 		if m.IsDefault {
 			cerebrasDefaults++
 		}
 	}
-	for _, m := range out.OpenRouter {
-		if m.IsDefault {
-			openRouterDefaults++
-		}
-	}
 	if cerebrasDefaults != 1 {
 		t.Errorf("expected exactly one default Cerebras model, got %d", cerebrasDefaults)
-	}
-	if openRouterDefaults != 1 {
-		t.Errorf("expected exactly one default OpenRouter model, got %d", openRouterDefaults)
-	}
-}
-
-func TestLlmSettingsPut_SwitchAllToOpenRouter(t *testing.T) {
-	fake := &fakeLlmSettingsProvider{state: seededState(true)}
-	h := &httpapi.LlmSettingsHandler{Settings: fake}
-	r := testutil.SetupRouter(h.Mount)
-
-	body := dto.UpdateLlmSettingsRequestDto{}
-	for _, k := range llmsettings.TaskKeys {
-		body.Tasks = append(body.Tasks, dto.LlmTaskSettingDto{
-			TaskKey: k, Provider: "openrouter", Model: "deepseek/deepseek-r1:free",
-		})
-	}
-
-	w := testutil.DoRequestJSON(r, "PUT", "/api/v1/settings/llm", body, nil)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	var out dto.LlmSettingsResponseDto
-	testutil.ParseJSON(w, &out)
-	if !out.OpenRouterCredentialConfigured {
-		t.Error("openRouterCredentialConfigured should be true")
-	}
-	for _, task := range out.Tasks {
-		if task.Provider != "openrouter" {
-			t.Errorf("task %q provider = %q, want openrouter", task.TaskKey, task.Provider)
-		}
 	}
 }

@@ -744,7 +744,6 @@ export interface LlmTaskSettingDto {
 }
 export interface LlmSettingsResponseDto {
   credentialConfigured: boolean;
-  openRouterCredentialConfigured: boolean;
   tasks: LlmTaskSettingDto[];
 }
 export interface UpdateLlmSettingsRequestDto {
@@ -760,12 +759,6 @@ export interface CerebrasModelDto {
   label: string;
   isDefault: boolean;
 }
-export interface OpenRouterModelDto {
-  id: string;
-  label: string;
-  isDefault: boolean;
-}
 export interface LlmModelsResponseDto {
   cerebras: CerebrasModelDto[];
-  openrouter: OpenRouterModelDto[];
 }

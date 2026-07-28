@@ -35,9 +35,11 @@ type SalaryEnqueuer interface {
 	EnqueueSalaryInfer(ctx context.Context, jobID string) error
 }
 
-// Handler processes "match" asynq tasks, mirroring matching.processor.ts
-// (concurrency 1: local LLM handles one request at a time comfortably —
-// enforced by the asynq server's queue concurrency configuration in main).
+// Handler processes "match" asynq tasks, mirroring matching.processor.ts.
+// Concurrency is policy- and provider-class-driven (019-ai-job-throughput):
+// several at once against a hosted provider, one at a time against a local
+// Ollama — enforced by the admission gate in cmd/server/servers.go, not a
+// fixed literal.
 type Handler struct {
 	svc       *Service
 	notifier  *notifier.Service

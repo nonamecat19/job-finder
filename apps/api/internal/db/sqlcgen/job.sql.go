@@ -64,7 +64,7 @@ func (q *Queries) GetJobByDedupeKey(ctx context.Context, dedupekey string) (pgty
 }
 
 const getJobByID = `-- name: GetJobByID :one
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources" FROM "Job" WHERE "id" = $1
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash" FROM "Job" WHERE "id" = $1
 `
 
 func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
@@ -96,6 +96,7 @@ func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
 		&i.SeenCount,
 		&i.SubscriptionId,
 		&i.SeenOnSources,
+		&i.EmbeddingHash,
 	)
 	return i, err
 }
@@ -109,7 +110,7 @@ INSERT INTO "Job" (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
   ARRAY[$2]
 )
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
 `
 
 type InsertJobParams struct {
@@ -171,6 +172,7 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, erro
 		&i.SeenCount,
 		&i.SubscriptionId,
 		&i.SeenOnSources,
+		&i.EmbeddingHash,
 	)
 	return i, err
 }
@@ -230,7 +232,7 @@ func (q *Queries) ListJobsMissingMatch(ctx context.Context, arg ListJobsMissingM
 }
 
 const listJobsNeedingDetail = `-- name: ListJobsNeedingDetail :many
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources" FROM "Job"
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash" FROM "Job"
 WHERE "sourceKey" = $1 AND "detailScrapedAt" IS NULL
 ORDER BY "ingestedAt" ASC
 LIMIT $2
@@ -276,6 +278,7 @@ func (q *Queries) ListJobsNeedingDetail(ctx context.Context, arg ListJobsNeeding
 			&i.SeenCount,
 			&i.SubscriptionId,
 			&i.SeenOnSources,
+			&i.EmbeddingHash,
 		); err != nil {
 			return nil, err
 		}
@@ -293,7 +296,7 @@ UPDATE "Job" SET
   "sourceKey" = $3,
   "seenOnSources" = array_append("seenOnSources", $4)
 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
 `
 
 type MergeJobBoardParams struct {
@@ -337,6 +340,7 @@ func (q *Queries) MergeJobBoard(ctx context.Context, arg MergeJobBoardParams) (J
 		&i.SeenCount,
 		&i.SubscriptionId,
 		&i.SeenOnSources,
+		&i.EmbeddingHash,
 	)
 	return i, err
 }
@@ -345,7 +349,7 @@ const recordJobRepost = `-- name: RecordJobRepost :one
 UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now(),
   "subscriptionId" = COALESCE("subscriptionId", $2)
 WHERE "dedupeKey" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
 `
 
 type RecordJobRepostParams struct {
@@ -388,6 +392,7 @@ func (q *Queries) RecordJobRepost(ctx context.Context, arg RecordJobRepostParams
 		&i.SeenCount,
 		&i.SubscriptionId,
 		&i.SeenOnSources,
+		&i.EmbeddingHash,
 	)
 	return i, err
 }
@@ -402,7 +407,7 @@ UPDATE "Job" SET
   "postedAt" = COALESCE($6, "postedAt"),
   "detailScrapedAt" = now()
 WHERE "id" = $7
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
 `
 
 type UpdateJobDetailParams struct {
@@ -452,6 +457,7 @@ func (q *Queries) UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams
 		&i.SeenCount,
 		&i.SubscriptionId,
 		&i.SeenOnSources,
+		&i.EmbeddingHash,
 	)
 	return i, err
 }
@@ -470,9 +476,26 @@ func (q *Queries) UpdateJobEmbedding(ctx context.Context, arg UpdateJobEmbedding
 	return err
 }
 
+const updateJobEmbeddingWithHash = `-- name: UpdateJobEmbeddingWithHash :exec
+UPDATE "Job" SET "embedding" = $2, "embeddingHash" = $3 WHERE "id" = $1
+`
+
+type UpdateJobEmbeddingWithHashParams struct {
+	ID            pgtype.UUID      `json:"id"`
+	Embedding     *pgvector.Vector `json:"embedding"`
+	EmbeddingHash *string          `json:"embeddingHash"`
+}
+
+// Stores the hash of the exact text embedded, so a later match on unchanged
+// content can skip re-embedding (019-ai-job-throughput, research.md R5).
+func (q *Queries) UpdateJobEmbeddingWithHash(ctx context.Context, arg UpdateJobEmbeddingWithHashParams) error {
+	_, err := q.db.Exec(ctx, updateJobEmbeddingWithHash, arg.ID, arg.Embedding, arg.EmbeddingHash)
+	return err
+}
+
 const updateJobStatus = `-- name: UpdateJobStatus :one
 UPDATE "Job" SET "status" = $2 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
 `
 
 type UpdateJobStatusParams struct {
@@ -509,6 +532,7 @@ func (q *Queries) UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams
 		&i.SeenCount,
 		&i.SubscriptionId,
 		&i.SeenOnSources,
+		&i.EmbeddingHash,
 	)
 	return i, err
 }

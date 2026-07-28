@@ -24,6 +24,8 @@ type ActivityRun struct {
 	CreatedAt   pgtype.Timestamp `json:"createdAt"`
 	StartedAt   pgtype.Timestamp `json:"startedAt"`
 	FinishedAt  pgtype.Timestamp `json:"finishedAt"`
+	HeartbeatAt pgtype.Timestamp `json:"heartbeatAt"`
+	TimeoutMs   *int32           `json:"timeoutMs"`
 }
 
 type AiFeatureSetting struct {
@@ -125,23 +127,6 @@ type EmployerBoard struct {
 	CreatedAt            pgtype.Timestamp `json:"createdAt"`
 }
 
-type ExtBootstrapCode struct {
-	ID        pgtype.UUID      `json:"id"`
-	CodeHash  string           `json:"codeHash"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	ExpiresAt pgtype.Timestamp `json:"expiresAt"`
-	UsedAt    pgtype.Timestamp `json:"usedAt"`
-}
-
-type ExtRefreshToken struct {
-	ID          pgtype.UUID      `json:"id"`
-	TokenHash   string           `json:"tokenHash"`
-	CreatedAt   pgtype.Timestamp `json:"createdAt"`
-	ExpiresAt   pgtype.Timestamp `json:"expiresAt"`
-	RevokedAt   pgtype.Timestamp `json:"revokedAt"`
-	RotatedToId pgtype.UUID      `json:"rotatedToId"`
-}
-
 type FreshMatchNotification struct {
 	ID            pgtype.UUID      `json:"id"`
 	JobId         pgtype.UUID      `json:"jobId"`
@@ -208,6 +193,7 @@ type Job struct {
 	SeenCount        int32            `json:"seenCount"`
 	SubscriptionId   pgtype.UUID      `json:"subscriptionId"`
 	SeenOnSources    []string         `json:"seenOnSources"`
+	EmbeddingHash    *string          `json:"embeddingHash"`
 }
 
 type JobContact struct {

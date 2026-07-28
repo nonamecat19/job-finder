@@ -20,13 +20,14 @@ var ErrNoProfileConfig = errors.New("no profile config")
 type Service struct {
 	q          Repository
 	profiles   *profile.Service
+	snapshot   *profile.SnapshotCache
 	llmc       llm.Provider
 	threshold  float64
 	matchModel string
 }
 
-func NewService(q Repository, profiles *profile.Service, llmc llm.Provider, threshold float64, matchModel string) *Service {
-	return &Service{q: q, profiles: profiles, llmc: llmc, threshold: threshold, matchModel: matchModel}
+func NewService(q Repository, profiles *profile.Service, snapshot *profile.SnapshotCache, llmc llm.Provider, threshold float64, matchModel string) *Service {
+	return &Service{q: q, profiles: profiles, snapshot: snapshot, llmc: llmc, threshold: threshold, matchModel: matchModel}
 }
 
 func (s *Service) fitModel() string {

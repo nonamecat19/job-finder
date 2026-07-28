@@ -2,10 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
-	"log/slog"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -45,8 +41,6 @@ type App struct {
 	Companies     *httpapi.CompaniesHandler
 	GhostJob      *httpapi.GhostJobHandler
 	Coach         *httpapi.CoachHandler
-	ExtAuth       *httpapi.ExtAuthHandler
-	ExtProfile    *httpapi.ExtProfileHandler
 	Contacts      *httpapi.ContactsHandler
 	Referral      *httpapi.ReferralHandler
 	Outreach      *httpapi.OutreachHandler
@@ -62,6 +56,15 @@ type App struct {
 	Enrichment *enrichment.Handler
 	Salary     *salary.Handler
 	Ghost      *ghostjob.Handler
+
+	// Routers back the six workers' admission gates (019-ai-job-throughput):
+	// each resolves the live provider class for its task so buildServers can
+	// size the gate to the applicable concurrency. nil for task types with
+	// no LLM component (ingest, enrich).
+	MatchRouter      *llm.Router
+	GenerationRouter *llm.Router
+	GhostRouter      *llm.Router
+	DefaultRouter    *llm.Router // salary uses the "default" task key
 
 	Scheduler *ingestion.Scheduler
 }
@@ -117,25 +120,6 @@ type minioPinger struct {
 func (m minioPinger) Ping(ctx context.Context) error {
 	_, err := m.client.BucketExists(ctx, m.bucket)
 	return err
-}
-
-// extJWTSigningSecret decodes a configured 32-byte hex EXT_JWT_SECRET, or
-// generates a random 32-byte secret when unset.
-func extJWTSigningSecret(hexKey string) ([]byte, error) {
-	if hexKey == "" {
-		secret := make([]byte, 32)
-		if _, err := rand.Read(secret); err != nil {
-			return nil, err
-		}
-		slog.Warn("EXT_JWT_SECRET not set — using an ephemeral random secret; " +
-			"extension sessions will not survive a server restart")
-		return secret, nil
-	}
-	secret, err := hex.DecodeString(hexKey)
-	if err != nil || len(secret) != 32 {
-		return nil, errors.New("EXT_JWT_SECRET must be a 32-byte hex string (openssl rand -hex 32)")
-	}
-	return secret, nil
 }
 
 // hostsAdapter maps retrieval.Service onto httpapi.HostRetrievalProvider.

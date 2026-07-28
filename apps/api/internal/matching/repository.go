@@ -35,6 +35,10 @@ func sqlcJobToDomain(j sqlcgen.Job) domain.Job {
 		t := j.PostedAt.Time
 		postedAt = &t
 	}
+	var embedding []float32
+	if j.Embedding != nil {
+		embedding = j.Embedding.Slice()
+	}
 	return domain.Job{
 		ID:              dbutil.UUIDString(j.ID),
 		DedupeKey:       j.DedupeKey,
@@ -57,6 +61,8 @@ func sqlcJobToDomain(j sqlcgen.Job) domain.Job {
 		SalaryCurrency:   j.SalaryCurrency,
 		SalaryConfidence: j.SalaryConfidence,
 		SalarySource:     j.SalarySource,
+		EmbeddingHash:    j.EmbeddingHash,
+		Embedding:        embedding,
 	}
 }
 

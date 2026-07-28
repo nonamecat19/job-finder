@@ -45,7 +45,7 @@ func TestActivityList(t *testing.T) {
 		t.Fatalf("insert activity: %v", err)
 	}
 
-	h := httpapi.NewActivityHandler(database.Queries, nil, nil)
+	h := httpapi.NewActivityHandler(database.Queries, nil, nil, nil, nil)
 	r := testutil.SetupRouter(h.Mount)
 
 	w := testutil.DoRequest(r, "GET", "/api/activity", nil, nil)

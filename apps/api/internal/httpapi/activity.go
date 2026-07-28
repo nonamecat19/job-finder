@@ -16,6 +16,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -41,6 +42,14 @@ type ActivityEnqueuer interface {
 type ActivityInspector interface {
 	CancelProcessing(id string) error
 	DeleteTask(queue, id string) error
+	GetQueueInfo(queue string) (*asynq.QueueInfo, error)
+}
+
+// queueOrder is the fixed display order for GET /activity/queues
+// (contracts/activity-api.md §2).
+var queueOrder = []string{
+	queue.QueueIngest, queue.QueueMatch, queue.QueueGenerate,
+	queue.QueueEnrich, queue.QueueSalaryInfer, queue.QueueGhostScore,
 }
 
 // queueForOp maps an ActivityRun.Op back to the asynq queue it was enqueued
@@ -58,14 +67,17 @@ type ActivityHandler struct {
 	q         ActivityProvider
 	client    ActivityEnqueuer
 	inspector ActivityInspector
+	policies  []queue.TaskPolicy
+	resolvers map[string]queue.ClassResolver // keyed by queue name; nil for non-LLM queues
 }
 
-func NewActivityHandler(q ActivityProvider, client ActivityEnqueuer, inspector ActivityInspector) *ActivityHandler {
-	return &ActivityHandler{q: q, client: client, inspector: inspector}
+func NewActivityHandler(q ActivityProvider, client ActivityEnqueuer, inspector ActivityInspector, policies []queue.TaskPolicy, resolvers map[string]queue.ClassResolver) *ActivityHandler {
+	return &ActivityHandler{q: q, client: client, inspector: inspector, policies: policies, resolvers: resolvers}
 }
 
 func (h *ActivityHandler) Mount(r chi.Router) {
 	r.Get("/activity", h.list)
+	r.Get("/activity/queues", h.queues)
 	r.Post("/activity/retry", h.retry)
 	r.Post("/activity/cancel-all", h.cancelAll)
 	r.Post("/activity/{id}/cancel", h.cancel)
@@ -86,7 +98,7 @@ func (h *ActivityHandler) cancel(w http.ResponseWriter, r *http.Request) {
 
 	row, err := h.q.GetActivityRun(r.Context(), uid)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "activity run not found")
+		writeError(w, http.StatusNotFound, "activity run not found: "+id)
 		return
 	}
 	if row.State != "queued" && row.State != "running" {
@@ -175,6 +187,98 @@ func (h *ActivityHandler) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// queues reports a per-queue backlog snapshot (019-ai-job-throughput,
+// contracts/activity-api.md §2): pending/active/scheduled/retry/archived
+// counts, the effective admission concurrency for the currently resolved
+// provider class, and a throughput-derived ETA. An Inspector failure for one
+// queue is reported per-entry rather than failing the whole response; total
+// Inspector unavailability (nil inspector) yields 503.
+func (h *ActivityHandler) queues(w http.ResponseWriter, r *http.Request) {
+	if h.inspector == nil {
+		writeError(w, http.StatusServiceUnavailable, "queue inspector unavailable")
+		return
+	}
+
+	entries := make([]dto.QueueBacklogDto, 0, len(queueOrder))
+	for _, qname := range queueOrder {
+		entries = append(entries, h.queueBacklog(qname))
+	}
+	writeJSON(w, http.StatusOK, dto.QueueBacklogResponse{Queues: entries})
+}
+
+func (h *ActivityHandler) queueBacklog(qname string) dto.QueueBacklogDto {
+	entry := dto.QueueBacklogDto{Queue: qname}
+
+	policy, ok := h.policyFor(qname)
+	if ok {
+		entry.Concurrency = h.effectiveConcurrency(qname, policy)
+		if class := h.providerClass(qname); class != nil {
+			entry.ProviderClass = class
+		}
+	}
+
+	info, err := h.inspector.GetQueueInfo(qname)
+	if err != nil {
+		msg := err.Error()
+		entry.Error = &msg
+		return entry
+	}
+
+	entry.Pending = info.Pending
+	entry.Active = info.Active
+	entry.Scheduled = info.Scheduled
+	entry.Retry = info.Retry
+	entry.Archived = info.Archived
+
+	minutesToday := time.Since(startOfDay(info.Timestamp)).Minutes()
+	if minutesToday < 1 {
+		minutesToday = 1
+	}
+	entry.ProcessedPerMinute = float64(info.Processed) / minutesToday
+
+	if entry.ProcessedPerMinute > 0 && entry.Pending > 0 {
+		eta := int(float64(entry.Pending) / entry.ProcessedPerMinute * 60)
+		entry.EtaSeconds = &eta
+	}
+	return entry
+}
+
+func startOfDay(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+func (h *ActivityHandler) policyFor(qname string) (queue.TaskPolicy, bool) {
+	for _, p := range h.policies {
+		if p.Queue == qname {
+			return p, true
+		}
+	}
+	return queue.TaskPolicy{}, false
+}
+
+// effectiveConcurrency is the admission capacity for the currently resolved
+// provider class, not the pool size (contracts/activity-api.md §2).
+func (h *ActivityHandler) effectiveConcurrency(qname string, policy queue.TaskPolicy) int {
+	resolver := h.resolvers[qname]
+	if resolver == nil {
+		return policy.LocalConcurrency
+	}
+	if resolver.ProviderClass() == llm.ProviderClassHosted {
+		return policy.HostedConcurrency
+	}
+	return policy.LocalConcurrency
+}
+
+func (h *ActivityHandler) providerClass(qname string) *string {
+	resolver := h.resolvers[qname]
+	if resolver == nil {
+		return nil
+	}
+	class := string(resolver.ProviderClass())
+	return &class
 }
 
 // retry re-enqueues every failed ActivityRun, or only those matching
@@ -347,19 +451,21 @@ func rowToDto(row sqlcgen.ActivityRun) dto.ActivityRunDto {
 	}
 
 	return dto.ActivityRunDto{
-		ID:         dbutil.UUIDString(row.ID),
-		Op:         row.Op,
-		State:      row.State,
-		Label:      row.Label,
-		Step:       row.Step,
-		JobID:      dbutil.UUIDStringPtr(row.JobId),
-		SourceKey:  row.SourceKey,
-		RefID:      row.RefId,
-		Error:      row.Error,
-		Meta:       meta,
-		CreatedAt:  dbutil.Timestamp(row.CreatedAt),
-		StartedAt:  dbutil.TimestampPtr(row.StartedAt),
-		FinishedAt: dbutil.TimestampPtr(row.FinishedAt),
-		ElapsedMs:  elapsedMs,
+		ID:          dbutil.UUIDString(row.ID),
+		Op:          row.Op,
+		State:       row.State,
+		Label:       row.Label,
+		Step:        row.Step,
+		JobID:       dbutil.UUIDStringPtr(row.JobId),
+		SourceKey:   row.SourceKey,
+		RefID:       row.RefId,
+		Error:       row.Error,
+		Meta:        meta,
+		CreatedAt:   dbutil.Timestamp(row.CreatedAt),
+		StartedAt:   dbutil.TimestampPtr(row.StartedAt),
+		FinishedAt:  dbutil.TimestampPtr(row.FinishedAt),
+		ElapsedMs:   elapsedMs,
+		HeartbeatAt: dbutil.TimestampPtr(row.HeartbeatAt),
+		TimeoutMs:   row.TimeoutMs,
 	}
 }

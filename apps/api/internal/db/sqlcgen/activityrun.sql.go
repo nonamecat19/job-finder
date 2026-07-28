@@ -48,6 +48,22 @@ func (q *Queries) FinishActivityRunError(ctx context.Context, arg FinishActivity
 	return err
 }
 
+const finishActivityRunInterrupted = `-- name: FinishActivityRunInterrupted :exec
+UPDATE "ActivityRun" SET "state" = 'interrupted', "error" = $2, "finishedAt" = now() WHERE "id" = $1 AND "state" = 'queued'
+`
+
+type FinishActivityRunInterruptedParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Error *string     `json:"error"`
+}
+
+// Per-row finalizer for a stale queued run whose asynq task the sweeper
+// confirmed no longer exists (checked via the Inspector, one row at a time).
+func (q *Queries) FinishActivityRunInterrupted(ctx context.Context, arg FinishActivityRunInterruptedParams) error {
+	_, err := q.db.Exec(ctx, finishActivityRunInterrupted, arg.ID, arg.Error)
+	return err
+}
+
 const finishActivityRunOk = `-- name: FinishActivityRunOk :exec
 UPDATE "ActivityRun" SET "state" = 'succeeded', "refId" = $2, "meta" = COALESCE($3, "meta"), "finishedAt" = now() WHERE "id" = $1
 `
@@ -63,8 +79,22 @@ func (q *Queries) FinishActivityRunOk(ctx context.Context, arg FinishActivityRun
 	return err
 }
 
+const finishActivityRunTimedOut = `-- name: FinishActivityRunTimedOut :exec
+UPDATE "ActivityRun" SET "state" = 'timed_out', "error" = $2, "finishedAt" = now() WHERE "id" = $1 AND "state" = 'running'
+`
+
+type FinishActivityRunTimedOutParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Error *string     `json:"error"`
+}
+
+func (q *Queries) FinishActivityRunTimedOut(ctx context.Context, arg FinishActivityRunTimedOutParams) error {
+	_, err := q.db.Exec(ctx, finishActivityRunTimedOut, arg.ID, arg.Error)
+	return err
+}
+
 const getActivityRun = `-- name: GetActivityRun :one
-SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt" FROM "ActivityRun" WHERE "id" = $1
+SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt", "heartbeatAt", "timeoutMs" FROM "ActivityRun" WHERE "id" = $1
 `
 
 func (q *Queries) GetActivityRun(ctx context.Context, id pgtype.UUID) (ActivityRun, error) {
@@ -85,6 +115,8 @@ func (q *Queries) GetActivityRun(ctx context.Context, id pgtype.UUID) (ActivityR
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.HeartbeatAt,
+		&i.TimeoutMs,
 	)
 	return i, err
 }
@@ -92,7 +124,7 @@ func (q *Queries) GetActivityRun(ctx context.Context, id pgtype.UUID) (ActivityR
 const insertActivityRun = `-- name: InsertActivityRun :one
 INSERT INTO "ActivityRun" ("op", "label", "jobId", "sourceKey", "queueTaskId", "meta")
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt"
+RETURNING id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt", "heartbeatAt", "timeoutMs"
 `
 
 type InsertActivityRunParams struct {
@@ -129,12 +161,14 @@ func (q *Queries) InsertActivityRun(ctx context.Context, arg InsertActivityRunPa
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.HeartbeatAt,
+		&i.TimeoutMs,
 	)
 	return i, err
 }
 
 const listActiveActivityRuns = `-- name: ListActiveActivityRuns :many
-SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt" FROM "ActivityRun" WHERE "state" IN ('queued', 'running') ORDER BY "createdAt" DESC
+SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt", "heartbeatAt", "timeoutMs" FROM "ActivityRun" WHERE "state" IN ('queued', 'running') ORDER BY "createdAt" DESC
 `
 
 func (q *Queries) ListActiveActivityRuns(ctx context.Context) ([]ActivityRun, error) {
@@ -161,6 +195,8 @@ func (q *Queries) ListActiveActivityRuns(ctx context.Context) ([]ActivityRun, er
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.HeartbeatAt,
+			&i.TimeoutMs,
 		); err != nil {
 			return nil, err
 		}
@@ -173,13 +209,14 @@ func (q *Queries) ListActiveActivityRuns(ctx context.Context) ([]ActivityRun, er
 }
 
 const listFailedActivityRuns = `-- name: ListFailedActivityRuns :many
-SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt" FROM "ActivityRun"
-WHERE "state" IN ('failed', 'cancelled') AND ($1::text IS NULL OR "op" = $1)
+SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt", "heartbeatAt", "timeoutMs" FROM "ActivityRun"
+WHERE "state" IN ('failed', 'cancelled', 'timed_out', 'interrupted') AND ($1::text IS NULL OR "op" = $1)
 ORDER BY "createdAt" DESC
 `
 
-// Includes "cancelled" runs (e.g. skipped because of an upstream rate limit)
-// alongside "failed" ones — both are retryable the same way.
+// Includes "cancelled" (e.g. skipped because of an upstream rate limit),
+// "timed_out" (exceeded its task-type deadline), and "interrupted" (worker
+// vanished) alongside "failed" — all four are retryable the same way.
 func (q *Queries) ListFailedActivityRuns(ctx context.Context, op *string) ([]ActivityRun, error) {
 	rows, err := q.db.Query(ctx, listFailedActivityRuns, op)
 	if err != nil {
@@ -204,6 +241,8 @@ func (q *Queries) ListFailedActivityRuns(ctx context.Context, op *string) ([]Act
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.HeartbeatAt,
+			&i.TimeoutMs,
 		); err != nil {
 			return nil, err
 		}
@@ -216,7 +255,7 @@ func (q *Queries) ListFailedActivityRuns(ctx context.Context, op *string) ([]Act
 }
 
 const listRecentActivityRuns = `-- name: ListRecentActivityRuns :many
-SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt" FROM "ActivityRun" ORDER BY "createdAt" DESC LIMIT $1
+SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt", "heartbeatAt", "timeoutMs" FROM "ActivityRun" ORDER BY "createdAt" DESC LIMIT $1
 `
 
 func (q *Queries) ListRecentActivityRuns(ctx context.Context, limit int32) ([]ActivityRun, error) {
@@ -243,6 +282,8 @@ func (q *Queries) ListRecentActivityRuns(ctx context.Context, limit int32) ([]Ac
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.HeartbeatAt,
+			&i.TimeoutMs,
 		); err != nil {
 			return nil, err
 		}
@@ -254,8 +295,68 @@ func (q *Queries) ListRecentActivityRuns(ctx context.Context, limit int32) ([]Ac
 	return items, nil
 }
 
+const listStaleQueuedActivityRuns = `-- name: ListStaleQueuedActivityRuns :many
+SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt", "heartbeatAt", "timeoutMs" FROM "ActivityRun" WHERE "state" = 'queued' AND "createdAt" < $1
+`
+
+// Rows past the queued grace window with no live asynq task; the sweeper
+// checks queueTaskId against the Inspector before marking these interrupted.
+func (q *Queries) ListStaleQueuedActivityRuns(ctx context.Context, cutoff pgtype.Timestamp) ([]ActivityRun, error) {
+	rows, err := q.db.Query(ctx, listStaleQueuedActivityRuns, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ActivityRun
+	for rows.Next() {
+		var i ActivityRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.Op,
+			&i.State,
+			&i.Label,
+			&i.Step,
+			&i.JobId,
+			&i.SourceKey,
+			&i.QueueTaskId,
+			&i.RefId,
+			&i.Error,
+			&i.Meta,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.HeartbeatAt,
+			&i.TimeoutMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setActivityRunTimeout = `-- name: SetActivityRunTimeout :exec
+UPDATE "ActivityRun" SET "timeoutMs" = $2 WHERE "id" = $1
+`
+
+type SetActivityRunTimeoutParams struct {
+	ID        pgtype.UUID `json:"id"`
+	TimeoutMs *int32      `json:"timeoutMs"`
+}
+
+// Records the deadline (from the task-type policy) the run was admitted
+// under, so the sweeper and UI can report which limit applied. Set by the
+// queue middleware, independent of the handler's own StartActivityRun call.
+func (q *Queries) SetActivityRunTimeout(ctx context.Context, arg SetActivityRunTimeoutParams) error {
+	_, err := q.db.Exec(ctx, setActivityRunTimeout, arg.ID, arg.TimeoutMs)
+	return err
+}
+
 const setActivityStep = `-- name: SetActivityStep :exec
-UPDATE "ActivityRun" SET "step" = $2, "meta" = COALESCE($3, "meta") WHERE "id" = $1
+UPDATE "ActivityRun" SET "step" = $2, "meta" = COALESCE($3, "meta"), "heartbeatAt" = now() WHERE "id" = $1
 `
 
 type SetActivityStepParams struct {
@@ -270,10 +371,72 @@ func (q *Queries) SetActivityStep(ctx context.Context, arg SetActivityStepParams
 }
 
 const startActivityRun = `-- name: StartActivityRun :exec
-UPDATE "ActivityRun" SET "state" = 'running', "startedAt" = now() WHERE "id" = $1
+UPDATE "ActivityRun" SET "state" = 'running', "startedAt" = now(), "heartbeatAt" = now() WHERE "id" = $1
 `
 
 func (q *Queries) StartActivityRun(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, startActivityRun, id)
+	return err
+}
+
+const sweepStaleRunningActivityRuns = `-- name: SweepStaleRunningActivityRuns :many
+UPDATE "ActivityRun"
+SET "state" = 'interrupted', "error" = $1, "finishedAt" = now()
+WHERE "state" = 'running' AND ("heartbeatAt" IS NULL OR "heartbeatAt" < $2)
+RETURNING id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt", "heartbeatAt", "timeoutMs"
+`
+
+type SweepStaleRunningActivityRunsParams struct {
+	Reason *string          `json:"reason"`
+	Cutoff pgtype.Timestamp `json:"cutoff"`
+}
+
+// Stale: heartbeatAt older than sqlc.arg('cutoff'), or null (the existing-ghost
+// case — pre-migration rows and any queued->running transition that predates
+// this feature). Only ever moves 'running' rows, never a terminal one, so a
+// run that finished between sweep read and write is never re-opened.
+func (q *Queries) SweepStaleRunningActivityRuns(ctx context.Context, arg SweepStaleRunningActivityRunsParams) ([]ActivityRun, error) {
+	rows, err := q.db.Query(ctx, sweepStaleRunningActivityRuns, arg.Reason, arg.Cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ActivityRun
+	for rows.Next() {
+		var i ActivityRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.Op,
+			&i.State,
+			&i.Label,
+			&i.Step,
+			&i.JobId,
+			&i.SourceKey,
+			&i.QueueTaskId,
+			&i.RefId,
+			&i.Error,
+			&i.Meta,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.HeartbeatAt,
+			&i.TimeoutMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const touchActivityRunHeartbeat = `-- name: TouchActivityRunHeartbeat :exec
+UPDATE "ActivityRun" SET "heartbeatAt" = now() WHERE "id" = $1 AND "state" = 'running'
+`
+
+func (q *Queries) TouchActivityRunHeartbeat(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, touchActivityRunHeartbeat, id)
 	return err
 }

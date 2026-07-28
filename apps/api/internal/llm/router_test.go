@@ -26,9 +26,8 @@ func (s *stubProvider) Embed(ctx context.Context, text string) ([]float32, error
 
 func snapshotWith(tasks map[string]TaskSetting, credentialConfigured bool) RouterSnapshot {
 	return RouterSnapshot{
-		Tasks:                          tasks,
-		CredentialConfigured:           credentialConfigured,
-		OpenRouterCredentialConfigured: credentialConfigured,
+		Tasks:                tasks,
+		CredentialConfigured: credentialConfigured,
 	}
 }
 
@@ -38,7 +37,7 @@ func TestRouterResolvesOllamaByDefault(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, true))
-	r := NewRouter("match", holder, ollama, cerebras, nil)
+	r := NewRouter("match", holder, ollama, cerebras)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -55,7 +54,7 @@ func TestRouterResolvesCerebrasWhenSelectedAndConfigured(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"generation": {Provider: TaskProviderCerebras, Model: "llama-3.3-70b"},
 	}, true))
-	r := NewRouter("generation", holder, ollama, cerebras, nil)
+	r := NewRouter("generation", holder, ollama, cerebras)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -74,9 +73,7 @@ func TestRouterFallsBackToOllamaWhenCredentialMissing(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"ghost": {Provider: TaskProviderCerebras, Model: "gpt-oss-120b"},
 	}, false))
-	// cerebras provider is nil, exactly as main.go would construct it when
-	// CEREBRAS_API_KEY is unset.
-	r := NewRouter("ghost", holder, ollama, nil, nil)
+	r := NewRouter("ghost", holder, ollama, nil)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -87,58 +84,13 @@ func TestRouterFallsBackToOllamaWhenCredentialMissing(t *testing.T) {
 	}
 }
 
-func TestRouterResolvesOpenRouterWhenSelectedAndConfigured(t *testing.T) {
-	ollama := &stubProvider{name: "ollama"}
-	cerebras := &stubProvider{name: "cerebras"}
-	openrouter := &stubProvider{name: "openrouter"}
-	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
-		"generation": {Provider: TaskProviderOpenRouter, Model: "deepseek/deepseek-r1:free"},
-	}, true))
-	r := NewRouter("generation", holder, ollama, cerebras, openrouter)
-
-	out, err := r.Complete(context.Background(), "hi", nil)
-	if err != nil {
-		t.Fatalf("Complete: %v", err)
-	}
-	if out != "openrouter" {
-		t.Errorf("Complete() = %q, want openrouter", out)
-	}
-	if openrouter.gotModel != "deepseek/deepseek-r1:free" {
-		t.Errorf("model passed to provider = %q, want deepseek/deepseek-r1:free", openrouter.gotModel)
-	}
-}
-
-func TestRouterFallsBackToOllamaWhenOpenRouterCredentialMissing(t *testing.T) {
+func TestRouterEmbedAlwaysUsesOllamaForCerebrasTask(t *testing.T) {
 	ollama := &stubProvider{name: "ollama"}
 	cerebras := &stubProvider{name: "cerebras"}
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
-		"ghost": {Provider: TaskProviderOpenRouter, Model: "deepseek/deepseek-r1:free"},
-	}, false))
-	// openrouter provider is nil, as main.go constructs it when
-	// OPENROUTER_API_KEY is unset.
-	r := NewRouter("ghost", holder, ollama, cerebras, nil)
-
-	out, err := r.Complete(context.Background(), "hi", nil)
-	if err != nil {
-		t.Fatalf("Complete: %v", err)
-	}
-	if out != "ollama" {
-		t.Errorf("Complete() = %q, want ollama (fallback)", out)
-	}
-	// The persisted OpenRouter model must not leak onto Ollama, which has no
-	// such model — the fallback uses Ollama's own default.
-	if ollama.gotModel != "" {
-		t.Errorf("gotModel = %q, want empty on fallback", ollama.gotModel)
-	}
-}
-
-func TestRouterEmbedAlwaysUsesOllamaForOpenRouterTask(t *testing.T) {
-	ollama := &stubProvider{name: "ollama"}
-	openrouter := &stubProvider{name: "openrouter"}
-	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
-		"default": {Provider: TaskProviderOpenRouter},
+		"default": {Provider: TaskProviderCerebras},
 	}, true))
-	r := NewRouter("default", holder, ollama, nil, openrouter)
+	r := NewRouter("default", holder, ollama, cerebras)
 
 	vec, err := r.Embed(context.Background(), "text")
 	if err != nil {
@@ -154,7 +106,7 @@ func TestRouterEmptyModelUsesProviderDefault(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"rephrase": {Provider: TaskProviderOllama, Model: ""},
 	}, true))
-	r := NewRouter("rephrase", holder, ollama, nil, nil)
+	r := NewRouter("rephrase", holder, ollama, nil)
 
 	if _, err := r.Complete(context.Background(), "hi", nil); err != nil {
 		t.Fatalf("Complete: %v", err)
@@ -170,7 +122,7 @@ func TestRouterEmbedAlwaysUsesOllama(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"default": {Provider: TaskProviderCerebras},
 	}, true))
-	r := NewRouter("default", holder, ollama, cerebras, nil)
+	r := NewRouter("default", holder, ollama, cerebras)
 
 	vec, err := r.Embed(context.Background(), "text")
 	if err != nil {
@@ -187,7 +139,7 @@ func TestRouterSnapshotSwapIsLive(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, true))
-	r := NewRouter("match", holder, ollama, cerebras, nil)
+	r := NewRouter("match", holder, ollama, cerebras)
 
 	out, _ := r.Complete(context.Background(), "hi", nil)
 	if out != "ollama" {
@@ -201,5 +153,61 @@ func TestRouterSnapshotSwapIsLive(t *testing.T) {
 	out, _ = r.Complete(context.Background(), "hi", nil)
 	if out != "cerebras" {
 		t.Errorf("after update, Complete() = %q, want cerebras", out)
+	}
+}
+
+func TestProviderClass_LoopbackIsLocal(t *testing.T) {
+	ollama := NewOllama("http://localhost:11434", "", "", "", "")
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"match": {Provider: TaskProviderOllama},
+	}, false))
+	r := NewRouter("match", holder, ollama, nil)
+	if got := r.ProviderClass(); got != ProviderClassLocal {
+		t.Errorf("expected local, got %v", got)
+	}
+}
+
+func TestProviderClass_LoopbackWithKeySetIsHosted(t *testing.T) {
+	ollama := NewOllama("http://127.0.0.1:11434", "some-key", "", "", "")
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"match": {Provider: TaskProviderOllama},
+	}, false))
+	r := NewRouter("match", holder, ollama, nil)
+	if got := r.ProviderClass(); got != ProviderClassHosted {
+		t.Errorf("expected hosted (key set on loopback), got %v", got)
+	}
+}
+
+func TestProviderClass_CloudURLIsHosted(t *testing.T) {
+	ollama := NewOllama("https://ollama.com", "cloud-key", "", "", "")
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"match": {Provider: TaskProviderOllama},
+	}, false))
+	r := NewRouter("match", holder, ollama, nil)
+	if got := r.ProviderClass(); got != ProviderClassHosted {
+		t.Errorf("expected hosted, got %v", got)
+	}
+}
+
+func TestProviderClass_CerebrasWithCredentialIsHosted(t *testing.T) {
+	ollama := NewOllama("http://localhost:11434", "", "", "", "")
+	cerebras := &stubProvider{name: "cerebras"}
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"match": {Provider: TaskProviderCerebras},
+	}, true))
+	r := NewRouter("match", holder, ollama, cerebras)
+	if got := r.ProviderClass(); got != ProviderClassHosted {
+		t.Errorf("expected hosted, got %v", got)
+	}
+}
+
+func TestProviderClass_CerebrasWithoutCredentialFollowsOllamaFallback(t *testing.T) {
+	ollama := NewOllama("http://localhost:11434", "", "", "", "")
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"match": {Provider: TaskProviderCerebras},
+	}, false))
+	r := NewRouter("match", holder, ollama, nil)
+	if got := r.ProviderClass(); got != ProviderClassLocal {
+		t.Errorf("expected local (fallback to local ollama), got %v", got)
 	}
 }

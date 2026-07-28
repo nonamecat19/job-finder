@@ -280,6 +280,9 @@ func (s *ServiceImpl) ClearCookies(ctx context.Context, host string) error {
 	return s.store.ClearCookies(ctx, host)
 }
 
+// OverrideCoolingOff clears an active cooling-off period for host, resetting
+// the consecutive-block counter so recordBlock starts fresh. Returns the
+// remaining duration that was cleared (0 if none was active).
 func (s *ServiceImpl) OverrideCoolingOff(ctx context.Context, host string) (time.Duration, error) {
 	state, err := s.store.Get(ctx, host)
 	if err != nil {
@@ -289,6 +292,11 @@ func (s *ServiceImpl) OverrideCoolingOff(ctx context.Context, host string) (time
 		return 0, nil
 	}
 	remaining := time.Until(state.CoolingOffUntil.Time)
+	state.CoolingOffUntil = pgtype.Timestamptz{}
+	state.ConsecutiveBlocks = 0
+	if err := s.store.Upsert(ctx, host, state); err != nil {
+		return 0, err
+	}
 	if remaining < 0 {
 		return 0, nil
 	}

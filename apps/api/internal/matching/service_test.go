@@ -12,7 +12,7 @@ type fakeRepo struct {
 }
 
 func TestNewServiceAcceptsRepositoryPort(t *testing.T) {
-	svc := matching.NewService(&fakeRepo{}, nil, nil, 0.35, "")
+	svc := matching.NewService(&fakeRepo{}, nil, nil, nil, 0.35, "")
 	if svc == nil {
 		t.Fatal("NewService returned nil")
 	}

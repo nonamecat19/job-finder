@@ -3,7 +3,9 @@ package activity
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -21,6 +23,9 @@ type Store interface {
 	FinishActivityRunOk(ctx context.Context, arg sqlcgen.FinishActivityRunOkParams) error
 	FinishActivityRunError(ctx context.Context, arg sqlcgen.FinishActivityRunErrorParams) error
 	FinishActivityRunCancelled(ctx context.Context, arg sqlcgen.FinishActivityRunCancelledParams) error
+	FinishActivityRunTimedOut(ctx context.Context, arg sqlcgen.FinishActivityRunTimedOutParams) error
+	TouchActivityRunHeartbeat(ctx context.Context, id pgtype.UUID) error
+	SetActivityRunTimeout(ctx context.Context, arg sqlcgen.SetActivityRunTimeoutParams) error
 }
 
 type Recorder struct {
@@ -142,6 +147,50 @@ func (r *Recorder) Cancel(ctx context.Context, reason string) {
 		Error: &reason,
 	}); dbErr != nil {
 		slog.Error("activity: finish cancelled failed", "id", dbutil.UUIDString(r.id), "error", dbErr)
+	}
+}
+
+// Heartbeat refreshes heartbeatAt, proving the owning worker is still alive.
+// Called by the queue middleware's ticker while a task runs
+// (019-ai-job-throughput) — the sweeper treats a stale heartbeat as a sign
+// the worker vanished.
+func (r *Recorder) Heartbeat(ctx context.Context) {
+	if !r.valid() {
+		return
+	}
+	if err := r.q.TouchActivityRunHeartbeat(ctx, r.id); err != nil {
+		slog.Error("activity: heartbeat failed", "id", dbutil.UUIDString(r.id), "error", err)
+	}
+}
+
+// SetTimeout records the deadline (in ms) the run was admitted under, from
+// the task-type policy, independent of Start — called once by the queue
+// middleware right after admission (019-ai-job-throughput).
+func (r *Recorder) SetTimeout(ctx context.Context, ms int32) {
+	if !r.valid() {
+		return
+	}
+	if err := r.q.SetActivityRunTimeout(ctx, sqlcgen.SetActivityRunTimeoutParams{
+		ID:        r.id,
+		TimeoutMs: &ms,
+	}); err != nil {
+		slog.Error("activity: set timeout failed", "id", dbutil.UUIDString(r.id), "error", err)
+	}
+}
+
+// TimedOut finalizes the run "timed_out": it exceeded its task-type deadline
+// (019-ai-job-throughput). elapsed/limit are formatted into the error
+// string per data-model.md §1.3.
+func (r *Recorder) TimedOut(ctx context.Context, elapsed, limit time.Duration) {
+	if !r.valid() {
+		return
+	}
+	msg := fmt.Sprintf("timed out after %s (limit %s)", elapsed.Round(time.Second), limit.Round(time.Second))
+	if err := r.q.FinishActivityRunTimedOut(ctx, sqlcgen.FinishActivityRunTimedOutParams{
+		ID:    r.id,
+		Error: &msg,
+	}); err != nil {
+		slog.Error("activity: finish timed_out failed", "id", dbutil.UUIDString(r.id), "error", err)
 	}
 }
 

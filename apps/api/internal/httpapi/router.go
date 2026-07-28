@@ -31,6 +31,10 @@ func NewRouter(mounts ...func(chi.Router)) *chi.Mux {
 		}
 	}
 
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, http.StatusNotFound, "not found: "+r.URL.Path)
+	})
+
 	r.Route("/api", mountAll)
 	r.Route("/api/v1", mountAll)
 

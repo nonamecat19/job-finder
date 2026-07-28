@@ -22,13 +22,12 @@ const (
 
 // Queue names each task type is routed to. These are deliberately separate
 // asynq *queues* (not just task type names) so each can run on its own
-// dedicated asynq.Server with its own Concurrency cap — mirroring the BullMQ
-// setup where ingest/match/generate were three separate queues with
-// concurrency 2/1/1 respectively (ingestion.processor.ts, matching.processor.ts,
-// generation.processor.ts). A single asynq.Server's `Queues` map only
+// dedicated asynq.Server, sized from that task's TaskPolicy and gated by
+// provider class (019-ai-job-throughput, internal/queue/policy.go +
+// middleware.go) — hosted providers run several AI items at once per task
+// type, local Ollama stays at one. A single asynq.Server's `Queues` map only
 // controls priority weighting *within* one shared worker pool, not a hard
-// per-queue concurrency ceiling, so one server can't reproduce "match never
-// runs more than 1 at a time" on its own.
+// per-queue concurrency ceiling, so each task type still needs its own server.
 const (
 	QueueIngest      = TypeIngest
 	QueueMatch       = TypeMatch

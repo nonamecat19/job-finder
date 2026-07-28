@@ -94,7 +94,7 @@ func (h *DocumentsHandler) get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Generation.GetDocumentDto(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "document not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -113,7 +113,7 @@ func (h *DocumentsHandler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := h.Generation.UpdateDocument(r.Context(), id, body.Text)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "document not found: "+id)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -123,18 +123,22 @@ func (h *DocumentsHandler) pdf(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	doc, err := h.Generation.GetDocument(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "document not found: "+id)
 		return
 	}
 	if doc.PdfPath == nil {
-		writeError(w, http.StatusNotFound, "PDF not rendered yet")
+		writeError(w, http.StatusNotFound, "PDF not rendered yet for document: "+id)
 		return
 	}
 	if _, err := os.Stat(*doc.PdfPath); err != nil {
-		writeError(w, http.StatusNotFound, "PDF not rendered yet")
+		writeError(w, http.StatusNotFound, "PDF not rendered yet for document: "+id)
 		return
 	}
+	disposition := "inline"
+	if r.URL.Query().Get("download") == "1" {
+		disposition = "attachment"
+	}
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(*doc.PdfPath)+`"`)
+	w.Header().Set("Content-Disposition", disposition+`; filename="`+filepath.Base(*doc.PdfPath)+`"`)
 	http.ServeFile(w, r, *doc.PdfPath)
 }

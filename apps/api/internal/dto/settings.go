@@ -7,9 +7,8 @@ type LlmTaskSettingDto struct {
 }
 
 type LlmSettingsResponseDto struct {
-	CredentialConfigured           bool                `json:"credentialConfigured"`
-	OpenRouterCredentialConfigured bool                `json:"openRouterCredentialConfigured"`
-	Tasks                          []LlmTaskSettingDto `json:"tasks"`
+	CredentialConfigured bool                `json:"credentialConfigured"`
+	Tasks                []LlmTaskSettingDto `json:"tasks"`
 }
 
 type UpdateLlmSettingsRequestDto struct {
@@ -28,13 +27,6 @@ type CerebrasModelDto struct {
 	IsDefault bool   `json:"isDefault"`
 }
 
-type OpenRouterModelDto struct {
-	ID        string `json:"id"`
-	Label     string `json:"label"`
-	IsDefault bool   `json:"isDefault"`
-}
-
 type LlmModelsResponseDto struct {
-	Cerebras   []CerebrasModelDto   `json:"cerebras"`
-	OpenRouter []OpenRouterModelDto `json:"openrouter"`
+	Cerebras []CerebrasModelDto `json:"cerebras"`
 }

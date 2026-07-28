@@ -2,6 +2,8 @@ package matching
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math"
 
@@ -16,6 +18,11 @@ import (
 	"github.com/job-finder/api/internal/strutil"
 )
 
+func contentHash(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
+}
+
 func (s *Service) runEmbeddingPrefilter(ctx context.Context, prof domain.Profile, job domain.Job, rec *activity.Recorder) (float64, error) {
 	profileID := prof.ID
 
@@ -24,20 +31,29 @@ func (s *Service) runEmbeddingPrefilter(ctx context.Context, prof domain.Profile
 	}
 
 	jobText := strutil.Truncate(fmt.Sprintf("%s at %s\n%s", job.Title, job.Company, job.Description), 8000)
-	jobEmbedding, err := s.llmc.Embed(ctx, jobText)
-	if err != nil {
-		return 0, err
-	}
-	jobVec := pgvector.NewVector(jobEmbedding)
+	hash := contentHash(jobText)
 
-	jobID, _ := dbutil.ParseUUID(job.ID)
-	if err := s.q.UpdateJobEmbedding(ctx, sqlcgen.UpdateJobEmbeddingParams{
-		ID: jobID, Embedding: &jobVec,
-	}); err != nil {
-		return 0, err
+	var jobEmbedding []float32
+	if job.EmbeddingHash != nil && *job.EmbeddingHash == hash && len(job.Embedding) > 0 {
+		// Unchanged content: reuse the stored embedding instead of paying for
+		// another embed call (019-ai-job-throughput, research.md R5).
+		jobEmbedding = job.Embedding
+	} else {
+		var err error
+		jobEmbedding, err = s.llmc.Embed(ctx, jobText)
+		if err != nil {
+			return 0, err
+		}
+		jobVec := pgvector.NewVector(jobEmbedding)
+		jobID, _ := dbutil.ParseUUID(job.ID)
+		if err := s.q.UpdateJobEmbeddingWithHash(ctx, sqlcgen.UpdateJobEmbeddingWithHashParams{
+			ID: jobID, Embedding: &jobVec, EmbeddingHash: &hash,
+		}); err != nil {
+			return 0, err
+		}
 	}
 
-	if has, err := s.profiles.HasEmbedding(ctx, profileID); err == nil && !has {
+	if !s.hasEmbedding(ctx, profileID) {
 		_ = s.profiles.RefreshEmbedding(ctx, profileID)
 	}
 
@@ -52,16 +68,50 @@ func (s *Service) runEmbeddingPrefilter(ctx context.Context, prof domain.Profile
 	return similarity, nil
 }
 
-func (s *Service) runLLMAnalysis(ctx context.Context, prof domain.Profile, job domain.Job, rec *activity.Recorder) (score int, matched, missing []string, summary string, redFlags []string, err error) {
+// hasEmbedding reports whether profileID's profile already has an embedding,
+// preferring the snapshot cache (019-ai-job-throughput) over a direct query
+// when the cache's profile matches. Defaults to true (no refresh) if neither
+// source can be read, since a spurious refresh is worse than a skipped one.
+func (s *Service) hasEmbedding(ctx context.Context, profileID string) bool {
+	if s.snapshot != nil {
+		if snap, err := s.snapshot.Get(ctx); err == nil && snap.ProfileID == profileID {
+			return snap.HasEmbedding
+		}
+	}
+	has, err := s.profiles.HasEmbedding(ctx, profileID)
+	if err != nil {
+		return true
+	}
+	return has
+}
+
+// profileText returns the derived profile text, preferring the process-wide
+// snapshot cache (019-ai-job-throughput, research.md R5) over rebuilding it
+// from prof on every job. Falls back to a direct rebuild if the cache is
+// unavailable or its cached profile doesn't match prof.ID (stale/mismatched
+// default).
+func (s *Service) profileText(ctx context.Context, prof domain.Profile) (string, error) {
+	if s.snapshot != nil {
+		if snap, err := s.snapshot.Get(ctx); err == nil && snap.ProfileID == prof.ID {
+			return snap.ProfileText, nil
+		}
+	}
 	master, err := generation.MasterFromConfig(prof.RendercvConfig)
 	if err != nil {
-		return 0, nil, nil, "", nil, err
+		return "", err
 	}
 	var extraNotes string
 	if prof.ExtraNotes != nil {
 		extraNotes = *prof.ExtraNotes
 	}
-	profileText := strutil.Truncate(generation.RendercvToText(master)+"\n"+extraNotes, 6000)
+	return strutil.Truncate(generation.RendercvToText(master)+"\n"+extraNotes, 6000), nil
+}
+
+func (s *Service) runLLMAnalysis(ctx context.Context, prof domain.Profile, job domain.Job, rec *activity.Recorder) (score int, matched, missing []string, summary string, redFlags []string, err error) {
+	profileText, err := s.profileText(ctx, prof)
+	if err != nil {
+		return 0, nil, nil, "", nil, err
+	}
 	description := strutil.Truncate(job.Description, 6000)
 	location := "n/a"
 	if job.Location != nil && *job.Location != "" {

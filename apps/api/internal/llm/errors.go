@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// The error taxonomy every remote chat provider (Cerebras, OpenRouter) maps
+// The error taxonomy every remote chat provider (Cerebras) maps
 // its HTTP failures onto, so callers can decide what to do without knowing
 // which provider produced the error:
 //
@@ -82,7 +82,7 @@ func providerErrMessage(body []byte) string {
 
 // classifyProviderError maps one provider's HTTP status + body onto the
 // taxonomy above. provider is the short name used in the message ("cerebras",
-// "openrouter", "ollama"). status 0 means the failure was reported in the
+// "ollama"). status 0 means the failure was reported in the
 // body rather than the status line and carried no usable code.
 func classifyProviderError(provider string, status int, body []byte) error {
 	msg := providerErrMessage(body)

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/job-finder/api/internal/strutil"
@@ -25,6 +27,10 @@ type OllamaProvider struct {
 	// breaker guards Ollama Cloud's per-plan quota. A local server never
 	// returns 429, so it never trips there.
 	breaker rateLimitBreaker
+	// keepAlive is sent as `keep_alive` on chat/embed requests so a local
+	// model stays resident across a queue drain (research.md R5). Empty
+	// omits the field entirely; ignored by Ollama Cloud.
+	keepAlive string
 }
 
 // NewOllama builds a provider. embedURL empty falls back to baseURL; apiKey
@@ -54,6 +60,30 @@ func NewOllama(baseURL, apiKey, modelName, embedModel, embedURL string) *OllamaP
 
 func (o *OllamaProvider) ModelName() string { return o.modelName }
 
+// IsHosted reports whether this Ollama server is a hosted/remote instance
+// (e.g. Ollama Cloud) rather than a local one, per research.md R2: hosted
+// when an API key is set, or when the base URL host is not loopback/private.
+func (o *OllamaProvider) IsHosted() bool {
+	if o.apiKey != "" {
+		return true
+	}
+	u, err := url.Parse(o.baseURL)
+	if err != nil {
+		return true
+	}
+	return !isLoopbackOrPrivateHost(u.Hostname())
+}
+
+func isLoopbackOrPrivateHost(host string) bool {
+	if host == "" || host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsPrivate()
+	}
+	return false
+}
+
 // setHeaders applies the JSON content type and, when configured, Bearer auth.
 func (o *OllamaProvider) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
@@ -68,11 +98,12 @@ type ollamaChatMessage struct {
 }
 
 type ollamaChatRequest struct {
-	Model    string              `json:"model"`
-	Stream   bool                `json:"stream"`
-	Format   string              `json:"format,omitempty"`
-	Messages []ollamaChatMessage `json:"messages"`
-	Options  ollamaChatOptions   `json:"options"`
+	Model     string              `json:"model"`
+	Stream    bool                `json:"stream"`
+	Format    string              `json:"format,omitempty"`
+	Messages  []ollamaChatMessage `json:"messages"`
+	Options   ollamaChatOptions   `json:"options"`
+	KeepAlive string              `json:"keep_alive,omitempty"`
 }
 
 type ollamaChatOptions struct {
@@ -136,7 +167,7 @@ func (o *OllamaProvider) Complete(ctx context.Context, prompt string, opts *Comp
 	if opts != nil && opts.MaxTokens != nil {
 		chatOpts.NumPredict = opts.MaxTokens
 	}
-	return o.chat(ctx, ollamaChatRequest{Model: opts.ModelOr(o.modelName), Stream: false, Messages: messages, Options: chatOpts})
+	return o.chat(ctx, ollamaChatRequest{Model: opts.ModelOr(o.modelName), Stream: false, Messages: messages, Options: chatOpts, KeepAlive: o.keepAlive})
 }
 
 func (o *OllamaProvider) CompleteJSON(ctx context.Context, prompt string, opts *CompleteOptions) (string, error) {
@@ -147,17 +178,19 @@ func (o *OllamaProvider) CompleteJSON(ctx context.Context, prompt string, opts *
 	messages = append(messages, ollamaChatMessage{Role: "user", Content: prompt})
 
 	return o.chat(ctx, ollamaChatRequest{
-		Model:    opts.ModelOr(o.modelName),
-		Stream:   false,
-		Format:   "json",
-		Messages: messages,
-		Options:  ollamaChatOptions{Temperature: opts.Temp(0.1)},
+		Model:     opts.ModelOr(o.modelName),
+		Stream:    false,
+		Format:    "json",
+		Messages:  messages,
+		Options:   ollamaChatOptions{Temperature: opts.Temp(0.1)},
+		KeepAlive: o.keepAlive,
 	})
 }
 
 type ollamaEmbedRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
+	Model     string `json:"model"`
+	Prompt    string `json:"prompt"`
+	KeepAlive string `json:"keep_alive,omitempty"`
 }
 
 type ollamaEmbedResponse struct {
@@ -166,7 +199,7 @@ type ollamaEmbedResponse struct {
 
 func (o *OllamaProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	text = strutil.Truncate(text, 8000)
-	body, err := json.Marshal(ollamaEmbedRequest{Model: o.embedModel, Prompt: text})
+	body, err := json.Marshal(ollamaEmbedRequest{Model: o.embedModel, Prompt: text, KeepAlive: o.keepAlive})
 	if err != nil {
 		return nil, err
 	}

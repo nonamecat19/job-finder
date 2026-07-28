@@ -30,18 +30,37 @@ type namedWorker struct {
 // worker builds one asynq.Server/mux pair. Each task type gets its own server
 // (own worker pool + own queue), so its Concurrency is a hard per-queue cap
 // rather than a weight shared across task types — matching the BullMQ setup's
-// separate queues.
-func (p *Platform) worker(name, taskType, queueName string, concurrency int, handler func(context.Context, *asynq.Task) error) namedWorker {
+// separate queues. Concurrency is sized to policy.PoolSize() (max of local
+// and hosted), and the handler is wrapped in the admission gate that enforces
+// whichever limit applies to the resolved provider class at run time
+// (019-ai-job-throughput, research.md R3). resolver is nil for task types
+// with no LLM component, which fall back to a single fixed concurrency.
+func (p *Platform) worker(name string, policy queue.TaskPolicy, resolver queue.ClassResolver, handler func(context.Context, *asynq.Task) error) namedWorker {
+	gate := queue.NewGate(policy, resolver)
+	deadline := queue.NewDeadlineMiddleware(policy, p.DB.Queries, p.Config.ActivityHeartbeatInterval)
+	wrapped := gate.Middleware(deadline.Middleware(handler))
 	mux := asynq.NewServeMux()
-	mux.HandleFunc(taskType, handler)
+	mux.HandleFunc(policy.TaskType, wrapped)
 	return namedWorker{
 		name: name,
 		srv: asynq.NewServer(p.RedisOpt, asynq.Config{
-			Concurrency: concurrency,
-			Queues:      map[string]int{queueName: 1},
+			Concurrency: policy.PoolSize(),
+			Queues:      map[string]int{policy.Queue: 1},
 		}),
 		mux: mux,
 	}
+}
+
+// policyFor looks up the validated TaskPolicy for taskType, built once at
+// startup (platform.go). Panics on an unknown type: every task type wired in
+// buildServers must have a corresponding policy from queue.PoliciesFromConfig.
+func (p *Platform) policyFor(taskType string) queue.TaskPolicy {
+	for _, policy := range p.Policies {
+		if policy.TaskType == taskType {
+			return policy
+		}
+	}
+	panic("servers: no TaskPolicy for task type " + taskType)
 }
 
 // buildServers mounts the router and constructs the six asynq worker servers.
@@ -52,7 +71,6 @@ func buildServers(p *Platform, app *App) *Servers {
 		app.Subs.Mount, app.Activity.Mount, app.Keyword.Mount,
 		app.PostAge.Mount, app.Notification.Mount, app.Companies.Mount,
 		app.GhostJob.Mount, app.Coach.Mount,
-		app.ExtAuth.Mount, app.ExtProfile.Mount,
 		app.Contacts.Mount, app.Referral.Mount,
 		app.Outreach.Mount, app.LlmSettings.Mount, app.AiFeatures.Mount,
 		app.InterviewPrep.Mount, app.Health.Mount,
@@ -65,18 +83,22 @@ func buildServers(p *Platform, app *App) *Servers {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	// ingest concurrency=2 (ingestion.processor.ts); match and generate
-	// concurrency=1 each ("local LLM handles one request at a time
-	// comfortably"). enrich concurrency=1: it hits an authenticated personal
-	// djinni page per job, serialized + delayed to stay polite. salary and
-	// ghost concurrency=1: same local-LLM contention reasoning as match/generate.
+	// Each worker's pool is sized to max(local, hosted) concurrency from its
+	// TaskPolicy, with an admission gate (queue.Gate) enforcing whichever
+	// limit applies to the resolved provider class at run time — hosted
+	// providers (Cerebras, Ollama Cloud) get AI_CONCURRENCY_CLOUD
+	// (default 3), local Ollama keeps AI_CONCURRENCY_LOCAL (default 1), with
+	// no restart needed when Settings flips a task between them
+	// (019-ai-job-throughput, research.md R3). ingest/enrich have no LLM
+	// component and use a single fixed concurrency (INGEST_CONCURRENCY /
+	// ENRICH_CONCURRENCY).
 	workers := []namedWorker{
-		p.worker("ingest", queue.TypeIngest, queue.QueueIngest, 2, app.Ingestion.ProcessTask),
-		p.worker("match", queue.TypeMatch, queue.QueueMatch, 1, app.Matching.ProcessTask),
-		p.worker("generate", queue.TypeGenerate, queue.QueueGenerate, 1, app.Generation.ProcessTask),
-		p.worker("enrich", queue.TypeEnrich, queue.QueueEnrich, 1, app.Enrichment.ProcessTask),
-		p.worker("salary", queue.TypeSalaryInfer, queue.QueueSalaryInfer, 1, app.Salary.ProcessTask),
-		p.worker("ghost", queue.TypeGhostScore, queue.QueueGhostScore, 1, app.Ghost.ProcessTask),
+		p.worker("ingest", p.policyFor(queue.TypeIngest), nil, app.Ingestion.ProcessTask),
+		p.worker("match", p.policyFor(queue.TypeMatch), app.MatchRouter, app.Matching.ProcessTask),
+		p.worker("generate", p.policyFor(queue.TypeGenerate), app.GenerationRouter, app.Generation.ProcessTask),
+		p.worker("enrich", p.policyFor(queue.TypeEnrich), nil, app.Enrichment.ProcessTask),
+		p.worker("salary", p.policyFor(queue.TypeSalaryInfer), app.DefaultRouter, app.Salary.ProcessTask),
+		p.worker("ghost", p.policyFor(queue.TypeGhostScore), app.GhostRouter, app.Ghost.ProcessTask),
 	}
 
 	return &Servers{HTTP: srv, Workers: workers}
@@ -102,6 +124,7 @@ func runServers(ctx context.Context, p *Platform, servers *Servers, scheduler *i
 	}
 
 	go scheduler.Run(ctx)
+	go p.Sweeper.Run(ctx)
 
 	<-ctx.Done()
 	slog.Info("shutting down")

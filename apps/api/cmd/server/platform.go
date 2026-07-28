@@ -9,6 +9,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/adapters"
@@ -41,6 +42,16 @@ type Platform struct {
 	// JobLeadsSession is the same pattern as DjinniSession, for the
 	// login-gated JobLeads source.
 	JobLeadsSession *adapters.JobLeadsSession
+
+	// Policies is the validated set of per-task-type concurrency/deadline
+	// policies (019-ai-job-throughput), built once at startup so buildServers
+	// and the sweeper read one source (research.md R3).
+	Policies []queue.TaskPolicy
+
+	// Sweeper closes out ActivityRun rows whose worker vanished
+	// (019-ai-job-throughput). Run once at startup and every
+	// ACTIVITY_SWEEP_INTERVAL by runServers.
+	Sweeper *activity.Sweeper
 }
 
 // buildPlatform opens the shared infrastructure. Callers own the lifecycle:
@@ -62,7 +73,11 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 	stateStore := retrieval.NewStateStore(database.Queries, cfg.ConfigEncryptionKey)
-	retrieval.ConfigureDefaultTransport(stateStore, nil)
+	rateOverrides := map[string]float64{}
+	if cfg.DjinniRateOverrideRPS > 0 {
+		rateOverrides["djinni.co"] = cfg.DjinniRateOverrideRPS
+	}
+	retrieval.ConfigureDefaultTransport(stateStore, rateOverrides)
 	retSvc, err := retrieval.NewServiceImpl(identity, stateStore, cfg)
 	if err != nil {
 		database.Close()
@@ -72,6 +87,13 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 	scrapingSvc := scraping.New(retSvc)
 
 	redisOpt, err := queue.RedisOpt(cfg.RedisURL)
+	if err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		return nil, err
+	}
+
+	policies, err := queue.PoliciesFromConfig(cfg)
 	if err != nil {
 		database.Close()
 		scrapingSvc.Close()
@@ -103,5 +125,10 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		Retrieval:       retSvc,
 		MinioReady:      minioReady,
 		JobLeadsSession: &adapters.JobLeadsSession{Email: cfg.JobLeadsEmail, Password: cfg.JobLeadsPassword, Key: "jobleads"},
+		Policies:        policies,
+		Sweeper: activity.NewSweeper(
+			database.Queries, asynq.NewInspector(redisOpt),
+			cfg.ActivityStaleAfter, cfg.ActivitySweepInterval, cfg.ActivityQueuedGrace,
+		),
 	}, nil
 }

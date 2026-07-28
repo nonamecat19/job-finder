@@ -24,6 +24,12 @@ type Service struct {
 	llmc        llm.Provider
 	embedModel  string
 	rendercvBin string
+
+	// snapshot is the profile-text cache (019-ai-job-throughput), wired in by
+	// SetSnapshotCache after construction (cmd/server) to avoid a
+	// construction-order cycle with NewSnapshotCache(svc). nil-safe: every
+	// invalidate call is a no-op until set.
+	snapshot *SnapshotCache
 }
 
 func NewService(q Repository, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
@@ -31,6 +37,19 @@ func NewService(q Repository, llmc llm.Provider, embedModel string, rendercvBin 
 		embedModel = "nomic-embed-text"
 	}
 	return &Service{q: q, llmc: llmc, embedModel: embedModel, rendercvBin: rendercvBin}
+}
+
+// SetSnapshotCache wires the profile-text cache so mutating methods can
+// invalidate it. Must be called once after both Service and its
+// SnapshotCache are constructed (cmd/server/compose_profile.go).
+func (s *Service) SetSnapshotCache(c *SnapshotCache) {
+	s.snapshot = c
+}
+
+func (s *Service) invalidateSnapshot() {
+	if s.snapshot != nil {
+		s.snapshot.Invalidate()
+	}
 }
 
 func (s *Service) List(ctx context.Context) ([]dto.ProfileDto, error) {
@@ -149,6 +168,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Pr
 	if in.RendercvYaml != nil {
 		_ = s.RefreshEmbedding(ctx, id)
 	}
+	s.invalidateSnapshot()
 	row, _ := s.Get(ctx, id)
 	return s.toDto(row), nil
 }
@@ -308,6 +328,7 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 	if err := s.RefreshEmbedding(ctx, id); err != nil {
 		slog.Error("failed to refresh embedding after config upload", "error", err)
 	}
+	s.invalidateSnapshot()
 
 	// Get fresh row
 	profileRow, err = s.Get(ctx, id)
@@ -381,7 +402,11 @@ func (s *Service) RefreshEmbedding(ctx context.Context, id string) error {
 	vec := pgvector.NewVector(embedding)
 	model := s.embedModel
 	uid, _ := dbutil.ParseUUID(id)
-	return s.q.UpdateProfileEmbedding(ctx, sqlcgen.UpdateProfileEmbeddingParams{ID: uid, Embedding: &vec, EmbedModel: &model})
+	if err := s.q.UpdateProfileEmbedding(ctx, sqlcgen.UpdateProfileEmbeddingParams{ID: uid, Embedding: &vec, EmbedModel: &model}); err != nil {
+		return err
+	}
+	s.invalidateSnapshot()
+	return nil
 }
 
 func (s *Service) toDto(p domain.Profile) dto.ProfileDto {

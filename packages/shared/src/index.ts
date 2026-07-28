@@ -564,7 +564,15 @@ export interface CompanyNewsItem {
 export const ACTIVITY_OPS = ['ingest', 'match', 'generate', 'enrich', 'ghost_score', 'salary_infer'] as const;
 export type ActivityOp = (typeof ACTIVITY_OPS)[number];
 
-export const ACTIVITY_STATES = ['queued', 'running', 'succeeded', 'failed', 'cancelled'] as const;
+export const ACTIVITY_STATES = [
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'timed_out', // exceeded its task-type deadline (019-ai-job-throughput)
+  'interrupted', // worker vanished: crash, shutdown, or power loss (019-ai-job-throughput)
+] as const;
 export type ActivityState = (typeof ACTIVITY_STATES)[number];
 
 export interface ActivityRunDto {
@@ -582,11 +590,32 @@ export interface ActivityRunDto {
   startedAt: string | null;
   finishedAt: string | null;
   elapsedMs: number | null;
+  heartbeatAt: string | null;
+  timeoutMs: number | null;
 }
 
 export interface ActivityListResponse {
   active: ActivityRunDto[];
   recent: ActivityRunDto[];
+}
+
+// 019-ai-job-throughput: per-queue backlog snapshot (GET /api/activity/queues).
+export interface QueueBacklogDto {
+  queue: string;
+  providerClass: 'local' | 'hosted' | null;
+  concurrency: number;
+  pending: number;
+  active: number;
+  scheduled: number;
+  retry: number;
+  archived: number;
+  processedPerMinute: number;
+  etaSeconds: number | null;
+  error?: string;
+}
+
+export interface QueueBacklogResponse {
+  queues: QueueBacklogDto[];
 }
 
 export interface CompanyIntelDto {
@@ -777,7 +806,7 @@ export interface OutreachToneOptionDto {
 
 /** One chat task's assigned provider/model, served by GET/PUT
  * /v1/settings/llm. taskKey is "match" | "generation" | "rephrase" | "ghost"
- * | "default"; provider is "ollama" | "cerebras" | "openrouter". model is ""
+ * | "default"; provider is "ollama" | "cerebras". model is ""
  * when the provider's own default model applies. */
 export interface LlmTaskSettingDto {
   taskKey: string;
@@ -785,13 +814,11 @@ export interface LlmTaskSettingDto {
   model: string;
 }
 
-/** GET/PUT /v1/settings/llm response. credentialConfigured and
- * openRouterCredentialConfigured reflect whether CEREBRAS_API_KEY /
- * OPENROUTER_API_KEY were set at process start — never the keys themselves,
- * which never leave the server. */
+/** GET/PUT /v1/settings/llm response. credentialConfigured reflects whether
+ * CEREBRAS_API_KEY was set at process start — never the key itself,
+ * which never leaves the server. */
 export interface LlmSettingsResponseDto {
   credentialConfigured: boolean;
-  openRouterCredentialConfigured: boolean;
   tasks: LlmTaskSettingDto[];
 }
 
@@ -818,17 +845,8 @@ export interface CerebrasModelDto {
   isDefault: boolean;
 }
 
-/** One curated OpenRouter model offered in the Settings model selector,
- * served by GET /v1/settings/llm/models. */
-export interface OpenRouterModelDto {
-  id: string;
-  label: string;
-  isDefault: boolean;
-}
-
 /** GET /v1/settings/llm/models response: the curated model list per remote
  * provider. */
 export interface LlmModelsResponseDto {
   cerebras: CerebrasModelDto[];
-  openrouter: OpenRouterModelDto[];
 }

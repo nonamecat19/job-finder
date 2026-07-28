@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/job-finder/api/internal/httpapi"
+	"github.com/job-finder/api/internal/queue"
 )
 
 // buildContexts runs every feature composer in construction order and performs
@@ -20,7 +21,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	}
 	profileH := composeProfile(p, llmH.Ollama)
 
-	matchingH, err := composeMatching(ctx, p, profileH.Profile, llmH.MatchRouter)
+	matchingH, err := composeMatching(ctx, p, profileH.Profile, profileH.Snapshot, llmH.MatchRouter)
 	if err != nil {
 		return nil, err
 	}
@@ -37,11 +38,6 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 
 	salaryH := composeSalary(ctx, p, llmH.DefaultRouter)
 
-	extAuthH, err := composeExtAuth(p, profileH.Profile)
-	if err != nil {
-		return nil, err
-	}
-
 	keywordH := composeKeyword(p, llmH.RephraseRouter, profileH.Profile)
 	companyIntelH := composeCompanyIntel(p)
 	recruiterH := composeRecruiter(p, llmH.DefaultRouter)
@@ -55,15 +51,18 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Jobs:          jobsHandler,
 		Applications:  composeApplications(p),
 		Subs:          composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
-		Activity:      httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector),
+		Activity: httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector, p.Policies, map[string]queue.ClassResolver{
+			queue.QueueMatch:       llmH.MatchRouter,
+			queue.QueueGenerate:    llmH.GenerationRouter,
+			queue.QueueSalaryInfer: llmH.DefaultRouter,
+			queue.QueueGhostScore:  llmH.GhostRouter,
+		}),
 		Keyword:       keywordH.Handler,
 		PostAge:       composePostAge(p),
 		Notification:  composeNotifications(p),
 		Companies:     companyIntelH.Handler,
 		GhostJob:      ghostH.HTTPHandler,
 		Coach:         composeCoach(p, keywordH.RephraseModel, profileH.Profile),
-		ExtAuth:       extAuthH.Auth,
-		ExtProfile:    extAuthH.Profile,
 		Contacts:      recruiterH.Handler,
 		Referral:      composeReferral(p),
 		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
@@ -79,6 +78,11 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Enrichment: enrichHandler,
 		Salary:     salaryH.Worker,
 		Ghost:      ghostH.Worker,
+
+		MatchRouter:      llmH.MatchRouter,
+		GenerationRouter: llmH.GenerationRouter,
+		GhostRouter:      llmH.GhostRouter,
+		DefaultRouter:    llmH.DefaultRouter,
 
 		Scheduler: ingestionH.Scheduler,
 	}, nil

@@ -26,6 +26,13 @@ type Job struct {
 	SalaryCurrency   *string
 	SalaryConfidence *float64
 	SalarySource     *string
+
+	// EmbeddingHash is the hash of the exact text last embedded (019-ai-job-
+	// throughput); nil means no embedding has been computed yet.
+	EmbeddingHash *string
+	// Embedding is the job's stored vector, reused when EmbeddingHash matches
+	// the current content so matching can skip re-embedding.
+	Embedding []float32
 }
 
 type JobStatus string
