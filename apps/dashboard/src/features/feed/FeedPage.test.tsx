@@ -5,24 +5,22 @@ import FeedPage from './FeedPage';
 import { mockJobListResponse } from '../../test/factories';
 
 vi.mock('./hooks', () => ({
-  useJobs: vi.fn(),
+  useInfiniteJobs: vi.fn(),
   useFeedSources: vi.fn(),
   useFeedSubscriptions: vi.fn(),
   useShortlistJob: vi.fn(),
   useHideJob: vi.fn(),
-  useClearJobs: vi.fn(),
 }));
 
-import { useJobs, useFeedSources, useFeedSubscriptions, useShortlistJob, useHideJob, useClearJobs } from './hooks';
+import { useInfiniteJobs, useFeedSources, useFeedSubscriptions, useShortlistJob, useHideJob } from './hooks';
 
-const mockedUseJobs = vi.mocked(useJobs);
+const mockedUseJobs = vi.mocked(useInfiniteJobs);
 
 function setupCommonMocks() {
   vi.mocked(useFeedSources).mockReturnValue({ data: [] } as any);
   vi.mocked(useFeedSubscriptions).mockReturnValue({ data: [] } as any);
   vi.mocked(useShortlistJob).mockReturnValue({ mutate: vi.fn() } as any);
   vi.mocked(useHideJob).mockReturnValue({ mutate: vi.fn() } as any);
-  vi.mocked(useClearJobs).mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
 }
 
 function renderFeedPage() {
@@ -36,7 +34,14 @@ function renderFeedPage() {
 describe('FeedPage loading state', () => {
   it('renders a skeleton job list while loading, not a spinner', () => {
     setupCommonMocks();
-    mockedUseJobs.mockReturnValue({ data: undefined, isLoading: true, error: null } as any);
+    mockedUseJobs.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+    } as any);
 
     renderFeedPage();
 
@@ -50,9 +55,12 @@ describe('FeedPage loading state', () => {
   it('renders real content and no skeleton once data resolves', () => {
     setupCommonMocks();
     mockedUseJobs.mockReturnValue({
-      data: mockJobListResponse(),
+      data: { pages: [mockJobListResponse()], pageParams: [1] },
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
 
     renderFeedPage();
@@ -67,6 +75,9 @@ describe('FeedPage loading state', () => {
       data: undefined,
       isLoading: false,
       error: new Error('network down'),
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
 
     renderFeedPage();

@@ -1,11 +1,14 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type JobFilters } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 
-export function useJobs(filters: JobFilters) {
-  return useQuery({
+export function useInfiniteJobs(filters: Omit<JobFilters, 'page'>) {
+  return useInfiniteQuery({
     queryKey: queryKeys.jobs.list(filters),
-    queryFn: () => api.jobs.list(filters),
+    queryFn: ({ pageParam }) => api.jobs.list({ ...filters, page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.page * lastPage.pageSize < lastPage.total ? lastPage.page + 1 : undefined,
     placeholderData: keepPreviousData,
   });
 }

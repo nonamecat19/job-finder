@@ -1,11 +1,9 @@
-import { Clock, ExternalLink, EyeOff, Star, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Clock, ExternalLink, EyeOff, Star } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { JobDto } from '@job-finder/shared';
 import { type JobFilters } from '../../lib/api';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { DashboardGrid, Tile } from '../../components/layout';
-import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
   Checkbox,
@@ -22,17 +20,12 @@ import {
   SkeletonLine,
   Surface,
 } from '../../components/ui';
-import {
-  useClearJobs,
-  useFeedSources,
-  useFeedSubscriptions,
-  useHideJob,
-  useJobs,
-  useShortlistJob,
-} from './hooks';
+import { useFeedSources, useFeedSubscriptions, useHideJob, useInfiniteJobs, useShortlistJob } from './hooks';
 import { postAgeLabel } from '../../lib/time';
 
-function filtersFromParams(params: URLSearchParams): JobFilters {
+type FeedFilters = Omit<JobFilters, 'page'>;
+
+function filtersFromParams(params: URLSearchParams): FeedFilters {
   return {
     sort: params.get('sort') === 'date' ? 'date' : 'score',
     source: params.get('source') ?? undefined,
@@ -40,17 +33,15 @@ function filtersFromParams(params: URLSearchParams): JobFilters {
     minScore: params.get('minScore') ? Number(params.get('minScore')) : undefined,
     remote: params.get('remote') === 'true' ? true : undefined,
     q: params.get('q') ?? undefined,
-    page: params.get('page') ? Number(params.get('page')) : 1,
     showBelowFloor: params.get('showBelowFloor') === 'true' ? true : undefined,
   };
 }
 
-function paramsFromFilters(filters: JobFilters): URLSearchParams {
+function paramsFromFilters(filters: FeedFilters): URLSearchParams {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(filters)) {
     if (v === undefined || v === '' || v === null) continue;
     if (k === 'sort' && v === 'score') continue;
-    if (k === 'page' && v === 1) continue;
     params.set(k, String(v));
   }
   return params;
@@ -59,17 +50,33 @@ function paramsFromFilters(filters: JobFilters): URLSearchParams {
 export default function FeedPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
-  const { data, isLoading, error } = useJobs(filters);
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteJobs(filters);
   const { data: sources } = useFeedSources();
   const { data: subscriptions } = useFeedSubscriptions();
   const shortlist = useShortlistJob();
   const hide = useHideJob();
-  const clear = useClearJobs();
 
-  const set = (patch: Partial<JobFilters>) =>
-    setSearchParams(paramsFromFilters({ ...filters, ...patch, page: 1 }), { replace: true });
+  const set = (patch: Partial<FeedFilters>) =>
+    setSearchParams(paramsFromFilters({ ...filters, ...patch }), { replace: true });
 
-  const setPage = (page: number) => setSearchParams(paramsFromFilters({ ...filters, page }), { replace: true });
+  const items = useMemo(() => data?.pages.flatMap((p) => p.items) ?? [], [data]);
+  const total = data?.pages[0]?.total ?? 0;
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '400px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const [searchInput, setSearchInput] = useState(filters.q ?? '');
   useEffect(() => {
@@ -83,30 +90,16 @@ export default function FeedPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
-  const onClearAll = () => {
-    if (window.confirm('Delete ALL vacancies and their match results, documents, and applications? This cannot be undone.')) {
-      clear.mutate();
-    }
-  };
-
   return (
     <div>
-      <PageHeader
-        title="Job feed"
-        description="Review fresh matches, filter by source or fit, and move promising roles into the tracker."
-        actions={
-          <Button variant="danger" onClick={onClearAll} disabled={clear.isPending}>
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-            {clear.isPending ? 'clearing…' : 'clear all'}
-          </Button>
-        }
-      />
+      <div className="sticky top-0 z-10 -mx-4 -mt-7 bg-background px-4 pt-7 sm:-mx-6 sm:-mt-9 sm:px-6 sm:pt-9 lg:-mx-8 lg:-mt-11 lg:px-8 lg:pt-11">
+        <PageHeader
+          title="Job feed"
+          description="Review fresh matches, filter by source or fit, and move promising roles into the tracker."
+        />
 
-      <DashboardGrid>
-        <Tile span="full" title="Feed">
-
-      <Surface className="mb-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(9rem,0.7fr))_auto] md:items-end">
+        <Surface className="mb-4 max-w-none w-full">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(11rem,0.8fr))_auto] lg:items-end">
           <Field label="Search">
             <Input
               placeholder="Search title/company…"
@@ -182,42 +175,45 @@ export default function FeedPage() {
           />
           hide below-floor jobs
         </label>
-      </Surface>
+        </Surface>
+      </div>
 
+      <div className="pt-4">
       {isLoading ? <JobListSkeleton /> : null}
       {error ? <ErrorState error={error} /> : null}
-      {data && data.items.length === 0 ? (
+      {data && items.length === 0 ? (
         <EmptyState>No jobs yet. Add a saved search on the Sources page and hit "Run now".</EmptyState>
       ) : null}
 
-      {data && data.items.length > 0 ? (
-        <VirtualList
-          items={data.items}
-          getKey={(job) => job.id}
-          estimateSize={128}
-          gap={12}
-          renderItem={(job) => (
+      {items.length > 0 ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 4xl:grid-cols-5">
+          {items.map((job) => (
             <JobCard
+              key={job.id}
               job={job}
               onShortlist={() => shortlist.mutate(job.id)}
               onHide={() => hide.mutate(job.id)}
             />
-          )}
-        />
+          ))}
+        </div>
       ) : null}
 
-      {data && data.total > data.pageSize ? (
-        <Pagination
-          page={data.page}
-          total={data.total}
-          pageSize={data.pageSize}
-          currentPage={filters.page ?? 1}
-          onPrev={() => setPage((filters.page ?? 1) - 1)}
-          onNext={() => setPage((filters.page ?? 1) + 1)}
-        />
+      <div ref={sentinelRef} />
+
+      {isFetchingNextPage ? (
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 4xl:grid-cols-5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <JobCardSkeleton key={i} />
+          ))}
+        </div>
       ) : null}
-        </Tile>
-      </DashboardGrid>
+
+      {items.length > 0 && !hasNextPage ? (
+        <p className="mt-4 text-center text-xs text-faint">
+          {total} job{total === 1 ? '' : 's'} · end of feed
+        </p>
+      ) : null}
+      </div>
     </div>
   );
 }
@@ -259,8 +255,11 @@ function SalaryInfo({ job }: { job: JobDto }) {
 
 function JobListSkeleton() {
   return (
-    <LoadingRegion label="loading jobs…" className="flex flex-col gap-3">
-      {Array.from({ length: 6 }).map((_, i) => (
+    <LoadingRegion
+      label="loading jobs…"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 4xl:grid-cols-5"
+    >
+      {Array.from({ length: 10 }).map((_, i) => (
         <JobCardSkeleton key={i} />
       ))}
     </LoadingRegion>
@@ -299,15 +298,15 @@ function JobCard({
   onHide: () => void;
 }) {
   return (
-    <div className="group rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20 transition hover:border-accent/40 hover:bg-surface-secondary">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
+    <div className="group flex h-full flex-col rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20 transition hover:border-accent/40 hover:bg-surface-secondary">
+      <div className="flex flex-1 flex-col gap-3">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <ScoreBadge score={job.matchResult?.score} />
             {/* Informational only — never filters, hides, dims, or reorders
                 this job (Constitution Principle I / FR-015). */}
             <GhostBadge score={job.ghostSignal?.score} />
-            <Link to={`/jobs/${job.id}`} className="truncate font-semibold text-accent hover:underline">
+            <Link to={`/jobs/${job.id}`} className="min-w-0 flex-1 truncate font-semibold text-accent hover:underline">
               {job.title}
             </Link>
           </div>
@@ -361,32 +360,3 @@ function JobCard({
   );
 }
 
-function Pagination({
-  page,
-  total,
-  pageSize,
-  currentPage,
-  onPrev,
-  onNext,
-}: {
-  page: number;
-  total: number;
-  pageSize: number;
-  currentPage: number;
-  onPrev: () => void;
-  onNext: () => void;
-}) {
-  return (
-    <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted">
-      <Button variant="secondary" disabled={currentPage <= 1} onClick={onPrev}>
-        prev
-      </Button>
-      <span>
-        page {page} / {Math.ceil(total / pageSize)} ({total} jobs)
-      </span>
-      <Button variant="secondary" disabled={page * pageSize >= total} onClick={onNext}>
-        next
-      </Button>
-    </div>
-  );
-}
