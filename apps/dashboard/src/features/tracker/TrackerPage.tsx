@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ApplicationDto, ApplicationStatus, StatsDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { DashboardGrid, GridCard } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
@@ -54,6 +55,9 @@ export default function TrackerPage() {
         }
       />
 
+      <DashboardGrid>
+        <GridCard span="full">
+
       <Surface className="mb-5">
         <Field label="Filter by status">
           <Select
@@ -86,6 +90,8 @@ export default function TrackerPage() {
           renderItem={(app) => <ApplicationCard application={app} />}
         />
       ) : null}
+        </GridCard>
+      </DashboardGrid>
     </div>
   );
 }

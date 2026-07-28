@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { DashboardGrid, GridCard } from '../../components/layout';
 import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Surface, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import {
@@ -70,8 +71,8 @@ export default function JobDetailPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <Link to="/" className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-fg">
+    <div>
+      <Link to="/" className="mb-5 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-fg">
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         back to feed
       </Link>
@@ -93,50 +94,75 @@ export default function JobDetailPage() {
         }
       />
 
-      {job.matchResult ? <FitSummary job={job} /> : null}
+      <DashboardGrid>
+        {job.matchResult ? (
+          <GridCard span="full">
+            <FitSummary job={job} />
+          </GridCard>
+        ) : null}
 
-      <GhostSignalPanel jobId={job.id} ghostSignal={job.ghostSignal} />
+        <GridCard span="wide">
+          <GhostSignalPanel jobId={job.id} ghostSignal={job.ghostSignal} />
+        </GridCard>
+        <GridCard span="narrow">
+          <PostAgeSignal />
+        </GridCard>
 
-      <PostAgeSignal />
+        <GridCard span="narrow">
+          <ContactLine jobId={job.id} />
+        </GridCard>
+        <GridCard span="narrow">
+          <CompanyIntelCard jobId={job.id} />
+        </GridCard>
+        <GridCard span="narrow">
+          <ReferralPathsCard jobId={id} />
+        </GridCard>
 
-      <ContactLine jobId={job.id} />
+        <GridCard span="wide">
+          <KeywordDiffPanel jobId={id} />
+        </GridCard>
+        <GridCard span="narrow">
+          <div className="flex flex-col gap-5">
+            <CoachPanel jobId={id} />
+            <OutreachPanel jobId={id} />
+          </div>
+        </GridCard>
 
-      <CompanyIntelCard jobId={job.id} />
+        <GridCard span="full">
+          <PrepPackPanel jobId={id} />
+        </GridCard>
 
-      <ReferralPathsCard jobId={id} />
+        <GridCard span="full">
+          <DocumentsPanel
+            documents={documents ?? []}
+            generating={generating}
+            editingDoc={editingDoc}
+            onGenerate={(type) => generate.mutate(type)}
+            onEdit={setEditingDoc}
+            onCancelEdit={() => setEditingDoc(null)}
+            onSave={(doc) => saveLetter.mutate(doc)}
+          />
+        </GridCard>
 
-      <KeywordDiffPanel jobId={id} />
-
-      <CoachPanel jobId={id} />
-
-      <OutreachPanel jobId={id} />
-
-      <PrepPackPanel jobId={id} />
-
-      <DocumentsPanel
-        documents={documents ?? []}
-        generating={generating}
-        editingDoc={editingDoc}
-        onGenerate={(type) => generate.mutate(type)}
-        onEdit={setEditingDoc}
-        onCancelEdit={() => setEditingDoc(null)}
-        onSave={(doc) => saveLetter.mutate(doc)}
-      />
-
-      <div className={resumeDoc ? 'grid gap-5 lg:grid-cols-2 lg:items-start' : ''}>
-        <Surface>
-          <SectionTitle>Job description</SectionTitle>
-          {job.descriptionHtml ? (
-            <div
-              className="prose prose-sm max-w-none text-muted [&_a]:text-accent [&_a:hover]:underline [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 [&_strong]:font-semibold"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.descriptionHtml) }}
-            />
-          ) : (
-            <p className="whitespace-pre-wrap text-sm leading-6 text-muted">{job.description}</p>
-          )}
-        </Surface>
-        {resumeDoc ? <ResumePreview doc={resumeDoc} /> : null}
-      </div>
+        <GridCard span={resumeDoc ? 'wide' : 'full'}>
+          <Surface>
+            <SectionTitle>Job description</SectionTitle>
+            {job.descriptionHtml ? (
+              <div
+                className="prose prose-sm max-w-none text-muted [&_a]:text-accent [&_a:hover]:underline [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 [&_strong]:font-semibold"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.descriptionHtml) }}
+              />
+            ) : (
+              <p className="whitespace-pre-wrap text-sm leading-6 text-muted">{job.description}</p>
+            )}
+          </Surface>
+        </GridCard>
+        {resumeDoc ? (
+          <GridCard span="narrow">
+            <ResumePreview doc={resumeDoc} />
+          </GridCard>
+        ) : null}
+      </DashboardGrid>
     </div>
   );
 }

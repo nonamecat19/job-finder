@@ -2,6 +2,7 @@ import { FileDown } from 'lucide-react';
 import { useState } from 'react';
 import type { GeneratedDocumentDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { DashboardGrid, GridCard } from '../../components/layout';
 import { Button, EmptyState, Field, Input, Select, Spinner, Surface, Textarea } from '../../components/ui';
 import { useToast } from '../../components/toast';
 import { api } from '../../lib/api';
@@ -38,8 +39,11 @@ export default function TailorPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div>
       <PageHeader title="Tailor" description="Paste a vacancy to generate a tailored resume and cover letter." />
+
+      <DashboardGrid>
+        <GridCard span="full">
 
       <Surface>
         <SectionTitle>Vacancy</SectionTitle>
@@ -111,6 +115,9 @@ export default function TailorPage() {
           </ul>
         )}
       </Surface>
+
+        </GridCard>
+      </DashboardGrid>
     </div>
   );
 }

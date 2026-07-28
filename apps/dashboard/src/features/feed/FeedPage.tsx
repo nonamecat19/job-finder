@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import type { JobDto } from '@job-finder/shared';
 import { type JobFilters } from '../../lib/api';
 import { PageHeader } from '../../components/layout/PageHeader';
+import { DashboardGrid, GridCard } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
@@ -100,6 +101,9 @@ export default function FeedPage() {
           </Button>
         }
       />
+
+      <DashboardGrid>
+        <GridCard span="full">
 
       <Surface className="mb-4">
         <div className="grid gap-3 md:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(9rem,0.7fr))_auto] md:items-end">
@@ -212,6 +216,8 @@ export default function FeedPage() {
           onNext={() => setPage((filters.page ?? 1) + 1)}
         />
       ) : null}
+        </GridCard>
+      </DashboardGrid>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { JobSourceDto, SavedSearchDto, SearchQuery, SubscriptionDto } from '@job-finder/shared';
 import { summarizeDjinniBasicSearch } from './djinniSearchSummary';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { DashboardGrid, GridCard } from '../../components/layout';
 import {
   Button,
   Chip,
@@ -46,13 +47,15 @@ export default function SourcesPage() {
         title="Sources & searches"
         description="Configure which job boards to scrape and manage saved searches that run on a schedule."
       />
-      <SourcesPanel />
-      <HostRetrievalPanel />
-      <RosterPanel />
-      <CandidatesPanel />
-      <SubscriptionsPanel />
-      <SearchesPanel />
-      <RecentRunsPanel />
+      <DashboardGrid>
+        <GridCard span="full"><SourcesPanel /></GridCard>
+        <GridCard span="full"><HostRetrievalPanel /></GridCard>
+        <GridCard span="full"><RosterPanel /></GridCard>
+        <GridCard span="full"><CandidatesPanel /></GridCard>
+        <GridCard span="full"><SubscriptionsPanel /></GridCard>
+        <GridCard span="full"><SearchesPanel /></GridCard>
+        <GridCard span="full"><RecentRunsPanel /></GridCard>
+      </DashboardGrid>
     </div>
   );
 }
@@ -77,7 +80,7 @@ function SourcesPanel() {
   if (!sources?.length) return <EmptyState>No sources configured.</EmptyState>;
 
   return (
-    <Surface className="mb-5">
+    <Surface>
       <SectionTitle>Job sources</SectionTitle>
       <ul className="space-y-2">
         {sources.map((s) => (
@@ -152,7 +155,7 @@ export function HostRetrievalPanel() {
   const hosts = [...new Set(sources.map((s) => s.key))];
 
   return (
-    <Surface className="mb-5">
+    <Surface>
       <SectionTitle>Host retrieval status</SectionTitle>
       <div className="mb-3 flex flex-wrap gap-2">
         {hosts.map((h) => (
@@ -237,7 +240,7 @@ function SearchesPanel() {
   const [showForm, setShowForm] = useState(false);
 
   return (
-    <Surface className="mb-5">
+    <Surface>
       <div className="mb-3 flex items-center justify-between">
         <SectionTitle>Saved searches</SectionTitle>
         <Button onClick={() => setShowForm((v) => !v)}>{showForm ? 'cancel' : '+ new search'}</Button>
@@ -345,7 +348,7 @@ function SubscriptionsPanel() {
   const [showForm, setShowForm] = useState(false);
 
   return (
-    <Surface className="mb-5">
+    <Surface>
       <div className="mb-3 flex items-center justify-between">
         <SectionTitle>Subscriptions</SectionTitle>
         <div className="flex items-center gap-2">

@@ -2,6 +2,7 @@ import { RefreshCw, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { ReferralContactDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
+import { DashboardGrid, GridCard } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import { Button, Chip, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock, Surface } from '../../components/ui';
 import { useContacts, useGithubSync, useImportContactsCSV } from './hooks';
@@ -40,6 +41,9 @@ export default function ContactsPage() {
         }
       />
 
+      <DashboardGrid>
+        <GridCard span="full">
+
       <p className="mb-4 text-xs text-faint">
         Expected columns (any order, case-insensitive): name, email, company, role, linkedin_url, github_username.
       </p>
@@ -77,6 +81,8 @@ export default function ContactsPage() {
           />
         </Surface>
       ) : null}
+        </GridCard>
+      </DashboardGrid>
     </div>
   );
 }

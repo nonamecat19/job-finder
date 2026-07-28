@@ -1,4 +1,5 @@
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { DashboardGrid, GridCard } from '../../components/layout';
 import { Surface } from '../../components/ui';
 import AiFeatureSettingsCard from './AiFeatureSettingsCard';
 import LlmSettingsCard from './LlmSettingsCard';
@@ -10,14 +11,20 @@ export default function SettingsPage() {
         title="Settings"
         description="Manage account-level preferences."
       />
-      <section>
-        <SectionTitle>AI models</SectionTitle>
-        <LlmSettingsCard />
-      </section>
-      <section>
-        <SectionTitle>AI features</SectionTitle>
-        <AiFeatureSettingsCard />
-      </section>
+      <DashboardGrid>
+        <GridCard span="narrow">
+          <section>
+            <SectionTitle>AI models</SectionTitle>
+            <LlmSettingsCard />
+          </section>
+        </GridCard>
+        <GridCard span="narrow">
+          <section>
+            <SectionTitle>AI features</SectionTitle>
+            <AiFeatureSettingsCard />
+          </section>
+        </GridCard>
+      </DashboardGrid>
     </div>
   );
 }

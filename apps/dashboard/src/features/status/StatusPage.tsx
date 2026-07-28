@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { RotateCw, X } from 'lucide-react';
 import type { ActivityOp, ActivityRunDto, QueueBacklogDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { DashboardGrid, GridCard } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
@@ -79,7 +80,10 @@ export default function StatusPage() {
       {isLoading ? <ActivitySkeleton /> : null}
       {error ? <ErrorState error={error} /> : null}
 
+      <DashboardGrid>
+
       {failed.length > 0 ? (
+        <GridCard span="full">
         <Surface className="mb-8">
           <div className="mb-3 flex items-center justify-between">
             <SectionTitle>Failed / cancelled ({failed.length})</SectionTitle>
@@ -116,10 +120,12 @@ export default function StatusPage() {
             ))}
           </ul>
         </Surface>
+        </GridCard>
       ) : null}
 
-      {backlog && backlog.queues.length > 0 ? <BacklogPanel queues={backlog.queues} /> : null}
+      {backlog && backlog.queues.length > 0 ? <GridCard span="full"><BacklogPanel queues={backlog.queues} /></GridCard> : null}
 
+      <GridCard span="wide">
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
           <SectionTitle>Active</SectionTitle>
@@ -147,7 +153,9 @@ export default function StatusPage() {
           />
         )}
       </section>
+      </GridCard>
 
+      <GridCard span="wide">
       <section>
         <SectionTitle>Recent</SectionTitle>
         {data && data.recent.length === 0 ? (
@@ -156,6 +164,9 @@ export default function StatusPage() {
           <RecentTable runs={data?.recent ?? []} />
         )}
       </section>
+      </GridCard>
+
+      </DashboardGrid>
     </div>
   );
 }

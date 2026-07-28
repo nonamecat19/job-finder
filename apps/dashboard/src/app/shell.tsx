@@ -24,9 +24,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen text-fg">
-      <div className="mx-auto grid min-h-screen max-w-[90rem] md:grid-cols-[16rem_1fr]">
+      <div className="grid min-h-screen gap-3 p-3 md:grid-cols-[16rem_1fr]">
         {!isMobile && (
-          <aside className="sticky top-0 hidden h-screen flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur-xl md:flex">
+          <aside className="sticky top-3 hidden h-[calc(100vh-1.5rem)] flex-col rounded-2xl border border-border bg-surface px-4 py-6 shadow-sm md:flex">
             <Brand />
             <nav className="mt-8 space-y-1" aria-label="Primary">
               {navItems.map((item) => (
@@ -55,7 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             </header>
           )}
-          <main className="px-4 py-6 sm:px-6 lg:px-10">{children}</main>
+          <main className="flex flex-wrap gap-4 p-4 sm:gap-6 sm:p-6 lg:gap-8 lg:p-8">{children}</main>
         </div>
       </div>
     </div>

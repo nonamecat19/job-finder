@@ -211,7 +211,7 @@ export function Surface({
 }) {
   const Comp = as ?? 'section';
   return (
-    <Comp className={cn('rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20', className)}>
+    <Comp className={cn('rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20 max-w-3xl', className)}>
       {children}
     </Comp>
   );
