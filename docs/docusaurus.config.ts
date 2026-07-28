@@ -9,7 +9,7 @@ const config: Config = {
 
   future: {
     v4: true,
-    experimental_faster: true,
+    faster: true,
   },
 
   url: 'https://example.com',
@@ -18,11 +18,13 @@ const config: Config = {
   organizationName: 'job-finder',
   projectName: 'job-finder',
 
-  onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenLinks: 'throw',
 
   markdown: {
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
   themes: ['@docusaurus/theme-mermaid'],
 

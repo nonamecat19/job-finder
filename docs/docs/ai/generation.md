@@ -1,0 +1,181 @@
+---
+title: Document generation
+sidebar_position: 6
+description: Grounded resume tailoring and cover letters, RenderCV, PDF rendering, versioning, and ad-hoc documents.
+---
+
+# Document generation
+
+`internal/generation` produces two document types — `resume` and `cover_letter` — grounded
+in your master profile, tailored to a specific vacancy, and rendered to PDF.
+
+## Grounding is the core constraint
+
+Generation is not free-form writing. `RESUME_GROUNDING_LEVEL` (default `moderate`) governs
+how far the model may depart from the master profile, and the package carries dedicated
+code for it: `grounding.go`, `rendercv_grounding.go`, `resume_validation.go`.
+
+```mermaid
+flowchart TD
+    M["RendercvMaster — your real history"] --> T["tailor against the vacancy"]
+    V["Vacancy text + matched skills"] --> T
+    G["GroundingLevel"] --> T
+    T --> VAL["resume_validation: does every claim trace to the master?"]
+    VAL -->|fails| RETRY["retry via CompleteStructured"]
+    VAL -->|passes| OUT["RendercvMaster (tailored)"]
+    OUT --> R["render"]
+```
+
+The rule this enforces: a tailored resume reorders, reweights and rephrases what is true.
+It does not invent employers, dates or skills.
+
+## Service shape
+
+```go
+func NewService(q Repository, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer,
+                rendercv *RenderCvRenderer, llmc llm.Provider,
+                genModel, defaultLevel string) *Service
+```
+
+| Collaborator | Role |
+| --- | --- |
+| `q` | `Repository` port over `GeneratedDocument` |
+| `profiles` | `ProfileStore` — the master document |
+| `htmlRenderer` | HTML → PDF path (cover letters) |
+| `rendercv` | RenderCV path (resumes), binary from `RENDERCV_BIN` |
+| `llmc` | the `generation` router |
+| `genModel` | `LLM_MODEL_GENERATION`; `docModel()` falls back to the provider default |
+| `defaultLevel` | `RESUME_GROUNDING_LEVEL` |
+
+```mermaid
+classDiagram
+    class Service {
+        +Generate(ctx, jobID, docType, profileID, rec) GeneratedDocumentDto
+        +GenerateAdHoc(ctx, AdHocInput) (resume, coverLetter)
+        +ListDocuments(ctx, jobID)
+        +GetDocument(ctx, id)
+        +UpdateDocument(ctx, id, text)
+        -tailorRendercvResume(...)
+        -writeCoverLetter(...)
+        -masterFor(ctx, profileID)
+        -docModel() string
+    }
+    class RenderCvRenderer
+    class HtmlPdfRenderer
+    class Repository {
+        <<interface>>
+    }
+    Service --> RenderCvRenderer
+    Service --> HtmlPdfRenderer
+    Service --> Repository
+```
+
+## The job-scoped path
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant API as POST /api/jobs/{id}/generate
+    participant Q as generate queue
+    participant S as generation.Service
+    participant L as llm.Router (generation)
+    participant RC as RenderCV
+    participant ST as storage
+    participant DB as GeneratedDocument
+    U->>API: type=resume or cover_letter
+    API->>Q: GeneratePayload{jobId, type, profileId?}
+    Q->>S: Generate(...)
+    S->>S: masterFor(profileID) — default profile if nil
+    S->>DB: load Job + MatchResult (matched skills)
+    alt resume
+        S->>L: tailorResume with grounding
+        L-->>S: tailored RendercvMaster
+        S->>RC: render PDF
+    else cover_letter
+        S->>L: writeCoverLetter(profileText, company, title, vacancy)
+        L-->>S: text
+        S->>S: sanitize
+        S->>ST: HTML → PDF
+    end
+    S->>ST: store the PDF
+    S->>DB: insert row (content, pdfPath, model, version)
+```
+
+`Generate` accepts an `*activity.Recorder` so its steps appear on the Status page, exactly
+like matching.
+
+## Two renderers
+
+| Renderer | Used for | Mechanism |
+| --- | --- | --- |
+| `RenderCvRenderer` | resumes | shells out to `RENDERCV_BIN` with a generated RendercvMaster config |
+| `HtmlPdfRenderer` | cover letters | HTML template → PDF |
+
+Templates live in `internal/generation/templates`; `rendercv_config.go` and
+`resume_mapping.go` convert between the master profile, RendercvMaster, and
+`dto.JsonResume`.
+
+:::note `sanitize` before rendering
+`sanitize` (`service.go:63-70`) cleans model output before it reaches a renderer.
+Untrusted text going into a template or a shelled-out binary is exactly where you want a
+scrubbing step.
+:::
+
+## Versioning
+
+`GeneratedDocument` is unique on `(jobId, type, version)`. Each generation writes a new
+version; nothing overwrites. `UpdateDocument(ctx, id, text)` lets you hand-edit a
+generated document — the edit is stored against the same row, so the copy you actually
+sent stays retrievable.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Generated
+    Generated --> Edited: PUT /api/documents/{id}
+    Generated --> Regenerated: new version row
+    Edited --> Downloaded: GET /api/documents/{id}/pdf
+    Regenerated --> Downloaded
+    Downloaded --> [*]
+```
+
+## Ad-hoc documents
+
+`GenerateAdHoc(ctx, AdHocInput)` (`service.go:89`) produces a resume **and** a cover letter
+from pasted vacancy text, with no `Job` row involved — migration
+`00006_adhoc_documents.sql` added the storage for it.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/documents/tailor` | generate from pasted vacancy text |
+| `GET /api/documents/ad-hoc` | list ad-hoc documents |
+| `GET /api/documents/{id}` | fetch content |
+| `PUT /api/documents/{id}` | save an edit |
+| `GET /api/documents/{id}/pdf` | download the PDF |
+
+This is the "I found this job elsewhere" path, and it is why `Documents` is a separate
+handler from `Jobs`.
+
+## Automatic generation
+
+When `aifeature` has `resume` or `cover_letter` enabled and a `MatchResult` scores at or
+above the feature's threshold, the match handler enqueues generation automatically
+(`internal/matching/handler.go:51`). Both features default to **disabled** with a
+threshold of 90 — automatic spending on a hosted provider is opt-in.
+
+## Queue characteristics
+
+| Property | Value |
+| --- | --- |
+| Queue | `generate` |
+| LLM task key | `generation` |
+| Concurrency | `AI_CONCURRENCY_LOCAL` (1) or `AI_CONCURRENCY_CLOUD` (3), by resolved provider class |
+| Deadline | `AI_TASK_TIMEOUT_GENERATE` (default `15m`) — the longest of the six |
+
+The deadline is long because a resume tailor plus a PDF render plus a cover letter is the
+heaviest unit of work in the system.
+
+## Testing
+
+`rendercv_test.go`, `resume_mapping_test.go`, `grounding_test.go` and `pdf_renderer_test.go`
+run offline against `testdata`. `rendercv_live_test.go` and `pdf_renderer_live_test.go`
+exercise the real binary and are opt-in.
