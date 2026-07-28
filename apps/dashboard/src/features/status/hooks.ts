@@ -26,6 +26,14 @@ export function useCancelActivity() {
   });
 }
 
+export function useQueueBacklog() {
+  return useQuery({
+    queryKey: queryKeys.activity.queues,
+    queryFn: () => api.activity.queues(),
+    refetchInterval: 5000,
+  });
+}
+
 export function useCancelAllActivity() {
   const qc = useQueryClient();
   return useMutation({

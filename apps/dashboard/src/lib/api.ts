@@ -26,6 +26,7 @@ import type {
   OutreachToneOptionDto,
   PostAgeResponseDto,
   ProfileDto,
+  QueueBacklogResponse,
   Resume,
   ResumeDto,
   ReferralContactDto,
@@ -213,6 +214,7 @@ export const api = {
       request<{ cancelled: boolean }>(`/activity/${id}/cancel`, { method: 'POST' }),
     cancelAll: () =>
       request<{ cancelled: number }>('/activity/cancel-all', { method: 'POST' }),
+    queues: () => request<QueueBacklogResponse>('/activity/queues'),
   },
   companies: {
     intel: (jobId: string) => request<CompanyIntelDto>(`/companies/${jobId}/intel`),
@@ -248,9 +250,9 @@ export const api = {
     reject: (id: string) => request(`/roster/candidates/${id}/reject`, { method: 'POST' }),
     discover: () => request<{ newCandidates: number }>('/roster/discover', { method: 'POST' }),
   },
-  // Per-task chat provider/model assignment across Ollama, Cerebras and
-  // OpenRouter. The remote API keys themselves are never part of this API —
-  // they're env-only (CEREBRAS_API_KEY / OPENROUTER_API_KEY) and never leave
+  // Per-task chat provider/model assignment across Ollama and Cerebras.
+  // The remote API keys themselves are never part of this API —
+  // they're env-only (CEREBRAS_API_KEY) and never leave
   // the server.
   settings: {
     getLlm: () => request<LlmSettingsResponseDto>('/v1/settings/llm'),

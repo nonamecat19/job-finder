@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RotateCw, X } from 'lucide-react';
-import type { ActivityOp, ActivityRunDto } from '@job-finder/shared';
+import type { ActivityOp, ActivityRunDto, QueueBacklogDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { VirtualList } from '../../components/VirtualList';
 import {
@@ -16,7 +16,13 @@ import {
   Surface,
 } from '../../components/ui';
 import { cn } from '../../lib/utils';
-import { useActivity, useCancelActivity, useCancelAllActivity, useRetryActivity } from './hooks';
+import {
+  useActivity,
+  useCancelActivity,
+  useCancelAllActivity,
+  useQueueBacklog,
+  useRetryActivity,
+} from './hooks';
 
 const OP_LABELS: Record<ActivityOp, string> = {
   ingest: 'Ingest',
@@ -25,6 +31,17 @@ const OP_LABELS: Record<ActivityOp, string> = {
   enrich: 'Enrich',
   ghost_score: 'Ghost score',
   salary_infer: 'Salary infer',
+};
+
+// Queue names as reported by GET /api/activity/queues don't match ActivityOp
+// (e.g. "salary:infer" vs "salary_infer"); map separately for display.
+const QUEUE_LABELS: Record<string, string> = {
+  ingest: 'Ingest',
+  match: 'Match',
+  generate: 'Generate',
+  enrich: 'Enrich',
+  'salary:infer': 'Salary infer',
+  'ghost:score': 'Ghost score',
 };
 
 const OP_TONES: Record<ActivityOp, 'green' | 'red' | 'slate'> = {
@@ -38,10 +55,14 @@ const OP_TONES: Record<ActivityOp, 'green' | 'red' | 'slate'> = {
 
 export default function StatusPage() {
   const { data, isLoading, error } = useActivity(100);
+  const { data: backlog } = useQueueBacklog();
   const retry = useRetryActivity();
   const cancelAll = useCancelAllActivity();
 
-  const failed = data?.recent.filter((r) => r.state === 'failed' || r.state === 'cancelled') ?? [];
+  const failed =
+    data?.recent.filter(
+      (r) => r.state === 'failed' || r.state === 'cancelled' || r.state === 'timed_out' || r.state === 'interrupted',
+    ) ?? [];
   const failedByOp = failed.reduce<Record<string, number>>((acc, r) => {
     acc[r.op] = (acc[r.op] ?? 0) + 1;
     return acc;
@@ -72,8 +93,8 @@ export default function StatusPage() {
           </div>
           {anyCancelled ? (
             <p className="mb-3 text-xs text-muted">
-              Some of these were cancelled, not failed — an upstream provider (Cerebras or
-              OpenRouter) hit its rate limit, so the rest of that batch was skipped instead of
+              Some of these were cancelled, not failed — an upstream provider (Cerebras)
+              hit its rate limit, so the rest of that batch was skipped instead of
               also erroring out. Retry once the limit resets.
             </p>
           ) : null}
@@ -96,6 +117,8 @@ export default function StatusPage() {
           </ul>
         </Surface>
       ) : null}
+
+      {backlog && backlog.queues.length > 0 ? <BacklogPanel queues={backlog.queues} /> : null}
 
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
@@ -148,6 +171,56 @@ function ActivitySkeleton() {
       ))}
     </LoadingRegion>
   );
+}
+
+function BacklogPanel({ queues }: { queues: QueueBacklogDto[] }) {
+  return (
+    <Surface className="mb-8">
+      <SectionTitle>Backlog</SectionTitle>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="text-xs font-semibold uppercase tracking-wide text-faint">
+              <th className="pb-2 pr-4">Queue</th>
+              <th className="pb-2 pr-4">Provider</th>
+              <th className="pb-2 pr-4">Concurrency</th>
+              <th className="pb-2 pr-4">Pending</th>
+              <th className="pb-2 pr-4">Active</th>
+              <th className="pb-2 pr-4">Rate/min</th>
+              <th className="pb-2">ETA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {queues.map((q) => (
+              <tr key={q.queue} className="border-t border-border">
+                <td className="py-2 pr-4 font-medium text-fg">{QUEUE_LABELS[q.queue] ?? q.queue}</td>
+                <td className="py-2 pr-4 text-muted">
+                  {q.providerClass ? <Chip tone={q.providerClass === 'hosted' ? 'green' : 'slate'}>{q.providerClass}</Chip> : '—'}
+                </td>
+                <td className="py-2 pr-4 tabular-nums text-muted">{q.concurrency}</td>
+                <td className="py-2 pr-4 tabular-nums text-muted">
+                  {q.error ? <span className="text-danger">error</span> : q.pending}
+                </td>
+                <td className="py-2 pr-4 tabular-nums text-muted">{q.error ? '—' : q.active}</td>
+                <td className="py-2 pr-4 tabular-nums text-muted">
+                  {q.error ? '—' : q.processedPerMinute.toFixed(1)}
+                </td>
+                <td className="py-2 tabular-nums text-muted">{formatEta(q.etaSeconds)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Surface>
+  );
+}
+
+function formatEta(etaSeconds: number | null): string {
+  if (etaSeconds == null) return '—';
+  const minutes = Math.round(etaSeconds / 60);
+  if (minutes < 1) return '<1m';
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 function ActiveCard({ run }: { run: ActivityRunDto }) {
@@ -226,9 +299,11 @@ function RecentRow({ run }: { run: ActivityRunDto }) {
         ) : (
           <span className="text-fg">{run.label}</span>
         )}
-        {(run.state === 'failed' || run.state === 'cancelled') && run.error ? (
-          <p className="mt-0.5 text-xs text-danger">{run.error}</p>
-        ) : null}
+        {(run.state === 'failed' ||
+          run.state === 'cancelled' ||
+          run.state === 'timed_out' ||
+          run.state === 'interrupted') &&
+        run.error ? <p className="mt-0.5 text-xs text-danger">{run.error}</p> : null}
       </span>
       <span>
         {run.state === 'succeeded' ? (
@@ -237,6 +312,10 @@ function RecentRow({ run }: { run: ActivityRunDto }) {
           <span className="text-danger">✗ failed</span>
         ) : run.state === 'cancelled' ? (
           <span className="text-amber-500">⊘ cancelled</span>
+        ) : run.state === 'timed_out' ? (
+          <span className="text-danger">⏱ timed out</span>
+        ) : run.state === 'interrupted' ? (
+          <span className="text-amber-500">⚠ interrupted</span>
         ) : (
           <span className="text-muted">{run.state}</span>
         )}
