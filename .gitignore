@@ -5,7 +5,6 @@ dist/
 apps/dashboard/dist/
 apps/api/dist/
 packages/shared/dist/
-apps/extension/dist/
 __pycache__/
 *.pyc
 .venv/

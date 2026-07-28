@@ -3,12 +3,6 @@ import type { AiFeatureSettingDto, LlmTaskSettingDto } from '@job-finder/shared'
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 
-export function useBootstrapExtension() {
-  return useMutation({
-    mutationFn: () => api.ext.bootstrap(),
-  });
-}
-
 // Cerebras free-tier model toggle (001-cerebras-model-toggle).
 export function useLlmSettings() {
   return useQuery({

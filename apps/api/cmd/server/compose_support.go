@@ -2,13 +2,11 @@ package main
 
 import (
 	"github.com/job-finder/api/internal/applications"
-	"github.com/job-finder/api/internal/extauth"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
 	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/postage"
-	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/subscriptions"
 )
 
@@ -28,24 +26,6 @@ func composePostAge(p *Platform) *httpapi.PostAgeHandler {
 
 func composeNotifications(p *Platform) *httpapi.NotificationHandler {
 	return &httpapi.NotificationHandler{Provider: notifier.NewNotificationService(p.DB.Queries, p.DB.Queries)}
-}
-
-type extAuthHandles struct {
-	Auth    *httpapi.ExtAuthHandler
-	Profile *httpapi.ExtProfileHandler
-}
-
-func composeExtAuth(p *Platform, profileSvc *profile.Service) (*extAuthHandles, error) {
-	extJWTSecret, err := extJWTSigningSecret(p.Config.ExtJWTSecret)
-	if err != nil {
-		return nil, err
-	}
-	extSigner := extauth.NewSigner(extJWTSecret)
-	extAuthSvc := extauth.NewService(p.DB.Queries, extSigner)
-	return &extAuthHandles{
-		Auth:    &httpapi.ExtAuthHandler{Auth: extAuthSvc},
-		Profile: &httpapi.ExtProfileHandler{Profiles: profileSvc, Verifier: extSigner},
-	}, nil
 }
 
 func composeHealth(p *Platform) *httpapi.HealthHandler {

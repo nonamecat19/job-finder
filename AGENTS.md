@@ -6,7 +6,6 @@ Context for AI coding agents working in this repo.
 
 - `apps/api` — Go backend (HTTP API, asynq workers, ingestion scheduler)
 - `apps/dashboard` — React/Vite dashboard
-- `apps/extension` — browser extension (autofill)
 - `packages/shared` — shared TS types, generated from Go DTOs via tygo
 - `specs/` — per-feature specs (numbered)
 - `plans/` — implementation plans derived from specs
@@ -26,7 +25,7 @@ Context for AI coding agents working in this repo.
 
 ## Running the app
 
-Infra/backend/frontend are all long-lived (`make up`, `make run-backend`,
+Infra/backend/frontend are all long-lived (`make run-backend`,
 `make run-frontend`) — start them via `process-hive`, never directly in a
 blocking Bash call.
 
