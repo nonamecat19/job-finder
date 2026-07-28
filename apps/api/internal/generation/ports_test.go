@@ -16,7 +16,7 @@ type fakeRepo struct {
 
 // NewService accepts the port, not a concrete queries value.
 func TestNewServiceAcceptsRepositoryPort(t *testing.T) {
-	svc := generation.NewService(&fakeRepo{}, nil, nil, nil, nil, "", "", "")
+	svc := generation.NewService(&fakeRepo{}, nil, nil, nil, nil, "", "")
 	if svc == nil {
 		t.Fatal("NewService returned nil")
 	}

@@ -48,19 +48,6 @@ type Config struct {
 	CerebrasAPIKey  string `mapstructure:"CEREBRAS_API_KEY"`
 	CerebrasBaseURL string `mapstructure:"CEREBRAS_BASE_URL"`
 
-	// OpenRouter: an optional third chat provider, selectable per task from
-	// dashboard Settings exactly like Cerebras. OpenRouterAPIKey is a secret
-	// with no default; when empty, OpenRouter is unavailable and tasks set to
-	// it resolve to Ollama. OpenRouterBaseURL defaults to the public API.
-	// OpenRouterSiteURL/OpenRouterAppName are optional attribution headers
-	// (HTTP-Referer / X-Title) OpenRouter uses for leaderboard ranking.
-	// OpenRouter has no embeddings endpoint, so EmbedURL/EmbedModel are
-	// unaffected by this provider.
-	OpenRouterAPIKey  string `mapstructure:"OPENROUTER_API_KEY"`
-	OpenRouterBaseURL string `mapstructure:"OPENROUTER_BASE_URL"`
-	OpenRouterSiteURL string `mapstructure:"OPENROUTER_SITE_URL"`
-	OpenRouterAppName string `mapstructure:"OPENROUTER_APP_NAME"`
-
 	// KeywordRephraseCacheTTLSec is the lifetime, in seconds, of a cached set of
 	// keyword-diff rephrase suggestions. Suggestions are generated async and
 	// cached because each is a live LLM call; a stale entry past this age is
@@ -81,13 +68,6 @@ type Config struct {
 
 	ConfigEncryptionKey string `mapstructure:"CONFIG_ENCRYPTION_KEY"`
 
-	// ExtJWTSecret signs the browser-extension access token (014-autofill-
-	// extension). A 32-byte hex string (openssl rand -hex 32), same shape as
-	// ConfigEncryptionKey. If unset, cmd/server generates a random ephemeral
-	// secret at startup and logs a warning — tokens then stop validating
-	// across restarts, which is safer than a hardcoded default secret.
-	ExtJWTSecret string `mapstructure:"EXT_JWT_SECRET"`
-
 	// Job source credentials
 	AdzunaAppID   string `mapstructure:"ADZUNA_APP_ID"`
 	AdzunaAppKey  string `mapstructure:"ADZUNA_APP_KEY"`
@@ -104,6 +84,10 @@ type Config struct {
 	// 2000 matches work.ua's published Crawl-delay: 2; adapters.WorkUaMinDelay
 	// clamps it so a misconfigured env var cannot go below the floor.
 	WorkUaDetailDelayMs int `mapstructure:"WORKUA_DETAIL_DELAY_MS"`
+	// DjinniRateOverrideRPS pins djinni.co's fetch rate (bypasses the
+	// crawl-delay-derived pacing) since its robots.txt Crawl-delay drives the
+	// resolver into long cooling-off spirals. 0.5 = one fetch/2s.
+	DjinniRateOverrideRPS float64 `mapstructure:"DJINNI_RATE_OVERRIDE_RPS"`
 
 	// Optional services
 	FlaresolverrURL string `mapstructure:"FLARESOLVERR_URL"`
@@ -135,7 +119,6 @@ type Config struct {
 	MinioUseSSL    bool   `mapstructure:"MINIO_USE_SSL"`
 
 	// RenderCV
-	ResumeMasterPath   string `mapstructure:"RESUME_MASTER_PATH"`
 	ResumeGroundingLvl string `mapstructure:"RESUME_GROUNDING_LEVEL"`
 	RendercvBin        string `mapstructure:"RENDERCV_BIN"`
 
@@ -149,6 +132,42 @@ type Config struct {
 	// defaults to false; enabling it is an explicit operator decision made
 	// via env var, not a code change, and is read once at process start.
 	LinkedInScrapeEnabled bool `mapstructure:"LINKEDIN_SCRAPE_ENABLED"`
+
+	// AI task concurrency (019-ai-job-throughput). AIConcurrencyCloud applies
+	// when a task resolves to a hosted provider (Cerebras or Ollama Cloud);
+	// AIConcurrencyLocal applies to a local Ollama and
+	// preserves today's behaviour. IngestConcurrency/EnrichConcurrency are
+	// non-LLM task pool sizes, promoted from hardcoded literals.
+	AIConcurrencyCloud int `mapstructure:"AI_CONCURRENCY_CLOUD"`
+	AIConcurrencyLocal int `mapstructure:"AI_CONCURRENCY_LOCAL"`
+	IngestConcurrency  int `mapstructure:"INGEST_CONCURRENCY"`
+	EnrichConcurrency  int `mapstructure:"ENRICH_CONCURRENCY"`
+
+	// Per-task-type deadlines (019-ai-job-throughput). A task exceeding its
+	// deadline is finalized `timed_out` rather than hanging indefinitely.
+	AITaskTimeoutMatch    time.Duration `mapstructure:"AI_TASK_TIMEOUT_MATCH"`
+	AITaskTimeoutGenerate time.Duration `mapstructure:"AI_TASK_TIMEOUT_GENERATE"`
+	AITaskTimeoutSalary   time.Duration `mapstructure:"AI_TASK_TIMEOUT_SALARY"`
+	AITaskTimeoutGhost    time.Duration `mapstructure:"AI_TASK_TIMEOUT_GHOST"`
+	AITaskTimeoutEnrich   time.Duration `mapstructure:"AI_TASK_TIMEOUT_ENRICH"`
+	AITaskTimeoutIngest   time.Duration `mapstructure:"AI_TASK_TIMEOUT_INGEST"`
+
+	// Activity liveness / sweeper (019-ai-job-throughput). ActivityStaleAfter
+	// must be >= 2x ActivityHeartbeatInterval, and
+	// ActivityStaleAfter+ActivitySweepInterval must stay under 5m (FR-009).
+	ActivityHeartbeatInterval time.Duration `mapstructure:"ACTIVITY_HEARTBEAT_INTERVAL"`
+	ActivityStaleAfter        time.Duration `mapstructure:"ACTIVITY_STALE_AFTER"`
+	ActivitySweepInterval     time.Duration `mapstructure:"ACTIVITY_SWEEP_INTERVAL"`
+	ActivityQueuedGrace       time.Duration `mapstructure:"ACTIVITY_QUEUED_GRACE"`
+
+	// Local model performance (019-ai-job-throughput). OllamaKeepAlive is
+	// sent as `keep_alive` on Ollama chat/embed requests so a local model
+	// stays resident; empty omits the field entirely. Ignored by Ollama
+	// Cloud. LLMMaxIdleConnsPerHost tunes the LLM clients' idle-connection
+	// pool so hosted concurrency doesn't force a fresh TLS handshake per
+	// request.
+	OllamaKeepAlive        string `mapstructure:"OLLAMA_KEEP_ALIVE"`
+	LLMMaxIdleConnsPerHost int    `mapstructure:"LLM_MAX_IDLE_CONNS_PER_HOST"`
 }
 
 func (c *Config) ModelOr(m string) string {

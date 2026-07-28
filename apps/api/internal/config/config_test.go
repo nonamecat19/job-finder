@@ -38,39 +38,6 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.CerebrasBaseURL != "https://api.cerebras.ai/v1" {
 		t.Errorf("CerebrasBaseURL default = %q, want https://api.cerebras.ai/v1", cfg.CerebrasBaseURL)
 	}
-	if cfg.OpenRouterAPIKey != "" {
-		t.Errorf("OpenRouterAPIKey should default empty, got %q", cfg.OpenRouterAPIKey)
-	}
-	if cfg.OpenRouterBaseURL != "https://openrouter.ai/api/v1" {
-		t.Errorf("OpenRouterBaseURL default = %q, want https://openrouter.ai/api/v1", cfg.OpenRouterBaseURL)
-	}
-}
-
-func TestLoadOpenRouterOverride(t *testing.T) {
-	if err := unsetForTest(t); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("OPENROUTER_API_KEY", "sk-or-test")
-	t.Setenv("OPENROUTER_BASE_URL", "http://localhost:9998/api/v1")
-	t.Setenv("OPENROUTER_SITE_URL", "https://job.finder.test")
-	t.Setenv("OPENROUTER_APP_NAME", "job-finder")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.OpenRouterAPIKey != "sk-or-test" {
-		t.Errorf("OpenRouterAPIKey = %q, want sk-or-test", cfg.OpenRouterAPIKey)
-	}
-	if cfg.OpenRouterBaseURL != "http://localhost:9998/api/v1" {
-		t.Errorf("OpenRouterBaseURL = %q", cfg.OpenRouterBaseURL)
-	}
-	if cfg.OpenRouterSiteURL != "https://job.finder.test" {
-		t.Errorf("OpenRouterSiteURL = %q", cfg.OpenRouterSiteURL)
-	}
-	if cfg.OpenRouterAppName != "job-finder" {
-		t.Errorf("OpenRouterAppName = %q", cfg.OpenRouterAppName)
-	}
 }
 
 func TestLoadCerebrasAPIKeyOverride(t *testing.T) {
@@ -151,9 +118,9 @@ func unsetForTest(t *testing.T) error {
 	all := append([]string{
 		"PORT", "REDIS_URL", "OLLAMA_URL", "LLM_MODEL", "EMBED_MODEL", "EMBED_DIMS",
 		"MATCH_SIMILARITY_THRESHOLD", "ADZUNA_COUNTRY", "DJINNI_DETAIL_DELAY_MS",
-		"WORKUA_DETAIL_DELAY_MS", "DOCUMENTS_DIR", "RESUME_MASTER_PATH",
+		"WORKUA_DETAIL_DELAY_MS", "DOCUMENTS_DIR",
 		"RESUME_GROUNDING_LEVEL", "RENDERCV_BIN", "LINKEDIN_SCRAPE_ENABLED",
-		"CEREBRAS_BASE_URL", "OPENROUTER_BASE_URL",
+		"CEREBRAS_BASE_URL",
 	}, optionalKeys...)
 	for _, k := range all {
 		t.Setenv(k, "")

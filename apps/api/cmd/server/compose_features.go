@@ -17,15 +17,19 @@ import (
 )
 
 type profileHandles struct {
-	Profile *profile.Service
-	Handler *httpapi.ProfilesHandler
+	Profile  *profile.Service
+	Snapshot *profile.SnapshotCache
+	Handler  *httpapi.ProfilesHandler
 }
 
 func composeProfile(p *Platform, ollama *llm.OllamaProvider) *profileHandles {
 	svc := profile.NewService(profile.NewSqlcRepository(p.DB.Queries), ollama, p.Config.EmbedModel, p.Config.RendercvBin)
+	snapshot := profile.NewSnapshotCache(svc)
+	svc.SetSnapshotCache(snapshot)
 	return &profileHandles{
-		Profile: svc,
-		Handler: &httpapi.ProfilesHandler{Profiles: svc},
+		Profile:  svc,
+		Snapshot: snapshot,
+		Handler:  &httpapi.ProfilesHandler{Profiles: svc},
 	}
 }
 
@@ -37,8 +41,8 @@ type matchingHandles struct {
 	Handler          *matching.Handler
 }
 
-func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Service, matchRouter *llm.Router) (*matchingHandles, error) {
-	matchingSvc := matching.NewService(matching.NewSqlcRepository(p.DB.Queries), profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
+func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Service, snapshot *profile.SnapshotCache, matchRouter *llm.Router) (*matchingHandles, error) {
+	matchingSvc := matching.NewService(matching.NewSqlcRepository(p.DB.Queries), profileSvc, snapshot, matchRouter, p.Config.MatchSimilarityThreshold, "")
 	notifierSvc := notifier.NewService(p.DB.Queries,
 		notifier.WithMatchThreshold(p.Config.MatchNotifyScoreThreshold),
 		notifier.WithRateLimitCap(p.Config.MatchNotifyRateLimit),
@@ -100,7 +104,7 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	htmlRenderer.Store = blobStore
 	rendercvRenderer := generation.NewRenderCvRenderer(cfg.DocumentsDir, cfg.RendercvBin)
 	rendercvRenderer.Store = blobStore
-	genSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, generationRouter, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
+	genSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, generationRouter, "", cfg.ResumeGroundingLvl)
 	return &generationHandles{
 		Generation: genSvc,
 		Handler:    generation.NewHandler(genSvc),

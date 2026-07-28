@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -42,17 +41,13 @@ type Service struct {
 	rendercv     *RenderCvRenderer
 	llmc         llm.Provider
 	genModel     string
-	masterPath   string
 	defaultLevel GroundingLevel
 }
 
-func NewService(q Repository, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, genModel, masterPath, defaultLevel string) *Service {
-	if masterPath == "" {
-		masterPath = "./resume/resume.yaml"
-	}
+func NewService(q Repository, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, genModel, defaultLevel string) *Service {
 	return &Service{
 		q: q, profiles: profiles, htmlRenderer: htmlRenderer, rendercv: rendercv, llmc: llmc, genModel: genModel,
-		masterPath: masterPath, defaultLevel: ParseGroundingLevel(defaultLevel),
+		defaultLevel: ParseGroundingLevel(defaultLevel),
 	}
 }
 
@@ -85,17 +80,7 @@ func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMas
 	if err == nil && prof.RendercvConfig != nil {
 		return MasterFromConfig(prof.RendercvConfig)
 	}
-
-	// Dev fallback to masterPath if no profile exists
-	data, err := os.ReadFile(s.masterPath)
-	if err != nil {
-		return nil, fmt.Errorf("generation: read master resume from %s: %w", s.masterPath, err)
-	}
-	master, err := ParseRendercv(string(data))
-	if err != nil {
-		return nil, fmt.Errorf("generation: parse master resume: %w", err)
-	}
-	return master, nil
+	return nil, fmt.Errorf("generation: no profile or RenderCV config found — upload a resume via the dashboard first")
 }
 
 // GenerateAdHoc tailors a resume and writes a cover letter from pasted
