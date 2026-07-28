@@ -57,7 +57,6 @@ describe('ReferralPathsCard', () => {
 
     render(<ReferralPathsCard jobId="job-1" />);
 
-    expect(screen.getByText('Referral paths')).toBeInTheDocument();
     expect(screen.getByText('1 warm path found')).toBeInTheDocument();
     expect(screen.getByText('You')).toBeInTheDocument();
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();

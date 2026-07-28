@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AiFeatureKey, AiFeatureSettingDto } from '@job-finder/shared';
 import { ApiError } from '../../lib/api';
-import { Button, Checkbox, EmptyState, ErrorState, Field, Input, LoadingRegion, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
+import { Button, Checkbox, EmptyState, ErrorState, Field, Input, LoadingRegion, SkeletonBlock, SkeletonLine } from '../../components/ui';
 import { useAiFeatureSettings, useUpdateAiFeatureSetting } from './hooks';
 
 const FEATURE_LABELS: Record<AiFeatureKey, { title: string; description: string }> = {
@@ -39,12 +39,12 @@ function FeatureRow({ setting }: { setting: AiFeatureSettingDto }) {
 
   return (
     <div className="border-b border-border py-4 last:border-0 last:pb-0 first:pt-0">
-      <p className="mb-1 text-sm font-semibold text-fg">{labels.title}</p>
+      <p className="mb-1 text-sm font-semibold text-foreground">{labels.title}</p>
       <p className="mb-3 text-sm text-muted">
         {labels.description} Below the threshold, or when disabled, it only runs on-demand.
       </p>
       <div className="flex flex-wrap items-end gap-4">
-        <label className="flex items-center gap-2 text-sm text-fg">
+        <label className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           Run automatically on high score
         </label>
@@ -80,33 +80,27 @@ export default function AiFeatureSettingsCard() {
 
   if (settings.isPending) {
     return (
-      <Surface>
-        <LoadingRegion label="Loading AI feature settings…" className="space-y-2">
-          <SkeletonLine width="w-1/3" className="h-5" />
-          <SkeletonBlock className="h-10 w-full" />
-          <SkeletonBlock className="h-10 w-full" />
-        </LoadingRegion>
-      </Surface>
+      <LoadingRegion label="Loading AI feature settings…" className="space-y-2">
+        <SkeletonLine width="w-1/3" className="h-5" />
+        <SkeletonBlock className="h-10 w-full" />
+        <SkeletonBlock className="h-10 w-full" />
+      </LoadingRegion>
     );
   }
   if (settings.error) {
     if (settings.error instanceof ApiError && settings.error.status === 404) {
       return (
-        <Surface>
-          <EmptyState>AI feature settings aren&apos;t available on this server yet.</EmptyState>
-        </Surface>
+        <EmptyState>AI feature settings aren&apos;t available on this server yet.</EmptyState>
       );
     }
     return (
-      <Surface>
-        <ErrorState error={settings.error} />
-      </Surface>
+      <ErrorState error={settings.error} />
     );
   }
 
   return (
-    <Surface>
+    <>
       {settings.data?.map((s) => <FeatureRow key={s.feature} setting={s} />)}
-    </Surface>
+    </>
   );
 }

@@ -17,7 +17,7 @@ export default function NotificationBell({ placement = 'bottom' }: { placement?:
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="relative inline-flex items-center justify-center rounded-lg p-2 text-muted hover:bg-overlay hover:text-fg transition"
+        className="relative inline-flex items-center justify-center rounded-lg p-2 text-muted hover:bg-surface-tertiary hover:text-foreground transition"
         aria-label={`Notifications${unseen > 0 ? ` (${unseen} unread)` : ''}`}
       >
         <Bell className="h-5 w-5" aria-hidden="true" />
@@ -37,10 +37,10 @@ export default function NotificationBell({ placement = 'bottom' }: { placement?:
             }`}
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h3 className="text-sm font-semibold text-fg">Notifications</h3>
+              <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
               <button
                 onClick={() => setOpen(false)}
-                className="text-xs text-muted hover:text-fg"
+                className="text-xs text-muted hover:text-foreground"
               >
                 close
               </button>
@@ -57,7 +57,7 @@ export default function NotificationBell({ placement = 'bottom' }: { placement?:
                   <div
                     key={n.id}
                     className={`flex items-start gap-3 border-b border-border/50 px-4 py-3 text-sm transition ${
-                      n.seen ? 'opacity-60' : 'bg-primary-soft/20'
+                      n.seen ? 'opacity-60' : 'bg-accent-soft/20'
                     }`}
                   >
                     <div className="min-w-0 flex-1">
@@ -65,7 +65,7 @@ export default function NotificationBell({ placement = 'bottom' }: { placement?:
                         {n.fresh ? (
                           <Chip tone="green">fresh</Chip>
                         ) : null}
-                        <span className="font-medium text-fg truncate">
+                        <span className="font-medium text-foreground truncate">
                           {n.jobTitle ?? 'Job match'}
                         </span>
                       </div>
@@ -94,7 +94,7 @@ export default function NotificationBell({ placement = 'bottom' }: { placement?:
                       ) : null}
                       <Link
                         to={`/jobs/${n.jobId}`}
-                        className="inline-flex rounded-md p-1 text-muted hover:bg-overlay hover:text-fg"
+                        className="inline-flex rounded-md p-1 text-muted hover:bg-surface-tertiary hover:text-foreground"
                         aria-label="View job"
                         onClick={() => setOpen(false)}
                       >

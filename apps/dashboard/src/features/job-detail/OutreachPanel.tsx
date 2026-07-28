@@ -1,8 +1,7 @@
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { OutreachDraftDto, OutreachTone } from '@job-finder/shared';
-import { SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, ErrorState, Field, Select, Spinner, Surface, Textarea } from '../../components/ui';
+import { Button, Chip, ErrorState, Field, Select, Spinner, Textarea } from '../../components/ui';
 import { emitToast, toErrorMessage } from '../../lib/toastBus';
 import { useGenerateOutreachDraft, useJobContacts, useOutreachTones } from './hooks';
 
@@ -62,11 +61,7 @@ export default function OutreachPanel({ jobId }: { jobId: string | undefined }) 
   };
 
   return (
-    <Surface>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <SectionTitle className="mb-0">Outreach draft</SectionTitle>
-      </div>
-
+    <>
       <p className="mb-3 text-xs text-faint">
         Draft-only: this generates a message for you to copy and send yourself. Nothing here is ever sent
         automatically.
@@ -115,7 +110,7 @@ export default function OutreachPanel({ jobId }: { jobId: string | undefined }) 
       {generate.isError ? <ErrorState error={generate.error} /> : null}
 
       {draft ? <DraftBody draft={draft} editedText={editedText} onEditedTextChange={setEditedText} onCopy={handleCopy} tracesOpen={tracesOpen} onToggleTraces={() => setTracesOpen((v) => !v)} /> : null}
-    </Surface>
+    </>
   );
 }
 
@@ -155,7 +150,7 @@ function DraftBody({
         {draft.groundingTraces.length > 0 ? (
           <button
             type="button"
-            className="inline-flex items-center gap-1 text-xs text-muted hover:text-fg"
+            className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
             onClick={onToggleTraces}
             data-testid="outreach-traces-toggle"
           >
@@ -170,10 +165,10 @@ function DraftBody({
       </div>
 
       {tracesOpen && draft.groundingTraces.length > 0 ? (
-        <ul className="space-y-1.5 rounded-md border border-border bg-elevated/60 p-3" data-testid="outreach-traces">
+        <ul className="space-y-1.5 rounded-md border border-border bg-surface-secondary/60 p-3" data-testid="outreach-traces">
           {draft.groundingTraces.map((tr, i) => (
             <li key={`${tr.signalKind}-${i}`} className="text-xs">
-              <span className="font-medium text-fg">&ldquo;{tr.claim}&rdquo;</span>
+              <span className="font-medium text-foreground">&ldquo;{tr.claim}&rdquo;</span>
               <span className="text-faint"> — from {tr.signalKind}: {tr.signalValue}</span>
             </li>
           ))}

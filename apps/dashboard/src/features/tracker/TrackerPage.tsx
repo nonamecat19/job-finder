@@ -1,9 +1,8 @@
-import { BarChart3 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { ApplicationDto, ApplicationStatus, StatsDto } from '@job-finder/shared';
-import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { DashboardGrid, GridCard } from '../../components/layout';
+import type { ApplicationDto, ApplicationStatus } from '@job-finder/shared';
+import { PageHeader } from '../../components/layout/PageHeader';
+import { DashboardGrid, Tile } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
@@ -50,13 +49,23 @@ export default function TrackerPage() {
       <PageHeader
         title="Application tracker"
         description="Track your applications from first match to offer."
-        actions={
-          stats ? <StatsSummary stats={stats} /> : null
-        }
       />
 
       <DashboardGrid>
-        <GridCard span="full">
+        {stats ? (
+          <>
+            <Tile span="compact" title="Total">
+              <p className="text-2xl font-semibold tabular-nums">{stats.jobsTotal}</p>
+            </Tile>
+            <Tile span="compact" title="High fit">
+              <p className="text-2xl font-semibold tabular-nums">{stats.highFit}</p>
+            </Tile>
+            <Tile span="compact" title="New today">
+              <p className="text-2xl font-semibold tabular-nums">{stats.jobsLast24h}</p>
+            </Tile>
+          </>
+        ) : null}
+        <Tile span="full" title="Application Tracker">
 
       <Surface className="mb-5">
         <Field label="Filter by status">
@@ -90,7 +99,7 @@ export default function TrackerPage() {
           renderItem={(app) => <ApplicationCard application={app} />}
         />
       ) : null}
-        </GridCard>
+        </Tile>
       </DashboardGrid>
     </div>
   );
@@ -110,17 +119,6 @@ function ApplicationListSkeleton() {
   );
 }
 
-function StatsSummary({ stats }: { stats: StatsDto }) {
-  return (
-    <div className="flex items-center gap-3 text-sm text-muted">
-      <BarChart3 className="h-4 w-4" />
-      <span>{stats.jobsTotal} total</span>
-      <span>{stats.highFit} high fit</span>
-      <span>{stats.jobsLast24h} new today</span>
-    </div>
-  );
-}
-
 function ApplicationCard({ application }: { application: ApplicationDto }) {
   const update = useUpdateApplication();
   const [editingNotes, setEditingNotes] = useState(false);
@@ -136,12 +134,12 @@ function ApplicationCard({ application }: { application: ApplicationDto }) {
           {application.job ? (
             <Link
               to={`/jobs/${application.jobId}`}
-              className="font-semibold text-primary hover:underline"
+              className="font-semibold text-accent hover:underline"
             >
               {application.job.title}
             </Link>
           ) : (
-            <span className="font-semibold text-fg">Job {application.jobId.slice(0, 8)}</span>
+            <span className="font-semibold text-foreground">Job {application.jobId.slice(0, 8)}</span>
           )}
           {application.job ? (
             <p className="text-sm text-muted">

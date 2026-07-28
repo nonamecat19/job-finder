@@ -2,7 +2,7 @@ import { RefreshCw, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { ReferralContactDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { DashboardGrid, GridCard } from '../../components/layout';
+import { DashboardGrid, Tile } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import { Button, Chip, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock, Surface } from '../../components/ui';
 import { useContacts, useGithubSync, useImportContactsCSV } from './hooks';
@@ -42,14 +42,14 @@ export default function ContactsPage() {
       />
 
       <DashboardGrid>
-        <GridCard span="full">
+        <Tile span="full" title="Contacts">
 
       <p className="mb-4 text-xs text-faint">
         Expected columns (any order, case-insensitive): name, email, company, role, linkedin_url, github_username.
       </p>
 
       {importCsv.isSuccess ? (
-        <div className="mb-4 rounded-md border border-border bg-elevated/60 p-3 text-sm text-muted" role="status">
+        <div className="mb-4 rounded-md border border-border bg-surface-secondary/60 p-3 text-sm text-muted" role="status">
           Imported {importCsv.data.imported} of {importCsv.data.total} contacts
           {importCsv.data.skipped > 0 ? ` (${importCsv.data.skipped} skipped)` : ''}.
         </div>
@@ -81,7 +81,7 @@ export default function ContactsPage() {
           />
         </Surface>
       ) : null}
-        </GridCard>
+        </Tile>
       </DashboardGrid>
     </div>
   );
@@ -93,7 +93,7 @@ function ContactRow({ contact }: { contact: ReferralContactDto }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-sm last:border-0">
       <div>
-        <span className="font-medium text-fg">{contact.name}</span>
+        <span className="font-medium text-foreground">{contact.name}</span>
         {contact.role ? <span className="ml-1.5 text-muted">{contact.role}</span> : null}
         {contact.company ? <span className="ml-1.5 text-faint">· {contact.company}</span> : null}
         {contact.gitHubUsername ? (

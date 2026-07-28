@@ -3,8 +3,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { JobSourceDto, SavedSearchDto, SearchQuery, SubscriptionDto } from '@job-finder/shared';
 import { summarizeDjinniBasicSearch } from './djinniSearchSummary';
-import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { DashboardGrid, GridCard } from '../../components/layout';
+import { PageHeader } from '../../components/layout/PageHeader';
+import { DashboardGrid, Tile } from '../../components/layout';
 import {
   Button,
   Chip,
@@ -16,7 +16,6 @@ import {
   LoadingRegion,
   Spinner,
   SkeletonBlock,
-  Surface,
 } from '../../components/ui';
 import {
   useCreateSearch,
@@ -48,13 +47,13 @@ export default function SourcesPage() {
         description="Configure which job boards to scrape and manage saved searches that run on a schedule."
       />
       <DashboardGrid>
-        <GridCard span="full"><SourcesPanel /></GridCard>
-        <GridCard span="full"><HostRetrievalPanel /></GridCard>
-        <GridCard span="full"><RosterPanel /></GridCard>
-        <GridCard span="full"><CandidatesPanel /></GridCard>
-        <GridCard span="full"><SubscriptionsPanel /></GridCard>
-        <GridCard span="full"><SearchesPanel /></GridCard>
-        <GridCard span="full"><RecentRunsPanel /></GridCard>
+        <Tile span="full" title="Job sources"><SourcesPanel /></Tile>
+        <Tile span="full" title="Host retrieval status"><HostRetrievalPanel /></Tile>
+        <Tile span="full" title="Employer roster"><RosterPanel /></Tile>
+        <Tile span="full" title="Board candidates"><CandidatesPanel /></Tile>
+        <Tile span="full" title="Subscriptions"><SubscriptionsPanel /></Tile>
+        <Tile span="full" title="Saved searches"><SearchesPanel /></Tile>
+        <Tile span="full" title="Recent runs"><RecentRunsPanel /></Tile>
       </DashboardGrid>
     </div>
   );
@@ -80,20 +79,17 @@ function SourcesPanel() {
   if (!sources?.length) return <EmptyState>No sources configured.</EmptyState>;
 
   return (
-    <Surface>
-      <SectionTitle>Job sources</SectionTitle>
-      <ul className="space-y-2">
-        {sources.map((s) => (
-          <SourceRow
-            key={s.key}
-            source={s}
-            onToggle={() => update.mutate({ key: s.key, body: { enabled: !s.enabled } })}
-            onTest={() => test.mutate(s.key)}
-            testing={test.isPending && test.variables === s.key}
-          />
-        ))}
-      </ul>
-    </Surface>
+    <ul className="space-y-2">
+      {sources.map((s) => (
+        <SourceRow
+          key={s.key}
+          source={s}
+          onToggle={() => update.mutate({ key: s.key, body: { enabled: !s.enabled } })}
+          onTest={() => test.mutate(s.key)}
+          testing={test.isPending && test.variables === s.key}
+        />
+      ))}
+    </ul>
   );
 }
 
@@ -109,10 +105,10 @@ function SourceRow({
   testing: boolean;
 }) {
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-elevated/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface-secondary/60 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2">
         <HealthDot healthy={source.healthy} />
-        <span className="font-medium text-fg">{source.key}</span>
+        <span className="font-medium text-foreground">{source.key}</span>
         <Chip>{source.kind}</Chip>
         {!source.enabled ? <Chip tone="red">disabled</Chip> : null}
       </div>
@@ -120,9 +116,9 @@ function SourceRow({
         <Button variant="ghost" onClick={onTest} disabled={testing}>
           {testing ? <Spinner /> : <>test</>}
         </Button>
-        <button onClick={onToggle} className="text-muted hover:text-fg" title="toggle">
+        <button onClick={onToggle} className="text-muted hover:text-foreground" title="toggle">
           {source.enabled ? (
-            <ToggleRight className="h-6 w-6 text-primary" />
+            <ToggleRight className="h-6 w-6 text-accent" />
           ) : (
             <ToggleLeft className="h-6 w-6 text-faint" />
           )}
@@ -155,8 +151,7 @@ export function HostRetrievalPanel() {
   const hosts = [...new Set(sources.map((s) => s.key))];
 
   return (
-    <Surface>
-      <SectionTitle>Host retrieval status</SectionTitle>
+    <div>
       <div className="mb-3 flex flex-wrap gap-2">
         {hosts.map((h) => (
           <Button
@@ -176,13 +171,13 @@ export function HostRetrievalPanel() {
       ) : null}
 
       {selectedHost && status ? (
-        <div className="rounded-lg border border-border bg-elevated/60 p-3 text-sm">
+        <div className="rounded-lg border border-border bg-surface-secondary/60 p-3 text-sm">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
             <span>
-              <span className="font-medium text-fg">Rung:</span> {status.currentRung}
+              <span className="font-medium text-foreground">Rung:</span> {status.currentRung}
             </span>
             <span>
-              <span className="font-medium text-fg">Pace:</span> {formatPacing(status.pacing)}
+              <span className="font-medium text-foreground">Pace:</span> {formatPacing(status.pacing)}
             </span>
           </div>
 
@@ -230,7 +225,7 @@ export function HostRetrievalPanel() {
           </div>
         </div>
       ) : null}
-    </Surface>
+    </div>
   );
 }
 
@@ -240,9 +235,8 @@ function SearchesPanel() {
   const [showForm, setShowForm] = useState(false);
 
   return (
-    <Surface>
+    <div>
       <div className="mb-3 flex items-center justify-between">
-        <SectionTitle>Saved searches</SectionTitle>
         <Button onClick={() => setShowForm((v) => !v)}>{showForm ? 'cancel' : '+ new search'}</Button>
       </div>
 
@@ -259,7 +253,7 @@ function SearchesPanel() {
           <SearchRow key={s.id} search={s} />
         ))}
       </ul>
-    </Surface>
+    </div>
   );
 }
 
@@ -274,7 +268,7 @@ function NewSearchForm({ onSubmit }: { onSubmit: (q: { name: string; query: Sear
   };
 
   return (
-    <div className="mb-3 rounded-lg border border-primary/30 bg-primary-soft p-3">
+    <div className="mb-3 rounded-lg border border-accent/30 bg-accent-soft p-3">
       <div className="grid gap-2 sm:grid-cols-3">
         <Field label="Name">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. React remote" />
@@ -300,9 +294,9 @@ function SearchRow({ search }: { search: SavedSearchDto }) {
   const remove = useDeleteSearch();
 
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-elevated/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface-secondary/60 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <span className="font-medium text-fg">{search.name}</span>
+        <span className="font-medium text-foreground">{search.name}</span>
         <span className="ml-2 text-xs text-muted">
           {search.query.keywords}
           {search.query.location ? ` in ${search.query.location}` : ''}
@@ -348,9 +342,8 @@ function SubscriptionsPanel() {
   const [showForm, setShowForm] = useState(false);
 
   return (
-    <Surface>
+    <div>
       <div className="mb-3 flex items-center justify-between">
-        <SectionTitle>Subscriptions</SectionTitle>
         <div className="flex items-center gap-2">
           <Button
             variant="secondary"
@@ -382,7 +375,7 @@ function SubscriptionsPanel() {
           />
         ))}
       </ul>
-    </Surface>
+    </div>
   );
 }
 
@@ -398,13 +391,13 @@ function NewSubscriptionForm({ onSubmit }: { onSubmit: (body: { sourceKey: strin
   };
 
   return (
-    <div className="mb-3 rounded-lg border border-primary/30 bg-primary-soft p-3">
+    <div className="mb-3 rounded-lg border border-accent/30 bg-accent-soft p-3">
       <div className="grid gap-2 sm:grid-cols-3">
         <Field label="Source">
           <select
             value={sourceKey}
             onChange={(e) => setSourceKey(e.target.value)}
-            className="w-full rounded-lg border border-border bg-elevated px-3 py-2 text-sm text-fg shadow-sm outline-none transition placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary-soft"
+            className="w-full rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-foreground shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent-soft"
           >
             {SUBSCRIPTION_SOURCES.map((s) => (
               <option key={s.key} value={s.key}>{s.label}</option>
@@ -434,9 +427,9 @@ function SubscriptionRow({ sub, onRun, onDelete, running }: { sub: SubscriptionD
       <span className="ml-1 text-xs text-faint">· basic-search</span>
     ) : null
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-elevated/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface-secondary/60 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <span className="font-medium text-fg">{basicSearchLabel ?? sub.name ?? sub.sourceKey}</span>
+        <span className="font-medium text-foreground">{basicSearchLabel ?? sub.name ?? sub.sourceKey}</span>
         <span className="ml-2 text-xs text-muted">{sub.sourceKey}</span>
         {djinniModeMarker}
         <div className="truncate text-xs text-faint" title={sub.url}>{sub.url}</div>
@@ -449,7 +442,7 @@ function SubscriptionRow({ sub, onRun, onDelete, running }: { sub: SubscriptionD
       <div className="flex shrink-0 items-center gap-2">
         <Link
           to={`/?source=${sub.sourceKey}&subscriptionId=${sub.id}`}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition hover:bg-overlay"
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition hover:bg-surface-tertiary"
         >
           <ListFilter className="h-3 w-3" /> view jobs
         </Link>
@@ -468,8 +461,7 @@ function RecentRunsPanel() {
   const { data: runs, isLoading } = useRecentRuns();
 
   return (
-    <Surface>
-      <SectionTitle>Recent runs</SectionTitle>
+    <div>
       {isLoading ? <ListRowsSkeleton label="loading recent runs…" /> : null}
       {runs && runs.length === 0 ? <EmptyState>No runs yet.</EmptyState> : null}
       <ul className="space-y-1">
@@ -502,6 +494,6 @@ function RecentRunsPanel() {
           );
         })}
       </ul>
-    </Surface>
+    </div>
   );
 }

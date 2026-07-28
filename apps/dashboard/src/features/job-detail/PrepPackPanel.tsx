@@ -7,8 +7,7 @@ import type {
   CompanyNewsItem,
   QuestionCategory,
 } from '@job-finder/shared';
-import { SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, EmptyState, LoadingRegion, ScoreBadge, SkeletonLine, Surface } from '../../components/ui';
+import { Button, Chip, EmptyState, LoadingRegion, ScoreBadge, SkeletonLine } from '../../components/ui';
 import { useInterviewPrep } from './hooks';
 
 const CATEGORY_LABEL: Record<QuestionCategory, string> = {
@@ -34,32 +33,26 @@ export default function PrepPackPanel({ jobId }: { jobId: string | undefined }) 
 
   if (isLoading) {
     return (
-      <Surface>
-        <LoadingRegion label="Preparing interview pack…" className="space-y-2">
-          <SkeletonLine width="w-1/2" />
-          <SkeletonLine width="w-2/3" />
-          <SkeletonLine width="w-1/3" />
-        </LoadingRegion>
-      </Surface>
+      <LoadingRegion label="Preparing interview pack…" className="space-y-2">
+        <SkeletonLine width="w-1/2" />
+        <SkeletonLine width="w-2/3" />
+        <SkeletonLine width="w-1/3" />
+      </LoadingRegion>
     );
   }
 
   if (isError || !data) {
     return (
-      <Surface>
-        <SectionTitle className="mb-0">Interview prep pack</SectionTitle>
-        <EmptyState>
-          No interview prep available yet. First run the keyword diff, then generate your
-          interview prep pack from the job page.
-        </EmptyState>
-      </Surface>
+      <EmptyState>
+        No interview prep available yet. First run the keyword diff, then generate your
+        interview prep pack from the job page.
+      </EmptyState>
     );
   }
 
   return (
-    <Surface className="print:border-none print:shadow-none">
+    <div className="print:border-none print:shadow-none">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <SectionTitle className="mb-0">Interview prep pack</SectionTitle>
         <div className="flex items-center gap-2">
           {data.metadata.totalQuestions > 0 ? (
             <span className="hidden text-xs text-muted sm:inline">
@@ -100,7 +93,7 @@ export default function PrepPackPanel({ jobId }: { jobId: string | undefined }) 
       <div className="print:hidden mt-4 border-t border-border pt-3 text-center text-xs text-faint">
         Generated {new Date(data.generatedAt).toLocaleString()}
       </div>
-    </Surface>
+    </div>
   );
 }
 
@@ -126,7 +119,7 @@ function QuestionCard({ question, index }: { question: InterviewQuestion; index:
   const uncovered = question.mappedStories.length === 0;
 
   return (
-    <div className="print:break-inside-avoid rounded-lg border border-border bg-overlay/30 p-3">
+    <div className="print:break-inside-avoid rounded-lg border border-border bg-surface-tertiary/30 p-3">
       <button
         type="button"
         className="flex w-full items-start gap-2 text-left"
@@ -143,7 +136,7 @@ function QuestionCard({ question, index }: { question: InterviewQuestion; index:
               <Chip tone="green">{question.mappedStories.length} {question.mappedStories.length === 1 ? 'story' : 'stories'}</Chip>
             )}
           </div>
-          <p className="mt-1 text-sm font-medium leading-6 text-fg">{question.text}</p>
+          <p className="mt-1 text-sm font-medium leading-6 text-foreground">{question.text}</p>
         </div>
         <span className="mt-1 shrink-0 text-faint">
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -196,10 +189,10 @@ function UncoveredQuestionCallout({ questionText }: { questionText: string }) {
 
 function StoryCard({ story }: { story: StoryMapping }) {
   return (
-    <li className="rounded-md border border-border bg-elevated/60 p-3">
+    <li className="rounded-md border border-border bg-surface-secondary/60 p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-fg">{story.storyTitle}</p>
+          <p className="text-sm font-medium text-foreground">{story.storyTitle}</p>
           <p className="mt-0.5 text-xs text-muted">
             Relevance <ScoreBadge score={Math.round(story.relevanceScore * 100)} />
           </p>
@@ -219,8 +212,8 @@ function StoryCard({ story }: { story: StoryMapping }) {
 
 function GapSummarySection({ keywordGap }: { keywordGap: InterviewPrepPack['keywordGap'] }) {
   return (
-    <div className="mt-4 rounded-lg border border-border bg-overlay/30 p-3">
-      <h3 className="mb-2 text-sm font-semibold text-fg">Skill gap awareness</h3>
+    <div className="mt-4 rounded-lg border border-border bg-surface-tertiary/30 p-3">
+      <h3 className="mb-2 text-sm font-semibold text-foreground">Skill gap awareness</h3>
       <p className="mb-2 text-xs text-muted">
         {`${keywordGap.coveragePct}% keyword coverage — these gaps may come up in the interview.`}
       </p>
@@ -260,16 +253,16 @@ function GapSummarySection({ keywordGap }: { keywordGap: InterviewPrepPack['keyw
 function CompanyNewsSection({ items, stale }: { items: CompanyNewsItem[]; stale: boolean }) {
   return (
     <div className="mt-4">
-      <h3 className="mb-2 text-sm font-semibold text-fg">Company news briefing</h3>
+      <h3 className="mb-2 text-sm font-semibold text-foreground">Company news briefing</h3>
       {stale ? (
         <p className="mb-2 text-xs italic text-warning">News data may be stale — refresh company intel.</p>
       ) : null}
       <div className="space-y-2">
         {items.map((item, i) => (
-          <div key={`${item.kind}-${i}`} className="rounded-md border border-border bg-elevated/60 p-3 text-sm">
+          <div key={`${item.kind}-${i}`} className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <span className="font-medium text-fg">{item.label}</span>
+                <span className="font-medium text-foreground">{item.label}</span>
                 <span className="ml-1.5 text-muted">{item.value}</span>
               </div>
               <span className="shrink-0 text-xs text-faint">{item.source}</span>

@@ -1,6 +1,5 @@
 import { Check, Search, X } from 'lucide-react';
 import type { BoardCandidateDto } from '@job-finder/shared';
-import { SectionTitle } from '../../../components/layout/PageHeader';
 import {
   Button,
   Chip,
@@ -8,7 +7,6 @@ import {
   ErrorState,
   LoadingRegion,
   SkeletonBlock,
-  Surface,
 } from '../../../components/ui';
 import { useAcceptCandidate, useCandidates, useDiscoverCandidates, useRejectCandidate } from '../hooks';
 
@@ -19,9 +17,8 @@ export default function CandidatesPanel() {
   const reject = useRejectCandidate();
 
   return (
-    <Surface className="mb-5">
+    <div>
       <div className="mb-3 flex items-center justify-between">
-        <SectionTitle>Board candidates</SectionTitle>
         <Button onClick={() => discover.mutate()} disabled={discover.isPending}>
           <Search className="h-3 w-3" /> discover
         </Button>
@@ -55,7 +52,7 @@ export default function CandidatesPanel() {
           />
         ))}
       </ul>
-    </Surface>
+    </div>
   );
 }
 
@@ -69,10 +66,10 @@ function CandidateRow({
   onReject: () => void;
 }) {
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-elevated/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface-secondary/60 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-fg">{c.displayName}</span>
+          <span className="font-medium text-foreground">{c.displayName}</span>
           <Chip>{c.vendor}</Chip>
           <Chip tone={c.state === 'proposed' ? 'slate' : c.state === 'accepted' ? 'green' : 'red'}>
             {c.state}

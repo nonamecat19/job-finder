@@ -1,7 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import type { FitGapEvidence, FitGapItem, FitGapProximity } from '@job-finder/shared';
-import { SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, ErrorState, LoadingRegion, ScoreBadge, Spinner, SkeletonLine, Surface } from '../../components/ui';
+import { Button, Chip, ErrorState, LoadingRegion, ScoreBadge, Spinner, SkeletonLine } from '../../components/ui';
 import { emitToast, toErrorMessage } from '../../lib/toastBus';
 import { useAssessCoach, useCoachAssessment } from './hooks';
 
@@ -30,9 +29,8 @@ export default function CoachPanel({ jobId }: { jobId: string | undefined }) {
   const assessed = assess.data ?? (isCachedError ? undefined : data);
 
   return (
-    <Surface>
+    <>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <SectionTitle className="mb-0">Fit-gap coach</SectionTitle>
         <Button variant="secondary" onClick={handleAssess} disabled={assess.isPending || isLoading}>
           {assess.isPending ? <Spinner /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
           {assessed ? 'Re-assess' : 'Assess'}
@@ -54,7 +52,7 @@ export default function CoachPanel({ jobId }: { jobId: string | undefined }) {
       ) : (
         <AssessmentBody assessment={assessed} />
       )}
-    </Surface>
+    </>
   );
 }
 
@@ -89,7 +87,7 @@ function AssessmentBody({ assessment }: { assessment: NonNullable<ReturnType<typ
 
 function GapCard({ gap }: { gap: FitGapItem }) {
   return (
-    <li className="rounded-lg border border-border bg-overlay/40 p-3">
+    <li className="rounded-lg border border-border bg-surface-tertiary/40 p-3">
       <div className="mb-2 flex items-center gap-2">
         <Chip tone="red">{gap.term}</Chip>
       </div>
@@ -111,13 +109,13 @@ function GapCard({ gap }: { gap: FitGapItem }) {
 
 function EvidenceRow({ evidence }: { evidence: FitGapEvidence }) {
   return (
-    <li className="rounded-md border border-border bg-elevated/60 p-3">
+    <li className="rounded-md border border-border bg-surface-secondary/60 p-3">
       <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs">
         <Chip tone={PROXIMITY_TONE[evidence.proximity]}>{evidence.proximity}</Chip>
         <span className="text-faint">from: {evidence.sourceEntry}</span>
       </div>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm leading-6 text-fg">{evidence.rephrase}</p>
+        <p className="text-sm leading-6 text-foreground">{evidence.rephrase}</p>
         <CopyButton text={evidence.rephrase} />
       </div>
       <p className="mt-1 text-xs text-faint">original: {evidence.sourceBullet}</p>

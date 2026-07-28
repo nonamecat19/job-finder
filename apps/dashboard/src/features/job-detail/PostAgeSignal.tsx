@@ -1,4 +1,4 @@
-import { Chip, LoadingRegion, SkeletonBlock, Surface } from '../../components/ui';
+import { Chip, LoadingRegion, SkeletonBlock } from '../../components/ui';
 import { usePostAgeSignal } from './hooks';
 
 export default function PostAgeSignal() {
@@ -6,13 +6,11 @@ export default function PostAgeSignal() {
 
   if (isLoading) {
     return (
-      <Surface>
-        <LoadingRegion label="loading response rate…" className="space-y-2">
-          <SkeletonBlock className="h-8 w-full" />
-          <SkeletonBlock className="h-8 w-full" />
-          <SkeletonBlock className="h-8 w-full" />
-        </LoadingRegion>
-      </Surface>
+      <LoadingRegion label="loading response rate…" className="space-y-2">
+        <SkeletonBlock className="h-8 w-full" />
+        <SkeletonBlock className="h-8 w-full" />
+        <SkeletonBlock className="h-8 w-full" />
+      </LoadingRegion>
     );
   }
   if (error) return null;
@@ -27,21 +25,20 @@ export default function PostAgeSignal() {
   };
 
   return (
-    <Surface>
-      <h2 className="mb-2 font-semibold">Response rate by application timing</h2>
+    <>
       {data.globalState === 'prior' && data.thresholdMsg ? (
         <p className="mb-3 text-sm text-muted">{data.thresholdMsg}</p>
       ) : null}
       <div className="space-y-2">
         {data.buckets.map((b) => (
-          <div key={b.bucket} className="flex items-center justify-between gap-3 rounded-md bg-elevated/60 px-3 py-2 text-sm">
+          <div key={b.bucket} className="flex items-center justify-between gap-3 rounded-md bg-surface-secondary/60 px-3 py-2 text-sm">
             <div className="min-w-0">
-              <span className="font-medium capitalize text-fg">{b.bucket}</span>
+              <span className="font-medium capitalize text-foreground">{b.bucket}</span>
               <span className="ml-2 text-xs text-faint">{bucketLabel[b.bucket] ?? b.bucket}</span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {b.state === 'observed' && b.rate !== null ? (
-                <span className="font-semibold tabular-nums text-fg">{(b.rate * 100).toFixed(0)}%</span>
+                <span className="font-semibold tabular-nums text-foreground">{(b.rate * 100).toFixed(0)}%</span>
               ) : b.state === 'insufficient' ? (
                 <Chip>not enough data</Chip>
               ) : (
@@ -57,6 +54,6 @@ export default function PostAgeSignal() {
           {data.priorLabel} — {data.priorRate * 100}% baseline
         </p>
       ) : null}
-    </Surface>
+    </>
   );
 }

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RotateCw, X } from 'lucide-react';
-import type { ActivityOp, ActivityRunDto, QueueBacklogDto } from '@job-finder/shared';
-import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { DashboardGrid, GridCard } from '../../components/layout';
+import type { ActivityOp, ActivityRunDto } from '@job-finder/shared';
+import { PageHeader } from '../../components/layout/PageHeader';
+import { DashboardGrid, Tile } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
@@ -83,10 +83,10 @@ export default function StatusPage() {
       <DashboardGrid>
 
       {failed.length > 0 ? (
-        <GridCard span="full">
-        <Surface className="mb-8">
-          <div className="mb-3 flex items-center justify-between">
-            <SectionTitle>Failed / cancelled ({failed.length})</SectionTitle>
+        <Tile
+          span="full"
+          title={`Failed / cancelled (${failed.length})`}
+          action={
             <Button
               variant="secondary"
               onClick={() => retry.mutate(undefined)}
@@ -94,7 +94,8 @@ export default function StatusPage() {
             >
               <RotateCw className="h-3 w-3" /> retry all
             </Button>
-          </div>
+          }
+        >
           {anyCancelled ? (
             <p className="mb-3 text-xs text-muted">
               Some of these were cancelled, not failed — an upstream provider (Cerebras)
@@ -119,17 +120,42 @@ export default function StatusPage() {
               </li>
             ))}
           </ul>
-        </Surface>
-        </GridCard>
+        </Tile>
       ) : null}
 
-      {backlog && backlog.queues.length > 0 ? <GridCard span="full"><BacklogPanel queues={backlog.queues} /></GridCard> : null}
+      {backlog && backlog.queues.length > 0
+        ? backlog.queues.map((q) => (
+            <Tile
+              key={q.queue}
+              span="compact"
+              title={QUEUE_LABELS[q.queue] ?? q.queue}
+              footer={
+                q.error ? (
+                  <span className="text-danger">error</span>
+                ) : (
+                  <span>
+                    {q.pending} pending &middot; {q.active} active &middot; {q.processedPerMinute.toFixed(1)}/min &middot; {formatEta(q.etaSeconds)}
+                  </span>
+                )
+              }
+            >
+              <div className="flex items-center gap-2">
+                {q.providerClass ? (
+                  <Chip tone={q.providerClass === 'hosted' ? 'green' : 'slate'}>{q.providerClass}</Chip>
+                ) : (
+                  <span className="text-xs text-muted">—</span>
+                )}
+                <span className="text-xs tabular-nums text-muted">conc {q.concurrency}</span>
+              </div>
+            </Tile>
+          ))
+        : null}
 
-      <GridCard span="wide">
-      <section className="mb-8">
-        <div className="mb-3 flex items-center justify-between">
-          <SectionTitle>Active</SectionTitle>
-          {data && data.active.length > 0 ? (
+      <Tile
+        span="wide"
+        title="Active"
+        action={
+          data && data.active.length > 0 ? (
             <Button
               variant="secondary"
               onClick={() => cancelAll.mutate()}
@@ -137,8 +163,9 @@ export default function StatusPage() {
             >
               <X className="h-3 w-3" /> cancel all ({data.active.length})
             </Button>
-          ) : null}
-        </div>
+          ) : undefined
+        }
+      >
         {data && data.active.length === 0 ? (
           <EmptyState>Nothing running.</EmptyState>
         ) : (
@@ -152,19 +179,15 @@ export default function StatusPage() {
             renderItem={(run) => <ActiveCard run={run} />}
           />
         )}
-      </section>
-      </GridCard>
+      </Tile>
 
-      <GridCard span="wide">
-      <section>
-        <SectionTitle>Recent</SectionTitle>
+      <Tile span="wide" title="Recent">
         {data && data.recent.length === 0 ? (
           <EmptyState>No activity yet.</EmptyState>
         ) : (
           <RecentTable runs={data?.recent ?? []} />
         )}
-      </section>
-      </GridCard>
+      </Tile>
 
       </DashboardGrid>
     </div>
@@ -181,48 +204,6 @@ function ActivitySkeleton() {
         </div>
       ))}
     </LoadingRegion>
-  );
-}
-
-function BacklogPanel({ queues }: { queues: QueueBacklogDto[] }) {
-  return (
-    <Surface className="mb-8">
-      <SectionTitle>Backlog</SectionTitle>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="text-xs font-semibold uppercase tracking-wide text-faint">
-              <th className="pb-2 pr-4">Queue</th>
-              <th className="pb-2 pr-4">Provider</th>
-              <th className="pb-2 pr-4">Concurrency</th>
-              <th className="pb-2 pr-4">Pending</th>
-              <th className="pb-2 pr-4">Active</th>
-              <th className="pb-2 pr-4">Rate/min</th>
-              <th className="pb-2">ETA</th>
-            </tr>
-          </thead>
-          <tbody>
-            {queues.map((q) => (
-              <tr key={q.queue} className="border-t border-border">
-                <td className="py-2 pr-4 font-medium text-fg">{QUEUE_LABELS[q.queue] ?? q.queue}</td>
-                <td className="py-2 pr-4 text-muted">
-                  {q.providerClass ? <Chip tone={q.providerClass === 'hosted' ? 'green' : 'slate'}>{q.providerClass}</Chip> : '—'}
-                </td>
-                <td className="py-2 pr-4 tabular-nums text-muted">{q.concurrency}</td>
-                <td className="py-2 pr-4 tabular-nums text-muted">
-                  {q.error ? <span className="text-danger">error</span> : q.pending}
-                </td>
-                <td className="py-2 pr-4 tabular-nums text-muted">{q.error ? '—' : q.active}</td>
-                <td className="py-2 pr-4 tabular-nums text-muted">
-                  {q.error ? '—' : q.processedPerMinute.toFixed(1)}
-                </td>
-                <td className="py-2 tabular-nums text-muted">{formatEta(q.etaSeconds)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Surface>
   );
 }
 
@@ -247,11 +228,11 @@ function ActiveCard({ run }: { run: ActivityRunDto }) {
             </Chip>
             {run.state === 'queued' ? <Chip tone="slate">queued</Chip> : null}
             {run.jobId ? (
-              <Link to={`/jobs/${run.jobId}`} className="font-semibold text-primary hover:underline">
+              <Link to={`/jobs/${run.jobId}`} className="font-semibold text-accent hover:underline">
                 {run.label}
               </Link>
             ) : (
-              <span className="font-semibold text-fg">{run.label}</span>
+              <span className="font-semibold text-foreground">{run.label}</span>
             )}
           </div>
           {run.step ? <p className="mt-1 text-sm text-muted">{run.step}</p> : null}
@@ -304,11 +285,11 @@ function RecentRow({ run }: { run: ActivityRunDto }) {
       </span>
       <span className="min-w-0">
         {run.jobId ? (
-          <Link to={`/jobs/${run.jobId}`} className="text-primary hover:underline">
+          <Link to={`/jobs/${run.jobId}`} className="text-accent hover:underline">
             {run.label}
           </Link>
         ) : (
-          <span className="text-fg">{run.label}</span>
+          <span className="text-foreground">{run.label}</span>
         )}
         {(run.state === 'failed' ||
           run.state === 'cancelled' ||

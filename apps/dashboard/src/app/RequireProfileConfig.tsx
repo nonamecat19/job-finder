@@ -19,7 +19,7 @@ export function RequireProfileConfig({ children }: { children: ReactNode }) {
       <EmptyState>
         Set up your profile first — upload a RenderCV config to unlock matching and document
         generation.{' '}
-        <Link to="/profile" className="font-semibold text-primary underline">
+        <Link to="/profile" className="font-semibold text-accent underline">
           Go to profile
         </Link>
       </EmptyState>

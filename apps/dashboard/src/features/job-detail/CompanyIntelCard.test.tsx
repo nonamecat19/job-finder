@@ -70,7 +70,6 @@ describe('CompanyIntelCard', () => {
     setupQueryMock({ data: intel });
 
     render(<CompanyIntelCard jobId="job-1" />);
-    expect(screen.getByText('Company Intel')).toBeInTheDocument();
     expect(screen.getByText('Acme Corp — funding Series B — Glassdoor 3.8')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
   });
@@ -83,7 +82,7 @@ describe('CompanyIntelCard', () => {
 
     render(<CompanyIntelCard jobId="job-1" />);
 
-    await user.click(screen.getByText('Company Intel'));
+    await user.click(screen.getByText('Acme Corp — funding Series B — Glassdoor 3.8'));
 
     expect(screen.getByText('Funding')).toBeInTheDocument();
     expect(screen.getByText('Series B')).toBeInTheDocument();
@@ -103,7 +102,7 @@ describe('CompanyIntelCard', () => {
     setupQueryMock({ data: intel });
 
     render(<CompanyIntelCard jobId="job-1" />);
-    await user.click(screen.getByText('Company Intel'));
+    await user.click(screen.getByText('Acme Corp'));
 
     const noDataElements = screen.getAllByText('No data yet');
     expect(noDataElements.length).toBe(5);
@@ -117,7 +116,7 @@ describe('CompanyIntelCard', () => {
     setupQueryMock({ data: intel });
 
     render(<CompanyIntelCard jobId="job-1" />);
-    await user.click(screen.getByText('Company Intel'));
+    await user.click(screen.getByText('Acme Corp — funding Series B — Glassdoor 3.8'));
 
     const staleTags = screen.getAllByText('possibly stale');
     expect(staleTags.length).toBeGreaterThanOrEqual(1);

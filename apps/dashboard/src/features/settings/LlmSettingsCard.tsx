@@ -1,6 +1,6 @@
 import type { LlmTaskSettingDto } from '@job-finder/shared';
 import { ApiError } from '../../lib/api';
-import { Button, EmptyState, ErrorState, LoadingRegion, Select, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
+import { Button, EmptyState, ErrorState, LoadingRegion, Select, SkeletonBlock, SkeletonLine } from '../../components/ui';
 import { useLlmModels, useLlmSettings, useUpdateLlmSettings } from './hooks';
 
 const TASK_LABELS: Record<string, string> = {
@@ -24,27 +24,21 @@ export default function LlmSettingsCard() {
 
   if (settings.isPending) {
     return (
-      <Surface>
-        <LoadingRegion label="Loading AI model settings…" className="space-y-2">
-          <SkeletonLine width="w-1/3" className="h-5" />
-          <SkeletonBlock className="h-10 w-full" />
-          <SkeletonBlock className="h-10 w-full" />
-        </LoadingRegion>
-      </Surface>
+      <LoadingRegion label="Loading AI model settings…" className="space-y-2">
+        <SkeletonLine width="w-1/3" className="h-5" />
+        <SkeletonBlock className="h-10 w-full" />
+        <SkeletonBlock className="h-10 w-full" />
+      </LoadingRegion>
     );
   }
   if (settings.error) {
     if (settings.error instanceof ApiError && settings.error.status === 404) {
       return (
-        <Surface>
-          <EmptyState>AI model settings aren&apos;t available on this server yet.</EmptyState>
-        </Surface>
+        <EmptyState>AI model settings aren&apos;t available on this server yet.</EmptyState>
       );
     }
     return (
-      <Surface>
-        <ErrorState error={settings.error} />
-      </Surface>
+      <ErrorState error={settings.error} />
     );
   }
 
@@ -69,7 +63,7 @@ export default function LlmSettingsCard() {
   }
 
   return (
-    <Surface>
+    <>
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted">
           Choose which chat tasks run on the local Ollama model versus a Cerebras
@@ -104,7 +98,7 @@ export default function LlmSettingsCard() {
       <div className="mt-5 divide-y divide-border">
         {tasks.map((task) => (
           <div key={task.taskKey} className="flex items-center gap-4 py-3">
-            <span className="flex-1 text-sm font-medium text-fg">{taskLabel(task.taskKey)}</span>
+            <span className="flex-1 text-sm font-medium text-foreground">{taskLabel(task.taskKey)}</span>
             <Select
               aria-label={`${taskLabel(task.taskKey)} provider`}
               className="w-40"
@@ -132,6 +126,6 @@ export default function LlmSettingsCard() {
           </div>
         ))}
       </div>
-    </Surface>
+    </>
   );
 }

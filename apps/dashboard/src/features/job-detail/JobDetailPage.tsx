@@ -2,9 +2,9 @@ import { ArrowLeft, ExternalLink, FileDown } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
-import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { DashboardGrid, GridCard } from '../../components/layout';
-import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Surface, Textarea } from '../../components/ui';
+import { PageHeader } from '../../components/layout/PageHeader';
+import { DashboardGrid, Tile } from '../../components/layout';
+import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import {
   useGenerateDocument,
@@ -72,7 +72,7 @@ export default function JobDetailPage() {
 
   return (
     <div>
-      <Link to="/" className="mb-5 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-fg">
+      <Link to="/" className="mb-5 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground">
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         back to feed
       </Link>
@@ -96,43 +96,43 @@ export default function JobDetailPage() {
 
       <DashboardGrid>
         {job.matchResult ? (
-          <GridCard span="full">
+          <Tile span="full" title="Fit">
             <FitSummary job={job} />
-          </GridCard>
+          </Tile>
         ) : null}
 
-        <GridCard span="wide">
+        <Tile span="wide" title="Ghost-job signal">
           <GhostSignalPanel jobId={job.id} ghostSignal={job.ghostSignal} />
-        </GridCard>
-        <GridCard span="narrow">
+        </Tile>
+        <Tile span="standard" title="Response rate">
           <PostAgeSignal />
-        </GridCard>
+        </Tile>
 
-        <GridCard span="narrow">
+        <Tile span="standard" title="Contact">
           <ContactLine jobId={job.id} />
-        </GridCard>
-        <GridCard span="narrow">
+        </Tile>
+        <Tile span="standard" title="Company Intel">
           <CompanyIntelCard jobId={job.id} />
-        </GridCard>
-        <GridCard span="narrow">
+        </Tile>
+        <Tile span="standard" title="Referral paths">
           <ReferralPathsCard jobId={id} />
-        </GridCard>
+        </Tile>
 
-        <GridCard span="wide">
+        <Tile span="wide" title="ATS keyword match">
           <KeywordDiffPanel jobId={id} />
-        </GridCard>
-        <GridCard span="narrow">
+        </Tile>
+        <Tile span="standard" title="Coaching">
           <div className="flex flex-col gap-5">
             <CoachPanel jobId={id} />
             <OutreachPanel jobId={id} />
           </div>
-        </GridCard>
+        </Tile>
 
-        <GridCard span="full">
+        <Tile span="full" title="Interview prep pack">
           <PrepPackPanel jobId={id} />
-        </GridCard>
+        </Tile>
 
-        <GridCard span="full">
+        <Tile span="full" title="Documents">
           <DocumentsPanel
             documents={documents ?? []}
             generating={generating}
@@ -142,25 +142,22 @@ export default function JobDetailPage() {
             onCancelEdit={() => setEditingDoc(null)}
             onSave={(doc) => saveLetter.mutate(doc)}
           />
-        </GridCard>
+        </Tile>
 
-        <GridCard span={resumeDoc ? 'wide' : 'full'}>
-          <Surface>
-            <SectionTitle>Job description</SectionTitle>
-            {job.descriptionHtml ? (
-              <div
-                className="prose prose-sm max-w-none text-muted [&_a]:text-accent [&_a:hover]:underline [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 [&_strong]:font-semibold"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.descriptionHtml) }}
-              />
-            ) : (
-              <p className="whitespace-pre-wrap text-sm leading-6 text-muted">{job.description}</p>
-            )}
-          </Surface>
-        </GridCard>
+        <Tile span="feature" title="Job description">
+          {job.descriptionHtml ? (
+            <div
+              className="prose prose-sm max-w-none text-muted [&_a]:text-accent [&_a:hover]:underline [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 [&_strong]:font-semibold"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.descriptionHtml) }}
+            />
+          ) : (
+            <p className="whitespace-pre-wrap text-sm leading-6 text-muted">{job.description}</p>
+          )}
+        </Tile>
         {resumeDoc ? (
-          <GridCard span="narrow">
+          <Tile span="standard" title="Resume">
             <ResumePreview doc={resumeDoc} />
-          </GridCard>
+          </Tile>
         ) : null}
       </DashboardGrid>
     </div>
@@ -169,9 +166,8 @@ export default function JobDetailPage() {
 
 function ResumePreview({ doc }: { doc: GeneratedDocumentDto }) {
   return (
-    <Surface>
+    <>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <SectionTitle className="mb-0">Resume</SectionTitle>
         <a href={api.documents.pdfUrl(doc.id)} target="_blank" rel="noreferrer">
           <Button variant="secondary">
             open PDF <FileDown className="h-4 w-4" aria-hidden="true" />
@@ -183,7 +179,7 @@ function ResumePreview({ doc }: { doc: GeneratedDocumentDto }) {
         src={api.documents.pdfUrl(doc.id)}
         className="h-[75vh] w-full rounded-md border border-border bg-white"
       />
-    </Surface>
+    </>
   );
 }
 
@@ -206,13 +202,13 @@ function FitSummary({ job }: { job: DetailedJob }) {
   const mr = job.matchResult!;
 
   return (
-    <Surface>
-      <h2 className="mb-2 flex flex-wrap items-center gap-2 font-semibold">
-        Fit <ScoreBadge score={mr.score} />
+    <>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <ScoreBadge score={mr.score} />
         <span className="text-xs font-normal text-faint">
           similarity {Number(mr.similarity).toFixed(2)} · {mr.model}
         </span>
-      </h2>
+      </div>
       {mr.summary ? <p className="mb-2 text-sm leading-6 text-muted">{mr.summary}</p> : null}
       <div className="flex flex-wrap gap-1">
         {(mr.matchedSkills ?? []).map((s: string, i: number) => (
@@ -233,7 +229,7 @@ function FitSummary({ job }: { job: DetailedJob }) {
           ))}
         </ul>
       ) : null}
-    </Surface>
+    </>
   );
 }
 
@@ -255,8 +251,7 @@ function DocumentsPanel({
   onSave: (doc: { id: string; text: string }) => void;
 }) {
   return (
-    <Surface>
-      <SectionTitle>Documents</SectionTitle>
+    <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button disabled={!!generating} onClick={() => onGenerate('resume')}>
           Generate resume
@@ -270,7 +265,7 @@ function DocumentsPanel({
       </div>
       <ul className="space-y-2">
         {documents.map((doc) => (
-          <li key={doc.id} className="rounded-md border border-border bg-elevated/60 p-3 text-sm">
+          <li key={doc.id} className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <span>
                 <b>{doc.type === 'resume' ? 'Resume' : 'Cover letter'}</b> v{doc.version}
@@ -317,6 +312,6 @@ function DocumentsPanel({
           </li>
         ))}
       </ul>
-    </Surface>
+    </>
   );
 }

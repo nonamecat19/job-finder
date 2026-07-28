@@ -116,7 +116,7 @@ describe('ContactLine', () => {
     setupQueryMock({ data: [high, low] });
 
     render(<ContactLine jobId="job-1" />);
-    await user.click(screen.getByText('Contact'));
+    await user.click(screen.getByTestId('contact-headline'));
 
     const list = screen.getByTestId('contact-list');
     const rows = list.querySelectorAll('li');
@@ -136,7 +136,7 @@ describe('ContactLine', () => {
     setupQueryMock({ data: [only] });
 
     render(<ContactLine jobId="job-1" />);
-    await user.click(screen.getByText('Contact'));
+    await user.click(screen.getByTestId('contact-headline'));
 
     const list = screen.getByTestId('contact-list');
     expect(list.querySelectorAll('li')).toHaveLength(1);
@@ -148,7 +148,7 @@ describe('ContactLine', () => {
     setupQueryMock({ data: [] });
 
     render(<ContactLine jobId="job-1" />);
-    await user.click(screen.getByText('Contact'));
+    await user.click(screen.getByTestId('contact-empty'));
 
     expect(screen.queryByTestId('contact-list')).not.toBeInTheDocument();
   });

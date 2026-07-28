@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import type { JobContactDto } from '@job-finder/shared';
-import { Button, Chip, LoadingRegion, Spinner, SkeletonCircle, SkeletonLine, Surface } from '../../components/ui';
+import { Button, Chip, LoadingRegion, Spinner, SkeletonCircle, SkeletonLine } from '../../components/ui';
 import { useJobContacts, useRefreshJobContacts } from './hooks';
 
 // pickHeadline returns the highest-confidence contact. useJobContacts
@@ -28,7 +28,7 @@ function ContactRow({ contact }: { contact: JobContactDto }) {
   return (
     <li className="flex flex-col gap-1 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <span className="font-medium text-fg">{contact.name}</span>
+        <span className="font-medium text-foreground">{contact.name}</span>
         {contact.title ? <span className="ml-2 text-muted">{contact.title}</span> : null}
         <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-faint">
           {contact.email ? <span>{contact.email}</span> : null}
@@ -55,12 +55,10 @@ export default function ContactLine({ jobId }: { jobId: string | undefined }) {
 
   if (isLoading) {
     return (
-      <Surface>
-        <LoadingRegion label="loading contact…" className="flex items-center gap-2">
-          <SkeletonCircle size="sm" />
-          <SkeletonLine width="w-1/3" />
-        </LoadingRegion>
-      </Surface>
+      <LoadingRegion label="loading contact…" className="flex items-center gap-2">
+        <SkeletonCircle size="sm" />
+        <SkeletonLine width="w-1/3" />
+      </LoadingRegion>
     );
   }
 
@@ -68,7 +66,7 @@ export default function ContactLine({ jobId }: { jobId: string | undefined }) {
   const hasContacts = !!contacts && contacts.length > 0;
 
   return (
-    <Surface>
+    <>
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -76,9 +74,8 @@ export default function ContactLine({ jobId }: { jobId: string | undefined }) {
           onClick={() => hasContacts && setExpanded((v) => !v)}
           disabled={!hasContacts}
         >
-          <h2 className="font-semibold">Contact</h2>
           {headline ? (
-            <span className="text-sm text-fg" data-testid="contact-headline">
+            <span className="text-sm text-foreground" data-testid="contact-headline">
               {headlineLabel(headline)}
               {headline.email ? <span className="ml-2 text-faint">{headline.email}</span> : null}
             </span>
@@ -108,6 +105,6 @@ export default function ContactLine({ jobId }: { jobId: string | undefined }) {
           ))}
         </ul>
       ) : null}
-    </Surface>
+    </>
   );
 }

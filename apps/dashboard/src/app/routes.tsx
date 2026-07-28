@@ -10,6 +10,18 @@ import StatusPage from '../features/status/StatusPage';
 import TailorPage from '../features/tailor/TailorPage';
 import TrackerPage from '../features/tracker/TrackerPage';
 
+export type LayoutMode = 'flow' | 'fit';
+
+export const routeLayoutModes: Record<string, LayoutMode> = {
+  '/': 'fit',
+  '/status': 'fit',
+  '/tracker': 'fit',
+};
+
+export function getLayoutMode(path: string): LayoutMode {
+  return routeLayoutModes[path] ?? 'flow';
+}
+
 export function AppRoutes() {
   return (
     <Routes>

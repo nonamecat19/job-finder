@@ -59,7 +59,7 @@ export function SectionEditor({ section, onChange }: SectionEditorProps) {
           {section.entries.map((entry, i) => (
             <SortableEntryRow key={i} id={String(i)}>
               {(dragHandleProps) => (
-                <div className="flex items-start gap-2 rounded-lg border border-border bg-elevated p-3">
+                <div className="flex items-start gap-2 rounded-lg border border-border bg-surface-secondary p-3">
                   <div className="mt-1 flex flex-col items-center gap-1 text-faint">
                     <button
                       type="button"

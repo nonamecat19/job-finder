@@ -2,7 +2,7 @@ import { FileDown } from 'lucide-react';
 import { useState } from 'react';
 import type { GeneratedDocumentDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { DashboardGrid, GridCard } from '../../components/layout';
+import { DashboardGrid, Tile } from '../../components/layout';
 import { Button, EmptyState, Field, Input, Select, Spinner, Surface, Textarea } from '../../components/ui';
 import { useToast } from '../../components/toast';
 import { api } from '../../lib/api';
@@ -43,7 +43,7 @@ export default function TailorPage() {
       <PageHeader title="Tailor" description="Paste a vacancy to generate a tailored resume and cover letter." />
 
       <DashboardGrid>
-        <GridCard span="full">
+        <Tile span="full" title="Resume Tailor">
 
       <Surface>
         <SectionTitle>Vacancy</SectionTitle>
@@ -96,7 +96,7 @@ export default function TailorPage() {
         ) : (
           <ul className="space-y-2">
             {groupHistory(history).map(([key, docs]) => (
-              <li key={key} className="rounded-md border border-border bg-elevated/60 p-3 text-sm">
+              <li key={key} className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
                 <div className="mb-2 font-semibold">{key}</div>
                 <div className="space-y-2">
                   {docs.map((doc) => (
@@ -116,7 +116,7 @@ export default function TailorPage() {
         )}
       </Surface>
 
-        </GridCard>
+        </Tile>
       </DashboardGrid>
     </div>
   );
@@ -147,7 +147,7 @@ function DocumentRow({
   const isEditing = editingDoc?.id === doc.id;
 
   return (
-    <div className="rounded-md border border-border bg-elevated/60 p-3 text-sm">
+    <div className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span>
           <b>{doc.type === 'resume' ? 'Resume' : 'Cover letter'}</b> v{doc.version}

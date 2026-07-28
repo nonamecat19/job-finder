@@ -1,7 +1,6 @@
 import { Plus, Trash2, ToggleRight, ToggleLeft } from 'lucide-react';
 import { useState } from 'react';
 import type { EmployerBoardDto } from '@job-finder/shared';
-import { SectionTitle } from '../../../components/layout/PageHeader';
 import {
   Button,
   Chip,
@@ -11,7 +10,6 @@ import {
   Input,
   LoadingRegion,
   SkeletonBlock,
-  Surface,
 } from '../../../components/ui';
 import { useRegisterBoard, useRemoveBoard, useRoster } from '../hooks';
 
@@ -44,10 +42,8 @@ export default function RosterPanel() {
   })();
 
   return (
-    <Surface className="mb-5">
-      <SectionTitle>Employer roster</SectionTitle>
-
-      <div className="mb-3 rounded-lg border border-primary/30 bg-primary-soft p-3">
+    <div>
+      <div className="mb-3 rounded-lg border border-accent/30 bg-accent-soft p-3">
         <div className="flex items-end gap-2">
           <Field label="Add board URL" className="flex-1">
             <Input
@@ -88,16 +84,16 @@ export default function RosterPanel() {
           />
         ))}
       </ul>
-    </Surface>
+    </div>
   );
 }
 
 function RosterRow({ employer: e, onRemove }: { employer: EmployerBoardDto; onRemove: () => void }) {
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-elevated/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface-secondary/60 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-fg">{e.displayName}</span>
+          <span className="font-medium text-foreground">{e.displayName}</span>
           <Chip>{e.vendor}</Chip>
           {e.enabled ? (
             <span title="enabled"><ToggleRight className="h-4 w-4 text-success" /></span>

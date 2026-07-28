@@ -1,7 +1,6 @@
 import { Copy } from 'lucide-react';
 import type { KeywordDiffResponse, KeywordDiffTerm, KeywordRephraseSuggestion } from '@job-finder/shared';
-import { SectionTitle } from '../../components/layout/PageHeader';
-import { Button, Chip, EmptyState, ScoreBadge, Surface } from '../../components/ui';
+import { Button, Chip, EmptyState, ScoreBadge } from '../../components/ui';
 import { emitToast, toErrorMessage } from '../../lib/toastBus';
 import { useJobKeywordDiff } from './hooks';
 
@@ -12,13 +11,10 @@ export default function KeywordDiffPanel({ jobId }: { jobId: string | undefined 
 
   if (isError || !data) {
     return (
-      <Surface>
-        <SectionTitle className="mb-3">ATS keyword match</SectionTitle>
-        <EmptyState>
-          No keyword analysis yet. Run the keyword diff from the job page to compare your
-          resume against this job description.
-        </EmptyState>
-      </Surface>
+      <EmptyState>
+        No keyword analysis yet. Run the keyword diff from the job page to compare your
+        resume against this job description.
+      </EmptyState>
     );
   }
 
@@ -30,9 +26,8 @@ export default function KeywordDiffPanel({ jobId }: { jobId: string | undefined 
   for (const s of suggestions) suggestionByCanonical.set(s.canonical, s);
 
   return (
-    <Surface>
+    <>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <SectionTitle className="mb-0">ATS keyword match</SectionTitle>
         <div className="flex items-center gap-2 text-xs text-muted">
           <span>
             {metadata.matchedRequired + metadata.matchedPreferred}/
@@ -74,13 +69,13 @@ export default function KeywordDiffPanel({ jobId }: { jobId: string | undefined 
           tone="slate"
         />
       </div>
-    </Surface>
+    </>
   );
 }
 
 function GroupHeading({ title, count }: { title: string; count: number }) {
   return (
-    <h3 className="mb-2 text-sm font-semibold text-fg">
+    <h3 className="mb-2 text-sm font-semibold text-foreground">
       {title} <span className="font-normal text-faint">({count})</span>
     </h3>
   );
@@ -125,7 +120,7 @@ function MissingRequiredRow({
   const rephrase = suggestion?.rephrase ?? null;
 
   return (
-    <li className="rounded-md border border-border bg-overlay/40 p-3">
+    <li className="rounded-md border border-border bg-surface-tertiary/40 p-3">
       <div className="flex items-center gap-2">
         <Chip tone="red">{term.canonical}</Chip>
       </div>
@@ -133,7 +128,7 @@ function MissingRequiredRow({
       {rephrase ? (
         <div className="mt-2 space-y-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm leading-6 text-fg">{rephrase}</p>
+            <p className="text-sm leading-6 text-foreground">{rephrase}</p>
             <CopyButton text={rephrase} />
           </div>
           {suggestion?.sourceBullet ? (

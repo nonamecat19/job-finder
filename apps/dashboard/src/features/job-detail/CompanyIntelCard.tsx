@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, ExternalLink, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { Button, Chip, LoadingRegion, Spinner, SkeletonLine, Surface } from '../../components/ui';
+import { Button, Chip, LoadingRegion, Spinner, SkeletonLine } from '../../components/ui';
 import { useCompanyIntel, useRefreshCompanyIntel } from './hooks';
 
 const STALE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -26,7 +26,7 @@ function SignalRow({ label, value, stale }: SignalRowProps) {
   return (
     <div className="flex items-center justify-between gap-2 py-1 text-sm">
       <span className="text-faint">{label}</span>
-      <span className="flex items-center gap-1.5 text-fg">
+      <span className="flex items-center gap-1.5 text-foreground">
         {value != null ? String(value) : <span className="text-faint">No data yet</span>}
         {stale ? <Chip tone="slate">possibly stale</Chip> : null}
       </span>
@@ -45,54 +45,47 @@ export default function CompanyIntelCard({ jobId }: { jobId: string }) {
 
   if (isLoading) {
     return (
-      <Surface>
-        <LoadingRegion label="loading company intel…" className="space-y-2">
-          <SkeletonLine width="w-1/2" />
-          <SkeletonLine width="w-1/3" />
-          <SkeletonLine width="w-2/5" />
-        </LoadingRegion>
-      </Surface>
+      <LoadingRegion label="loading company intel…" className="space-y-2">
+        <SkeletonLine width="w-1/2" />
+        <SkeletonLine width="w-1/3" />
+        <SkeletonLine width="w-2/5" />
+      </LoadingRegion>
     );
   }
 
   if (isError) {
     return (
-      <Surface>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-danger">Failed to load company intel</span>
-          <Button variant="secondary" onClick={() => refetch()}>
-            retry
-          </Button>
-        </div>
-      </Surface>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-danger">Failed to load company intel</span>
+        <Button variant="secondary" onClick={() => refetch()}>
+          retry
+        </Button>
+      </div>
     );
   }
 
   if (!intel) {
     return (
-      <Surface>
-        <div className="flex flex-col items-center gap-3 py-2 text-center">
-          <p className="text-sm text-muted">No company intel yet. Click Refresh to fetch.</p>
-          <Button onClick={handleRefresh} disabled={refresh.isPending}>
-            {refresh.isPending ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
-            Refresh
-          </Button>
-        </div>
-      </Surface>
+      <div className="flex flex-col items-center gap-3 py-2 text-center">
+        <p className="text-sm text-muted">No company intel yet. Click Refresh to fetch.</p>
+        <Button onClick={handleRefresh} disabled={refresh.isPending}>
+          {refresh.isPending ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
+          Refresh
+        </Button>
+      </div>
     );
   }
 
   const stale = isStale(intel.fetchedAt);
 
   return (
-    <Surface>
+    <>
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
           className="flex flex-1 items-center gap-2 text-left"
           onClick={() => setExpanded((v) => !v)}
         >
-          <h2 className="font-semibold">Company Intel</h2>
           <span className="text-sm text-muted">{oneLineSummary(intel)}</span>
           {expanded ? (
             <ChevronUp className="ml-auto h-4 w-4 flex-shrink-0 text-faint" />
@@ -131,6 +124,6 @@ export default function CompanyIntelCard({ jobId }: { jobId: string }) {
           ) : null}
         </div>
       ) : null}
-    </Surface>
+    </>
   );
 }

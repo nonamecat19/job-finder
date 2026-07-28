@@ -71,7 +71,7 @@ describe('PrepPackPanel', () => {
     renderWithProviders(<PrepPackPanel jobId="job-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('Interview prep pack')).toBeInTheDocument()
+      expect(screen.getByText(/1\/2 covered/)).toBeInTheDocument()
     })
   })
 

@@ -2,8 +2,8 @@ import { FileUp, Trash2, Check, AlertCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Resume } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { DashboardGrid, GridCard } from '../../components/layout';
-import { Button, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock, SkeletonLine, Surface } from '../../components/ui';
+import { DashboardGrid, Tile } from '../../components/layout';
+import { Button, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock, SkeletonLine } from '../../components/ui';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { IdentityForm } from './components/IdentityForm';
 import { SectionList } from './components/SectionList';
@@ -127,43 +127,44 @@ function ProfileEditor({ profileId, profileName }: { profileId: string; profileN
         </LoadingRegion>
       ) : (
         <DashboardGrid>
-          <GridCard span="full">
-          <Surface className="flex items-center justify-between">
-            <span className="text-sm text-muted">Profile: {profileName}</span>
-            <div className="flex items-center gap-2">
-              {saveState === 'saved' && !updateResume.isPending ? (
-                <span className="inline-flex items-center gap-1 text-sm text-success">
-                  <Check className="h-4 w-4" /> saved
-                </span>
-              ) : null}
-              {saveState === 'error' ? (
-                <span className="inline-flex items-center gap-1 text-sm text-danger">
-                  <AlertCircle className="h-4 w-4" /> save failed
-                </span>
-              ) : null}
-              <Button onClick={handleSave} disabled={updateResume.isPending}>
-                {updateResume.isPending ? <Spinner /> : 'save resume'}
-              </Button>
-            </div>
-          </Surface>
-          </GridCard>
-          {updateResume.error ? <GridCard span="full"><ErrorState error={updateResume.error} /></GridCard> : null}
+          <Tile
+            span="full"
+            title={`Profile: ${profileName}`}
+            action={
+              <div className="flex items-center gap-2">
+                {saveState === 'saved' && !updateResume.isPending ? (
+                  <span className="inline-flex items-center gap-1 text-sm text-success">
+                    <Check className="h-4 w-4" /> saved
+                  </span>
+                ) : null}
+                {saveState === 'error' ? (
+                  <span className="inline-flex items-center gap-1 text-sm text-danger">
+                    <AlertCircle className="h-4 w-4" /> save failed
+                  </span>
+                ) : null}
+                <Button onClick={handleSave} disabled={updateResume.isPending}>
+                  {updateResume.isPending ? <Spinner /> : 'save resume'}
+                </Button>
+              </div>
+            }
+          />
+          {updateResume.error ? <Tile span="full"><ErrorState error={updateResume.error} /></Tile> : null}
 
-          <GridCard span="narrow">
-          <IdentityForm resume={draft} onChange={setDraft} />
-          </GridCard>
+          <Tile span="standard">
+            <IdentityForm resume={draft} onChange={setDraft} />
+          </Tile>
 
           {draft.sections.length === 0 ? (
-            <GridCard span="full">
-            <EmptyState>
-              This resume has no sections yet. Add one below to start building — this is a valid starting point, not an
-              error.
-            </EmptyState>
-            </GridCard>
+            <Tile span="full">
+              <EmptyState>
+                This resume has no sections yet. Add one below to start building — this is a valid starting point, not an
+                error.
+              </EmptyState>
+            </Tile>
           ) : null}
-          <GridCard span="wide">
-          <SectionList sections={draft.sections} onChange={(sections) => setDraft({ ...draft, sections })} />
-          </GridCard>
+          <Tile span="wide">
+            <SectionList sections={draft.sections} onChange={(sections) => setDraft({ ...draft, sections })} />
+          </Tile>
         </DashboardGrid>
       )}
 

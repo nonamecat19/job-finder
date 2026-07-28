@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import type { JobDto } from '@job-finder/shared';
 import { type JobFilters } from '../../lib/api';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { DashboardGrid, GridCard } from '../../components/layout';
+import { DashboardGrid, Tile } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
@@ -103,7 +103,7 @@ export default function FeedPage() {
       />
 
       <DashboardGrid>
-        <GridCard span="full">
+        <Tile span="full" title="Feed">
 
       <Surface className="mb-4">
         <div className="grid gap-3 md:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(9rem,0.7fr))_auto] md:items-end">
@@ -216,7 +216,7 @@ export default function FeedPage() {
           onNext={() => setPage((filters.page ?? 1) + 1)}
         />
       ) : null}
-        </GridCard>
+        </Tile>
       </DashboardGrid>
     </div>
   );
@@ -299,7 +299,7 @@ function JobCard({
   onHide: () => void;
 }) {
   return (
-    <div className="group rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20 transition hover:border-primary/40 hover:bg-elevated">
+    <div className="group rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20 transition hover:border-accent/40 hover:bg-surface-secondary">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -307,7 +307,7 @@ function JobCard({
             {/* Informational only — never filters, hides, dims, or reorders
                 this job (Constitution Principle I / FR-015). */}
             <GhostBadge score={job.ghostSignal?.score} />
-            <Link to={`/jobs/${job.id}`} className="truncate font-semibold text-primary hover:underline">
+            <Link to={`/jobs/${job.id}`} className="truncate font-semibold text-accent hover:underline">
               {job.title}
             </Link>
           </div>
@@ -350,7 +350,7 @@ function JobCard({
             href={job.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex rounded-md px-2 py-1.5 text-sm text-muted hover:bg-overlay"
+            className="inline-flex rounded-md px-2 py-1.5 text-sm text-muted hover:bg-surface-tertiary"
             aria-label={`Open ${job.title}`}
           >
             <ExternalLink className="h-4 w-4" aria-hidden="true" />
