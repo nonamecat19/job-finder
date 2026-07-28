@@ -58,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main
             className={cn(
               'p-4 sm:p-6 lg:p-8',
-              layoutMode === 'fit' && 'lg:h-[100dvh] lg:overflow-hidden',
+              layoutMode === 'fit' && 'lg:h-[calc(100dvh-1.5rem)] lg:overflow-hidden',
             )}
           >
             {children}
