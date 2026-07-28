@@ -19,7 +19,12 @@ export function ScoreBadge({ score }: { score?: number | null }) {
           ? 'bg-warning-soft text-warning ring-warning/30'
           : 'bg-danger-soft text-danger ring-danger/30';
   return (
-    <span className={cn('rounded-full px-2 py-0.5 text-xs font-bold ring-1 ring-inset tabular-nums', color)}>
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-bold ring-1 ring-inset tabular-nums whitespace-nowrap',
+        color,
+      )}
+    >
       {score}
     </span>
   );
@@ -32,10 +37,14 @@ export function GhostBadge({ score }: { score?: number | null }) {
   const tone = score >= 80 ? 'bg-danger-soft text-danger ring-danger/30' : 'bg-warning-soft text-warning ring-warning/30';
   return (
     <span
-      className={cn('rounded-full px-2 py-0.5 text-xs font-bold ring-1 ring-inset tabular-nums', tone)}
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ring-1 ring-inset tabular-nums whitespace-nowrap',
+        tone,
+      )}
       title="Ghost-job likelihood score — informational only"
     >
-      👻 {score}
+      <span aria-hidden="true">👻</span>
+      {score}
     </span>
   );
 }
