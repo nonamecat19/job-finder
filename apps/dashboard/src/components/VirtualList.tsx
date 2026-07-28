@@ -74,7 +74,7 @@ export function VirtualList<T>({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-1.5 text-xs font-medium text-muted hover:bg-overlay"
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-1.5 text-xs font-medium text-muted hover:bg-surface-tertiary"
         >
           {expanded ? (
             <>

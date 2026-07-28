@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ToastProvider, useToast } from './toast';
 import { emitToast } from '../lib/toastBus';
@@ -25,7 +25,9 @@ describe('ToastProvider', () => {
 
     await user.click(screen.getByText('raise-error'));
 
-    expect(await screen.findByText('Generation failed')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Generation failed')).toBeInTheDocument();
+    });
     expect(screen.getByText('resume generation failed')).toBeInTheDocument();
   });
 
@@ -38,7 +40,9 @@ describe('ToastProvider', () => {
 
     emitToast({ title: 'Background job done', variant: 'info' });
 
-    expect(await screen.findByText('Background job done')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Background job done')).toBeInTheDocument();
+    });
   });
 
   it('dismisses a toast when the close button is clicked', async () => {
@@ -50,9 +54,16 @@ describe('ToastProvider', () => {
     );
 
     await user.click(screen.getByText('raise-success'));
-    expect(await screen.findByText('Saved')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Dismiss'));
-    await waitFor(() => expect(screen.queryByText('Saved')).not.toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getByText('Saved')).toBeInTheDocument();
+    });
+
+    const closeButtons = screen.getAllByLabelText('Close');
+    await user.click(closeButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Saved')).not.toBeInTheDocument();
+    });
   });
 });

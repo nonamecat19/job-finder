@@ -22,7 +22,7 @@ describe('ScoreBadge', () => {
   it('renders lime class for score >= 60', () => {
     render(<ScoreBadge score={65} />)
     const badge = screen.getByText('65')
-    expect(badge.className).toContain('primary')
+    expect(badge.className).toContain('accent')
   })
 
   it('renders amber class for score >= 40', () => {
@@ -170,7 +170,7 @@ describe('Button', () => {
   it('renders primary variant by default', () => {
     render(<Button>Click me</Button>)
     const btn = screen.getByRole('button', { name: 'Click me' })
-    expect(btn.className).toContain('bg-primary')
+    expect(btn.className).toContain('bg-accent')
   })
 
   it('renders secondary variant', () => {

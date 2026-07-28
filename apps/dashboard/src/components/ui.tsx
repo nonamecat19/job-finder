@@ -1,107 +1,7 @@
 import { ReactNode, type ComponentPropsWithoutRef, type ElementType } from 'react';
 import { cn } from '../lib/utils';
 
-export function ScoreBadge({ score }: { score?: number | null }) {
-  if (score === null || score === undefined) {
-    return (
-      <span className="rounded-full border border-border bg-overlay px-2 py-0.5 text-xs font-semibold text-faint">
-        —
-      </span>
-    );
-  }
-  const color =
-    score >= 80
-      ? 'bg-success-soft text-success ring-success/30'
-      : score >= 60
-        ? 'bg-primary-soft text-primary ring-primary/30'
-        : score >= 40
-          ? 'bg-warning-soft text-warning ring-warning/30'
-          : 'bg-danger-soft text-danger ring-danger/30';
-  return (
-    <span className={cn('rounded-full px-2 py-0.5 text-xs font-bold ring-1 ring-inset tabular-nums', color)}>
-      {score}
-    </span>
-  );
-}
-
-// GhostBadge renders the ghost-job detector's (005) score, informational
-// only: yellow for 50-79, red for 80-100, and NOTHING below 50 or when no
-// ghost signal exists — the feed must stay quiet for jobs the system isn't
-// suspicious of (FR-012, FR-017). This component must never hide, dim, or
-// otherwise act on the job itself; it only ever renders a badge next to
-// ScoreBadge (Constitution Principle I / FR-015).
-export function GhostBadge({ score }: { score?: number | null }) {
-  if (score === null || score === undefined || score < 50) {
-    return null;
-  }
-  const tone = score >= 80 ? 'bg-danger-soft text-danger ring-danger/30' : 'bg-warning-soft text-warning ring-warning/30';
-  return (
-    <span
-      className={cn('rounded-full px-2 py-0.5 text-xs font-bold ring-1 ring-inset tabular-nums', tone)}
-      title="Ghost-job likelihood score — informational only"
-    >
-      👻 {score}
-    </span>
-  );
-}
-
-export function Chip({ children, tone = 'slate' }: { children: ReactNode; tone?: 'green' | 'red' | 'slate' }) {
-  const cls =
-    tone === 'green'
-      ? 'bg-success-soft text-success ring-success/25'
-      : tone === 'red'
-        ? 'bg-danger-soft text-danger ring-danger/25'
-        : 'bg-overlay text-muted ring-border';
-  return (
-    <span className={cn('inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset', cls)}>
-      {children}
-    </span>
-  );
-}
-
-export function Spinner({ label }: { label?: string }) {
-  return (
-    <span className="inline-flex items-center gap-2 text-sm text-muted">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-border-strong border-t-primary" />
-      {label}
-    </span>
-  );
-}
-
-export function SkeletonLine({ width, className }: { width?: string; className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn('h-3 animate-pulse rounded bg-overlay', width ?? 'w-full', className)}
-    />
-  );
-}
-
-export function SkeletonBlock({ className }: { className?: string }) {
-  return <div aria-hidden="true" className={cn('animate-pulse rounded-xl bg-overlay', className)} />;
-}
-
-export function SkeletonCircle({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
-  const dim = { sm: 'h-6 w-6', md: 'h-8 w-8', lg: 'h-12 w-12' }[size];
-  return <div aria-hidden="true" className={cn('animate-pulse rounded-full bg-overlay', dim, className)} />;
-}
-
-export function LoadingRegion({
-  label,
-  children,
-  className,
-}: {
-  label: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div role="status" aria-busy="true" className={className}>
-      <span className="sr-only">{label}</span>
-      {children}
-    </div>
-  );
-}
+export { ScoreBadge, GhostBadge, HealthDot } from './badges';
 
 export function Button({
   children,
@@ -120,11 +20,11 @@ export function Button({
 } & Omit<ComponentPropsWithoutRef<'button'>, 'type' | 'onClick' | 'disabled'>) {
   const cls = {
     primary:
-      'bg-primary text-primary-fg shadow-sm shadow-primary/25 hover:brightness-110 disabled:bg-overlay disabled:text-faint disabled:shadow-none',
+      'bg-accent text-accent-foreground shadow-sm shadow-accent/25 hover:brightness-110 disabled:bg-surface-tertiary disabled:text-faint disabled:shadow-none',
     secondary:
-      'border border-border bg-elevated text-fg shadow-sm hover:border-border-strong hover:bg-overlay disabled:text-faint',
-    danger: 'bg-danger text-white hover:brightness-110 disabled:bg-overlay disabled:text-faint',
-    ghost: 'text-muted hover:bg-overlay hover:text-fg disabled:text-faint',
+      'border border-border bg-surface-secondary text-foreground shadow-sm hover:border-border-strong hover:bg-surface-tertiary disabled:text-faint',
+    danger: 'bg-danger text-white hover:brightness-110 disabled:bg-surface-tertiary disabled:text-faint',
+    ghost: 'text-muted hover:bg-surface-tertiary hover:text-foreground disabled:text-faint',
   }[variant];
   return (
     <button
@@ -132,7 +32,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed',
         cls,
         className,
       )}
@@ -143,15 +43,61 @@ export function Button({
   );
 }
 
-export function HealthDot({ healthy }: { healthy: boolean }) {
+export function Chip({ children, tone = 'slate' }: { children: ReactNode; tone?: 'green' | 'red' | 'slate' }) {
+  const cls =
+    tone === 'green'
+      ? 'bg-success-soft text-success ring-success/25'
+      : tone === 'red'
+        ? 'bg-danger-soft text-danger ring-danger/25'
+        : 'bg-surface-tertiary text-muted ring-border';
   return (
-    <span
-      className={cn(
-        'inline-block h-2.5 w-2.5 rounded-full ring-2',
-        healthy ? 'bg-success ring-success/25' : 'bg-danger ring-danger/25',
-      )}
-      title={healthy ? 'healthy' : 'unhealthy'}
+    <span className={cn('inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset', cls)}>
+      {children}
+    </span>
+  );
+}
+
+export function Spinner({ label }: { label?: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-sm text-muted">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-border-strong border-t-accent" />
+      {label}
+    </span>
+  );
+}
+
+export function SkeletonLine({ width, className }: { width?: string; className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn('h-3 animate-pulse rounded bg-surface-tertiary', width ?? 'w-full', className)}
     />
+  );
+}
+
+export function SkeletonBlock({ className }: { className?: string }) {
+  return <div aria-hidden="true" className={cn('animate-pulse rounded-xl bg-surface-tertiary', className)} />;
+}
+
+export function SkeletonCircle({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
+  const dim = { sm: 'h-6 w-6', md: 'h-8 w-8', lg: 'h-12 w-12' }[size];
+  return <div aria-hidden="true" className={cn('animate-pulse rounded-full bg-surface-tertiary', dim, className)} />;
+}
+
+export function LoadingRegion({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div role="status" aria-busy="true" className={className}>
+      <span className="sr-only">{label}</span>
+      {children}
+    </div>
   );
 }
 
@@ -173,7 +119,7 @@ export function Field({
 }
 
 const controlClass =
-  'w-full rounded-lg border border-border bg-elevated px-3 py-2 text-sm text-fg shadow-sm outline-none transition placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary-soft disabled:bg-overlay disabled:text-faint';
+  'w-full rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-foreground shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:bg-surface-tertiary disabled:text-faint';
 
 export function Input(props: ComponentPropsWithoutRef<'input'>) {
   return <input {...props} className={cn(controlClass, props.className)} />;
@@ -193,7 +139,7 @@ export function Checkbox(props: ComponentPropsWithoutRef<'input'>) {
       type="checkbox"
       {...props}
       className={cn(
-        'h-4 w-4 rounded border-border-strong bg-elevated text-primary accent-primary focus:ring-primary',
+        'h-4 w-4 rounded border-border-strong bg-surface-secondary text-accent accent-accent focus:ring-accent',
         props.className,
       )}
     />

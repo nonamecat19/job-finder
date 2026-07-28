@@ -1,31 +1,130 @@
-@import 'tailwindcss';
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCo3FwrK3iLTcvvYwYL8g.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCo3FwrK3iLTcvmYwYL8g.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCo3FwrK3iLTcvuYwYL8g.woff2') format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCo3FwrK3iLTcvhYwYL8g.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCo3FwrK3iLTcvtYwYL8g.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCo3FwrK3iLTcvsYwYL8g.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCo3FwrK3iLTcviYwY.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCm3FwrK3iLTcvnUwkT9nA2.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCm3FwrK3iLTcvnUwAT9nA2.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCm3FwrK3iLTcvnUwgT9nA2.woff2') format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCm3FwrK3iLTcvnUwcT9nA2.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCm3FwrK3iLTcvnUwsT9nA2.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCm3FwrK3iLTcvnUwoT9nA2.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/UcCm3FwrK3iLTcvnUwQT9g.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
-/*
- * Design tokens. Dark by default; add `.light` on <html> to flip.
- * `@theme inline` maps Tailwind color utilities (bg-*, text-*, border-*, ring-*)
- * onto the CSS vars below, so overriding the vars re-themes everything live.
- */
+@import '@heroui/styles';
+
+@theme {
+  --breakpoint-3xl: 120rem;
+  --breakpoint-4xl: 160rem;
+  --container-dashboard: 140rem;
+}
+
 @theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-elevated: var(--elevated);
-  --color-overlay: var(--overlay);
-  --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
-  --color-fg: var(--fg);
-  --color-muted: var(--muted);
   --color-faint: var(--faint);
-
-  --color-primary: var(--primary);
-  --color-primary-fg: var(--primary-fg);
-  --color-primary-soft: var(--primary-soft);
-  --color-accent: var(--accent);
-
-  --color-success: var(--success);
+  --color-border-strong: var(--border-strong);
+  --color-accent-soft: var(--accent-soft);
   --color-success-soft: var(--success-soft);
-  --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
-  --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
 
   --radius-lg: 0.75rem;
@@ -34,66 +133,83 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-:root {
-  --bg: #0a0b10;
-  --surface: #101219;
-  --elevated: #161923;
-  --overlay: #1c202c;
-  --border: #23262f;
-  --border-strong: #2f3340;
-  --fg: #e8eaf0;
-  --muted: #9aa1b0;
-  --faint: #656b7a;
+:root, [data-theme='dark'] {
+  --background: oklch(0.12 0 0);
+  --background-secondary: oklch(0.15 0 0);
+  --background-tertiary: oklch(0.18 0 0);
+  --foreground: oklch(0.95 0 0);
+  --surface: oklch(0.15 0 0);
+  --surface-secondary: oklch(0.18 0 0);
+  --surface-tertiary: oklch(0.21 0 0);
+  --overlay: oklch(0.24 0 0);
+  --muted: oklch(0.68 0 0);
+  --faint: oklch(0.50 0 0);
+  --border: oklch(0.28 0 0);
+  --border-strong: oklch(0.37 0 0);
+  --separator: oklch(0.28 0 0);
 
-  --primary: #7c6cff;
-  --primary-fg: #ffffff;
-  --primary-soft: color-mix(in srgb, var(--primary) 16%, transparent);
-  --accent: #22d3ee;
+  --accent: oklch(0.72 0.20 260);
+  --accent-foreground: oklch(1 0 0);
+  --accent-soft: color-mix(in oklab, var(--accent) 18%, transparent);
+  --focus: var(--accent);
 
-  --success: #34d399;
-  --success-soft: color-mix(in srgb, var(--success) 14%, transparent);
-  --warning: #fbbf24;
-  --warning-soft: color-mix(in srgb, var(--warning) 14%, transparent);
-  --danger: #fb7185;
-  --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
+  --success: oklch(0.62 0.12 160);
+  --success-foreground: oklch(0.10 0 0);
+  --success-soft: color-mix(in oklab, var(--success) 16%, transparent);
+  --warning: oklch(0.68 0.12 85);
+  --warning-foreground: oklch(0.12 0 0);
+  --warning-soft: color-mix(in oklab, var(--warning) 16%, transparent);
+  --danger: oklch(0.60 0.16 15);
+  --danger-foreground: oklch(1 0 0);
+  --danger-soft: color-mix(in oklab, var(--danger) 16%, transparent);
+
+  --radius: 0.75rem;
 
   color-scheme: dark;
 }
 
-:root.light {
-  --bg: #f6f7fb;
-  --surface: #ffffff;
-  --elevated: #ffffff;
-  --overlay: #ffffff;
-  --border: #e6e8ef;
-  --border-strong: #d3d7e0;
-  --fg: #12141c;
-  --muted: #5a6172;
-  --faint: #8a90a0;
+[data-theme='light'] {
+  --background: oklch(0.97 0 0);
+  --background-secondary: oklch(0.94 0 0);
+  --background-tertiary: oklch(0.91 0 0);
+  --foreground: oklch(0.12 0 0);
+  --surface: oklch(1 0 0);
+  --surface-secondary: oklch(0.97 0 0);
+  --surface-tertiary: oklch(0.94 0 0);
+  --overlay: oklch(0.90 0 0);
+  --muted: oklch(0.45 0 0);
+  --faint: oklch(0.60 0 0);
+  --border: oklch(0.88 0 0);
+  --border-strong: oklch(0.80 0 0);
+  --separator: oklch(0.88 0 0);
 
-  --primary: #6b5bff;
-  --primary-fg: #ffffff;
-  --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
-  --accent: #0891b2;
+  --accent: oklch(0.55 0.18 260);
+  --accent-foreground: oklch(1 0 0);
+  --accent-soft: color-mix(in oklab, var(--accent) 12%, transparent);
+  --focus: var(--accent);
 
-  --success: #059669;
-  --warning: #d97706;
-  --danger: #e11d48;
+  --success: oklch(0.50 0.08 160);
+  --success-foreground: oklch(1 0 0);
+  --success-soft: color-mix(in oklab, var(--success) 12%, transparent);
+  --warning: oklch(0.55 0.08 85);
+  --warning-foreground: oklch(0.15 0 0);
+  --warning-soft: color-mix(in oklab, var(--warning) 12%, transparent);
+  --danger: oklch(0.50 0.12 15);
+  --danger-foreground: oklch(1 0 0);
+  --danger-soft: color-mix(in oklab, var(--danger) 12%, transparent);
+
+  --radius: 0.75rem;
 
   color-scheme: light;
 }
 
 body {
-  @apply bg-bg text-fg antialiased;
+  @apply bg-background text-foreground antialiased;
   font-family: var(--font-sans);
   background-image:
-    radial-gradient(60rem 40rem at 15% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 60%),
-    radial-gradient(50rem 40rem at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 55%);
+    radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.25 0.04 260 / 0.3), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, oklch(0.20 0.03 260 / 0.2), transparent);
   background-attachment: fixed;
-}
-
-::selection {
-  background: color-mix(in srgb, var(--primary) 35%, transparent);
 }
 
 /* Themed, thin scrollbars */
