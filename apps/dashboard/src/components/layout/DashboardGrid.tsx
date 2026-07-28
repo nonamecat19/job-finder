@@ -17,8 +17,7 @@ export function DashboardGrid({
       className={cn(
         'mx-auto grid w-full max-w-[var(--container-dashboard)] gap-4 sm:gap-5 lg:gap-6',
         'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 3xl:grid-cols-4 4xl:grid-cols-5',
-        'auto-rows-min',
-        variant === 'fit' ? 'items-stretch lg:h-full' : 'items-start',
+        variant === 'fit' ? 'auto-rows-fr items-stretch lg:h-full' : 'auto-rows-min items-start',
         className,
       )}
     >
