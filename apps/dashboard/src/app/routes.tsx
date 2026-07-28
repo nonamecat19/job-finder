@@ -13,7 +13,6 @@ import TrackerPage from '../features/tracker/TrackerPage';
 export type LayoutMode = 'flow' | 'fit';
 
 export const routeLayoutModes: Record<string, LayoutMode> = {
-  '/': 'fit',
   '/status': 'fit',
   '/tracker': 'fit',
 };
