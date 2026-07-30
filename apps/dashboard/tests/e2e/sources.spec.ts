@@ -36,15 +36,26 @@ test.describe('Sources page', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
     await page.route('**/api/roster', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ employers: [] }),
+      });
     });
     await page.route('**/api/roster/candidates', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ candidates: [] }),
+      });
     });
 
     await page.goto('/sources');
     await expect(page.getByText('React jobs')).toBeVisible();
-    await expect(page.getByPlaceholder('keywords*')).toBeVisible();
+
+    // The new-search form is collapsed until the button is pressed.
+    await page.getByRole('button', { name: '+ new search' }).click();
+    await expect(page.getByPlaceholder('e.g. React developer')).toBeVisible();
   });
 
   test('shows a configured source with test button', async ({ page }) => {
@@ -75,14 +86,22 @@ test.describe('Sources page', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
     await page.route('**/api/roster', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ employers: [] }),
+      });
     });
     await page.route('**/api/roster/candidates', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ candidates: [] }),
+      });
     });
 
     await page.goto('/sources');
-    await expect(page.getByText('adzuna')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Test' })).toBeVisible();
+    await expect(page.getByRole('listitem').getByText('adzuna', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'test' })).toBeVisible();
   });
 });

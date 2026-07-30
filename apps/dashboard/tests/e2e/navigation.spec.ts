@@ -33,7 +33,7 @@ test.describe('Navigation', () => {
     // Tracker
     await page.getByRole('link', { name: 'Tracker' }).click();
     await expect(page).toHaveURL('/tracker');
-    await expect(page.getByRole('heading', { name: 'Application tracker' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Application tracker' })).toBeVisible();
 
     // Sources
     await page.getByRole('link', { name: 'Sources' }).click();
@@ -43,7 +43,7 @@ test.describe('Navigation', () => {
     // Profile
     await page.getByRole('link', { name: 'Profile' }).click();
     await expect(page).toHaveURL('/profile');
-    await expect(page.getByRole('heading', { name: 'Master profile' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /^Profile/ })).toBeVisible();
 
     // Back to Feed
     await page.getByRole('link', { name: 'Feed' }).click();
@@ -53,6 +53,6 @@ test.describe('Navigation', () => {
   test('active nav link has the active style class', async ({ page }) => {
     await page.goto('/tracker');
     const trackerLink = page.getByRole('link', { name: 'Tracker' });
-    await expect(trackerLink).toHaveClass(/bg-sky-600/);
+    await expect(trackerLink).toHaveClass(/bg-accent-soft/);
   });
 });
