@@ -13,6 +13,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
+	salaryparser "github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/job-finder/api/internal/strutil"
 )
@@ -22,6 +23,15 @@ import (
 const djinniMaxSubscriptionPages = 50
 
 var djinniRemoteRe = regexp.MustCompile(`(?i)remote|віддалено`)
+
+var djinniExpEnRe = regexp.MustCompile(`(?i)(\d+)\+?\s*(?:years?|yrs?\.?)\s*(?:of\s+)?(?:(?:commercial|professional|full-stack|software)\s+)*(?:development\s+)?experience`)
+var djinniExpUaRe = regexp.MustCompile(`(?:від|не менше|мінімум)?\s*(\d+)\+?\s*(?:рок\S*|р\.|р)(?:\s+досвід)`)
+var djinniExpUaAltRe = regexp.MustCompile(`досвід\s+(?:роботи\s+)?(?:від\s+)?(\d+)`)
+var djinniAnalyticsUrlRe = regexp.MustCompile(`[?&]exp=(\d+)`)
+
+var djinniEnglishRe = regexp.MustCompile(`(?i)(?:english|англійська)\s*(?:level|мова)?\s*[—:\-–]\s*(\S+)`)
+var djinniEnglishLabelRe = regexp.MustCompile(`(?i)(Upper-?Intermediate|Advanced/Fluent|Fluent|Advanced|Intermediate|Pre-Intermediate|Elementary|Beginner)\s*(?:level\s*)?(?:english|англ)`)
+var djinniEnglishUaRe = regexp.MustCompile(`(?i)рівень\s+англійської\s*[—:\-–]\s*(\S+(?:\s+\S+)?)`)
 
 // DjinniAdapter — djinni.co, Ukrainian dev job board, server-rendered HTML.
 // Selectors are best-effort/defensive, matching djinni.adapter.ts.
@@ -163,7 +173,7 @@ func parseDjinniCards(doc *goquery.Document) []dto.NormalizedJob {
 
 		company := strings.TrimSpace(item.Find(`a[href^="/company/"], .js-analytics-company, [data-analytics="company_page"]`).First().Text())
 		description := jobsources.SelectionText(item.Find(`.js-truncated-text, .js-original-text, .text-card`).First())
-		salary := strings.TrimSpace(item.Find(`.public-salary-item, .text-success`).First().Text())
+		salary := strings.TrimSpace(item.Find(`.public-salary-item`).First().Text())
 		location := strings.TrimSpace(item.Find(`.location-text`).First().Text())
 
 		itemHTML, _ := item.Html()
@@ -211,6 +221,15 @@ type DjinniDetailPatch struct {
 	Remote      bool
 	PostedAt    *string
 	Raw         map[string]string
+
+	Company               string
+	ExperienceLevel       *string
+	ExperienceMinYears    *int
+	EnglishLevel          *string
+	SalaryEstimateRaw     *string
+	SalaryEstimateMin     *int
+	SalaryEstimateMax     *int
+	SalaryEstimateCurrency *string
 }
 
 // FetchDetail fetches a single djinni job page and parses the full
@@ -218,7 +237,7 @@ type DjinniDetailPatch struct {
 // and defensive (unverified against live markup — see plan risk #2): a
 // missing field just stays empty rather than erroring.
 func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (DjinniDetailPatch, error) {
-	html, err := d.Scraping.FetchHTML(ctx, jobURL, nil)
+	html, err := d.Scraping.FetchHTMLDirect(ctx, jobURL, nil)
 	if err != nil {
 		return DjinniDetailPatch{}, err
 	}
@@ -228,11 +247,84 @@ func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[str
 	}
 
 	description := jobsources.SelectionText(doc.Find(`.job-post__description, .job-post-page__description, .js-original-text, [data-qa="job-description"], article`).First())
-	salary := strings.TrimSpace(doc.Find(`.public-salary-item, .job-additional-info-item .text-success, .text-success`).First().Text())
+	salary := strings.TrimSpace(doc.Find(`.public-salary-item, .job-additional-info-item .text-success`).First().Text())
 	location := strings.TrimSpace(doc.Find(`.location-text, .job-additional-info-item .location`).First().Text())
 	postedAt, _ := doc.Find(`.job-post__details time, time[datetime]`).First().Attr("datetime")
 
-	remote := djinniRemoteRe.MatchString(doc.Find("body").Text())
+	bodyText := doc.Find("body").Text()
+	remote := djinniRemoteRe.MatchString(bodyText)
+
+	// Company: try detail-page selector first, fall back to <title> parsing
+	company := strings.TrimSpace(doc.Find(`a[href*="/company-"]`).First().Text())
+	if company == "" {
+		if m := regexp.MustCompile(`(.+?) в (.+?) – Djinni`).FindStringSubmatch(doc.Find("title").Text()); len(m) >= 3 {
+			company = m[2]
+		}
+	}
+
+	// Experience level: regex on plain-text body, fall back to analytics URL param
+	plainDesc := jobsources.HTMLToText(description)
+	if plainDesc == "" {
+		plainDesc = jobsources.HTMLToText(bodyText)
+	}
+	var expLevel *string
+	var expMinYears *int
+	if m := djinniExpEnRe.FindStringSubmatch(plainDesc); m != nil {
+		s := m[0]
+		expLevel = &s
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			expMinYears = &n
+		}
+	} else if m := djinniExpUaRe.FindStringSubmatch(plainDesc); m != nil {
+		s := m[0]
+		expLevel = &s
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			expMinYears = &n
+		}
+	} else if m := djinniExpUaAltRe.FindStringSubmatch(plainDesc); m != nil {
+		s := m[0]
+		expLevel = &s
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			expMinYears = &n
+		}
+	}
+	// Fallback: parse exp=N from analytics URL
+	if expLevel == nil {
+		if href, ok := doc.Find(`a[href*="/salaries/"]`).First().Attr("href"); ok {
+			if m := djinniAnalyticsUrlRe.FindStringSubmatch(href); m != nil {
+				s := m[1] + " years"
+				expLevel = &s
+				if n, err := strconv.Atoi(m[1]); err == nil {
+					expMinYears = &n
+				}
+			}
+		}
+	}
+
+	// English level: regex on plain-text body
+	var englishLevel *string
+	if m := djinniEnglishRe.FindStringSubmatch(plainDesc); m != nil {
+		v := strings.TrimSpace(m[1])
+		englishLevel = &v
+	} else if m := djinniEnglishLabelRe.FindStringSubmatch(plainDesc); m != nil {
+		v := strings.TrimSpace(m[1])
+		englishLevel = &v
+	} else if m := djinniEnglishUaRe.FindStringSubmatch(plainDesc); m != nil {
+		v := strings.TrimSpace(m[1])
+		englishLevel = &v
+	}
+
+	// Salary analytics estimate
+	var salaryEstimateRaw, salaryEstimateCurrency *string
+	var salaryEstimateMin, salaryEstimateMax *int
+	if seRaw := strings.TrimSpace(doc.Find(`div.salaries-info-link strong#salary-suggestion`).First().Text()); seRaw != "" {
+		salaryEstimateRaw = &seRaw
+		if band, ok := salaryparser.ParseSalaryRaw(seRaw); ok {
+			salaryEstimateMin = &band.Min
+			salaryEstimateMax = &band.Max
+			salaryEstimateCurrency = &band.Currency
+		}
+	}
 
 	bodyHTML, _ := doc.Find("body").Html()
 	// Same rune-safety concern as parseDjinniCards — this page is routinely
@@ -240,11 +332,19 @@ func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[str
 	bodyHTML = strutil.Truncate(bodyHTML, 8000)
 
 	patch := DjinniDetailPatch{
-		Description: description,
-		SalaryRaw:   jobsources.NilIfEmpty(salary),
-		Location:    jobsources.NilIfEmpty(location),
-		Remote:      remote,
-		Raw:         map[string]string{"html": bodyHTML},
+		Description:            description,
+		SalaryRaw:              jobsources.NilIfEmpty(salary),
+		Location:               jobsources.NilIfEmpty(location),
+		Remote:                 remote,
+		Raw:                    map[string]string{"html": bodyHTML},
+		Company:                company,
+		ExperienceLevel:        expLevel,
+		ExperienceMinYears:     expMinYears,
+		EnglishLevel:           englishLevel,
+		SalaryEstimateRaw:      salaryEstimateRaw,
+		SalaryEstimateMin:      salaryEstimateMin,
+		SalaryEstimateMax:      salaryEstimateMax,
+		SalaryEstimateCurrency: salaryEstimateCurrency,
 	}
 	if postedAt != "" {
 		patch.PostedAt = &postedAt

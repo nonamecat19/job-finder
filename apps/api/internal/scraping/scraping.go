@@ -90,6 +90,33 @@ func (s *Service) FetchHTML(ctx context.Context, rawURL string, headers map[stri
 	return string(body), nil
 }
 
+// FetchHTMLDirect fetches HTML through a plain HTTP client, bypassing the
+// retrieval ladder. Use for one-off fetches where the ladder's rate-limiting
+// would interfere (e.g. re-scraping a single job detail page on demand).
+func (s *Service) FetchHTMLDirect(ctx context.Context, rawURL string, headers map[string]string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	res, err := s.httpFallback.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("scraping: fetch %s failed: %w", rawURL, err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode >= 500 {
+		return "", fmt.Errorf("scraping: fetch %s returned %d", rawURL, res.StatusCode)
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
 // BrowserContext lazily launches a shared headless Chromium instance and
 // returns a chromedp context rooted on it. Callers create a new tab context
 // per render with chromedp.NewContext(browserCtx) so pages don't share state,
