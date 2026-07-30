@@ -79,14 +79,14 @@ description: "Task list for Enforced Workflow Quality Gates"
 
 ### Go linting
 
-- [ ] T016 [US2] Write the pin `/home/nnc/Projects/job-finder/apps/api/.golangci-version` containing `2.12.2` (current release; Go 1.26 support landed 2026-02-10, and the module targets `go 1.26`)
-- [ ] T017 [US2] Install it locally: `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`
-- [ ] T018 [US2] **Measure the backlog before fixing the rule set** (FR-012, research R3): run with `linters.default: standard` and record the issue count per linter in a table. `errcheck` and `staticcheck` are the likely large contributors on 236 never-linted files
-- [ ] T019 [US2] Apply the FR-012 thresholds to that table — **no judgement in the moment**: every rule at 0 violations is enabled; a rule at 1–30 is fixed and enabled; anything above 30 is deferred. The shared cap across both languages is **80 violations fixed total**; once reached, every remaining rule is deferred regardless of its individual count. Record the resulting enable/defer decision per rule
-- [ ] T020 [US2] Write `/home/nnc/Projects/job-finder/apps/api/.golangci.yml` in v2 format (`version: "2"`) enabling exactly the rules T019 selected; set `linters.exclusions.generated` and additionally list `internal/db/sqlcgen` explicitly, because relying on a header comment for something this load-bearing is fragile
-- [ ] T021 [US2] Record every deferred linter in `.golangci.yml` as a commented entry with its measured count and the reason it was deferred (over 30, or cap reached), so widening later is a known quantity rather than a rediscovery
-- [ ] T022 [US2] Fix the selected violations, keeping the diff in its own commit separate from configuration changes so a reviewer can read each independently. If the fixes exceed the 80 cap, stop and defer the remainder — the cap exists so this feature cannot quietly become a cleanup project
-- [ ] T023 [US2] Write `/home/nnc/Projects/job-finder/scripts/golangci-check.sh` mirroring `scripts/sqlc-check.sh`'s version guard: fail with pinned-vs-installed and the install line on mismatch, fail with an install line when the binary is absent (FR-015, FR-027)
+- [X] T016 [US2] Write the pin `/home/nnc/Projects/job-finder/apps/api/.golangci-version` containing `2.12.2` (current release; Go 1.26 support landed 2026-02-10, and the module targets `go 1.26`)
+- [X] T017 [US2] Install it locally: `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`
+- [X] T018 [US2] **Measure the backlog before fixing the rule set** (FR-012, research R3): run with `linters.default: standard` and record the issue count per linter in a table. `errcheck` and `staticcheck` are the likely large contributors on 236 never-linted files
+- [X] T019 [US2] Apply the FR-012 thresholds to that table — **no judgement in the moment**: every rule at 0 violations is enabled; a rule at 1–30 is fixed and enabled; anything above 30 is deferred. The shared cap across both languages is **80 violations fixed total**; once reached, every remaining rule is deferred regardless of its individual count. Record the resulting enable/defer decision per rule
+- [X] T020 [US2] Write `/home/nnc/Projects/job-finder/apps/api/.golangci.yml` in v2 format (`version: "2"`) enabling exactly the rules T019 selected; set `linters.exclusions.generated` and additionally list `internal/db/sqlcgen` explicitly, because relying on a header comment for something this load-bearing is fragile
+- [X] T021 [US2] Record every deferred linter in `.golangci.yml` as a commented entry with its measured count and the reason it was deferred (over 30, or cap reached), so widening later is a known quantity rather than a rediscovery
+- [X] T022 [US2] Fix the selected violations, keeping the diff in its own commit separate from configuration changes so a reviewer can read each independently. If the fixes exceed the 80 cap, stop and defer the remainder — the cap exists so this feature cannot quietly become a cleanup project
+- [X] T023 [US2] Write `/home/nnc/Projects/job-finder/scripts/golangci-check.sh` mirroring `scripts/sqlc-check.sh`'s version guard: fail with pinned-vs-installed and the install line on mismatch, fail with an install line when the binary is absent (FR-015, FR-027)
 
 ### Web linting
 
