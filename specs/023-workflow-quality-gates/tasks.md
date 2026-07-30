@@ -29,10 +29,10 @@ description: "Task list for Enforced Workflow Quality Gates"
 
 **Purpose**: work on a branch, and unblock committing agent configuration
 
-- [ ] T001 Create the feature branch: `git checkout -b 023-workflow-quality-gates` (do not work on `master` — the whole point of US1)
-- [ ] T002 Stash or commit the 18-file in-flight change currently on `master` (feature 022 work) onto its own branch, so this feature's diff is reviewable in isolation — see spec.md Edge Cases, "in-flight work at adoption time"
-- [ ] T003 Add the `.claude/` negation to `/home/nnc/Projects/job-finder/.gitignore` exactly as specified in plan.md Constraints: `!.claude/`, `.claude/*`, `!.claude/settings.json` — a file cannot be re-included while a parent directory is excluded, and `~/.gitignore_global:2` excludes `.claude`
-- [ ] T004 Verify the negation works with `git check-ignore -v .claude/settings.json` returning nothing — **not** by looking at `git status`, which is silent on globally-ignored paths
+- [X] T001 Create the feature branch: `git checkout -b 023-workflow-quality-gates` (do not work on `master` — the whole point of US1) — N/A as run: this implementation executes inside a dedicated git worktree already checked out on its own branch (`worktree-agent-a8adfa63bba994057`, off `master` @ 8c1f320), which satisfies the same isolation intent
+- [X] T002 Stash or commit the 18-file in-flight change currently on `master` (feature 022 work) onto its own branch, so this feature's diff is reviewable in isolation — N/A as run: this worktree's tree started clean (no feature-022 changes present), so there was nothing to move
+- [X] T003 Add the `.claude/` negation to `/home/nnc/Projects/job-finder/.gitignore` exactly as specified in plan.md Constraints: `!.claude/`, `.claude/*`, `!.claude/settings.json` — a file cannot be re-included while a parent directory is excluded, and `~/.gitignore_global:2` excludes `.claude`
+- [X] T004 Verify the negation works with `git check-ignore -v .claude/settings.json` returning nothing — **not** by looking at `git status`, which is silent on globally-ignored paths
 
 **Checkpoint**: on a branch; `.claude/settings.json` is committable.
 
@@ -42,9 +42,9 @@ description: "Task list for Enforced Workflow Quality Gates"
 
 **Purpose**: the directory and script conventions every later phase writes into
 
-- [ ] T005 Create `/home/nnc/Projects/job-finder/scripts/hooks/` and `/home/nnc/Projects/job-finder/.githooks/`
-- [ ] T006 Create `/home/nnc/Projects/job-finder/.claude/settings.json` containing only `{"hooks": {}}` and commit it, confirming with `git ls-files .claude/settings.json` that it is tracked
-- [ ] T007 Write `/home/nnc/Projects/job-finder/scripts/hooks/common.sh` — the shared helpers every hook script needs, mirroring the existing `.specify/scripts/bash/common.sh` convention: read the hook JSON from stdin once, expose `hook_field <jq-path>` for pulling `tool_input.file_path` / `tool_input.command` / `session_id`, `require_tool <name> <install-line>` for the FR-027 tool-presence check, and `emit_context <message>` for `hookSpecificOutput.additionalContext`. The conventions in contracts/hooks.md (`set -euo pipefail`, idempotent, never writes outside the repo) become executable here instead of being copied into five scripts by hand
+- [X] T005 Create `/home/nnc/Projects/job-finder/scripts/hooks/` and `/home/nnc/Projects/job-finder/.githooks/`
+- [X] T006 Create `/home/nnc/Projects/job-finder/.claude/settings.json` containing only `{"hooks": {}}` and commit it, confirming with `git ls-files .claude/settings.json` that it is tracked
+- [X] T007 Write `/home/nnc/Projects/job-finder/scripts/hooks/common.sh` — the shared helpers every hook script needs, mirroring the existing `.specify/scripts/bash/common.sh` convention: read the hook JSON from stdin once, expose `hook_field <jq-path>` for pulling `tool_input.file_path` / `tool_input.command` / `session_id`, `require_tool <name> <install-line>` for the FR-027 tool-presence check, and `emit_context <message>` for `hookSpecificOutput.additionalContext`. The conventions in contracts/hooks.md (`set -euo pipefail`, idempotent, never writes outside the repo) become executable here instead of being copied into five scripts by hand
 
 **Checkpoint**: skeleton in place, nothing enforced yet.
 
@@ -56,14 +56,14 @@ description: "Task list for Enforced Workflow Quality Gates"
 
 **Independent test**: attempt a commit on `master` — rejected. Same commit on a branch — succeeds. Delivers value even with no new checks, because existing CI stops being advisory.
 
-- [ ] T008 [US1] Write `/home/nnc/Projects/job-finder/.githooks/pre-commit` per contracts/hooks.md: exit 1 when `git rev-parse --abbrev-ref HEAD` is `master`, printing the branch-and-PR rule plus the `git checkout -b <nnn>-<slug>` command; exit 0 on any other branch; `chmod +x`
-- [ ] T009 [P] [US1] Write `/home/nnc/Projects/job-finder/.githooks/pre-push` per contracts/hooks.md: read the stdin lines `<local ref> <local sha> <remote ref> <remote sha>`, exit 1 if any `<remote ref>` is `refs/heads/master`; `chmod +x`
-- [ ] T010 [US1] Add the `setup-hooks` target to `/home/nnc/Projects/job-finder/Makefile` running `git config core.hooksPath .githooks`, idempotent, per contracts/make-targets.md
-- [ ] T011 [P] [US1] Write `/home/nnc/Projects/job-finder/scripts/hooks/guard-master.sh`: read the hook JSON on stdin, extract `tool_input.command`, exit 2 with a stderr message when on `master` and the command is a `git commit`/`git push`, else exit 0. **Exit 2 blocks for `PreToolUse`** — unlike `PostToolUse` (research R2)
-- [ ] T012 [US1] Register the `PreToolUse` binding in `/home/nnc/Projects/job-finder/.claude/settings.json`: matcher `Bash`, `if` entries `Bash(git commit*)` and `Bash(git push*)`, command `$CLAUDE_PROJECT_DIR/scripts/hooks/guard-master.sh`
-- [ ] T013 [US1] Add the branch-and-PR rule to `/home/nnc/Projects/job-finder/AGENTS.md` (FR-006) and document the `--no-verify` emergency override as the FR-005 escape hatch, stating that using it leaves a visible trace. Keep it to the **minimal rule this feature's enforcement needs** — feature 024 owns the final wording and the per-topic ownership table, so do not also write a rules-ownership section here
-- [ ] T014 [US1] Verify per quickstart.md P1: commit on `master` rejected; same commit on a branch succeeds; `git push origin master --dry-run` aborted before contacting the remote; `git commit --no-verify` succeeds
-- [ ] T015 [US1] Verify the agent guard standalone: `echo '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}' | ./scripts/hooks/guard-master.sh` → exit 2 on `master`, exit 0 and silent on a branch
+- [X] T008 [US1] Write `/home/nnc/Projects/job-finder/.githooks/pre-commit` per contracts/hooks.md: exit 1 when `git rev-parse --abbrev-ref HEAD` is `master`, printing the branch-and-PR rule plus the `git checkout -b <nnn>-<slug>` command; exit 0 on any other branch; `chmod +x`
+- [X] T009 [P] [US1] Write `/home/nnc/Projects/job-finder/.githooks/pre-push` per contracts/hooks.md: read the stdin lines `<local ref> <local sha> <remote ref> <remote sha>`, exit 1 if any `<remote ref>` is `refs/heads/master`; `chmod +x`
+- [X] T010 [US1] Add the `setup-hooks` target to `/home/nnc/Projects/job-finder/Makefile` running `git config core.hooksPath .githooks`, idempotent, per contracts/make-targets.md
+- [X] T011 [P] [US1] Write `/home/nnc/Projects/job-finder/scripts/hooks/guard-master.sh`: read the hook JSON on stdin, extract `tool_input.command`, exit 2 with a stderr message when on `master` and the command is a `git commit`/`git push`, else exit 0. **Exit 2 blocks for `PreToolUse`** — unlike `PostToolUse` (research R2)
+- [X] T012 [US1] Register the `PreToolUse` binding in `/home/nnc/Projects/job-finder/.claude/settings.json`: matcher `Bash`, `if` entries `Bash(git commit*)` and `Bash(git push*)`, command `$CLAUDE_PROJECT_DIR/scripts/hooks/guard-master.sh`
+- [X] T013 [US1] Add the branch-and-PR rule to `/home/nnc/Projects/job-finder/AGENTS.md` (FR-006) and document the `--no-verify` emergency override as the FR-005 escape hatch, stating that using it leaves a visible trace. Keep it to the **minimal rule this feature's enforcement needs** — feature 024 owns the final wording and the per-topic ownership table, so do not also write a rules-ownership section here
+- [X] T014 [US1] Verify per quickstart.md P1: commit on `master` rejected; same commit on a branch succeeds; `git push origin master --dry-run` aborted before contacting the remote; `git commit --no-verify` succeeds
+- [X] T015 [US1] Verify the agent guard standalone: `echo '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}' | ./scripts/hooks/guard-master.sh` → exit 2 on `master`, exit 0 and silent on a branch
 
 **Checkpoint**: US1 done. `master` is write-protected locally and the agent cannot route around it invisibly.
 

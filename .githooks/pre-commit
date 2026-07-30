@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#
+# Reject commits made directly on master. See
+# specs/023-workflow-quality-gates/contracts/hooks.md — Layer 1 — Git hooks.
+#
+# Activated via `make setup-hooks` (git config core.hooksPath .githooks),
+# which is a repository-level config value shared by every worktree.
+#
+# Bypass (the FR-005 emergency override): git commit --no-verify
+#
+set -euo pipefail
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+
+if [[ "$BRANCH" == "master" ]]; then
+  cat >&2 <<'EOF'
+------------------------------------------------------------------
+Direct commits to master are not allowed.
+
+Agent-authored (and human-authored) changes go on a feature branch and
+merge via a pull request whose CI is green. Create a branch first:
+
+  git checkout -b <nnn>-<slug>
+
+Emergency repair of a broken trunk is the only exception. If this really
+is that, use the documented override (it leaves a visible trace):
+
+  git commit --no-verify
+------------------------------------------------------------------
+EOF
+  exit 1
+fi
+
+exit 0

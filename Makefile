@@ -1,7 +1,8 @@
 .PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean run-all \
 	test test-go test-react test-integration test-e2e test-lint test-db-setup \
 	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install \
-	tygo-generate tygo-check tygo-install
+	tygo-generate tygo-check tygo-install \
+	setup-hooks lint lint-go lint-web golangci-install
 
 ifneq (,$(wildcard .env))
 include .env
@@ -18,6 +19,13 @@ export POSTGRES_HOST_PORT := $(shell echo "$$(( 5432 + ( $(WORKTREE_HASH) % 100 
 
 install:
 	pnpm install
+
+# --- workflow quality gates (specs/023-workflow-quality-gates) ---
+# One-time per clone; core.hooksPath is a repository-level git config value,
+# so this single call covers the main working tree and every worktree.
+setup-hooks:
+	git config core.hooksPath .githooks
+	@echo "core.hooksPath -> .githooks (run once per clone; shared by all worktrees)"
 
 run-frontend:
 	pnpm dev

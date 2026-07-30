@@ -2,6 +2,33 @@
 
 Context for AI coding agents working in this repo.
 
+## Branching and pull requests
+
+Every change — agent-authored or human-authored — goes on a feature branch
+and merges via a pull request whose CI is green. **Never commit or push
+directly to `master`.** Create a branch first:
+
+```
+git checkout -b <nnn>-<slug>
+```
+
+This is enforced, not just documented: `make setup-hooks` (run once per
+clone; the config is shared across worktrees) installs committed git hooks
+(`.githooks/pre-commit`, `.githooks/pre-push`) that reject a commit or push
+targeting `master`, and a Claude Code `PreToolUse` hook
+(`scripts/hooks/guard-master.sh`) stops the agent before it even reaches
+git. Server-side branch protection is not available on the current GitHub
+plan (private repo, Free tier) — see
+`specs/023-workflow-quality-gates/contracts/required-checks.md` for the
+ruleset recorded to apply the moment that changes.
+
+**Emergency override**: if the trunk itself is broken and the normal branch
+workflow can't repair it, `git commit --no-verify` / `git push --no-verify`
+bypasses both git hooks. This is the documented, deliberate escape hatch —
+its use is visible in shell history and in the agent's transcript, so it is
+a traceable act, not a silent bypass. Reach for it only to restore a broken
+trunk, never as a way to skip review.
+
 ## Project layout
 
 - `apps/api` — Go backend (HTTP API, asynq workers, ingestion scheduler)

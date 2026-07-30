@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# Reject pushes to master. See
+# specs/023-workflow-quality-gates/contracts/hooks.md — Layer 1 — Git hooks.
+#
+# Git invokes this with the remote name/URL as $1/$2 and feeds it lines of
+# "<local ref> <local sha> <remote ref> <remote sha>" on stdin — one line per
+# ref being pushed. Reject the push if ANY of those refs targets
+# refs/heads/master.
+#
+# Bypass (the FR-005 emergency override): git push --no-verify
+#
+set -euo pipefail
+
+blocked=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -z "${remote_ref:-}" ]] && continue
+  if [[ "$remote_ref" == "refs/heads/master" ]]; then
+    blocked=1
+  fi
+done
+
+if [[ "$blocked" -eq 1 ]]; then
+  cat >&2 <<'EOF'
+------------------------------------------------------------------
+Direct pushes to master are not allowed.
+
+Push your branch and open a pull request instead:
+
+  git push -u origin <your-branch>
+  gh pr create
+
+Emergency repair of a broken trunk is the only exception. If this really
+is that, use the documented override (it leaves a visible trace):
+
+  git push --no-verify
+------------------------------------------------------------------
+EOF
+  exit 1
+fi
+
+exit 0
