@@ -55,9 +55,7 @@ func (a JobSpyAdapter) baseURL(config map[string]any) string {
 
 func (a JobSpyAdapter) Search(ctx context.Context, query dto.SearchQuery, config map[string]any) ([]dto.NormalizedJob, error) {
 	site := "linkedin"
-	if query.Site != nil && *query.Site != "" {
-		site = *query.Site
-	} else if s, ok := config["site"].(string); ok && s != "" {
+	if s, ok := config["site"].(string); ok && s != "" {
 		site = s
 	}
 	location := ""
