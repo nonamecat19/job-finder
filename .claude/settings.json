@@ -18,6 +18,42 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/scripts/hooks/go-postedit.sh",
+            "if": "Edit(apps/api/**/*.go)",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/scripts/hooks/regen-sqlc.sh",
+            "if": "Edit(apps/api/internal/db/queries/*.sql)",
+            "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/scripts/hooks/regen-tygo.sh",
+            "if": "Edit(apps/api/internal/dto/*.go)",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/scripts/hooks/session-verify.sh",
+            "timeout": 120
+          }
+        ]
+      }
     ]
   }
 }
