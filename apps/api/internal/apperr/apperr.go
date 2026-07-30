@@ -8,14 +8,14 @@ import (
 type Kind string
 
 const (
-	KindNotFound       Kind = "not_found"
-	KindValidation     Kind = "validation"
-	KindConflict       Kind = "conflict"
-	KindUnauthorized   Kind = "unauthorized"
-	KindForbidden      Kind = "forbidden"
-	KindPrecondition   Kind = "precondition_failed"
+	KindNotFound        Kind = "not_found"
+	KindValidation      Kind = "validation"
+	KindConflict        Kind = "conflict"
+	KindUnauthorized    Kind = "unauthorized"
+	KindForbidden       Kind = "forbidden"
+	KindPrecondition    Kind = "precondition_failed"
 	KindTooManyRequests Kind = "too_many_requests"
-	KindInternal       Kind = "internal"
+	KindInternal        Kind = "internal"
 )
 
 type Error struct {
