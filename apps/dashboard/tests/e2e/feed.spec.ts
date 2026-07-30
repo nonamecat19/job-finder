@@ -1,5 +1,26 @@
 import { test, expect } from '@playwright/test';
 
+// The feed routes sit behind RequireProfileConfig (app/routes.tsx), and the
+// shell fires the notification bell's unseen-count on every page, so without
+// a backend in CI both must be mocked or the feed renders the "set up your
+// profile first" empty state instead of the job list.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/profiles/config/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ hasConfig: true, hasExistingContent: true }),
+    });
+  });
+  await page.route('**/api/notifications/unseen-count', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ count: 0 }),
+    });
+  });
+});
+
 test.describe('Feed page', () => {
   test('loads and shows the feed heading', async ({ page }) => {
     await page.goto('/');
