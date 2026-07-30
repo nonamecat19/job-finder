@@ -2,6 +2,7 @@
   "name": "job-finder",
   "private": true,
   "version": "0.1.0",
+  "type": "module",
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --filter @job-finder/dashboard dev",
@@ -9,13 +10,17 @@
     "test": "make test",
     "test:go": "make test-go",
     "test:react": "make test-react",
-    "test:python": "make test-python",
     "doctor": "npx react-doctor@latest"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "react-doctor": "^0.7.8"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "react-doctor": "^0.7.8",
+    "typescript-eslint": "^8.65.0"
   }
 }
