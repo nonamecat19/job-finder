@@ -1,41 +1,21 @@
-package postage
+package application
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/job-finder/api/internal/dto"
-)
-
-const (
-	// GlobalColdStartThreshold is the minimum total applications (rows with an
-	// `applied` event) before the feature shows any personalised observed rate.
-	// Below it the feature shows the documented prior.
-	GlobalColdStartThreshold = 30
-
-	// PerBucketMinSample is the minimum applications in a bucket before that
-	// bucket shows its own observed rate. Below it the bucket shows
-	// "not enough data".
-	PerBucketMinSample = 8
-
-	// DocumentedPriorRate is a conservative industry-baseline job-application
-	// response rate used only for the overall view during global cold-start.
-	// Source: placeholder — cited source TBD per spec el-37xa.
-	DocumentedPriorRate = 0.20
-
-	// DocumentedPriorLabel is the label rendered alongside the prior rate so
-	// the user knows it is a baseline, not their personal rate.
-	DocumentedPriorLabel = "Typical baseline — not yet your data"
+	"github.com/job-finder/api/internal/postage/domain"
 )
 
 // Service computes the post-age-at-apply vs response-rate signal from the
 // ApplicationOutcome event log. It is a deterministic SQL aggregation — no
 // model, no LLM in the signal path.
 type Service struct {
-	q Repository
+	q domain.Repository
 }
 
-func NewService(q Repository) *Service {
+func NewService(q domain.Repository) *Service {
 	return &Service{q: q}
 }
 
@@ -54,7 +34,7 @@ func (s *Service) Compute(ctx context.Context) (dto.PostAgeResponseDto, error) {
 	}
 
 	globalState := dto.PostAgeStateObserved
-	if totalApps < GlobalColdStartThreshold {
+	if totalApps < domain.GlobalColdStartThreshold {
 		globalState = dto.PostAgeStatePrior
 	}
 
@@ -77,12 +57,12 @@ func (s *Service) Compute(ctx context.Context) (dto.PostAgeResponseDto, error) {
 		Buckets:     buckets,
 		TotalApps:   totalApps,
 		GlobalState: globalState,
-		PriorRate:   DocumentedPriorRate,
-		PriorLabel:  DocumentedPriorLabel,
+		PriorRate:   domain.DocumentedPriorRate,
+		PriorLabel:  domain.DocumentedPriorLabel,
 	}
 
 	if globalState == dto.PostAgeStatePrior {
-		remaining := GlobalColdStartThreshold - totalApps
+		remaining := domain.GlobalColdStartThreshold - totalApps
 		msg := fmt.Sprintf("Need %d more applications before showing your personal response rate.", remaining)
 		resp.ThresholdMsg = &msg
 	}
@@ -96,10 +76,10 @@ func (s *Service) Compute(ctx context.Context) (dto.PostAgeResponseDto, error) {
 //   - Total ≥ global threshold, bucket < per-bucket min → insufficient
 //   - Total ≥ global threshold, bucket ≥ per-bucket min → observed
 func bucketState(totalApps, bucketN int32) dto.PostAgeBucketState {
-	if totalApps < GlobalColdStartThreshold {
+	if totalApps < domain.GlobalColdStartThreshold {
 		return dto.PostAgeStatePrior
 	}
-	if bucketN < PerBucketMinSample {
+	if bucketN < domain.PerBucketMinSample {
 		return dto.PostAgeStateInsufficient
 	}
 	return dto.PostAgeStateObserved

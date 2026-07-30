@@ -1,4 +1,4 @@
-package postage
+package domain
 
 import (
 	"context"

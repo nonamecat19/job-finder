@@ -1,26 +1,25 @@
-package notifier
+package application
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/notifier/domain"
 )
 
 const (
 	defaultMatchThreshold = 70
 	defaultRateLimitCap   = 10
 	defaultRateLimitHours = 1
-	freshWindow           = 24 * time.Hour
 )
 
 type Service struct {
-	q              Repository
+	q              domain.Repository
 	matchThreshold int
 	rateLimitCap   int
 	rateLimitHours int
@@ -36,7 +35,7 @@ func WithRateLimitCap(c int) Option {
 	return func(s *Service) { s.rateLimitCap = c }
 }
 
-func NewService(q Repository, opts ...Option) *Service {
+func NewService(q domain.Repository, opts ...Option) *Service {
 	s := &Service{
 		q:              q,
 		matchThreshold: defaultMatchThreshold,
@@ -72,7 +71,7 @@ func (s *Service) MaybeNotify(ctx context.Context, jobID, matchResultID string, 
 		return
 	}
 
-	fresh := isFresh(job.PostedAt)
+	fresh := domain.IsFresh(job.PostedAt)
 
 	count, err := s.q.CountRecentNotificationsByProfile(ctx, sqlcgen.CountRecentNotificationsByProfileParams{
 		ProfileId: profileUID,
@@ -123,15 +122,4 @@ func (s *Service) resolveProfileID(ctx context.Context) (pgtype.UUID, error) {
 		return pgtype.UUID{}, fmt.Errorf("no profile found: %w", err)
 	}
 	return rows[0].ID, nil
-}
-
-func isFresh(postedAt pgtype.Timestamp) bool {
-	if !postedAt.Valid {
-		return false
-	}
-	return time.Since(postedAt.Time) < freshWindow
-}
-
-func IsFresh(postedAt pgtype.Timestamp) bool {
-	return isFresh(postedAt)
 }

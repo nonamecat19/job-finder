@@ -1,4 +1,4 @@
-package notifier
+package application
 
 import (
 	"context"
@@ -9,20 +9,17 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/notifier/domain"
 )
 
 // NotificationService implements httpapi.NotificationProvider for the
 // GET /api/notifications and related endpoints.
 type NotificationService struct {
-	q    *sqlcgen.Queries
-	prof ProfileResolver
+	q    domain.NotificationReader
+	prof domain.ProfileResolver
 }
 
-type ProfileResolver interface {
-	ListProfiles(ctx context.Context) ([]sqlcgen.Profile, error)
-}
-
-func NewNotificationService(q *sqlcgen.Queries, prof ProfileResolver) *NotificationService {
+func NewNotificationService(q domain.NotificationReader, prof domain.ProfileResolver) *NotificationService {
 	return &NotificationService{q: q, prof: prof}
 }
 
