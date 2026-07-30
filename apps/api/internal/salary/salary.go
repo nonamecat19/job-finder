@@ -21,4 +21,9 @@ var (
 	NewLevelsFyiLoader = application.NewLevelsFyiLoader
 	NewHandler         = salaryworker.NewHandler
 	ParseSalaryRaw     = domain.ParseSalaryRaw
+
+	SourceLLM           = domain.SourceLLM
+	SourceLevelsFyi     = domain.SourceLevelsFyi
+	SourceIngestedCache = domain.SourceIngestedCache
+	SourceBlended       = domain.SourceBlended
 )
