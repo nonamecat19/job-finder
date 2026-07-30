@@ -1,0 +1,49 @@
+// Package domain holds the keyword bounded context's core model: the
+// Extractor port and its regex/lexicon implementation, the term diff/
+// classifier/question/story-selection engines, and the synonym/adjacency
+// data. Everything here is pure and dependency-free — turn a raw job
+// description into a set of typed terms (required vs preferred) and
+// normalize those terms for the downstream ATS diff (008). The Extractor
+// port is swappable — today a deterministic regex/lexicon extractor,
+// tomorrow an LLM-backed one — without touching callers. See spec 008-1
+// (el-1a4s).
+package domain
+
+// Polarity is the required/preferred classification of an extracted term.
+type Polarity string
+
+const (
+	// PolarityRequired marks a term the JD frames as mandatory.
+	PolarityRequired Polarity = "required"
+	// PolarityPreferred marks a term the JD frames as nice-to-have.
+	PolarityPreferred Polarity = "preferred"
+)
+
+// ExtractedTerm is a single skill-like token pulled from a job description,
+// tagged with the polarity inferred from its surrounding section/markers and
+// the section it came from.
+type ExtractedTerm struct {
+	Term      string   `json:"term"`
+	Polarity  Polarity `json:"polarity"`
+	Section   string   `json:"source_section"`
+	Canonical string   `json:"canonical"`
+	Stemmed   string   `json:"normalized"`
+	// Evidence is the raw candidate line/bullet this term was extracted from.
+	// It is retained so the must-have classifier (009-2) can inspect the
+	// surrounding phrasing (e.g. "5+ years", "must have") without re-parsing
+	// the JD, and for downstream traceability of why a term was surfaced.
+	Evidence string `json:"evidence,omitempty"`
+}
+
+// ExtractResult is the full output of a single extraction pass over one JD.
+type ExtractResult struct {
+	Terms []ExtractedTerm `json:"terms"`
+}
+
+// Extractor is the inbound port the keyword use-case exposes. The concrete
+// implementation (RegexExtractor) satisfies it structurally, so tests can swap
+// in a fake and the wiring layer can inject the production adapter.
+type Extractor interface {
+	// Extract parses raw job-description text into typed, normalized terms.
+	Extract(jobDescription string) (*ExtractResult, error)
+}

@@ -1,4 +1,4 @@
-package application
+package coach
 
 import (
 	"context"
@@ -10,11 +10,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/job-finder/api/internal/coach/domain"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/keyword"
+	"github.com/job-finder/api/internal/keyword/domain"
 )
 
 // ErrNoDiff is returned when no keyword diff (008) has been computed for the
@@ -39,8 +38,8 @@ type DiffReader interface {
 // source label. It is a func rather than an interface bound to a concrete
 // profile type so this package never needs to import internal/profile —
 // main.go closes over profile.Service when wiring the AssessmentService,
-// keeping the dependency graph acyclic (mirrors keyword.BulletsProvider).
-type ProfileEntriesFunc func(ctx context.Context) ([]domain.ProfileEntry, error)
+// keeping the dependency graph acyclic (mirrors domain.BulletsProvider).
+type ProfileEntriesFunc func(ctx context.Context) ([]ProfileEntry, error)
 
 // AssessmentService orchestrates the fit-gap coach for the HTTP layer
 // (009-wiring): it reads the persisted keyword diff and the profile's
@@ -60,7 +59,7 @@ type AssessmentService struct {
 	entries ProfileEntriesFunc
 
 	mu    sync.RWMutex
-	cache map[string]*domain.FitGapAssessment
+	cache map[string]*FitGapAssessment
 }
 
 // NewAssessmentService wires an AssessmentService. entries may be nil, in
@@ -71,7 +70,7 @@ func NewAssessmentService(svc *Service, diffs DiffReader, entries ProfileEntries
 		svc:     svc,
 		diffs:   diffs,
 		entries: entries,
-		cache:   make(map[string]*domain.FitGapAssessment),
+		cache:   make(map[string]*FitGapAssessment),
 	}
 }
 
@@ -84,7 +83,7 @@ func (a *AssessmentService) Assess(ctx context.Context, jobID string) (dto.FitGa
 		return dto.FitGapAssessmentDto{}, err
 	}
 
-	var entries []domain.ProfileEntry
+	var entries []ProfileEntry
 	if a.entries != nil {
 		entries, err = a.entries(ctx)
 		if err != nil {
@@ -114,10 +113,10 @@ func (a *AssessmentService) CachedAssessment(_ context.Context, jobID string) (d
 }
 
 // loadDiff reads the persisted 008 keyword diff for jobID and reconstitutes
-// it as a *keyword.DiffResult. The stored jsonb term shape and keyword.DiffTerm
+// it as a *domain.DiffResult. The stored jsonb term shape and domain.DiffTerm
 // share the same JSON tags (spec 008-1 §3), so this is a direct unmarshal —
 // no dependency on keyword's unexported apiservice helpers.
-func (a *AssessmentService) loadDiff(ctx context.Context, jobID string) (*keyword.DiffResult, error) {
+func (a *AssessmentService) loadDiff(ctx context.Context, jobID string) (*domain.DiffResult, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
 		return nil, ErrNoDiff
@@ -145,7 +144,7 @@ func (a *AssessmentService) loadDiff(ctx context.Context, jobID string) (*keywor
 
 	var matchedRequired, matchedPreferred int
 	for _, t := range matched {
-		if t.Polarity == keyword.PolarityRequired {
+		if t.Polarity == domain.PolarityRequired {
 			matchedRequired++
 		} else {
 			matchedPreferred++
@@ -161,11 +160,11 @@ func (a *AssessmentService) loadDiff(ctx context.Context, jobID string) (*keywor
 		coveragePct = float64(matchedRequired+matchedPreferred) / float64(total) * 100
 	}
 
-	return &keyword.DiffResult{
+	return &domain.DiffResult{
 		Matched:          matched,
 		MissingRequired:  missingRequired,
 		MissingPreferred: missingPreferred,
-		Metadata: keyword.DiffMetadata{
+		Metadata: domain.DiffMetadata{
 			TotalRequired:    totalRequired,
 			TotalPreferred:   totalPreferred,
 			MatchedRequired:  matchedRequired,
@@ -175,13 +174,42 @@ func (a *AssessmentService) loadDiff(ctx context.Context, jobID string) (*keywor
 	}, nil
 }
 
-func unmarshalDiffTerms(raw []byte) ([]keyword.DiffTerm, error) {
+func unmarshalDiffTerms(raw []byte) ([]domain.DiffTerm, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
-	var terms []keyword.DiffTerm
+	var terms []domain.DiffTerm
 	if err := json.Unmarshal(raw, &terms); err != nil {
 		return nil, err
 	}
 	return terms, nil
+}
+
+// ToDto flattens a FitGapAssessment into its wire shape.
+func (a *FitGapAssessment) ToDto() dto.FitGapAssessmentDto {
+	gaps := make([]dto.FitGapItemDto, 0, len(a.Gaps))
+	for _, g := range a.Gaps {
+		evidence := make([]dto.FitGapEvidenceDto, 0, len(g.AdjacentEvidence))
+		for _, e := range g.AdjacentEvidence {
+			evidence = append(evidence, dto.FitGapEvidenceDto{
+				SourceEntry:  e.SourceEntry,
+				SourceBullet: e.SourceBullet,
+				Proximity:    string(e.Proximity),
+				Rephrase:     e.Rephrase,
+			})
+		}
+		gaps = append(gaps, dto.FitGapItemDto{
+			Term:               g.Term,
+			Polarity:           g.Polarity,
+			AdjacentEvidence:   evidence,
+			NoAdjacentEvidence: g.NoAdjacentEvidence,
+		})
+	}
+	return dto.FitGapAssessmentDto{
+		JobID:           a.JobID,
+		TotalMustHaves:  a.TotalMustHaves,
+		FailedMustHaves: a.FailedMustHaves,
+		CoveragePct:     a.CoveragePct,
+		Gaps:            gaps,
+	}
 }

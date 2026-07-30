@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/ghostjob"
+	"github.com/job-finder/api/internal/ghostjob/application"
 )
 
 // GhostJobProvider is the interface GhostJobHandler needs from the
@@ -32,7 +32,7 @@ func (h *GhostJobHandler) score(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Ghost.ScoreJob(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, ghostjob.ErrDeclinedToScore) {
+		if errors.Is(err, application.ErrDeclinedToScore) {
 			writeError(w, http.StatusUnprocessableEntity, "insufficient signal to score this job yet")
 			return
 		}

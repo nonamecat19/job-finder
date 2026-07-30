@@ -18,23 +18,27 @@ import (
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/extauth"
 	"github.com/job-finder/api/internal/generation"
-	"github.com/job-finder/api/internal/ghostjob"
+	ghostapp "github.com/job-finder/api/internal/ghostjob/application"
+	ghostworker "github.com/job-finder/api/internal/ghostjob/interfaces/worker"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/ingestion"
 	"github.com/job-finder/api/internal/jobs"
 	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/jobsources/adapters"
-	"github.com/job-finder/api/internal/keyword"
+	keywordapp "github.com/job-finder/api/internal/keyword/application"
+	"github.com/job-finder/api/internal/keyword/infrastructure/rephraseadapter"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/llmsettings"
-	"github.com/job-finder/api/internal/matching"
+	matchingapp "github.com/job-finder/api/internal/matching/application"
+	matchingworker "github.com/job-finder/api/internal/matching/interfaces/worker"
 	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/outreach"
 	"github.com/job-finder/api/internal/postage"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/recruiter"
 	"github.com/job-finder/api/internal/referral"
-	"github.com/job-finder/api/internal/salary"
+	salaryapp "github.com/job-finder/api/internal/salary/application"
+	salaryworker "github.com/job-finder/api/internal/salary/interfaces/worker"
 	"github.com/job-finder/api/internal/storage"
 	"github.com/job-finder/api/internal/subscriptions"
 )
@@ -67,11 +71,11 @@ type App struct {
 
 	// Worker handlers (each exposes ProcessTask).
 	Ingestion  *ingestion.Handler
-	Matching   *matching.Handler
+	Matching   *matchingworker.Handler
 	Generation *generation.Handler
 	Enrichment *enrichment.Handler
-	Salary     *salary.Handler
-	Ghost      *ghostjob.Handler
+	Salary     *salaryworker.Handler
+	Ghost      *ghostworker.Handler
 
 	Scheduler *ingestion.Scheduler
 }
@@ -196,14 +200,14 @@ type matchingHandles struct {
 	Notifier            *notifier.Service
 	Autogen             *autogen.Service
 	AutoGenerateHandler *httpapi.AutoGenerateHandler
-	Handler             *matching.Handler
+	Handler             *matchingworker.Handler
 }
 
 // composeMatching also owns jobs.Service: matchingHandler auto-enqueues a
 // resume via it when a job's score crosses the autogen threshold, so it must
 // exist before the matching handler.
 func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Service, matchRouter *llm.Router) (*matchingHandles, error) {
-	matchingSvc := matching.NewService(p.DB.Queries, profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
+	matchingSvc := matchingapp.NewService(p.DB.Queries, profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
 	notifierSvc := notifier.NewService(p.DB.Queries,
 		notifier.WithMatchThreshold(p.Config.MatchNotifyScoreThreshold),
 		notifier.WithRateLimitCap(p.Config.MatchNotifyRateLimit),
@@ -218,21 +222,21 @@ func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Servi
 		Notifier:            notifierSvc,
 		Autogen:             autogenSvc,
 		AutoGenerateHandler: &httpapi.AutoGenerateHandler{Settings: autogenSvc},
-		Handler:             matching.NewHandler(matchingSvc, notifierSvc, autogenSvc, jobsSvc),
+		Handler:             matchingworker.NewHandler(matchingSvc, notifierSvc, autogenSvc, jobsSvc),
 	}, nil
 }
 
 type ghostHandles struct {
-	Worker      *ghostjob.Handler
+	Worker      *ghostworker.Handler
 	HTTPHandler *httpapi.GhostJobHandler
 }
 
 // composeGhostJob builds the ghost-job detector, kept separate from
 // matching/fit scoring end-to-end.
 func composeGhostJob(p *Platform, ghostRouter *llm.Router) *ghostHandles {
-	ghostSvc := ghostjob.NewService(p.DB.Queries, ghostRouter, "")
+	ghostSvc := ghostapp.NewService(p.DB.Queries, ghostRouter, "")
 	return &ghostHandles{
-		Worker:      ghostjob.NewHandler(ghostSvc, p.DB.Queries),
+		Worker:      ghostworker.NewHandler(ghostSvc, p.DB.Queries),
 		HTTPHandler: &httpapi.GhostJobHandler{Ghost: ghostSvc},
 	}
 }
@@ -303,16 +307,16 @@ func composeEnrichment(p *Platform, sources *sourcesHandles) *enrichment.Handler
 }
 
 type salaryHandles struct {
-	Worker       *salary.Handler
-	LevelsLoader *salary.LevelsFyiLoader
+	Worker       *salaryworker.Handler
+	LevelsLoader *salaryapp.LevelsFyiLoader
 }
 
 // composeSalary builds the salary inference worker and loads the levels.fyi
 // CSV when configured (a warn-only side effect, unchanged from the original).
 func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) *salaryHandles {
 	cfg := p.Config
-	levelsFyiLoader := salary.NewLevelsFyiLoader(p.DB.Queries)
-	salaryService := salary.NewService(p.DB.Queries, defaultRouter, levelsFyiLoader, "")
+	levelsFyiLoader := salaryapp.NewLevelsFyiLoader(p.DB.Queries)
+	salaryService := salaryapp.NewService(p.DB.Queries, defaultRouter, levelsFyiLoader, "")
 
 	if cfg.LevelsFyiCSV != "" {
 		if _, err := levelsFyiLoader.LoadCSV(ctx, cfg.LevelsFyiCSV); err != nil {
@@ -323,26 +327,26 @@ func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) 
 	}
 
 	return &salaryHandles{
-		Worker:       salary.NewHandler(salaryService, p.DB.Queries),
+		Worker:       salaryworker.NewHandler(salaryService, p.DB.Queries),
 		LevelsLoader: levelsFyiLoader,
 	}
 }
 
 type keywordHandles struct {
 	Handler       *httpapi.KeywordHandler
-	RephraseModel *keyword.ProviderRephraseModel
+	RephraseModel *rephraseadapter.ProviderRephraseModel
 }
 
 // composeKeyword builds the keyword-diff endpoint with its async, TTL'd
 // rephrase cache. RephraseModel is returned so the fit-gap coach can reuse the
 // identical truthful-reframing port.
 func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile.Service) *keywordHandles {
-	rephraseModel := keyword.NewProviderRephraseModel(rephraseRouter, "")
-	cachedRephraser := keyword.NewCachedRephraser(
-		keyword.NewSuggester(rephraseModel),
+	rephraseModel := rephraseadapter.NewProviderRephraseModel(rephraseRouter, "")
+	cachedRephraser := keywordapp.NewCachedRephraser(
+		keywordapp.NewSuggester(rephraseModel),
 		time.Duration(p.Config.KeywordRephraseCacheTTLSec)*time.Second,
 	)
-	diffService := keyword.NewDiffService(p.DB.Queries).WithRephraser(cachedRephraser, profileSvc)
+	diffService := keywordapp.NewDiffService(p.DB.Queries).WithRephraser(cachedRephraser, profileSvc)
 	return &keywordHandles{
 		Handler:       &httpapi.KeywordHandler{Diff: diffService},
 		RephraseModel: rephraseModel,
@@ -351,7 +355,7 @@ func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile
 
 // composeCoach builds the fit-gap coach. ProfileEntries closes over profileSvc
 // rather than coach importing internal/profile, keeping that edge one-directional.
-func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, profileSvc *profile.Service) *httpapi.CoachHandler {
+func composeCoach(p *Platform, rephraseModel *rephraseadapter.ProviderRephraseModel, profileSvc *profile.Service) *httpapi.CoachHandler {
 	coachSvc := coach.NewService(rephraseModel)
 	coachAssessSvc := coach.NewAssessmentService(coachSvc, p.DB.Queries, func(ctx context.Context) ([]coach.ProfileEntry, error) {
 		entries, err := profileSvc.ProfileEntries(ctx)
