@@ -92,6 +92,36 @@ func (r *Router) resolve() (domain.Provider, string) {
 	return r.cerebras, setting.Model
 }
 
+// ProviderClass identifies whether a resolved provider is local or hosted
+// (019-ai-job-throughput), used to size the admission gate.
+type ProviderClass string
+
+const (
+	ProviderClassLocal  ProviderClass = "local"
+	ProviderClassHosted ProviderClass = "hosted"
+)
+
+// hostedChecker is implemented by ollama.Provider; Cerebras is always hosted
+// when selected (resolve() only returns it when its credential is
+// configured).
+type hostedChecker interface {
+	IsHosted() bool
+}
+
+// ProviderClass resolves the current provider class from the live snapshot,
+// reusing resolve() so a credential-less remote provider that falls back to
+// Ollama reports the *effective* class (data-model.md §3).
+func (r *Router) ProviderClass() ProviderClass {
+	p, _ := r.resolve()
+	if hc, ok := p.(hostedChecker); ok {
+		if hc.IsHosted() {
+			return ProviderClassHosted
+		}
+		return ProviderClassLocal
+	}
+	return ProviderClassHosted
+}
+
 func (r *Router) ModelName() string {
 	p, model := r.resolve()
 	if model != "" {

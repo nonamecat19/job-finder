@@ -2,8 +2,10 @@ package application
 
 import (
 	"context"
-	"github.com/job-finder/api/internal/platform/llm/domain"
 	"testing"
+
+	"github.com/job-finder/api/internal/platform/llm/domain"
+	ollamaprovider "github.com/job-finder/api/internal/platform/llm/infrastructure/ollama"
 )
 
 type stubProvider struct {
@@ -157,7 +159,7 @@ func TestRouterSnapshotSwapIsLive(t *testing.T) {
 }
 
 func TestProviderClass_LoopbackIsLocal(t *testing.T) {
-	ollama := NewOllama("http://localhost:11434", "", "", "", "")
+	ollama := ollamaprovider.New("http://localhost:11434", "", "", "", "")
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, false))
@@ -168,7 +170,7 @@ func TestProviderClass_LoopbackIsLocal(t *testing.T) {
 }
 
 func TestProviderClass_LoopbackWithKeySetIsHosted(t *testing.T) {
-	ollama := NewOllama("http://127.0.0.1:11434", "some-key", "", "", "")
+	ollama := ollamaprovider.New("http://127.0.0.1:11434", "some-key", "", "", "")
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, false))
@@ -179,7 +181,7 @@ func TestProviderClass_LoopbackWithKeySetIsHosted(t *testing.T) {
 }
 
 func TestProviderClass_CloudURLIsHosted(t *testing.T) {
-	ollama := NewOllama("https://ollama.com", "cloud-key", "", "", "")
+	ollama := ollamaprovider.New("https://ollama.com", "cloud-key", "", "", "")
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, false))
@@ -190,7 +192,7 @@ func TestProviderClass_CloudURLIsHosted(t *testing.T) {
 }
 
 func TestProviderClass_CerebrasWithCredentialIsHosted(t *testing.T) {
-	ollama := NewOllama("http://localhost:11434", "", "", "", "")
+	ollama := ollamaprovider.New("http://localhost:11434", "", "", "", "")
 	cerebras := &stubProvider{name: "cerebras"}
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderCerebras},
@@ -202,7 +204,7 @@ func TestProviderClass_CerebrasWithCredentialIsHosted(t *testing.T) {
 }
 
 func TestProviderClass_CerebrasWithoutCredentialFollowsOllamaFallback(t *testing.T) {
-	ollama := NewOllama("http://localhost:11434", "", "", "", "")
+	ollama := ollamaprovider.New("http://localhost:11434", "", "", "", "")
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderCerebras},
 	}, false))
