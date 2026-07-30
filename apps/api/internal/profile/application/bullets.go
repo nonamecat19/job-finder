@@ -1,4 +1,4 @@
-package profile
+package application
 
 import (
 	"context"

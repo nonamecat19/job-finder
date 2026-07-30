@@ -1,4 +1,4 @@
-package llmsettings
+package domain
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package llmsettings
+package application
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/llmsettings/domain"
 )
 
 type fakeRepo struct {
@@ -13,16 +14,16 @@ type fakeRepo struct {
 }
 
 func newFakeRepo() *fakeRepo {
-	rows := make(map[string]sqlcgen.LlmTaskSetting, len(TaskKeys))
-	for _, k := range TaskKeys {
+	rows := make(map[string]sqlcgen.LlmTaskSetting, len(domain.TaskKeys))
+	for _, k := range domain.TaskKeys {
 		rows[k] = sqlcgen.LlmTaskSetting{TaskKey: k, Provider: "ollama", Model: ""}
 	}
 	return &fakeRepo{rows: rows}
 }
 
 func (f *fakeRepo) ListLlmTaskSettings(ctx context.Context) ([]sqlcgen.LlmTaskSetting, error) {
-	out := make([]sqlcgen.LlmTaskSetting, 0, len(TaskKeys))
-	for _, k := range TaskKeys {
+	out := make([]sqlcgen.LlmTaskSetting, 0, len(domain.TaskKeys))
+	for _, k := range domain.TaskKeys {
 		out = append(out, f.rows[k])
 	}
 	return out, nil
@@ -43,8 +44,8 @@ func TestNewServiceLoadsSeededDefaults(t *testing.T) {
 	if state.CredentialConfigured {
 		t.Error("CredentialConfigured should be false")
 	}
-	if len(state.Tasks) != len(TaskKeys) {
-		t.Fatalf("Tasks len = %d, want %d", len(state.Tasks), len(TaskKeys))
+	if len(state.Tasks) != len(domain.TaskKeys) {
+		t.Fatalf("Tasks len = %d, want %d", len(state.Tasks), len(domain.TaskKeys))
 	}
 	for _, task := range state.Tasks {
 		if task.Provider != "ollama" {
@@ -60,7 +61,7 @@ func TestUpdatePersistsAndReloadsSnapshot(t *testing.T) {
 		t.Fatalf("NewService: %v", err)
 	}
 
-	state, err := svc.Update(context.Background(), []TaskUpdate{
+	state, err := svc.Update(context.Background(), []domain.TaskUpdate{
 		{TaskKey: "generation", Provider: "cerebras", Model: "gpt-oss-120b"},
 	})
 	if err != nil {
@@ -89,33 +90,33 @@ func TestUpdatePersistsAndReloadsSnapshot(t *testing.T) {
 
 func TestUpdateRejectsUnknownTaskKey(t *testing.T) {
 	svc, _ := NewService(context.Background(), newFakeRepo(), true)
-	_, err := svc.Update(context.Background(), []TaskUpdate{{TaskKey: "bogus", Provider: "ollama"}})
-	if !errors.Is(err, ErrUnknownTaskKey) {
-		t.Errorf("err = %v, want ErrUnknownTaskKey", err)
+	_, err := svc.Update(context.Background(), []domain.TaskUpdate{{TaskKey: "bogus", Provider: "ollama"}})
+	if !errors.Is(err, domain.ErrUnknownTaskKey) {
+		t.Errorf("err = %v, want domain.ErrUnknownTaskKey", err)
 	}
 }
 
 func TestUpdateRejectsInvalidProvider(t *testing.T) {
 	svc, _ := NewService(context.Background(), newFakeRepo(), true)
-	_, err := svc.Update(context.Background(), []TaskUpdate{{TaskKey: "match", Provider: "openai"}})
-	if !errors.Is(err, ErrInvalidProvider) {
-		t.Errorf("err = %v, want ErrInvalidProvider", err)
+	_, err := svc.Update(context.Background(), []domain.TaskUpdate{{TaskKey: "match", Provider: "openai"}})
+	if !errors.Is(err, domain.ErrInvalidProvider) {
+		t.Errorf("err = %v, want domain.ErrInvalidProvider", err)
 	}
 }
 
 func TestUpdateRejectsUnsupportedCerebrasModel(t *testing.T) {
 	svc, _ := NewService(context.Background(), newFakeRepo(), true)
-	_, err := svc.Update(context.Background(), []TaskUpdate{
+	_, err := svc.Update(context.Background(), []domain.TaskUpdate{
 		{TaskKey: "match", Provider: "cerebras", Model: "not-a-real-model"},
 	})
-	if !errors.Is(err, ErrInvalidModel) {
-		t.Errorf("err = %v, want ErrInvalidModel", err)
+	if !errors.Is(err, domain.ErrInvalidModel) {
+		t.Errorf("err = %v, want domain.ErrInvalidModel", err)
 	}
 }
 
 func TestUpdateAllowsCerebrasWithoutCredential(t *testing.T) {
 	svc, _ := NewService(context.Background(), newFakeRepo(), false)
-	state, err := svc.Update(context.Background(), []TaskUpdate{
+	state, err := svc.Update(context.Background(), []domain.TaskUpdate{
 		{TaskKey: "ghost", Provider: "cerebras", Model: ""},
 	})
 	if err != nil {
@@ -133,7 +134,7 @@ func TestUpdateAllowsCerebrasWithoutCredential(t *testing.T) {
 
 func TestUpdateLeavesOmittedTasksUnchanged(t *testing.T) {
 	svc, _ := NewService(context.Background(), newFakeRepo(), true)
-	if _, err := svc.Update(context.Background(), []TaskUpdate{
+	if _, err := svc.Update(context.Background(), []domain.TaskUpdate{
 		{TaskKey: "match", Provider: "cerebras", Model: "gpt-oss-120b"},
 	}); err != nil {
 		t.Fatalf("Update: %v", err)

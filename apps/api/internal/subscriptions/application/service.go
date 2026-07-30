@@ -1,7 +1,11 @@
-// Package subscriptions manages URL-based subscriptions: a saved-filter URL on
-// a job site attached to a JobSource by key. CRUD plus the enable toggle and
-// the cron the ingestion scheduler runs the subscription on.
-package subscriptions
+// Package application manages URL-based subscriptions: a saved-filter URL
+// on a job site attached to a JobSource by key. This pass is CRUD + enable
+// toggle only; fetching/scraping each URL is deferred.
+//
+// TODO(subscriptions): add an adapter method to fetch a subscription URL and a
+// scheduler that iterates enabled subscriptions and touches "lastRunAt" —
+// integrate at internal/ingestion/scheduler.go, mirroring the SavedSearch flow.
+package application
 
 import (
 	"context"
@@ -15,15 +19,16 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/subscriptions/domain"
 )
 
-// SourceEnsurer and Repository ports live in ports.go.
+// SourceEnsurer and Repository ports live in domain/port.go.
 type Service struct {
-	q       Repository
-	sources SourceEnsurer
+	q       domain.Repository
+	sources domain.SourceEnsurer
 }
 
-func NewService(q Repository, sources SourceEnsurer) *Service {
+func NewService(q domain.Repository, sources domain.SourceEnsurer) *Service {
 	return &Service{q: q, sources: sources}
 }
 
