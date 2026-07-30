@@ -52,11 +52,15 @@ Key facts that shaped this design (verified against the hooks reference — see 
 
 ```
 Bound to: Bash, if: Bash(git commit*) and Bash(git push*)
-Reads:    stdin JSON → tool_input.command
+Reads:    stdin JSON → tool_input.command, cwd
+Branch:   of the checkout the command writes to — a `git -C <dir>` or `cd <dir>`
+          in the command itself, else `cwd`, else $CLAUDE_PROJECT_DIR
 Exit 0:   not on master, or the command is not a commit/push
 Exit 2:   on master — BLOCKS the tool call, stderr fed back to the agent
 Stderr:   "On master. Create a branch first: git checkout -b <nnn>-<slug>"
 ```
+
+The branch lookup follows the command rather than the session because agents routinely commit from a git worktree (`cd <worktree> && git commit`) while `$CLAUDE_PROJECT_DIR` still points at the main checkout sitting on master. Reading only the project dir gets that wrong in both directions: blocking commits bound for a feature branch, and passing commits that really do land on master whenever the session itself runs from a worktree.
 
 This is the layer that matters for agents: it stops the mistake before git is reached, and the agent cannot route around it with `--no-verify` without that appearing in the transcript.
 
