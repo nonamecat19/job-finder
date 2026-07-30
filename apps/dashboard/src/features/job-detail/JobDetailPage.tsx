@@ -11,18 +11,22 @@ import {
   useJobDetail,
   useJobDocuments,
   useMarkJobApplied,
+  useReenrichJob,
   useSaveDocument,
 } from './hooks';
 import CoachPanel from './CoachPanel';
 import CompanyIntelCard from './CompanyIntelCard';
 import ContactLine from './ContactLine';
 import DOMPurify from 'dompurify';
+import EnglishLevelBadge from './EnglishLevelBadge';
+import ExperienceBadge from './ExperienceBadge';
 import GhostSignalPanel from './GhostSignalPanel';
 import KeywordDiffPanel from './KeywordDiffPanel';
 import OutreachPanel from './OutreachPanel';
 import PostAgeSignal from './PostAgeSignal';
 import PrepPackPanel from './PrepPackPanel';
 import ReferralPathsCard from './ReferralPathsCard';
+import SalaryEstimateCard from './SalaryEstimateCard';
 
 type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
 
@@ -46,6 +50,7 @@ export default function JobDetailPage() {
   }, [documents]);
   const markApplied = useMarkJobApplied(id);
   const saveLetter = useSaveDocument(id, () => setEditingDoc(null));
+  const reenrich = useReenrichJob(id);
   const [resumeOpen, setResumeOpen] = useState(false);
 
   useEffect(() => {
@@ -121,6 +126,13 @@ export default function JobDetailPage() {
         <Tile span="standard" title="Company Intel">
           <CompanyIntelCard jobId={job.id} />
         </Tile>
+        <SalaryEstimateCard
+          estimateRaw={job.salaryEstimateRaw}
+          estimateMin={job.salaryEstimateMin}
+          estimateMax={job.salaryEstimateMax}
+          estimateCurrency={job.salaryEstimateCurrency}
+          isEstimated={job.salaryIsEstimated}
+        />
         <Tile span="standard" title="Referral paths">
           <ReferralPathsCard jobId={id} />
         </Tile>
@@ -211,9 +223,28 @@ export default function JobDetailPage() {
             </div>
           </div>
         )}
+
+        <Tile span="wide" title="Danger Zone" tone="default" className="border-red-500/40">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted">Re-scrape this vacancy to refresh its metadata from the source.</p>
+            <Button onClick={() => reenrich.mutate()} disabled={reenrich.isPending} variant="danger">
+              {reenrich.isPending ? 'Enqueuing…' : 'Rescrape vacancy'}
+            </Button>
+          </div>
+        </Tile>
       </DashboardGrid>
     </div>
   );
+}
+
+function statusLabel(s: string): string {
+  const labels: Record<string, string> = {
+    new: 'New',
+    shortlisted: 'Shortlisted',
+    hidden: 'Hidden',
+    docs_generated: 'Docs ready',
+  };
+  return labels[s] ?? s;
 }
 
 function JobMeta({ job }: { job: DetailedJob }) {
@@ -223,9 +254,11 @@ function JobMeta({ job }: { job: DetailedJob }) {
       {job.location ? ` · ${job.location}` : ''}
       {job.remote ? ' · remote' : ''}
       {job.salaryRaw ? ` · ${job.salaryRaw}` : ''}
-      <span className="mt-2 flex gap-1">
+      <span className="mt-2 flex gap-1 flex-wrap">
         <Chip>{job.sourceKey}</Chip>
-        <Chip>{job.status}</Chip>
+        <Chip>{statusLabel(job.status)}</Chip>
+        <ExperienceBadge level={job.experienceLevel} minYears={job.experienceMinYears} />
+        <EnglishLevelBadge level={job.englishLevel} />
       </span>
     </>
   );

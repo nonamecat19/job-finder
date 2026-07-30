@@ -98,6 +98,7 @@ export const api = {
     keywordDiff: (id: string) => request<KeywordDiffResponse>(`/jobs/${id}/keyword-diff`),
     interviewPrep: (id: string) => request<InterviewPrepPack>(`/jobs/${id}/interview-prep`),
     ghostScore: (id: string) => request<JobSignalDto>(`/jobs/${id}/ghost-score`, { method: 'POST' }),
+    reEnrich: (id: string) => request<{ ok: boolean }>(`/jobs/${id}/re-enrich`, { method: 'POST' }),
     contacts: (id: string) => request<JobContactDto[]>(`/jobs/${id}/contacts`),
     refreshContacts: (id: string) =>
       request<JobContactDto[]>(`/jobs/${id}/contacts/refresh`, { method: 'POST' }),

@@ -183,3 +183,17 @@ export function usePostAgeSignal() {
     staleTime: 60000,
   });
 }
+
+export function useReenrichJob(jobId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.jobs.reEnrich(jobId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) });
+      emitToast({ variant: 'success', title: 'Re-scrape enqueued', description: 'The vacancy will be re-scraped shortly.' });
+    },
+    onError: (err) => {
+      emitToast({ variant: 'error', title: 'Re-scrape failed', description: toErrorMessage(err) });
+    },
+  });
+}
