@@ -90,9 +90,9 @@ description: "Task list for Enforced Workflow Quality Gates"
 
 ### Web linting
 
-- [ ] T024 [P] [US2] Add ESLint devDependencies at the repository root — `eslint`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`. **Install the current major, not v9** — v9 reaches end of life 2026-08-06 (research R4)
-- [ ] T025 [US2] Write `/home/nnc/Projects/job-finder/eslint.config.js` as a flat config covering `apps/dashboard` and `packages/shared`, ignoring `**/dist/**`, `packages/shared/src/generated.ts` and `node_modules`. Type-aware rules stay **off** — they conflict with the <60s budget, and `tsc --noEmit` already covers types
-- [ ] T026 [US2] Measure and fix the dashboard backlog under the same FR-012 thresholds as T018–T022, drawing from the **same shared 80-violation cap** — the cap spans both languages, so whatever the Go work consumed reduces what is available here. Prioritise `react-hooks` findings — commit `5867674` ("prevent infinite re-render loop in JobDetailPage useEffect") is exactly the defect class this catches
+- [X] T024 [P] [US2] Add ESLint devDependencies at the repository root — `eslint`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`. **Install the current major, not v9** — v9 reaches end of life 2026-08-06 (research R4)
+- [X] T025 [US2] Write `/home/nnc/Projects/job-finder/eslint.config.js` as a flat config covering `apps/dashboard` and `packages/shared`, ignoring `**/dist/**`, `packages/shared/src/generated.ts` and `node_modules`. Type-aware rules stay **off** — they conflict with the <60s budget, and `tsc --noEmit` already covers types
+- [X] T026 [US2] Measure and fix the dashboard backlog under the same FR-012 thresholds as T018–T022, drawing from the **same shared 80-violation cap** — the cap spans both languages, so whatever the Go work consumed reduces what is available here. Prioritise `react-hooks` findings — commit `5867674` ("prevent infinite re-render loop in JobDetailPage useEffect") is exactly the defect class this catches
 
 ### Wiring and honesty
 
