@@ -32,6 +32,15 @@ test.describe('Sources page', () => {
         body: JSON.stringify([]),
       });
     });
+    await page.route('**/api/subscriptions', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/roster', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/roster/candidates', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
 
     await page.goto('/sources');
     await expect(page.getByText('React jobs')).toBeVisible();
@@ -61,6 +70,15 @@ test.describe('Sources page', () => {
         contentType: 'application/json',
         body: JSON.stringify([]),
       });
+    });
+    await page.route('**/api/subscriptions', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/roster', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/roster/candidates', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
 
     await page.goto('/sources');
