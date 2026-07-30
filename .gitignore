@@ -26,3 +26,4 @@ apps/dashboard/playwright-report/
 !.claude/
 .claude/*
 !.claude/settings.json
+.playwright-mcp/
