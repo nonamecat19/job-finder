@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -154,7 +155,7 @@ func TestRemotiveKind(t *testing.T) {
 
 func TestRemotiveHealthCheck(t *testing.T) {
 	adapter := RemotiveAdapter{}
-	_, err := adapter.HealthCheck(nil, nil)
+	_, err := adapter.HealthCheck(context.TODO(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

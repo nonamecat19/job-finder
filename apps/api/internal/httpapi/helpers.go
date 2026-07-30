@@ -51,13 +51,3 @@ func decodeJSON(r *http.Request, dst any) error {
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(dst)
 }
-
-func reencode[T any](v any) T {
-	var out T
-	b, err := json.Marshal(v)
-	if err != nil {
-		return out
-	}
-	_ = json.Unmarshal(b, &out)
-	return out
-}

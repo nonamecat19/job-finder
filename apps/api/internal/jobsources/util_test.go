@@ -164,7 +164,7 @@ func TestStringOr(t *testing.T) {
 func TestPtrNilSafety(t *testing.T) {
 	result := Ptr("test")
 	if result == nil {
-		t.Error("Ptr should not return nil")
+		t.Fatal("Ptr should not return nil")
 	}
 	if *result != "test" {
 		t.Errorf("expected 'test', got %q", *result)
@@ -192,7 +192,7 @@ func TestNilIfEmptyWithJobType(t *testing.T) {
 	str := "hello"
 	result := NilIfEmpty(str)
 	if result == nil {
-		t.Error("expected non-nil result")
+		t.Fatal("expected non-nil result")
 	}
 	if *result != "hello" {
 		t.Errorf("expected 'hello', got %q", *result)
@@ -272,7 +272,7 @@ func TestNilIfEmptyEdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := NilIfEmpty(tt.input)
 			if result == nil {
-				t.Errorf("expected non-nil result for %q", tt.input)
+				t.Fatalf("expected non-nil result for %q", tt.input)
 			}
 			if *result != tt.input {
 				t.Errorf("expected %q, got %q", tt.input, *result)
@@ -311,7 +311,7 @@ func TestNilIfEmptyWithNestedStrings(t *testing.T) {
 	input := "nested: {key: value}"
 	result := NilIfEmpty(input)
 	if result == nil {
-		t.Error("expected non-nil result")
+		t.Fatal("expected non-nil result")
 	}
 	if *result != input {
 		t.Errorf("expected %q, got %q", input, *result)

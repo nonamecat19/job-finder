@@ -96,7 +96,7 @@ func TestMatchJob_SkipsProfileWithoutConfig(t *testing.T) {
 		t.Fatalf("create profile: %v", err)
 	}
 
-	profiles := profile.NewService(testDB.Queries, noopLLM{}, "nomic-embed-text", "rendercv")
+	profiles := profile.NewService(profile.NewSqlcRepository(testDB.Queries), noopLLM{}, "nomic-embed-text", "rendercv")
 	svc := matching.NewService(matching.NewSqlcRepository(testDB.Queries), profiles, nil, noopLLM{}, 0.5, "")
 
 	_, err = svc.MatchJob(ctx, dbutil.UUIDString(job.ID), nil)
@@ -172,7 +172,7 @@ func TestMatchJob_ConcurrentMatchConverges(t *testing.T) {
 	}
 
 	embedLLM := fixedEmbedLLM{}
-	profiles := profile.NewService(testDB.Queries, embedLLM, "nomic-embed-text", "rendercv")
+	profiles := profile.NewService(profile.NewSqlcRepository(testDB.Queries), embedLLM, "nomic-embed-text", "rendercv")
 	// Threshold set above 1.0 (similarity is bounded [-1,1]) so both calls
 	// take the below-threshold path deterministically, without needing a
 	// stubbed LLM fit-analysis response.

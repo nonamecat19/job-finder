@@ -1,5 +1,5 @@
 import { RefreshCw, Upload } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import type { ReferralContactDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { DashboardGrid, Tile } from '../../components/layout';

@@ -54,6 +54,12 @@ export default function JobDetailPage() {
       return;
     }
     if (generating && documents && docCountOfType(generating) > countAtGenerate) {
+      // Clears the "generating" flag once the query cache actually reflects
+      // the new document — genuinely reacting to an external system (the
+      // documents query) settling, not state derivable from props/state
+      // during render. Reviewed as safe (spec 023-workflow-quality-gates
+      // FR-012 lint adoption).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGenerating(null);
     }
   }, [generate.isSuccess, generate.variables, generating, documents, countAtGenerate]);

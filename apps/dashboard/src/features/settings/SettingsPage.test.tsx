@@ -1,6 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
-import { api } from '../../lib/api'
 import SettingsPage from './SettingsPage'
 
 vi.mock('../../lib/api', async (importOriginal) => {

@@ -284,11 +284,3 @@ var jobs = []jobSeed{
 func now() time.Time { return time.Now().UTC() }
 
 func daysAgo(n int) time.Time { return now().AddDate(0, 0, -n) }
-
-func daysFromNow(n int) time.Time { return now().AddDate(0, 0, n) }
-
-func strPtr(s string) *string { return &s }
-
-func int32Ptr(i int32) *int32 { return &i }
-
-func boolPtr(b bool) *bool { return &b }

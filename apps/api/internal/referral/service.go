@@ -166,7 +166,7 @@ func (s *Service) SyncGithub(ctx context.Context, contactID string) (*GithubSync
 		link(p.Login, strength)
 	}
 	for _, p := range following {
-		if strings.ToLower(p.Login) == strings.ToLower(username) {
+		if strings.EqualFold(p.Login, username) {
 			continue
 		}
 		link(p.Login, 0.5)

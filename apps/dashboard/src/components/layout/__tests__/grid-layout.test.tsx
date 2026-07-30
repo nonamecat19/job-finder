@@ -91,7 +91,7 @@ describe('Tile span rules', () => {
       { span: 'feature', cols: { '': 1, 'sm:': 2, 'lg:': 2, '3xl:': 2, '4xl:': 3 } },
       { span: 'full', cols: { '': 1, 'sm:': 2, 'lg:': 3, '3xl:': 4, '4xl:': 5 } },
     ];
-    for (const { span, cols } of spans) {
+    for (const { span: _span, cols } of spans) {
       for (const [bp, colSpan] of Object.entries(cols)) {
         expect(colSpan).toBeLessThanOrEqual(maxCols[bp]);
       }

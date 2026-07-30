@@ -19,10 +19,7 @@ import (
 	"github.com/job-finder/api/internal/scraping"
 )
 
-var (
-	douRemoteRe = regexp.MustCompile(`(?i)\bвіддалено\b|\bremote\b|\bдистанційно\b`)
-	douSalaryRe = regexp.MustCompile(`(?i)(?:від|від\s+)?(\d[\d\s]*)\s*[-–]\s*(\d[\d\s]*)\s*(?:\*?\s*(?:долар|дол\.\s*?|USD|\$|грн|UAH|€|євро))`)
-)
+var douRemoteRe = regexp.MustCompile(`(?i)\bвіддалено\b|\bremote\b|\bдистанційно\b`)
 
 const (
 	douMaxSubscriptionPages = 50
@@ -415,32 +412,6 @@ func parseDouDetail(doc *goquery.Document, jobURL string) dto.NormalizedJob {
 	}
 }
 
-func parseDOUSalary(s string) (*int, *int) {
-	s = strings.ReplaceAll(s, " ", "")
-	s = strings.ReplaceAll(s, "\u00a0", "")
-	s = strings.ToLower(s)
-
-	matches := douSalaryRe.FindStringSubmatch(s)
-	if len(matches) < 3 {
-		return nil, nil
-	}
-
-	minStr := strings.ReplaceAll(matches[1], " ", "")
-	maxStr := strings.ReplaceAll(matches[2], " ", "")
-
-	min, err := strconv.Atoi(minStr)
-	if err != nil {
-		return nil, nil
-	}
-
-	max, err := strconv.Atoi(maxStr)
-	if err != nil {
-		return nil, nil
-	}
-
-	return &min, &max
-}
-
 func parseRelativeDOUDate(dateText string) *time.Time {
 	dateText = strings.TrimSpace(dateText)
 	if dateText == "" {
@@ -484,15 +455,3 @@ func truncatePreview(s string, maxRunes int) string {
 	return string([]rune(s)[:maxRunes]) + "..."
 }
 
-func strutilTruncate(s string, maxRunes int) string {
-	if utf8.RuneCountInString(s) <= maxRunes {
-		return s
-	}
-	runes := []rune(s)
-	cut := string(runes[:maxRunes])
-	idx := strings.LastIndex(cut, "</")
-	if idx > 0 {
-		cut = cut[:idx]
-	}
-	return cut + "..."
-}

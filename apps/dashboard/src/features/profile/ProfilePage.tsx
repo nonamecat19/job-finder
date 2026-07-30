@@ -70,6 +70,11 @@ function ProfileEditor({ profileId, profileName }: { profileId: string; profileN
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
+    // Seeds the editable draft once the resume query resolves — reacting to
+    // an external query resolving, not state derivable from props alone
+    // during render. Reviewed as safe (spec 023-workflow-quality-gates
+    // FR-012 lint adoption).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (resumeDto) setDraft(resumeDto.resume);
   }, [resumeDto]);
 

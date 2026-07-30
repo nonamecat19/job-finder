@@ -1,7 +1,8 @@
 .PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean run-all \
 	test test-go test-react test-integration test-e2e test-lint test-db-setup \
 	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install \
-	tygo-generate tygo-check tygo-install
+	tygo-generate tygo-check tygo-install \
+	setup-hooks lint lint-go lint-web golangci-install
 
 ifneq (,$(wildcard .env))
 include .env
@@ -18,6 +19,13 @@ export POSTGRES_HOST_PORT := $(shell echo "$$(( 5432 + ( $(WORKTREE_HASH) % 100 
 
 install:
 	pnpm install
+
+# --- workflow quality gates (specs/023-workflow-quality-gates) ---
+# One-time per clone; core.hooksPath is a repository-level git config value,
+# so this single call covers the main working tree and every worktree.
+setup-hooks:
+	git config core.hooksPath .githooks
+	@echo "core.hooksPath -> .githooks (run once per clone; shared by all worktrees)"
 
 run-frontend:
 	pnpm dev
@@ -87,7 +95,19 @@ test-e2e: test-db-setup
 		REDIS_URL=redis://localhost:6379/1 \
 		npx playwright test
 
-test-lint: test-go test-react
+# --- lint (specs/023-workflow-quality-gates) ---
+# `make lint`/`test-lint` are the only sanctioned way to invoke either
+# linter — CI and the Stop hook call these same targets, never the binaries
+# directly, so local, automated and hook-triggered runs cannot drift apart.
+lint-go:
+	./scripts/golangci-check.sh
+
+lint-web:
+	pnpm exec eslint apps/dashboard packages/shared
+
+lint: lint-go lint-web
+
+test-lint: lint-go lint-web test-go test-react
 
 # --- run all (infra + backend + frontend) ---
 run-all: up

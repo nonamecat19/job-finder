@@ -269,7 +269,7 @@ func validateDjinniSubscriptionURL(rawURL string) error {
 		parsed.Query().Get("search_type") == "basic-search" {
 		return nil
 	}
-	return fmt.Errorf("Djinni subscriptions support only preset-search URLs (`djinni.co/jobs/?search_type=basic-search&…`); dashboard URLs are no longer supported.")
+	return fmt.Errorf("djinni subscriptions support only preset-search URLs (`djinni.co/jobs/?search_type=basic-search&…`); dashboard URLs are no longer supported")
 }
 
 // validateJobgetherSubscriptionURL rejects a Jobgether subscription URL that

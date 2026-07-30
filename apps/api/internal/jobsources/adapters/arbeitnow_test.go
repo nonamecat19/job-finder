@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -118,7 +119,7 @@ func TestArbeitnowKind(t *testing.T) {
 
 func TestArbeitnowHealthCheck(t *testing.T) {
 	adapter := ArbeitnowAdapter{}
-	_, err := adapter.HealthCheck(nil, nil)
+	_, err := adapter.HealthCheck(context.TODO(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

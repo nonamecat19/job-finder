@@ -1,7 +1,7 @@
 import { Bell, Check, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Chip, LoadingRegion, SkeletonLine, Surface } from '../../components/ui';
+import { Button, Chip, LoadingRegion, SkeletonLine } from '../../components/ui';
 import { useMarkNotificationSeen, useNotifications, useUnseenNotificationCount } from './hooks';
 
 export default function NotificationBell({ placement = 'bottom' }: { placement?: 'top' | 'bottom' }) {

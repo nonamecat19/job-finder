@@ -1,0 +1,44 @@
+version: "2"
+
+# specs/023-workflow-quality-gates: FR-012 backlog measurement + thresholds.
+#
+# Measured against the never-linted codebase (236 source files) with
+# `linters.default: standard` and issue-truncation disabled, so every
+# violation was actually counted rather than hidden behind golangci-lint's
+# default max-same-issues/max-issues-per-linter caps:
+#
+#   govet:       0 violations -> enabled trivially
+#   ineffassign: 0 violations -> enabled trivially
+#   staticcheck: 19 violations (1-30 range) -> fixed, enabled
+#   unused:      17 violations (1-30 range) -> fixed, enabled
+#   errcheck:    44 violations (>30)        -> DEFERRED, see disable list below
+#
+# staticcheck + unused fixes: 19 + 17 = 36 violations fixed, within the
+# shared 80-violations-fixed cap across both languages (see eslint.config.js
+# / package.json for the dashboard side of that same cap).
+linters:
+  default: standard
+  disable:
+    # Deferred per FR-012: 44 violations measured, exceeding the 30-violation
+    # threshold for "fix and enable" on first adoption. Almost entirely
+    # unchecked defer'd Close()/Write() calls (net/http response bodies,
+    # uploaded-file handles) — real, but low-severity, and 44 fixes would
+    # blow well past the shared 80-violation cap on its own. Revisit in a
+    # follow-up change once the cap has headroom; do not silently widen this
+    # by adding exceptions instead of fixing violations.
+    - errcheck
+  exclusions:
+    generated: strict
+    paths:
+      # Belt-and-suspenders alongside the `// Code generated ... DO NOT
+      # EDIT.` header golangci-lint's `generated: strict` already respects
+      # (FR-010) — relying only on a header comment for something this
+      # load-bearing is fragile.
+      - internal/db/sqlcgen
+
+# FR-011: never hide a violation behind golangci-lint's default
+# max-same-issues (3) / max-issues-per-linter (50) truncation — every
+# violation must be reported with file, line and rule.
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

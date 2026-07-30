@@ -17,11 +17,6 @@ func NewPathFinder(repo Repository) *PathFinder {
 	return &PathFinder{repo: repo}
 }
 
-type graphNode struct {
-	contactID string
-	company   string
-}
-
 func (pf *PathFinder) FindPathsToCompany(ctx context.Context, company string, maxDepth int) ([]ReferralPath, error) {
 	if maxDepth <= 0 {
 		maxDepth = 3

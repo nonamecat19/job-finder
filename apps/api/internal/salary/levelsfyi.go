@@ -96,16 +96,16 @@ func columnIndex(header []string) csvColumns {
 
 	for i, h := range header {
 		hl := strings.ToLower(strings.TrimSpace(h))
-		switch {
-		case hl == "company":
+		switch hl {
+		case "company":
 			c.company = i
-		case hl == "title":
+		case "title":
 			c.title = i
-		case hl == "totalyearlycompensation" || hl == "totalcompensation":
+		case "totalyearlycompensation", "totalcompensation":
 			c.totalComp = i
-		case hl == "basesalary":
+		case "basesalary":
 			c.baseSalary = i
-		case hl == "location":
+		case "location":
 			c.location = i
 		}
 	}

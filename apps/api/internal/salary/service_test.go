@@ -44,8 +44,7 @@ func (f *fakeRepo) GetSalaryCacheByBucket(ctx context.Context, bucket string) ([
 }
 
 type fakeLLM struct {
-	band salary.SalaryBand
-	err  error
+	err error
 }
 
 func (f *fakeLLM) ModelName() string { return "test-model" }
@@ -213,6 +212,12 @@ func int32Ptr(v int32) *int32 { return &v }
 
 // strPtr/float64Ptr: shared with integration_test.go (also package
 // salary_test) — service.go's own strPtr/float64Ptr are unexported to
-// package salary and unreachable from here.
-func strPtr(v string) *string       { return &v }
+// package salary and unreachable from here. integration_test.go carries a
+// `//go:build integration` tag, so the unused linter (which lints the
+// default, non-integration build) cannot see that call site.
+//
+//nolint:unused // used by integration_test.go under the `integration` build tag
+func strPtr(v string) *string { return &v }
+
+//nolint:unused // used by integration_test.go under the `integration` build tag
 func float64Ptr(v float64) *float64 { return &v }

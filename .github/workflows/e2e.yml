@@ -1,0 +1,49 @@
+name: E2E
+
+# FR-019: at least daily, and triggerable on demand. Given its own workflow
+# file rather than folded into api-ci.yml's `on:` block, so the schedule and
+# manual dispatch triggers don't also re-run every existing job in that
+# workflow (sqlc-drift, tygo-drift, go-vet, ...) which contracts/
+# required-checks.md's trigger column lists as "PR, push master" only.
+on:
+  pull_request:
+  push:
+    branches: [master]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: e2e (playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @job-finder/shared build
+
+      # No database, Redis or Go backend needed: feed.spec.ts and
+      # sources.spec.ts mock every API call via page.route, and
+      # navigation.spec.ts only asserts headings/URLs. playwright.config.ts
+      # already starts the dev server via `webServer` with
+      # reuseExistingServer: !process.env.CI.
+      - name: Install Playwright browsers
+        working-directory: apps/dashboard
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright e2e suite
+        working-directory: apps/dashboard
+        run: pnpm exec playwright test

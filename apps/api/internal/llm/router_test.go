@@ -6,9 +6,8 @@ import (
 )
 
 type stubProvider struct {
-	name        string
-	gotModel    string
-	returnModel string
+	name     string
+	gotModel string
 }
 
 func (s *stubProvider) ModelName() string { return s.name }

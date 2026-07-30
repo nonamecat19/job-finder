@@ -1,5 +1,5 @@
 import { Copy } from 'lucide-react';
-import type { KeywordDiffResponse, KeywordDiffTerm, KeywordRephraseSuggestion } from '@job-finder/shared';
+import type { KeywordDiffTerm, KeywordRephraseSuggestion } from '@job-finder/shared';
 import { Button, Chip, EmptyState, ScoreBadge } from '../../components/ui';
 import { emitToast, toErrorMessage } from '../../lib/toastBus';
 import { useJobKeywordDiff } from './hooks';

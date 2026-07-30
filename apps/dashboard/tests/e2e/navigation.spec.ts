@@ -1,5 +1,28 @@
 import { test, expect } from '@playwright/test';
 
+// Every route mounts the app shell, which fires these two calls
+// unconditionally (notification bell unseen-count, profile config-status
+// banner). Without a backend running in CI (this suite deliberately needs
+// none — see feed.spec.ts/sources.spec.ts), they'd otherwise fail with
+// ECONNREFUSED on every navigation and can destabilize the shell around the
+// headings/links this spec actually asserts on.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/notifications/unseen-count', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ count: 0 }),
+    });
+  });
+  await page.route('**/api/profiles/config/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ hasConfig: true, hasExistingContent: true }),
+    });
+  });
+});
+
 test.describe('Navigation', () => {
   test('navigates between all top-level pages', async ({ page }) => {
     await page.goto('/');

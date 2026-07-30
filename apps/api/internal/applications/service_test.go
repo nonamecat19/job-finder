@@ -38,7 +38,7 @@ func TestListEmpty(t *testing.T) {
 	if out == nil {
 		t.Error("expected non-nil empty slice")
 	}
-	var _ []dto.ApplicationDto = out
+	var _ = out
 }
 
 func TestListError(t *testing.T) {

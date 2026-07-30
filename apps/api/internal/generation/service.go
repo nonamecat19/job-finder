@@ -320,47 +320,6 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	return toDocumentDto(doc), nil
 }
 
-func (s *Service) tailorResume(ctx context.Context, master RendercvMaster, profileText string, extraNotes *string, job sqlcgen.Job, matchedSkills []string) (dto.JsonResume, error) {
-	prompt := "Create a tailored resume for this job application by selecting, reordering and rephrasing " +
-		"content from the candidate's master profile.\n\n" +
-		"STRICT RULES:\n" +
-		"- Use ONLY employers, roles, projects, education, dates and facts present in the master profile.\n" +
-		"- Never invent experience, employers, dates, degrees, metrics or technologies.\n" +
-		"- You may drop irrelevant entries, reorder, and rephrase highlights to emphasize what the job asks for.\n" +
-		"- Copy employer names, institution names, project names and all dates EXACTLY as written in the master profile.\n" +
-		"- Keep basics (name, email, phone, url, location) exactly as in the master profile.\n\n" +
-		"MASTER PROFILE:\n" + strutil.Truncate(profileText, 12000) + "\n\n"
-	if extraNotes != nil && *extraNotes != "" {
-		prompt += "EXTRA CANDIDATE NOTES:\n" + strutil.Truncate(*extraNotes, 2000) + "\n\n"
-	}
-	prompt += fmt.Sprintf("TARGET JOB:\nTitle: %s\nCompany: %s\n", job.Title, job.Company)
-	if len(matchedSkills) > 0 {
-		ms, _ := json.Marshal(matchedSkills)
-		prompt += "Matched skills: " + string(ms) + "\n"
-	}
-	prompt += "Description:\n" + strutil.Truncate(job.Description, 6000)
-
-	var lastViolations []string
-	for attempt := 0; attempt < groundingAttempts; attempt++ {
-		p := prompt
-		if len(lastViolations) > 0 {
-			p += "\n\nYour previous attempt violated grounding rules:\n- " + strings.Join(lastViolations, "\n- ") + "\nRegenerate without these violations."
-		}
-		tailored, err := llm.CompleteStructured[dto.JsonResume](ctx, s.llmc, p, &llm.CompleteOptions{
-			System: "You are an expert resume writer who never fabricates information.",
-			Model:  s.genModel,
-		})
-		if err != nil {
-			return dto.JsonResume{}, err
-		}
-		lastViolations = verifyGroundingFromRendercv(master, tailored)
-		if len(lastViolations) == 0 {
-			return tailored, nil
-		}
-	}
-	return dto.JsonResume{}, fmt.Errorf("tailored resume failed grounding check: %s", strings.Join(lastViolations, "; "))
-}
-
 func (s *Service) writeCoverLetter(ctx context.Context, profileText string, extraNotes *string, company, title, vacancyText string) (string, error) {
 	prompt := "Write a short cover letter (maximum 150 words, exactly 3 paragraphs separated by blank lines) " +
 		"for this application.\n\n" +
