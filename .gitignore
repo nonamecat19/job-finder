@@ -17,6 +17,8 @@ resume/
 .aider*
 .opencode
 apps/api/data/
+apps/dashboard/test-results/
+apps/dashboard/playwright-report/
 
 # .claude/ is excluded by a global gitignore (~/.gitignore_global). Re-include
 # the committed hook registry so every clone/worktree gets it (FR-028);
