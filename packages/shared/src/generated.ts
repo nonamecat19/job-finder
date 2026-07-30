@@ -18,6 +18,8 @@ export interface ActivityRunDto {
   startedAt?: string;
   finishedAt?: string;
   elapsedMs?: number /* int64 */;
+  heartbeatAt?: string;
+  timeoutMs?: number /* int32 */;
 }
 export interface ActivityListResponse {
   active: ActivityRunDto[];
@@ -581,6 +583,30 @@ export interface ExtEducation {
 export interface ExtLink {
   url: string;
   label: string;
+}
+
+//////////
+// source: queue_backlog.go
+
+/**
+ * QueueBacklogDto is one queue's backlog snapshot (019-ai-job-throughput),
+ * assembled from the asynq Inspector plus the resolved task policy.
+ */
+export interface QueueBacklogDto {
+  queue: string;
+  providerClass?: string;
+  concurrency: number /* int */;
+  pending: number /* int */;
+  active: number /* int */;
+  scheduled: number /* int */;
+  retry: number /* int */;
+  archived: number /* int */;
+  processedPerMinute: number /* float64 */;
+  etaSeconds?: number /* int */;
+  error?: string;
+}
+export interface QueueBacklogResponse {
+  queues: QueueBacklogDto[];
 }
 
 //////////
