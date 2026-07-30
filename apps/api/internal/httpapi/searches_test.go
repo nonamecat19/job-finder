@@ -6,7 +6,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/httpapi"
-	"github.com/job-finder/api/internal/ingestion"
+	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/testutil"
 )
 
@@ -20,7 +20,7 @@ func (f *fakeSearchProvider) CreateSearch(ctx context.Context, name string, quer
 	return &dto.SavedSearchDto{ID: "s-new", Name: name}, nil
 }
 
-func (f *fakeSearchProvider) UpdateSearch(ctx context.Context, id string, in ingestion.UpdateSearchInput) (*dto.SavedSearchDto, error) {
+func (f *fakeSearchProvider) UpdateSearch(ctx context.Context, id string, in application.UpdateSearchInput) (*dto.SavedSearchDto, error) {
 	return &dto.SavedSearchDto{ID: id, Name: *in.Name}, nil
 }
 

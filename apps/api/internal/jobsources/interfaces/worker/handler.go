@@ -1,4 +1,8 @@
-package ingestion
+// Package worker holds the jobsources bounded context's inbound worker
+// adapters: the asynq ingest task handler (adapter.Search -> dedupe ->
+// persist -> enqueue match) and the due-since-lastRunAt cron Scheduler that
+// triggers it. Mirrors ingestion.processor.ts / ingestion.scheduler.ts.
+package worker
 
 import (
 	"context"
@@ -16,7 +20,8 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/jobsources"
+	"github.com/job-finder/api/internal/jobsources/application"
+	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -55,13 +60,13 @@ func lastAttempt(ctx context.Context) bool {
 // Handler processes "ingest" asynq tasks: adapter.Search -> dedupe -> persist
 // -> enqueue match. Mirrors ingestion.processor.ts.
 type Handler struct {
-	q        Repository
-	registry *jobsources.Registry
-	sources  *jobsources.Service
-	client   Enqueuer
+	q        domain.SearchRepository
+	registry *domain.Registry
+	sources  *application.Service
+	client   application.Enqueuer
 }
 
-func NewHandler(q Repository, registry *jobsources.Registry, sources *jobsources.Service, client Enqueuer) *Handler {
+func NewHandler(q domain.SearchRepository, registry *domain.Registry, sources *application.Service, client application.Enqueuer) *Handler {
 	return &Handler{q: q, registry: registry, sources: sources, client: client}
 }
 

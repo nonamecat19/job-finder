@@ -7,14 +7,14 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/ingestion"
+	"github.com/job-finder/api/internal/jobsources/application"
 )
 
 // SearchProvider is the interface SearchesHandler needs from the ingestion service.
 type SearchProvider interface {
 	ListSearches(ctx context.Context) ([]dto.SavedSearchDto, error)
 	CreateSearch(ctx context.Context, name string, query dto.SearchQuery, cron string, enabled bool) (*dto.SavedSearchDto, error)
-	UpdateSearch(ctx context.Context, id string, in ingestion.UpdateSearchInput) (*dto.SavedSearchDto, error)
+	UpdateSearch(ctx context.Context, id string, in application.UpdateSearchInput) (*dto.SavedSearchDto, error)
 	DeleteSearch(ctx context.Context, id string) error
 	RunSearch(ctx context.Context, searchID string) ([]string, error)
 	RecentRuns(ctx context.Context, limit int32) ([]dto.SourceRunDto, error)
@@ -82,7 +82,7 @@ func (h *SearchesHandler) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	out, err := h.Ingestion.UpdateSearch(r.Context(), id, ingestion.UpdateSearchInput{
+	out, err := h.Ingestion.UpdateSearch(r.Context(), id, application.UpdateSearchInput{
 		Name: body.Name, Query: body.Query, Cron: body.Cron, Enabled: body.Enabled,
 	})
 	if err != nil {

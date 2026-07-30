@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -37,15 +36,21 @@ type adzunaResponse struct {
 	Results []adzunaResult `json:"results"`
 }
 
-// AdzunaAdapter mirrors adzuna.adapter.ts.
-type AdzunaAdapter struct{}
+// AdzunaAdapter mirrors adzuna.adapter.ts. AppID/AppKey/Country are env-sourced
+// defaults injected at construction (config.Config), used when the per-source
+// runtime config (from Search's config param) omits them.
+type AdzunaAdapter struct {
+	AppID   string
+	AppKey  string
+	Country string
+}
 
 func (AdzunaAdapter) Key() string          { return "adzuna" }
 func (AdzunaAdapter) Kind() dto.SourceKind { return dto.SourceKindAPI }
 
 func (a AdzunaAdapter) Search(ctx context.Context, query dto.SearchQuery, config map[string]any) ([]dto.NormalizedJob, error) {
-	appID := jobsources.StringOr(config["appId"], os.Getenv("ADZUNA_APP_ID"))
-	appKey := jobsources.StringOr(config["appKey"], os.Getenv("ADZUNA_APP_KEY"))
+	appID := jobsources.StringOr(config["appId"], a.AppID)
+	appKey := jobsources.StringOr(config["appKey"], a.AppKey)
 	if appID == "" || appKey == "" {
 		return nil, fmt.Errorf("adzuna: appId/appKey not configured")
 	}
@@ -54,7 +59,7 @@ func (a AdzunaAdapter) Search(ctx context.Context, query dto.SearchQuery, config
 		country = *query.Country
 	}
 	if country == "" {
-		country = jobsources.StringOr(config["country"], os.Getenv("ADZUNA_COUNTRY"))
+		country = jobsources.StringOr(config["country"], a.Country)
 	}
 	if country == "" {
 		country = "gb"

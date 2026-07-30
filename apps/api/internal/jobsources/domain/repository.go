@@ -1,4 +1,4 @@
-package jobsources
+package domain
 
 import (
 	"context"
@@ -7,7 +7,8 @@ import (
 )
 
 // Repository is the outbound persistence port for the jobsources use-case.
-// *sqlcgen.Queries satisfies it structurally.
+// Method names mirror the generated queries so *sqlcgen.Queries satisfies it
+// structurally, with no hand-written adapter in between.
 type Repository interface {
 	GetJobSourceByKey(ctx context.Context, key string) (sqlcgen.JobSource, error)
 	ListJobSources(ctx context.Context) ([]sqlcgen.JobSource, error)

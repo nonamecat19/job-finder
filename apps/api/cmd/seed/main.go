@@ -13,8 +13,9 @@ import (
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
-	"github.com/job-finder/api/internal/jobsources"
-	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/jobsources/application"
+	"github.com/job-finder/api/internal/jobsources/domain"
+	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/seed"
 )
 
@@ -57,19 +58,18 @@ func run() error {
 	// are created lazily on first use, not seeded upfront. The fixtures below
 	// (SourceRun, Subscription) FK against those rows, so materialize one per
 	// adapter here via the same lazy GetByKey path the running server uses.
-	gh, lv, as, wk, sr, _ := adapters.NewBoardAdapters()
-	registry := jobsources.NewRegistry(
-		adapters.AdzunaAdapter{},
+	registry := domain.NewRegistry(
+		adapters.AdzunaAdapter{AppID: cfg.AdzunaAppID, AppKey: cfg.AdzunaAppKey, Country: cfg.AdzunaCountry},
 		adapters.RemotiveAdapter{},
 		adapters.ArbeitnowAdapter{},
 		adapters.DjinniAdapter{},
 		adapters.DouAdapter{},
 		adapters.WorkUaAdapter{},
 		adapters.RobotaAdapter{},
-		adapters.JoobleAdapter{},
-		gh, lv, as, wk, sr,
+		adapters.JobSpyAdapter{URL: cfg.JobspyURL},
+		adapters.JoobleAdapter{APIKey: cfg.JoobleAPIKey},
 	)
-	sourcesSvc := jobsources.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
+	sourcesSvc := application.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
 	for _, a := range registry.All() {
 		if _, err := sourcesSvc.GetByKey(ctx, a.Key()); err != nil {
 			return fmt.Errorf("seed: job source %s: %w", a.Key(), err)

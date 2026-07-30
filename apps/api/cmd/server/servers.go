@@ -10,7 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/httpapi"
-	"github.com/job-finder/api/internal/ingestion"
+	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -106,7 +106,7 @@ func buildServers(p *Platform, app *App) *Servers {
 
 // runServers launches the HTTP server, every worker, and the scheduler as
 // goroutines, then blocks until ctx is cancelled and coordinates shutdown.
-func runServers(ctx context.Context, p *Platform, servers *Servers, scheduler *ingestion.Scheduler) error {
+func runServers(ctx context.Context, p *Platform, servers *Servers, scheduler *worker.Scheduler) error {
 	go func() {
 		slog.Info("API listening", "port", p.Config.Port)
 		if err := servers.HTTP.ListenAndServe(); err != nil && err != http.ErrServerClosed {

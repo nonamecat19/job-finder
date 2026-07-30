@@ -1,4 +1,4 @@
-package ingestion
+package worker
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/jobsources/application"
+	"github.com/job-finder/api/internal/jobsources/domain"
 )
 
 // Scheduler replicates ingestion.scheduler.ts: every 5 minutes, for each
@@ -23,11 +25,11 @@ import (
 // mathematically equivalent (Next() is the only primitive robfig/cron
 // exposes) — see the derivation in internal/ingestion doc comments.
 type Scheduler struct {
-	q       Repository
-	service *Service
+	q       domain.SearchRepository
+	service *application.SearchService
 }
 
-func NewScheduler(q Repository, service *Service) *Scheduler {
+func NewScheduler(q domain.SearchRepository, service *application.SearchService) *Scheduler {
 	return &Scheduler{q: q, service: service}
 }
 

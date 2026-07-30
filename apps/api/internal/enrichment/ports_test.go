@@ -8,7 +8,7 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/enrichment"
-	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 )
 
 // The concrete infra types must satisfy the ports structurally.
