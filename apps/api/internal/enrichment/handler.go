@@ -26,15 +26,23 @@ type Handler struct {
 	djinni       adapters.DjinniAdapter
 	dou          adapters.DouAdapter
 	workua       adapters.WorkUaAdapter
+	indeed       adapters.IndeedAdapter
+	remoteok     adapters.RemoteOKAdapter
+	glassdoor    adapters.GlassdoorAdapter
+	jobleads     adapters.JobLeadsAdapter
+	wellfound    adapters.WellfoundAdapter
+	jobgether    adapters.JobgetherAdapter
 	client       Enqueuer
 	defaultDelay time.Duration
 	delays       map[string]time.Duration
 }
 
-func NewHandler(q Repository, sources *application.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
+func NewHandler(q Repository, sources *application.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, indeed adapters.IndeedAdapter, remoteok adapters.RemoteOKAdapter, glassdoor adapters.GlassdoorAdapter, jobleads adapters.JobLeadsAdapter, wellfound adapters.WellfoundAdapter, jobgether adapters.JobgetherAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
 	return &Handler{
 		q: q, sources: sources,
 		djinni: djinni, dou: dou, workua: workua,
+		indeed: indeed, remoteok: remoteok, glassdoor: glassdoor,
+		jobleads: jobleads, wellfound: wellfound, jobgether: jobgether,
 		client:       client,
 		defaultDelay: defaultDelay,
 		delays:       delays,
@@ -104,7 +112,33 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	case "workua":
 		err = h.enrichWorkUa(ctx, payload, uid, job)
 		return err
+	case "indeed":
+		err = h.enrichIndeed(ctx, payload, uid, job)
+		return err
+	case "remoteok":
+		err = h.enrichRemoteOK(ctx, payload, uid, job)
+		return err
+	case "glassdoor":
+		err = h.enrichGlassdoor(ctx, payload, uid, job)
+		return err
+	case "jobleads":
+		err = h.enrichJobLeads(ctx, payload, uid, job)
+		return err
+	case "wellfound":
+		err = h.enrichWellfound(ctx, payload, uid, job)
+		return err
+	case "jobgether":
+		err = h.enrichJobgether(ctx, payload, uid, job)
+		return err
 	default:
+		// No enrich branch for this source. It still has to reach match and
+		// salary-infer below: for a NeedsDetail adapter, ingestion enqueued
+		// neither on the assumption that this handler would run them, so
+		// returning early here would strand the job unscored forever.
+		slog.Warn("enrichment: no detail fetcher for source, scoring the listing as-is",
+			"job", payload.JobID, "source", job.SourceKey)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
 		return nil
 	}
 }
@@ -123,6 +157,8 @@ func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload,
 	patch, err := h.djinni.FetchDetail(ctx, job.Url, config)
 	if err != nil {
 		slog.Warn("enrichment: djinni fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
 		return nil
 	}
 
@@ -156,6 +192,8 @@ func (h *Handler) enrichDOU(ctx context.Context, payload queue.EnrichPayload, ui
 	patch, err := h.dou.FetchDetail(ctx, job.Url, nil)
 	if err != nil {
 		slog.Warn("enrichment: dou fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
 		return nil
 	}
 
@@ -201,6 +239,8 @@ func (h *Handler) enrichWorkUa(ctx context.Context, payload queue.EnrichPayload,
 	patch, err := h.workua.FetchDetail(ctx, job.Url, nil)
 	if err != nil {
 		slog.Warn("enrichment: workua fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
 		return nil
 	}
 
@@ -223,6 +263,246 @@ func (h *Handler) enrichWorkUa(ctx context.Context, payload queue.EnrichPayload,
 	h.enqueueMatch(ctx, payload.JobID, job)
 	h.enqueueSalaryInfer(ctx, payload.JobID)
 	slog.Info("enrichment: workua complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichIndeed(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	if delay := h.delayFor("indeed"); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	patch, err := h.indeed.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: indeed fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    patch.Location,
+		Remote:      patch.Remote,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update indeed job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
+	slog.Info("enrichment: indeed complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichRemoteOK(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	if delay := h.delayFor("remoteok"); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	patch, err := h.remoteok.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: remoteok fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+	if !patch.Available {
+		slog.Info("enrichment: remoteok listing no longer in feed, leaving existing data untouched", "job", payload.JobID, "url", job.Url)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    nil,
+		Remote:      true,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update remoteok job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
+	slog.Info("enrichment: remoteok complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichJobLeads(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	if delay := h.delayFor("jobleads"); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	patch, err := h.jobleads.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: jobleads fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+	if !patch.Available {
+		slog.Info("enrichment: jobleads listing no longer available, leaving existing data untouched", "job", payload.JobID, "url", job.Url)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    job.Location,
+		Remote:      job.Remote,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update jobleads job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
+	slog.Info("enrichment: jobleads complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichGlassdoor(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	if delay := h.delayFor("glassdoor"); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	patch, err := h.glassdoor.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: glassdoor fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+	if !patch.Available {
+		slog.Info("enrichment: glassdoor listing no longer available, leaving existing data untouched", "job", payload.JobID, "url", job.Url)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    job.Location,
+		Remote:      job.Remote,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update glassdoor job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
+	slog.Info("enrichment: glassdoor complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichWellfound(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	if delay := h.delayFor("wellfound"); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	patch, err := h.wellfound.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: wellfound fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+	if !patch.Available {
+		slog.Info("enrichment: wellfound listing no longer available, leaving existing data untouched", "job", payload.JobID, "url", job.Url)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    job.Location,
+		Remote:      job.Remote,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update wellfound job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
+	slog.Info("enrichment: wellfound complete", "job", payload.JobID)
+	return nil
+}
+
+func (h *Handler) enrichJobgether(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
+	if delay := h.delayFor("jobgether"); delay > 0 {
+		time.Sleep(delay)
+	}
+
+	patch, err := h.jobgether.FetchDetail(ctx, job.Url, nil)
+	if err != nil {
+		slog.Warn("enrichment: jobgether fetch detail failed", "job", payload.JobID, "url", job.Url, "error", err)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+	if !patch.Available {
+		slog.Info("enrichment: jobgether listing no longer available, leaving existing data untouched", "job", payload.JobID, "url", job.Url)
+		h.enqueueMatch(ctx, payload.JobID, job)
+		h.enqueueSalaryInfer(ctx, payload.JobID)
+		return nil
+	}
+
+	raw, err := json.Marshal(patch.Raw)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
+		ID:          uid,
+		Description: patch.Description,
+		SalaryRaw:   patch.SalaryRaw,
+		Location:    job.Location,
+		Remote:      job.Remote,
+		Raw:         raw,
+		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+	}); err != nil {
+		return fmt.Errorf("enrichment: update jobgether job detail: %w", err)
+	}
+
+	h.enqueueMatch(ctx, payload.JobID, job)
+	h.enqueueSalaryInfer(ctx, payload.JobID)
+	slog.Info("enrichment: jobgether complete", "job", payload.JobID)
 	return nil
 }
 

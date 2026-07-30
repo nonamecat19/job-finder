@@ -2,38 +2,42 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
 	"log/slog"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
+	"github.com/job-finder/api/internal/aifeature"
 	"github.com/job-finder/api/internal/applications"
-	"github.com/job-finder/api/internal/autogen"
 	"github.com/job-finder/api/internal/coach"
 	"github.com/job-finder/api/internal/companyintel"
+	"github.com/job-finder/api/internal/dbutil"
+	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/enrichment"
-	"github.com/job-finder/api/internal/extauth"
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/httpapi"
+	"github.com/job-finder/api/internal/interviewprep"
 	"github.com/job-finder/api/internal/jobs"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
+	"github.com/job-finder/api/internal/jobsources/roster"
 	"github.com/job-finder/api/internal/keyword"
-	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/llmsettings"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/outreach"
+	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/platform/storage"
 	"github.com/job-finder/api/internal/postage"
 	"github.com/job-finder/api/internal/profile"
+	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/recruiter"
 	"github.com/job-finder/api/internal/referral"
+	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/salary"
-	"github.com/job-finder/api/internal/platform/storage"
 	"github.com/job-finder/api/internal/subscriptions"
 )
 
@@ -41,27 +45,29 @@ import (
 // consumed by buildServers (router mounting + worker muxes) and runServers.
 type App struct {
 	// HTTP handlers (each exposes Mount).
-	Sources      *httpapi.SourcesHandler
-	Searches     *httpapi.SearchesHandler
-	Documents    *httpapi.DocumentsHandler
-	Profiles     *httpapi.ProfilesHandler
-	Jobs         *httpapi.JobsHandler
-	Applications *httpapi.ApplicationsHandler
-	Subs         *httpapi.SubscriptionsHandler
-	Activity     *httpapi.ActivityHandler
-	Keyword      *httpapi.KeywordHandler
-	PostAge      *httpapi.PostAgeHandler
-	Notification *httpapi.NotificationHandler
-	Companies    *httpapi.CompaniesHandler
-	GhostJob     *httpapi.GhostJobHandler
-	Coach        *httpapi.CoachHandler
-	ExtAuth      *httpapi.ExtAuthHandler
-	ExtProfile   *httpapi.ExtProfileHandler
-	Contacts     *httpapi.ContactsHandler
-	Referral     *httpapi.ReferralHandler
-	Outreach     *httpapi.OutreachHandler
-	LlmSettings  *httpapi.LlmSettingsHandler
-	AutoGenerate *httpapi.AutoGenerateHandler
+	Sources       *httpapi.SourcesHandler
+	Roster        *httpapi.RosterHandler
+	Searches      *httpapi.SearchesHandler
+	Documents     *httpapi.DocumentsHandler
+	Profiles      *httpapi.ProfilesHandler
+	Jobs          *httpapi.JobsHandler
+	Applications  *httpapi.ApplicationsHandler
+	Subs          *httpapi.SubscriptionsHandler
+	Activity      *httpapi.ActivityHandler
+	Keyword       *httpapi.KeywordHandler
+	PostAge       *httpapi.PostAgeHandler
+	Notification  *httpapi.NotificationHandler
+	Companies     *httpapi.CompaniesHandler
+	GhostJob      *httpapi.GhostJobHandler
+	Coach         *httpapi.CoachHandler
+	Contacts      *httpapi.ContactsHandler
+	Referral      *httpapi.ReferralHandler
+	Outreach      *httpapi.OutreachHandler
+	LlmSettings   *httpapi.LlmSettingsHandler
+	AiFeatures    *httpapi.AiFeatureHandler
+	InterviewPrep *httpapi.InterviewPrepHandler
+	Health        *httpapi.HealthHandler
+	Hosts         *httpapi.HostsHandler
 
 	// Worker handlers (each exposes ProcessTask).
 	Ingestion  *worker.Handler
@@ -70,6 +76,13 @@ type App struct {
 	Enrichment *enrichment.Handler
 	Salary     *salary.Handler
 	Ghost      *ghostjob.Handler
+
+	// Per-task-type LLM routers, reused by buildServers to resolve each
+	// worker's admission-gate provider class (019-ai-job-throughput).
+	MatchRouter      *llm.Router
+	GenerationRouter *llm.Router
+	DefaultRouter    *llm.Router
+	GhostRouter      *llm.Router
 
 	Scheduler *worker.Scheduler
 }
@@ -80,15 +93,27 @@ type sourcesHandles struct {
 	Djinni   adapters.DjinniAdapter
 	Dou      adapters.DouAdapter
 	Workua   adapters.WorkUaAdapter
+	Roster   *roster.Service
 }
 
 // composeJobSources builds the adapter registry and application.Service, then
 // wires the djinni session's Sources back-reference now that the service
-// exists (closing the adapter<->service cycle).
+// exists (closing the adapter<->service cycle). The five ATS board vendor
+// adapters (013) share one roster.Service, health-checked via the checkers
+// map NewBoardAdapters returns.
 func composeJobSources(p *Platform) *sourcesHandles {
 	djinniAdapter := adapters.DjinniAdapter{Scraping: p.Scraping, Session: p.DjinniSession}
 	douAdapter := adapters.DouAdapter{Scraping: p.Scraping}
 	workuaAdapter := adapters.WorkUaAdapter{Scraping: p.Scraping}
+
+	ghAdapter, lvAdapter, asAdapter, wkAdapter, srAdapter, checkers := adapters.NewBoardAdapters()
+	rosterSvc := roster.NewService(p.DB.Queries, checkers)
+	ghAdapter.Roster = rosterSvc
+	lvAdapter.Roster = rosterSvc
+	asAdapter.Roster = rosterSvc
+	wkAdapter.Roster = rosterSvc
+	srAdapter.Roster = rosterSvc
+
 	registry := domain.NewRegistry(
 		adapters.AdzunaAdapter{AppID: p.Config.AdzunaAppID, AppKey: p.Config.AdzunaAppKey, Country: p.Config.AdzunaCountry},
 		adapters.RemotiveAdapter{},
@@ -99,6 +124,11 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		adapters.RobotaAdapter{},
 		adapters.JobSpyAdapter{URL: p.Config.JobspyURL},
 		adapters.JoobleAdapter{APIKey: p.Config.JoobleAPIKey},
+		ghAdapter,
+		lvAdapter,
+		asAdapter,
+		wkAdapter,
+		srAdapter,
 	)
 	sourcesSvc := application.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc
@@ -108,6 +138,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		Djinni:   djinniAdapter,
 		Dou:      douAdapter,
 		Workua:   workuaAdapter,
+		Roster:   rosterSvc,
 	}
 }
 
@@ -190,16 +221,25 @@ func composeProfile(p *Platform, ollama *llm.OllamaProvider) *profileHandles {
 }
 
 type matchingHandles struct {
-	Jobs                *jobs.Service
-	Notifier            *notifier.Service
-	Autogen             *autogen.Service
-	AutoGenerateHandler *httpapi.AutoGenerateHandler
-	Handler             *matching.Handler
+	Jobs             *jobs.Service
+	Notifier         *notifier.Service
+	AiFeatures       *aifeature.Service
+	AiFeatureHandler *httpapi.AiFeatureHandler
+	Handler          *matching.Handler
+}
+
+// resumeAutoGenerateGate adapts aifeature.Service's per-feature ShouldRun to
+// matching's AutoGenerateGate, pinned to the resume feature (the only one
+// matching's post-score hook auto-enqueues).
+type resumeAutoGenerateGate struct{ svc *aifeature.Service }
+
+func (g resumeAutoGenerateGate) ShouldGenerate(score int) bool {
+	return g.svc.ShouldRun(aifeature.Resume, score)
 }
 
 // composeMatching also owns jobs.Service: matchingHandler auto-enqueues a
-// resume via it when a job's score crosses the autogen threshold, so it must
-// exist before the matching handler.
+// resume via it when a job's score crosses the aifeature threshold, so it
+// must exist before the matching handler.
 func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Service, matchRouter *llm.Router) (*matchingHandles, error) {
 	matchingSvc := matching.NewService(p.DB.Queries, profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
 	notifierSvc := notifier.NewService(p.DB.Queries,
@@ -207,16 +247,16 @@ func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Servi
 		notifier.WithRateLimitCap(p.Config.MatchNotifyRateLimit),
 	)
 	jobsSvc := jobs.NewService(p.DB.Queries, p.AsynqClient, p.Config.SalaryFloorUsd)
-	autogenSvc, err := autogen.NewService(ctx, p.DB.Queries)
+	aiFeatureSvc, err := aifeature.NewService(ctx, p.DB.Queries)
 	if err != nil {
 		return nil, err
 	}
 	return &matchingHandles{
-		Jobs:                jobsSvc,
-		Notifier:            notifierSvc,
-		Autogen:             autogenSvc,
-		AutoGenerateHandler: &httpapi.AutoGenerateHandler{Settings: autogenSvc},
-		Handler:             matching.NewHandler(matchingSvc, notifierSvc, autogenSvc, jobsSvc),
+		Jobs:             jobsSvc,
+		Notifier:         notifierSvc,
+		AiFeatures:       aiFeatureSvc,
+		AiFeatureHandler: &httpapi.AiFeatureHandler{Settings: aiFeatureSvc},
+		Handler:          matching.NewHandler(matchingSvc, notifierSvc, resumeAutoGenerateGate{aiFeatureSvc}, jobsSvc),
 	}, nil
 }
 
@@ -291,13 +331,20 @@ func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestio
 
 // composeEnrichment builds the enrichment worker handler, reusing the same
 // adapter values as the registry so it hits the shared djinni session.
-func composeEnrichment(p *Platform, sources *sourcesHandles) *enrichment.Handler {
+func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc retrieval.Service) *enrichment.Handler {
 	cfg := p.Config
 	enrichDelay := time.Duration(cfg.DjinniDetailDelayMs) * time.Millisecond
 	enrichDelays := map[string]time.Duration{
 		"workua": time.Duration(cfg.WorkUaDetailDelayMs) * time.Millisecond,
 	}
-	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua, p.AsynqClient, enrichDelay, enrichDelays)
+	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua,
+		adapters.IndeedAdapter{Scraping: p.Scraping},
+		adapters.RemoteOKAdapter{Scraping: p.Scraping},
+		adapters.GlassdoorAdapter{Scraping: p.Scraping, Retrieval: retrievalSvc},
+		adapters.JobLeadsAdapter{Scraping: p.Scraping, Session: &adapters.JobLeadsSession{Email: p.Config.JobLeadsEmail, Password: p.Config.JobLeadsPassword, Key: "jobleads"}},
+		adapters.WellfoundAdapter{Scraping: p.Scraping, Retrieval: retrievalSvc},
+		adapters.JobgetherAdapter{Scraping: p.Scraping, Retrieval: retrievalSvc},
+		p.AsynqClient, enrichDelay, enrichDelays)
 }
 
 type salaryHandles struct {
@@ -395,27 +442,6 @@ func composeCompanyIntel(p *Platform) *companyIntelHandles {
 	}
 }
 
-type extAuthHandles struct {
-	Auth    *httpapi.ExtAuthHandler
-	Profile *httpapi.ExtProfileHandler
-}
-
-// composeExtAuth builds browser-extension auth. extJWTSecret must be a random
-// byte string; the hex config value is decoded when present, or a fresh one is
-// generated per process start when absent.
-func composeExtAuth(p *Platform, profileSvc *profile.Service) (*extAuthHandles, error) {
-	extJWTSecret, err := extJWTSigningSecret(p.Config.ExtJWTSecret)
-	if err != nil {
-		return nil, err
-	}
-	extSigner := extauth.NewSigner(extJWTSecret)
-	extAuthSvc := extauth.NewService(p.DB.Queries, extSigner)
-	return &extAuthHandles{
-		Auth:    &httpapi.ExtAuthHandler{Auth: extAuthSvc},
-		Profile: &httpapi.ExtProfileHandler{Profiles: profileSvc, Verifier: extSigner},
-	}, nil
-}
-
 type recruiterHandles struct {
 	Service *recruiter.Service
 	Handler *httpapi.ContactsHandler
@@ -444,6 +470,142 @@ func composeOutreach(p *Platform, recruiterSvc *recruiter.Service, companyIntelS
 	return &httpapi.OutreachHandler{Outreach: outreachSvc}
 }
 
+// composeInterviewPrep builds the interview-prep pack (013): derived
+// questions + gap summary (008 keyword diff) + STAR stories from the default
+// profile + a company-news briefing reshaped from company-intel (004).
+func composeInterviewPrep(p *Platform, profileSvc *profile.Service, companyIntelSvc *companyintel.Service) *httpapi.InterviewPrepHandler {
+	stories := func(ctx context.Context) ([]keyword.StarStory, error) {
+		prof, err := profileSvc.GetDefault(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := p.DB.Queries.ListStarStoriesByProfile(ctx, prof.ID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]keyword.StarStory, len(rows))
+		for i, r := range rows {
+			var skills []string
+			_ = dbutil.UnmarshalJSONB(r.Skills, &skills)
+			var categories []keyword.StoryCategory
+			_ = dbutil.UnmarshalJSONB(r.Categories, &categories)
+			out[i] = keyword.StarStory{
+				ID:         dbutil.UUIDString(r.ID),
+				ProfileID:  dbutil.UUIDString(r.ProfileId),
+				Title:      r.Title,
+				Situation:  r.Situation,
+				Task:       r.Task,
+				Action:     r.Action,
+				Result:     r.Result,
+				Skills:     skills,
+				Categories: categories,
+			}
+		}
+		return out, nil
+	}
+	prepSvc := interviewprep.NewService(p.DB.Queries, p.DB.Queries, stories, companyIntelSvc)
+	return &httpapi.InterviewPrepHandler{InterviewPrep: prepSvc}
+}
+
+// redisPinger adapts redis.UniversalClient's Ping (which returns a command,
+// not a bare error) to httpapi.Pinger.
+type redisPinger struct{ client redis.UniversalClient }
+
+func (p redisPinger) Ping(ctx context.Context) error {
+	return p.client.Ping(ctx).Err()
+}
+
+// composeHealth wires /health/ready's dependency pings (FR-004): Postgres and
+// Redis are always checked; Minio stays disabled here since object storage is
+// optional and its client isn't shared on Platform.
+func composeHealth(p *Platform) *httpapi.HealthHandler {
+	redisClient, _ := p.RedisOpt.MakeRedisClient().(redis.UniversalClient)
+	return &httpapi.HealthHandler{
+		Postgres: p.DB.Pool,
+		Redis:    redisPinger{client: redisClient},
+	}
+}
+
+// hostRetrievalAdapter maps retrieval.Service's HostStatus (package-local
+// type) to dto.HostRetrievalStatusDto, so HostsHandler never needs to import
+// internal/retrieval.
+type hostRetrievalAdapter struct{ svc retrieval.Service }
+
+func (a hostRetrievalAdapter) HostStatus(ctx context.Context, host string) (dto.HostRetrievalStatusDto, error) {
+	st, err := a.svc.HostStatus(ctx, host)
+	if err != nil {
+		return dto.HostRetrievalStatusDto{}, err
+	}
+	var lastBlockReason *string
+	if st.LastBlockReason != "" {
+		lastBlockReason = &st.LastBlockReason
+	}
+	return dto.HostRetrievalStatusDto{
+		Host:              st.Host,
+		IdentityVersion:   st.IdentityVersion,
+		CurrentRung:       st.CurrentRung,
+		LastBlockAt:       st.LastBlockAt,
+		LastBlockReason:   lastBlockReason,
+		CoolingOffUntil:   st.CoolingOffUntil,
+		CrawlDelaySeconds: st.CrawlDelaySeconds,
+		Pacing: dto.HostPacingDto{
+			RequestsPerSecond: st.Pacing.RequestsPerSecond,
+			IntervalSeconds:   st.Pacing.IntervalSeconds,
+			Source:            st.Pacing.Source,
+		},
+	}, nil
+}
+
+func (a hostRetrievalAdapter) ClearRungPreference(ctx context.Context, host string) error {
+	return a.svc.ClearRungPreference(ctx, host)
+}
+
+func (a hostRetrievalAdapter) ClearCookies(ctx context.Context, host string) error {
+	return a.svc.ClearCookies(ctx, host)
+}
+
+func (a hostRetrievalAdapter) OverrideCoolingOff(ctx context.Context, host string) (time.Duration, error) {
+	return a.svc.OverrideCoolingOff(ctx, host)
+}
+
+// composeRetrieval builds the rung-aware (direct/browser/flaresolverr)
+// fetch service that backs both the Hosts introspection endpoints and the
+// scrape-heavy jobsources adapters that declare a Retrieval field.
+func composeRetrieval(p *Platform) (retrieval.Service, error) {
+	identity, err := retrieval.NewBrowserIdentity(p.Config.BrowserIdentityVersion)
+	if err != nil {
+		return nil, err
+	}
+	store := retrieval.NewStateStore(p.DB.Queries, p.Config.ConfigEncryptionKey)
+	return retrieval.NewServiceImpl(identity, store, p.Config)
+}
+
+// composeHosts builds the host-retrieval introspection/debug endpoints
+// (rung, cooling-off, cookies).
+func composeHosts(retrievalSvc retrieval.Service) *httpapi.HostsHandler {
+	return &httpapi.HostsHandler{Retrieval: hostRetrievalAdapter{svc: retrievalSvc}}
+}
+
+// queueClassResolvers maps each LLM task policy's queue name to the router
+// that resolves its live provider class (019-ai-job-throughput), for the
+// GET /activity/queues admission-gate readout.
+func queueClassResolvers(policies []queue.TaskPolicy, llmH *llmHandles) map[string]queue.ClassResolver {
+	resolvers := make(map[string]queue.ClassResolver, len(policies))
+	for _, p := range policies {
+		switch p.LLMTaskKey {
+		case "match":
+			resolvers[p.Queue] = llmH.MatchRouter
+		case "generation":
+			resolvers[p.Queue] = llmH.GenerationRouter
+		case "default":
+			resolvers[p.Queue] = llmH.DefaultRouter
+		case "ghost":
+			resolvers[p.Queue] = llmH.GhostRouter
+		}
+	}
+	return resolvers
+}
+
 // buildContexts runs every feature composer in construction order and performs
 // the two cross-composer wires that cannot live inside a single composer:
 // jobsHandler (jobs.Service from matching + generation.Service) and the
@@ -470,42 +632,46 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	}
 	jobsHandler := &httpapi.JobsHandler{Jobs: matchingH.Jobs, Generation: generationH.Generation}
 
-	enrichHandler := composeEnrichment(p, sources)
-	ingestionH.Sources.Enrichment = enrichHandler
-
-	salaryH := composeSalary(ctx, p, llmH.DefaultRouter)
-
-	extAuthH, err := composeExtAuth(p, profileH.Profile)
+	retrievalSvc, err := composeRetrieval(p)
 	if err != nil {
 		return nil, err
 	}
 
+	enrichHandler := composeEnrichment(p, sources, retrievalSvc)
+	ingestionH.Sources.Enrichment = enrichHandler
+
+	salaryH := composeSalary(ctx, p, llmH.DefaultRouter)
+
 	keywordH := composeKeyword(p, llmH.RephraseRouter, profileH.Profile)
 	companyIntelH := composeCompanyIntel(p)
 	recruiterH := composeRecruiter(p, llmH.DefaultRouter)
+	interviewPrepH := composeInterviewPrep(p, profileH.Profile, companyIntelH.Service)
+	hostsH := composeHosts(retrievalSvc)
 
 	return &App{
-		Sources:      ingestionH.Sources,
-		Searches:     ingestionH.Searches,
-		Documents:    generationH.Documents,
-		Profiles:     profileH.Handler,
-		Jobs:         jobsHandler,
-		Applications: composeApplications(p),
-		Subs:         composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
-		Activity:     httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient),
-		Keyword:      keywordH.Handler,
-		PostAge:      composePostAge(p),
-		Notification: composeNotifications(p),
-		Companies:    companyIntelH.Handler,
-		GhostJob:     ghostH.HTTPHandler,
-		Coach:        composeCoach(p, keywordH.RephraseModel, profileH.Profile),
-		ExtAuth:      extAuthH.Auth,
-		ExtProfile:   extAuthH.Profile,
-		Contacts:     recruiterH.Handler,
-		Referral:     composeReferral(p),
-		Outreach:     composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
-		LlmSettings:  llmH.SettingsHandler,
-		AutoGenerate: matchingH.AutoGenerateHandler,
+		Sources:       ingestionH.Sources,
+		Roster:        &httpapi.RosterHandler{Roster: sources.Roster},
+		Searches:      ingestionH.Searches,
+		Documents:     generationH.Documents,
+		Profiles:      profileH.Handler,
+		Jobs:          jobsHandler,
+		Applications:  composeApplications(p),
+		Subs:          composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
+		Activity:      httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector, p.Policies, queueClassResolvers(p.Policies, llmH)),
+		Keyword:       keywordH.Handler,
+		PostAge:       composePostAge(p),
+		Notification:  composeNotifications(p),
+		Companies:     companyIntelH.Handler,
+		GhostJob:      ghostH.HTTPHandler,
+		Coach:         composeCoach(p, keywordH.RephraseModel, profileH.Profile),
+		Contacts:      recruiterH.Handler,
+		Referral:      composeReferral(p),
+		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
+		LlmSettings:   llmH.SettingsHandler,
+		AiFeatures:    matchingH.AiFeatureHandler,
+		InterviewPrep: interviewPrepH,
+		Health:        composeHealth(p),
+		Hosts:         hostsH,
 
 		Ingestion:  ingestionH.Handler,
 		Matching:   matchingH.Handler,
@@ -514,26 +680,11 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Salary:     salaryH.Worker,
 		Ghost:      ghostH.Worker,
 
+		MatchRouter:      llmH.MatchRouter,
+		GenerationRouter: llmH.GenerationRouter,
+		DefaultRouter:    llmH.DefaultRouter,
+		GhostRouter:      llmH.GhostRouter,
+
 		Scheduler: ingestionH.Scheduler,
 	}, nil
-}
-
-// extJWTSigningSecret decodes a configured 32-byte hex EXT_JWT_SECRET, or
-// generates a random 32-byte secret when unset (dev/first-run convenience —
-// see the EXT_JWT_SECRET comment in .env.example and config.go).
-func extJWTSigningSecret(hexKey string) ([]byte, error) {
-	if hexKey == "" {
-		secret := make([]byte, 32)
-		if _, err := rand.Read(secret); err != nil {
-			return nil, err
-		}
-		slog.Warn("EXT_JWT_SECRET not set — using an ephemeral random secret; " +
-			"extension sessions will not survive a server restart")
-		return secret, nil
-	}
-	secret, err := hex.DecodeString(hexKey)
-	if err != nil || len(secret) != 32 {
-		return nil, errors.New("EXT_JWT_SECRET must be a 32-byte hex string (openssl rand -hex 32)")
-	}
-	return secret, nil
 }

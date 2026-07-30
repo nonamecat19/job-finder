@@ -162,7 +162,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	// of whether the overall Search errored (FR-019, FR-020, FR-023) — a
 	// run-level error from a board adapter means "zero employers read"
 	// (FR-021), not "no detail worth keeping".
-	if reporter, ok := adapter.(jobsources.EmployerReporter); ok {
+	if reporter, ok := adapter.(domain.EmployerReporter); ok {
 		if detail, mErr := json.Marshal(reporter.LastRunDetail()); mErr == nil {
 			_ = h.q.SetSourceRunEmployerDetail(ctx, sqlcgen.SetSourceRunEmployerDetailParams{ID: run.ID, EmployerDetail: detail})
 		}
@@ -187,7 +187,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	// enqueues match + ghost itself. Scoring the teaser here as well would
 	// mean two LLM passes per job, the first one on text the job doesn't
 	// actually have.
-	needsDetail := jobsources.NeedsDetail(adapter)
+	needsDetail := domain.NeedsDetail(adapter)
 
 	for _, j := range jobs {
 		isNew, err := h.persistIfNew(ctx, j, subscriptionID, needsDetail)

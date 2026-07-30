@@ -48,7 +48,7 @@ func TestDjinniSearchBasicSearchSinglePage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	dd := DjinniAdapter{Scraping: scraping.New(nil)}
+	dd := DjinniAdapter{Scraping: scraping.New()}
 
 	query := dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs/?search_type=basic-search&primary_keyword=Golang"}
 	jobs, err := dd.Search(context.Background(), query, nil)
@@ -83,7 +83,7 @@ func TestDjinniSearchBasicSearchMultiPage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	dd := DjinniAdapter{Scraping: scraping.New(nil)}
+	dd := DjinniAdapter{Scraping: scraping.New()}
 
 	query := dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs/?search_type=basic-search&primary_keyword=Golang"}
 	jobs, err := dd.Search(context.Background(), query, nil)
@@ -108,7 +108,7 @@ func TestDjinniSearchBasicSearchRedirectLoop(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	dd := DjinniAdapter{Scraping: scraping.New(nil)}
+	dd := DjinniAdapter{Scraping: scraping.New()}
 
 	query := dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs/?search_type=basic-search&primary_keyword=Golang"}
 	jobs, err := dd.Search(context.Background(), query, nil)
@@ -135,7 +135,7 @@ func TestDjinniSearchBasicSearchPreservesQueryParams(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	dd := DjinniAdapter{Scraping: scraping.New(nil)}
+	dd := DjinniAdapter{Scraping: scraping.New()}
 
 	subURL := srv.URL + "/jobs/?search_type=basic-search&primary_keyword=Node.js&salary=3000&exp_level=2y&exp_level=3y&exp_level=4y&exp_level=5y&employment=remote"
 	query := dto.SearchQuery{SubscriptionURL: subURL}
@@ -182,7 +182,7 @@ func TestDjinniSearchBasicSearchStripsPageParamFromSavedURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	dd := DjinniAdapter{Scraping: scraping.New(nil)}
+	dd := DjinniAdapter{Scraping: scraping.New()}
 
 	query := dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs/?search_type=basic-search&primary_keyword=Golang&page=4"}
 	_, err := dd.Search(context.Background(), query, nil)

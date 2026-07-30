@@ -12,6 +12,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/jobsources/domain"
+	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -105,7 +106,7 @@ func dueSearch() sqlcgen.SavedSearch {
 // it made the due decision on so the write is a compare-and-swap.
 func TestTick_ClaimsBeforeRunning(t *testing.T) {
 	repo := &schedulerFakeRepo{search: dueSearch()}
-	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &fakeEnqueuer{}))
+	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, &fakeEnqueuer{}))
 
 	s.Tick(context.Background())
 
@@ -125,7 +126,7 @@ func TestTick_ClaimsBeforeRunning(t *testing.T) {
 // slot — the search must not be scraped a second time.
 func TestTick_LostClaimSkipsRun(t *testing.T) {
 	repo := &schedulerFakeRepo{search: dueSearch(), claimErr: pgx.ErrNoRows}
-	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &fakeEnqueuer{}))
+	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, &fakeEnqueuer{}))
 
 	s.Tick(context.Background())
 
@@ -147,7 +148,7 @@ func TestTick_ReconcilesJobsWithNoMatchResult(t *testing.T) {
 		},
 	}
 	enq := &countingEnqueuer{}
-	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, enq))
+	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, enq))
 
 	s.Tick(context.Background())
 
@@ -207,7 +208,7 @@ func TestTick_RunsDueSubscriptions(t *testing.T) {
 		claimErr: pgx.ErrNoRows, // skip the search run; this test is about subs
 		subs:     []sqlcgen.Subscription{dueSubscription()},
 	}
-	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
+	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
 
 	s.Tick(context.Background())
 
@@ -223,7 +224,7 @@ func TestTick_SkipsSubscriptionNotYetDue(t *testing.T) {
 	sub := dueSubscription()
 	sub.LastRunAt = pgtype.Timestamp{Time: time.Now(), Valid: true}
 	repo := &schedulerFakeRepo{search: dueSearch(), claimErr: pgx.ErrNoRows, subs: []sqlcgen.Subscription{sub}}
-	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
+	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
 
 	s.Tick(context.Background())
 
@@ -239,7 +240,7 @@ func TestTick_LostSubscriptionClaimSkipsRun(t *testing.T) {
 		subs:        []sqlcgen.Subscription{dueSubscription()},
 		subClaimErr: pgx.ErrNoRows,
 	}
-	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
+	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
 
 	s.Tick(context.Background())
 

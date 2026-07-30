@@ -11,7 +11,7 @@ import (
 
 	"github.com/job-finder/api/internal/coach/domain"
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/keyword/domain"
+	kwdomain "github.com/job-finder/api/internal/keyword/domain"
 )
 
 const validJobID = "11111111-1111-1111-1111-111111111111"
@@ -37,13 +37,13 @@ func mustJSON(t *testing.T, v any) []byte {
 func rowWithOneMissingRequired(t *testing.T) sqlcgen.KeywordDiff {
 	pct := 50.0
 	return sqlcgen.KeywordDiff{
-		Matched: mustJSON(t, []domain.DiffTerm{
-			{Term: "Go", Canonical: "Go", Polarity: domain.PolarityRequired},
+		Matched: mustJSON(t, []kwdomain.DiffTerm{
+			{Term: "Go", Canonical: "Go", Polarity: kwdomain.PolarityRequired},
 		}),
-		MissingRequired: mustJSON(t, []domain.DiffTerm{
-			{Term: "Kubernetes", Canonical: "Kubernetes", Polarity: domain.PolarityRequired},
+		MissingRequired: mustJSON(t, []kwdomain.DiffTerm{
+			{Term: "Kubernetes", Canonical: "Kubernetes", Polarity: kwdomain.PolarityRequired},
 		}),
-		MissingPreferred: mustJSON(t, []domain.DiffTerm{}),
+		MissingPreferred: mustJSON(t, []kwdomain.DiffTerm{}),
 		CoveragePct:      &pct,
 	}
 }

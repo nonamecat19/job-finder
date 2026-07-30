@@ -47,7 +47,7 @@ func TestHimalayasSearch_MapsAndFiltersFixture(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := HimalayasAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
+	a := HimalayasAdapter{Scraping: scraping.New(), APIURL: srv.URL}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: "https://himalayas.app/jobs?categories=Backend-Engineering"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -99,7 +99,7 @@ func TestHimalayasSearch_ZeroResultsVsUnparseable(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		a := HimalayasAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
+		a := HimalayasAdapter{Scraping: scraping.New(), APIURL: srv.URL}
 		jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: "https://himalayas.app/jobs?categories=Backend-Engineering"}, nil)
 		if err != nil {
 			t.Fatalf("expected nil error for zero results, got %v", err)
@@ -116,7 +116,7 @@ func TestHimalayasSearch_ZeroResultsVsUnparseable(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		a := HimalayasAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
+		a := HimalayasAdapter{Scraping: scraping.New(), APIURL: srv.URL}
 		_, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: "https://himalayas.app/jobs?categories=Backend-Engineering"}, nil)
 		if err == nil {
 			t.Fatal("expected a non-nil error for an unparseable response")
@@ -127,7 +127,7 @@ func TestHimalayasSearch_ZeroResultsVsUnparseable(t *testing.T) {
 // TestHimalayasSearch_NoSubscriptionURL covers T009: keyword search is out
 // of scope, mirroring RemoteOKAdapter.Search's stance.
 func TestHimalayasSearch_NoSubscriptionURL(t *testing.T) {
-	a := HimalayasAdapter{Scraping: scraping.New(nil)}
+	a := HimalayasAdapter{Scraping: scraping.New()}
 	_, err := a.Search(context.Background(), dto.SearchQuery{}, nil)
 	if err == nil {
 		t.Fatal("expected error when SubscriptionURL is empty (keyword search out of scope)")
@@ -137,7 +137,7 @@ func TestHimalayasSearch_NoSubscriptionURL(t *testing.T) {
 // TestHimalayasSearch_MissingCategoriesParam covers the invalid-subscription
 // precondition: a URL missing "categories" returns a distinguishable error.
 func TestHimalayasSearch_MissingCategoriesParam(t *testing.T) {
-	a := HimalayasAdapter{Scraping: scraping.New(nil)}
+	a := HimalayasAdapter{Scraping: scraping.New()}
 	_, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: "https://himalayas.app/jobs"}, nil)
 	if err == nil {
 		t.Fatal("expected error when subscription url has no categories parameter")
@@ -184,7 +184,7 @@ func TestHimalayasSearch_Pagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := HimalayasAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
+	a := HimalayasAdapter{Scraping: scraping.New(), APIURL: srv.URL}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: "https://himalayas.app/jobs?categories=Backend-Engineering"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -217,7 +217,7 @@ func TestHimalayasHealthCheck(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		a := HimalayasAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
+		a := HimalayasAdapter{Scraping: scraping.New(), APIURL: srv.URL}
 		ok, err := a.HealthCheck(context.Background(), nil)
 		if err != nil {
 			t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
@@ -235,7 +235,7 @@ func TestHimalayasHealthCheck(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		a := HimalayasAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
+		a := HimalayasAdapter{Scraping: scraping.New(), APIURL: srv.URL}
 		ok, err := a.HealthCheck(context.Background(), nil)
 		if err != nil {
 			t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
@@ -246,7 +246,7 @@ func TestHimalayasHealthCheck(t *testing.T) {
 	})
 
 	t.Run("unreachable", func(t *testing.T) {
-		a := HimalayasAdapter{Scraping: scraping.New(nil), APIURL: "http://127.0.0.1:1"}
+		a := HimalayasAdapter{Scraping: scraping.New(), APIURL: "http://127.0.0.1:1"}
 		ok, err := a.HealthCheck(context.Background(), nil)
 		if err != nil {
 			t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
@@ -263,7 +263,7 @@ func TestHimalayasHealthCheck(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		a := HimalayasAdapter{Scraping: scraping.New(nil), APIURL: srv.URL}
+		a := HimalayasAdapter{Scraping: scraping.New(), APIURL: srv.URL}
 		ok, err := a.HealthCheck(context.Background(), nil)
 		if err != nil {
 			t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)

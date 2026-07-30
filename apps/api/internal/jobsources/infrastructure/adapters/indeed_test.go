@@ -97,7 +97,7 @@ func TestParseIndeedCards_Empty(t *testing.T) {
 }
 
 func TestIndeedSearch_NoSubscriptionURL(t *testing.T) {
-	a := IndeedAdapter{Scraping: scraping.New(nil)}
+	a := IndeedAdapter{Scraping: scraping.New()}
 	_, err := a.Search(context.Background(), dto.SearchQuery{}, nil)
 	if err == nil {
 		t.Fatal("expected error when SubscriptionURL is empty (keyword search out of scope)")
@@ -125,7 +125,7 @@ func TestIndeedSearch_Pagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := IndeedAdapter{Scraping: scraping.New(nil)}
+	a := IndeedAdapter{Scraping: scraping.New()}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/jobs?q=golang"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -142,7 +142,7 @@ func TestIndeedHealthCheck(t *testing.T) {
 	// HealthCheck targets the fixed indeed.com host; reachability in a
 	// sandboxed/offline test environment is not guaranteed, so this only
 	// asserts the "never a non-nil error" contract (contracts/indeed-adapter.md).
-	a := IndeedAdapter{Scraping: scraping.New(nil)}
+	a := IndeedAdapter{Scraping: scraping.New()}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
 	}
@@ -156,7 +156,7 @@ func TestIndeedFetchDetail(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := IndeedAdapter{Scraping: scraping.New(nil)}
+	a := IndeedAdapter{Scraping: scraping.New()}
 	patch, err := a.FetchDetail(context.Background(), srv.URL+"/viewjob?jk=abc123golang", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -179,7 +179,7 @@ func TestIndeedFetchDetail_NotFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := IndeedAdapter{Scraping: scraping.New(nil)}
+	a := IndeedAdapter{Scraping: scraping.New()}
 	_, err := a.FetchDetail(context.Background(), srv.URL+"/viewjob?jk=gone", nil)
 	if err == nil {
 		t.Fatal("expected a non-nil error when the detail page has no recognizable job description (gone/unavailable)")

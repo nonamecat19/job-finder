@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	activityapp "github.com/job-finder/api/internal/activity/application"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
@@ -46,8 +45,7 @@ func TestActivityList(t *testing.T) {
 		t.Fatalf("insert activity: %v", err)
 	}
 
-	svc := activityapp.NewService(database.Queries, nil)
-	h := httpapi.NewActivityHandler(svc)
+	h := httpapi.NewActivityHandler(database.Queries, nil, nil, nil, nil)
 	r := testutil.SetupRouter(h.Mount)
 
 	w := testutil.DoRequest(r, "GET", "/api/activity", nil, nil)

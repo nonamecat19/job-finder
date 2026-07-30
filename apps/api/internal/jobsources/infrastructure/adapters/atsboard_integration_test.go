@@ -14,6 +14,8 @@ import (
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
+	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/jobsources"
 	ads "github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/jobsources/roster"
 )
@@ -228,10 +230,10 @@ func TestATSBoardIntegration_Greenhouse(t *testing.T) {
 
 	// Route the adapter's HTTP requests through the mock server by swapping
 	// the package-level defaultClient. Each sub-test restores it.
-	origClient := defaultClient
-	restore := func() { defaultClient = origClient }
+	origClient := jobsources.DefaultClient()
+	restore := func() { jobsources.SetDefaultClient(origClient) }
 
-	defaultClient = ts.Client()
+	jobsources.SetDefaultClient(ts.Client())
 	defer restore()
 
 	jobs, err := gh.Search(ctx, emptyQuery, nil)
@@ -273,9 +275,9 @@ func TestATSBoardIntegration_Greenhouse(t *testing.T) {
 	// Re-run: no duplicates (T017-2). The adapter always returns fresh from API;
 	// dedup happens in the ingestion handler, not in the adapter itself. The
 	// adapter level guarantees posting count per employer is capped.
-	origClient = defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient = jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	jobs2, err := gh.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -297,9 +299,9 @@ func TestATSBoardIntegration_Lever(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	lv := &ads.LeverAdapter{Roster: rosterSvc}
-	origClient := defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient := jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	jobs, err := lv.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -333,9 +335,9 @@ func TestATSBoardIntegration_Ashby(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	as := &ads.AshbyAdapter{Roster: rosterSvc}
-	origClient := defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient := jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	jobs, err := as.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -372,9 +374,9 @@ func TestATSBoardIntegration_Workable(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	wk := &ads.WorkableAdapter{Roster: rosterSvc}
-	origClient := defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient := jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	jobs, err := wk.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -411,9 +413,9 @@ func TestATSBoardIntegration_SmartRecruiters(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	sr := &ads.SmartRecruitersAdapter{Roster: rosterSvc}
-	origClient := defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient := jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	jobs, err := sr.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -451,9 +453,9 @@ func TestATSBoardIntegration_404Employer(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	gh := &ads.GreenhouseAdapter{Roster: rosterSvc}
-	origClient := defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient := jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	jobs, err := gh.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -472,9 +474,9 @@ func TestATSBoardIntegration_MalformedResponse(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	gh := &ads.GreenhouseAdapter{Roster: rosterSvc}
-	origClient := defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient := jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	jobs, err := gh.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -494,9 +496,9 @@ func TestATSBoardIntegration_PreviouslySeenDisappears(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	gh := &ads.GreenhouseAdapter{Roster: rosterSvc}
-	origClient := defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient := jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	// First run: the board returns a posting.
 	jobs, err := gh.Search(ctx, emptyQuery, nil)
@@ -518,9 +520,9 @@ func TestATSBoardIntegration_PreviouslySeenDisappears(t *testing.T) {
 	// gh-test still returns postings (mock always returns same), so the
 	// "disappeared" scenario is naturally covered by the gh-empty employer:
 	// the adapter puts no jobs for it and does not error.
-	origClient = defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient = jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	jobs2, err := gh.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -540,9 +542,9 @@ func TestATSBoardIntegration_EmployerReporter(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	gh := &ads.GreenhouseAdapter{Roster: rosterSvc}
-	origClient := defaultClient
-	defaultClient = ts.Client()
-	defer func() { defaultClient = origClient }()
+	origClient := jobsources.DefaultClient()
+	jobsources.SetDefaultClient(ts.Client())
+	defer func() { jobsources.SetDefaultClient(origClient) }()
 
 	_, err := gh.Search(ctx, emptyQuery, nil)
 	if err != nil {
@@ -579,16 +581,4 @@ func TestATSBoardIntegration_EmployerReporter(t *testing.T) {
 }
 
 // emptyQuery is reused across adapter Search calls in these tests.
-var emptyQuery = func() (q struct {
-	Keywords  string
-	Location  *string
-	Remote    *bool
-	SalaryMin *float64
-	Country   *string
-	Sources   []string
-	SubscriptionURL string
-}) { return q }()
-
-// defaultClient is referenced from the adapters package for test purposes.
-// This import alias gets us access to the package-level variable.
-var defaultClient = ads.DefaultClient()
+var emptyQuery = dto.SearchQuery{}

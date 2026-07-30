@@ -115,7 +115,7 @@ func TestGlassdoorIsBlockedPage(t *testing.T) {
 }
 
 func TestGlassdoorSearch_NoSubscriptionURL(t *testing.T) {
-	a := GlassdoorAdapter{Scraping: scraping.New(nil)}
+	a := GlassdoorAdapter{Scraping: scraping.New()}
 	_, err := a.Search(context.Background(), dto.SearchQuery{}, nil)
 	if err == nil {
 		t.Fatal("expected error when SubscriptionURL is empty (keyword search out of scope)")
@@ -143,7 +143,7 @@ func TestGlassdoorSearch_Pagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := GlassdoorAdapter{Scraping: scraping.New(nil)}
+	a := GlassdoorAdapter{Scraping: scraping.New()}
 	jobs, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/Job/remote-golang-jobs-SRCH_KO0,14.htm"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -164,7 +164,7 @@ func TestGlassdoorSearch_Blocked(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := GlassdoorAdapter{Scraping: scraping.New(nil)}
+	a := GlassdoorAdapter{Scraping: scraping.New()}
 	_, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: srv.URL + "/Job/remote-golang-jobs-SRCH_KO0,14.htm"}, nil)
 	if err == nil {
 		t.Fatal("expected a distinguishable error when the response is a bot-challenge/security page")
@@ -176,7 +176,7 @@ func TestGlassdoorHealthCheck(t *testing.T) {
 	// sandboxed/offline test environment is not guaranteed, so this only
 	// asserts the "never a non-nil error" contract, matching IndeedAdapter's
 	// equivalent test.
-	a := GlassdoorAdapter{Scraping: scraping.New(nil)}
+	a := GlassdoorAdapter{Scraping: scraping.New()}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
 	}
@@ -190,7 +190,7 @@ func TestGlassdoorFetchDetail(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := GlassdoorAdapter{Scraping: scraping.New(nil)}
+	a := GlassdoorAdapter{Scraping: scraping.New()}
 	patch, err := a.FetchDetail(context.Background(), srv.URL+"/job-listing/senior-golang-developer-novatech-JV_KO0,24_KE25,41.htm?jl=1010196986009", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -216,7 +216,7 @@ func TestGlassdoorFetchDetail_NotFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := GlassdoorAdapter{Scraping: scraping.New(nil)}
+	a := GlassdoorAdapter{Scraping: scraping.New()}
 	patch, err := a.FetchDetail(context.Background(), srv.URL+"/job-listing/gone.htm?jl=0", nil)
 	if err != nil {
 		t.Fatalf("expected nil error for a gone/unavailable listing (FR-009 edge case), got %v", err)
@@ -234,7 +234,7 @@ func TestGlassdoorFetchDetail_Blocked(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := GlassdoorAdapter{Scraping: scraping.New(nil)}
+	a := GlassdoorAdapter{Scraping: scraping.New()}
 	_, err := a.FetchDetail(context.Background(), srv.URL+"/job-listing/x.htm?jl=1", nil)
 	if err == nil {
 		t.Fatal("expected a distinguishable error when the detail response is a bot-challenge/security page")

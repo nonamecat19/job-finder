@@ -8,16 +8,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/domain"
+	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/profile"
 )
 
 type resumeFakeRepo struct {
 	profile.Repository
-	row domain.Profile
+	row sqlcgen.Profile
 }
 
-func (f *resumeFakeRepo) GetProfile(ctx context.Context, id pgtype.UUID) (domain.Profile, error) {
+func (f *resumeFakeRepo) GetProfile(ctx context.Context, id pgtype.UUID) (sqlcgen.Profile, error) {
 	return f.row, nil
 }
 
@@ -47,8 +47,9 @@ func TestGetResume_SocialNetworksSurfaced(t *testing.T) {
 		t.Fatalf("marshal fixture: %v", err)
 	}
 
-	repo := &resumeFakeRepo{row: domain.Profile{
-		ID: "00000000-0000-0000-0000-000000000001", Name: "Test User", RendercvConfig: configJSON,
+	uid, _ := dbutil.ParseUUID("00000000-0000-0000-0000-000000000001")
+	repo := &resumeFakeRepo{row: sqlcgen.Profile{
+		ID: uid, Name: "Test User", RendercvConfig: configJSON,
 	}}
 	svc := profile.NewService(repo, nil, "", "")
 

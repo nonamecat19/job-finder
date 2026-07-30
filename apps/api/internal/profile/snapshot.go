@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/strutil"
 )
@@ -45,15 +46,17 @@ func (c *SnapshotCache) Get(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 
+	profID := dbutil.UUIDString(prof.ID)
+
 	c.mu.Lock()
-	if c.cur != nil && c.cur.ProfileID == prof.ID && c.cur.Version.Equal(prof.UpdatedAt) {
+	if c.cur != nil && c.cur.ProfileID == profID && c.cur.Version.Equal(prof.UpdatedAt.Time) {
 		snap := *c.cur
 		c.mu.Unlock()
 		return snap, nil
 	}
 	c.mu.Unlock()
 
-	master, err := c.svc.masterFor(prof)
+	master, err := generation.MasterFromProfile(prof)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -64,16 +67,16 @@ func (c *SnapshotCache) Get(ctx context.Context) (Snapshot, error) {
 	// Truncated to 6000 exactly as scoring.go:64 does today, so caching this
 	// value changes nothing about what reaches the prompt (Constitution II).
 	text := strutil.Truncate(generation.RendercvToText(master)+"\n"+extraNotes, 6000)
-	hasEmbedding, err := c.svc.HasEmbedding(ctx, prof.ID)
+	hasEmbedding, err := c.svc.HasEmbedding(ctx, profID)
 	if err != nil {
 		return Snapshot{}, err
 	}
 
 	snap := Snapshot{
-		ProfileID:    prof.ID,
+		ProfileID:    profID,
 		ProfileText:  text,
 		HasEmbedding: hasEmbedding,
-		Version:      prof.UpdatedAt,
+		Version:      prof.UpdatedAt.Time,
 	}
 	c.mu.Lock()
 	c.cur = &snap

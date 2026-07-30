@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	coachdomain "github.com/job-finder/api/internal/coach/domain"
 	"github.com/job-finder/api/internal/keyword/domain"
 )
 
@@ -53,7 +54,7 @@ func TestAssess_NoMissingRequired(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{SourceLabel: "Backend Engineer, Acme (2022-2024)", Bullet: "Built Go services"},
 	}
 
@@ -90,7 +91,7 @@ func TestAssess_ZeroAdjacency(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{SourceLabel: "Backend Engineer, Beta Inc (2021-2023)", Bullet: "Built Java microservices"},
 		{SourceLabel: "Data Engineer, Gamma Corp (2019-2021)", Bullet: "Wrote Python ETL pipelines"},
 	}
@@ -143,7 +144,7 @@ func TestAssess_AdjacentEvidenceFound(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{
 			SourceLabel: "DevOps Engineer, Acme Corp (2022–2024)",
 			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
@@ -209,7 +210,7 @@ func TestAssess_MaxThreeEvidence(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{SourceLabel: "Backend 1", Bullet: "Built MySQL applications"},
 		{SourceLabel: "Backend 2", Bullet: "Managed MySQL databases"},
 		{SourceLabel: "Backend 3", Bullet: "Deployed SQLite solutions"},
@@ -257,7 +258,7 @@ func TestAssess_GroundingRejection(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{
 			SourceLabel: "Backend Engineer, Beta Inc (2021–2023)",
 			Bullet:      "Built REST and WebSocket APIs handling 10k req/s",
@@ -304,7 +305,7 @@ func TestAssess_ProximitySorting(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{SourceLabel: "DBA, Gamma (2020–2022)", Bullet: "Administered Oracle databases with 99% uptime"},
 		{SourceLabel: "Backend, Beta (2018–2020)", Bullet: "Managed MySQL databases handling 1M records"},
 	}
@@ -357,7 +358,7 @@ func TestAssess_RejectsInflatedSeniority(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{
 			SourceLabel: "DevOps Engineer, Acme Corp (2022–2024)",
 			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
@@ -404,7 +405,7 @@ func TestAssess_RejectsInflatedSeniority_JuniorToSenior(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{
 			SourceLabel: "Junior DevOps Engineer, Acme Corp (2022–2024)",
 			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
@@ -452,7 +453,7 @@ func TestAssess_AllowsSameSeniority(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{
 			SourceLabel: "Senior DevOps Engineer, Acme Corp (2022–2024)",
 			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
@@ -500,7 +501,7 @@ func TestAssess_RejectsInflatedDuration(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{
 			SourceLabel: "DevOps Engineer, Acme Corp (2022–2024)",
 			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
@@ -549,7 +550,7 @@ func TestAssess_RejectsBorrowedTechnology(t *testing.T) {
 		},
 	}
 
-	profileEntries := []ProfileEntry{
+	profileEntries := []coachdomain.ProfileEntry{
 		{
 			SourceLabel: "DevOps Engineer, Acme Corp (2022–2024)",
 			Bullet:      "Managed CI/CD pipelines with Podman and BuildKit",
@@ -575,7 +576,7 @@ func TestAssess_NilDiffResult(t *testing.T) {
 	model := &fakeRephraseModel{responses: map[string]string{}}
 	svc := NewService(model)
 
-	result := svc.Assess(context.Background(), "job-1", nil, []ProfileEntry{}, "")
+	result := svc.Assess(context.Background(), "job-1", nil, []coachdomain.ProfileEntry{}, "")
 
 	if result.TotalMustHaves != 0 {
 		t.Errorf("TotalMustHaves: got %d, want 0", result.TotalMustHaves)

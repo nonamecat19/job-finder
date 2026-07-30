@@ -15,7 +15,7 @@ import (
 // retrying cannot fix — otherwise a malformed payload burns the whole retry
 // budget re-running a decode that will never succeed.
 func TestProcessTask_InvalidPayloadIsNotRetried(t *testing.T) {
-	h := worker.NewHandler(&fakeRepo{}, nil, nil, &fakeEnqueuer{})
+	h := worker.NewHandler(&fakeSearchRepo{}, nil, nil, &fakeEnqueuer{})
 
 	err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeIngest, []byte("not json")))
 	if err == nil {
