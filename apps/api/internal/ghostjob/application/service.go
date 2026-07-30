@@ -10,6 +10,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/ghostjob/domain"
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
@@ -36,12 +37,12 @@ var ErrDeclinedToScore = errors.New("ghostjob: insufficient signal to score this
 // filters, reorders, or auto-rejects a job — the result is purely
 // informational.
 type Service struct {
-	q          Repository
+	q          domain.Repository
 	llmc       llm.Provider
 	ghostModel string
 }
 
-func NewService(q Repository, llmc llm.Provider, ghostModel string) *Service {
+func NewService(q domain.Repository, llmc llm.Provider, ghostModel string) *Service {
 	return &Service{q: q, llmc: llmc, ghostModel: ghostModel}
 }
 
@@ -73,7 +74,7 @@ func (s *Service) ScoreJob(ctx context.Context, jobID string) (dto.JobSignalDto,
 	}
 
 	prompt := buildPrompt(job, signals)
-	result, err := llm.CompleteStructured[GhostJobResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
+	result, err := llm.CompleteStructured[domain.GhostJobResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You are a skeptical but fair job-market analyst. You judge only from the " +
 			"measured numbers given to you. You never assert anything about the employer, " +
 			"the role, or hiring intent that the numbers do not support.",
@@ -123,7 +124,7 @@ func (s *Service) ScoreJob(ctx context.Context, jobID string) (dto.JobSignalDto,
 // explicitly states that an always-hiring count of 1 is no evidence
 // (SC-004) and that cross-board duplication alone never justifies the red
 // band (legitimate agency cross-post edge case).
-func buildPrompt(job sqlcgen.Job, s GhostSignals) string {
+func buildPrompt(job sqlcgen.Job, s domain.GhostSignals) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Rate how likely this job posting is a \"ghost job\" — a posting the "+
 		"employer has no real intent to fill. Score 0-100, where higher means more "+
