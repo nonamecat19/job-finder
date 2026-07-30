@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/job-finder/api/internal/platform/llm"
+
+	"github.com/job-finder/api/internal/recruiter/domain"
 )
 
 // extractedContact is the raw LLM structured-output shape for posting-text
@@ -43,13 +45,13 @@ var (
 )
 
 // ExtractPostingContact runs the local LLM over a job's description text
-// and returns at most one grounded ResolvedContact, or (nil, nil) when no
+// and returns at most one grounded domain.ResolvedContact, or (nil, nil) when no
 // human contact could be grounded in the text (FR-016 — zero contacts is
 // success, not an error). Every non-empty field the LLM returns is
 // verified to actually occur in description before being trusted
 // (Constitution Principle II) — a hallucinated field is silently dropped,
 // never surfaced.
-func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string, description string) (*ResolvedContact, error) {
+func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string, description string) (*domain.ResolvedContact, error) {
 	text := strings.TrimSpace(description)
 	if text == "" {
 		return nil, nil
@@ -79,7 +81,7 @@ func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string,
 		return nil, fmt.Errorf("recruiter: posting extraction: %w", err)
 	}
 
-	return groundContact(out, text, SourcePosting, postingConfidence)
+	return groundContact(out, text, domain.SourcePosting, postingConfidence)
 }
 
 // groundContact validates every field the LLM returned actually occurs
@@ -95,7 +97,7 @@ func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string,
 // Shared by every extraction source (posting.go, companypage.go,
 // linkedin.go) so grounding/no-fabrication logic lives in exactly one
 // place; only the source label and confidence formula vary per source.
-func groundContact(out extractedContact, source, sourceName string, confidenceFn func(source, email, phone string) float64) (*ResolvedContact, error) {
+func groundContact(out extractedContact, source, sourceName string, confidenceFn func(source, email, phone string) float64) (*domain.ResolvedContact, error) {
 	lowerSource := strings.ToLower(source)
 
 	ground := func(v string) string {
@@ -131,7 +133,7 @@ func groundContact(out extractedContact, source, sourceName string, confidenceFn
 		phone = ""
 	}
 
-	contact := &ResolvedContact{
+	contact := &domain.ResolvedContact{
 		Name:       name,
 		Source:     sourceName,
 		Confidence: confidenceFn(source, email, phone),
