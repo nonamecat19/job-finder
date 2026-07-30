@@ -1,4 +1,4 @@
-package application_test
+package ghostjob_test
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/ghostjob/application"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/ghostjob"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// fakeServiceRepo is a controllable stand-in for domain.Repository at the
+// fakeServiceRepo is a controllable stand-in for ghostjob.Repository at the
 // service level: it tracks every UpsertJobSignal call and simulates the
 // (jobId, kind) upsert-replace semantics the real "JobSignal" unique
 // constraint enforces (FR-009).
@@ -75,6 +75,8 @@ func dbKey(id pgtype.UUID, kind string) string {
 	return string(id.Bytes[:]) + "|" + kind
 }
 
+var _ ghostjob.Repository = (*fakeServiceRepo)(nil)
+
 // fakeLLM is a scripted llm.Provider: each call to CompleteJSON returns the
 // next canned response in order, so a test can simulate retry-then-succeed,
 // exhaust-the-retry-budget, or a clean one-shot answer.
@@ -123,7 +125,7 @@ func TestScoreJob_PersistsAValidResult(t *testing.T) {
 		`{"score": 82, "confidence": 0.8, "explanation": "reposted 3 times", "topSignals": ["repostCount"]}`,
 	}}
 
-	svc := application.NewService(repo, llmc, "")
+	svc := ghostjob.NewService(repo, llmc, "")
 	out, err := svc.ScoreJob(context.Background(), "09000000-0000-0000-0000-000000000000")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -131,8 +133,8 @@ func TestScoreJob_PersistsAValidResult(t *testing.T) {
 	if out.Score != 82 {
 		t.Errorf("expected score 82, got %d", out.Score)
 	}
-	if out.Kind != application.Kind {
-		t.Errorf("expected kind %q, got %q", application.Kind, out.Kind)
+	if out.Kind != ghostjob.Kind {
+		t.Errorf("expected kind %q, got %q", ghostjob.Kind, out.Kind)
 	}
 	// SC-003: every persisted row carries score/model/confidence and a
 	// value-or-explicit-unknown for all four signals.
@@ -159,7 +161,7 @@ func TestScoreJob_OutOfRangeScorePersistsNothing(t *testing.T) {
 	invalid := `{"score": 500, "confidence": 0.5, "explanation": "bad", "topSignals": []}`
 	llmc := &fakeLLM{model: "qwen2.5:14b", responses: []string{invalid, invalid, invalid}}
 
-	svc := application.NewService(repo, llmc, "")
+	svc := ghostjob.NewService(repo, llmc, "")
 	_, err := svc.ScoreJob(context.Background(), "09000000-0000-0000-0000-000000000000")
 	if err == nil {
 		t.Fatal("expected an error for an out-of-range score")
@@ -178,7 +180,7 @@ func TestScoreJob_SecondUpsertReplacesFirst(t *testing.T) {
 		`{"score": 40, "confidence": 0.6, "explanation": "first pass", "topSignals": []}`,
 		`{"score": 85, "confidence": 0.9, "explanation": "reposted again", "topSignals": ["repostCount"]}`,
 	}}
-	svc := application.NewService(repo, llmc, "")
+	svc := ghostjob.NewService(repo, llmc, "")
 
 	jobID := "09000000-0000-0000-0000-000000000000"
 	if _, err := svc.ScoreJob(context.Background(), jobID); err != nil {
@@ -213,10 +215,10 @@ func TestScoreJob_DeclinesWhenAllSignalsUnknown(t *testing.T) {
 	llmc := &fakeLLM{model: "qwen2.5:14b", responses: []string{
 		`{"score": 90, "confidence": 0.9, "explanation": "should never be called", "topSignals": []}`,
 	}}
-	svc := application.NewService(repo, llmc, "")
+	svc := ghostjob.NewService(repo, llmc, "")
 
 	_, err := svc.ScoreJob(context.Background(), "09000000-0000-0000-0000-000000000000")
-	if !errors.Is(err, application.ErrDeclinedToScore) {
+	if !errors.Is(err, ghostjob.ErrDeclinedToScore) {
 		t.Fatalf("expected ErrDeclinedToScore, got %v", err)
 	}
 	if llmc.calls != 0 {
@@ -238,7 +240,7 @@ func TestScoreJob_CapsConfidenceWhenSignalUnknown(t *testing.T) {
 	llmc := &fakeLLM{model: "qwen2.5:14b", responses: []string{
 		`{"score": 70, "confidence": 0.95, "explanation": "overconfident", "topSignals": []}`,
 	}}
-	svc := application.NewService(repo, llmc, "")
+	svc := ghostjob.NewService(repo, llmc, "")
 
 	out, err := svc.ScoreJob(context.Background(), "09000000-0000-0000-0000-000000000000")
 	if err != nil {
@@ -258,7 +260,7 @@ func TestScoreJob_FailureIsIsolatedPerJob(t *testing.T) {
 	failing := newFakeServiceRepo(scoredJob())
 	failing.repostCount = 2
 	failingLLM := &fakeLLM{model: "m", responses: []string{"not json", "not json", "not json"}}
-	failingSvc := application.NewService(failing, failingLLM, "")
+	failingSvc := ghostjob.NewService(failing, failingLLM, "")
 	if _, err := failingSvc.ScoreJob(context.Background(), "09000000-0000-0000-0000-000000000000"); err == nil {
 		t.Fatal("expected the malformed-response job to error")
 	}
@@ -270,7 +272,7 @@ func TestScoreJob_FailureIsIsolatedPerJob(t *testing.T) {
 	okLLM := &fakeLLM{model: "m", responses: []string{
 		`{"score": 55, "confidence": 0.7, "explanation": "fine", "topSignals": []}`,
 	}}
-	okSvc := application.NewService(ok, okLLM, "")
+	okSvc := ghostjob.NewService(ok, okLLM, "")
 	if _, err := okSvc.ScoreJob(context.Background(), "09000000-0000-0000-0000-000000000000"); err != nil {
 		t.Fatalf("expected the other job to score successfully, got %v", err)
 	}

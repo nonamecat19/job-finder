@@ -1,12 +1,9 @@
-// Package rephraseadapter adapts an llm.Provider to the keyword bounded
-// context's application.RephraseModel port used by application.Suggester.
-package rephraseadapter
+package keyword
 
 import (
 	"context"
 
-	"github.com/job-finder/api/internal/keyword/application"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // ProviderRephraseModel adapts an llm.Provider to the RephraseModel port used
@@ -18,7 +15,7 @@ type ProviderRephraseModel struct {
 	model string
 }
 
-var _ application.RephraseModel = (*ProviderRephraseModel)(nil)
+var _ RephraseModel = (*ProviderRephraseModel)(nil)
 
 // NewProviderRephraseModel wraps p; model overrides the provider default when
 // non-empty (per-task model selection, mirroring generation.Service.genModel).

@@ -1,11 +1,8 @@
-// Package application holds the ghost-job use-case: measure signals -> build
-// the prompt -> llm.CompleteStructured -> upsert. Principle I: nothing here
-// hides, filters, reorders, or auto-rejects a job — the result is purely
-// informational.
-package application
+package ghostjob
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -13,8 +10,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/ghostjob/domain"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // Kind is the "JobSignal"."kind" value this feature writes. The column
@@ -29,21 +25,23 @@ const Kind = "ghost"
 // deterministic backstop, not a replacement for that instruction.
 const confidenceCapWhenUnknown = 0.6
 
-// ErrDeclinedToScore re-exports domain.ErrDeclinedToScore for callers that
-// only import application (e.g. the interfaces/worker Handler).
-var ErrDeclinedToScore = domain.ErrDeclinedToScore
+// ErrDeclinedToScore is returned when every signal is unknown (spec edge
+// case: no postedAt, one-off company, empty description, first appearance).
+// No LLM call is made and no row is written — the system declines rather
+// than emitting a confident 0 or a confident 50 (SC-003).
+var ErrDeclinedToScore = errors.New("ghostjob: insufficient signal to score this job")
 
 // Service is the ghost-job use-case: measure signals -> build the prompt ->
 // llm.CompleteStructured -> upsert. Principle I: nothing here hides,
 // filters, reorders, or auto-rejects a job — the result is purely
 // informational.
 type Service struct {
-	q          domain.Repository
+	q          Repository
 	llmc       llm.Provider
 	ghostModel string
 }
 
-func NewService(q domain.Repository, llmc llm.Provider, ghostModel string) *Service {
+func NewService(q Repository, llmc llm.Provider, ghostModel string) *Service {
 	return &Service{q: q, llmc: llmc, ghostModel: ghostModel}
 }
 
@@ -71,11 +69,11 @@ func (s *Service) ScoreJob(ctx context.Context, jobID string) (dto.JobSignalDto,
 
 	signals := MeasureSignals(ctx, s.q, job)
 	if signals.AllOptionalSignalsUnknown() {
-		return dto.JobSignalDto{}, domain.ErrDeclinedToScore
+		return dto.JobSignalDto{}, ErrDeclinedToScore
 	}
 
 	prompt := buildPrompt(job, signals)
-	result, err := llm.CompleteStructured[domain.GhostJobResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
+	result, err := llm.CompleteStructured[GhostJobResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You are a skeptical but fair job-market analyst. You judge only from the " +
 			"measured numbers given to you. You never assert anything about the employer, " +
 			"the role, or hiring intent that the numbers do not support.",
@@ -125,7 +123,7 @@ func (s *Service) ScoreJob(ctx context.Context, jobID string) (dto.JobSignalDto,
 // explicitly states that an always-hiring count of 1 is no evidence
 // (SC-004) and that cross-board duplication alone never justifies the red
 // band (legitimate agency cross-post edge case).
-func buildPrompt(job sqlcgen.Job, s domain.GhostSignals) string {
+func buildPrompt(job sqlcgen.Job, s GhostSignals) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Rate how likely this job posting is a \"ghost job\" — a posting the "+
 		"employer has no real intent to fill. Score 0-100, where higher means more "+

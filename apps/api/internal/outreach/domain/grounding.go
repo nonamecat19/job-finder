@@ -1,20 +1,19 @@
-package domain
+package outreach
 
 import (
+	"context"
 	"fmt"
 	"strings"
+
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// MaxDraftChars is the hard length ceiling (FR-009): outreach is a brief
-// opener a busy recruiter reads in one glance, not a cover letter.
-const MaxDraftChars = 500
-
-// DraftOutput is the LLM structured-output shape for the grounded-generation
-// path. SpecificClaims must be copied verbatim from the allowed facts given
-// in the prompt — that verbatim requirement is what GroundClaims below
-// checks (Constitution Principle II, mirroring recruiter's extractedContact
-// + groundContact pattern).
-type DraftOutput struct {
+// draftOutput is the LLM structured-output shape for the grounded-generation
+// path. specificClaims must be copied verbatim from the allowed facts given
+// in the prompt — that verbatim requirement is what groundClaims below
+// checks (Constitution Principle II, mirroring recruiter/posting.go's
+// extractedContact + groundContact pattern).
+type draftOutput struct {
 	Text           string   `json:"text" jsonschema:"description=The outreach message body, addressed to the named contact, written in the requested tone. Must contain ONLY facts explicitly listed in ALLOWED FACTS below — never invent a technology, funding round, headcount figure, or any other specific detail."`
 	SpecificClaims []string `json:"specificClaims" jsonschema:"description=Every specific factual claim the message text makes about the team, company, technology, funding, or size, copied VERBATIM from the ALLOWED FACTS list. Empty array if the message makes no specific claim."`
 }
@@ -28,14 +27,59 @@ var toneInstruction = map[Tone]string{
 	ToneFormal: "formal and polished, traditional business register",
 }
 
-// GroundClaims verifies every claim is (a) actually present in text and
+// generateGrounded asks the local LLM for a tone-appropriate draft that
+// only cites the given facts, verifies every declared specific claim
+// actually traces to one of them, and retries on violation. After
+// maxAttempts it falls back to the deterministic generic opener — a
+// generation that cannot be grounded is never presented (FR-006).
+func (s *Service) generateGrounded(ctx context.Context, tone Tone, contactName, companyName string, facts []Fact) (string, []GroundingTrace) {
+	var lastViolation string
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		prompt := buildPrompt(tone, contactName, companyName, facts, lastViolation)
+		out, err := llm.CompleteStructured[draftOutput](ctx, s.llmc, prompt, &llm.CompleteOptions{
+			System: "You write brief, honest outreach messages. You never state a specific fact about a " +
+				"company or team that is not explicitly given to you as an allowed fact. Vagueness is always " +
+				"preferred to invention.",
+			Model: s.model,
+		})
+		if err != nil {
+			lastViolation = "generation failed: " + err.Error()
+			continue
+		}
+
+		text := strings.TrimSpace(out.Text)
+		if text == "" {
+			lastViolation = "text was empty"
+			continue
+		}
+		if len(text) > maxDraftChars {
+			lastViolation = fmt.Sprintf("text was %d characters, over the %d character limit", len(text), maxDraftChars)
+			continue
+		}
+
+		traces, ok := groundClaims(out.SpecificClaims, text, facts)
+		if !ok {
+			lastViolation = "one or more specificClaims could not be verified verbatim against ALLOWED FACTS or the message text"
+			continue
+		}
+
+		return text, traces
+	}
+
+	// Every attempt either fabricated a claim or violated a hard
+	// constraint: fall back to the guaranteed-safe generic opener rather
+	// than ever presenting an ungrounded or over-length draft.
+	return genericOpener(tone, contactName, companyName), []GroundingTrace{}
+}
+
+// groundClaims verifies every claim is (a) actually present in text and
 // (b) a verbatim substring of some fact's value — the same "field must
-// occur in source" check recruiter's groundContact applies to LLM-extracted
-// fields. Any claim failing either check fails the whole batch (ok=false),
-// which triggers a retry rather than silently keeping the other, valid
-// claims — a draft that needed one retry to become fully grounded is
-// preferable to ever guessing which of several claims to trust.
-func GroundClaims(claims []string, text string, facts []Fact) ([]GroundingTrace, bool) {
+// occur in source" check recruiter/posting.go's groundContact applies to
+// LLM-extracted fields. Any claim failing either check fails the whole
+// batch (ok=false), which triggers a retry rather than silently keeping
+// the other, valid claims — a draft that needed one retry to become fully
+// grounded is preferable to ever guessing which of several claims to trust.
+func groundClaims(claims []string, text string, facts []Fact) ([]GroundingTrace, bool) {
 	lowerText := strings.ToLower(text)
 	traces := make([]GroundingTrace, 0, len(claims))
 	for _, raw := range claims {
@@ -67,11 +111,11 @@ func matchFact(claim string, facts []Fact) (Fact, bool) {
 	return Fact{}, false
 }
 
-// BuildPrompt renders the full generation prompt, appending the previous
+// buildPrompt renders the full generation prompt, appending the previous
 // violation (if any) so a retry can self-correct, mirroring
 // CompleteStructured's own retry-with-error-appended shape but at the
 // domain-validation level rather than the JSON-parsing level.
-func BuildPrompt(tone Tone, contactName, companyName string, facts []Fact, lastViolation string) string {
+func buildPrompt(tone Tone, contactName, companyName string, facts []Fact, lastViolation string) string {
 	var b strings.Builder
 	b.WriteString("Write a single short outreach message to a hiring contact after the sender has just applied " +
 		"to a job at their company.\n\n")
@@ -95,7 +139,7 @@ func BuildPrompt(tone Tone, contactName, companyName string, facts []Fact, lastV
 		"under %d characters. Never state a specific technology, funding figure, headcount, rating, or any other "+
 		"detail that is not one of the ALLOWED FACTS above — if you are not sure something is allowed, leave it "+
 		"out. This is a draft the user will read and send themselves, so it must contain no send/apply action, "+
-		"just the message body.\n", MaxDraftChars)
+		"just the message body.\n", maxDraftChars)
 
 	if lastViolation != "" {
 		fmt.Fprintf(&b, "\nYour previous attempt was rejected: %s. Fix this and answer again.\n", lastViolation)
@@ -104,11 +148,11 @@ func BuildPrompt(tone Tone, contactName, companyName string, facts []Fact, lastV
 	return b.String()
 }
 
-// GenericOpener is the deterministic, zero-signal-dependency fallback used
+// genericOpener is the deterministic, zero-signal-dependency fallback used
 // whenever no company-intel signal exists, or grounded generation could not
 // be produced within maxAttempts. It contains no specific claim about the
 // team or company (FR-005, FR-012) — vagueness over invention.
-func GenericOpener(tone Tone, contactName, companyName string) string {
+func genericOpener(tone Tone, contactName, companyName string) string {
 	greeting := "Hi there"
 	if contactName != "" {
 		greeting = "Hi " + contactName
@@ -148,11 +192,11 @@ func GenericOpener(tone Tone, contactName, companyName string) string {
 	}
 }
 
-// EnforceLength is the final safety net (FR-009): truncates at the nearest
+// enforceLength is the final safety net (FR-009): truncates at the nearest
 // word boundary within the limit and drops any trace whose claim text was
 // truncated away, so a trace is never presented for text that no longer
 // contains it.
-func EnforceLength(text string, traces []GroundingTrace, max int) (string, []GroundingTrace) {
+func enforceLength(text string, traces []GroundingTrace, max int) (string, []GroundingTrace) {
 	text = strings.TrimSpace(text)
 	if len(text) > max {
 		cut := text[:max]

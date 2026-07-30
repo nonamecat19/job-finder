@@ -1,7 +1,4 @@
-// Package application holds the salary use-case: infer a job's salary band
-// from its own salaryRaw text, an ingested-cache/levels.fyi bucket lookup, or
-// an LLM estimate, in that priority order. Mirrors the salary inference flow.
-package application
+package salary
 
 import (
 	"context"
@@ -14,18 +11,24 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/salary/domain"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
+type Repository interface {
+	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
+	UpdateJobSalary(ctx context.Context, arg sqlcgen.UpdateJobSalaryParams) error
+	UpsertSalaryCache(ctx context.Context, arg sqlcgen.UpsertSalaryCacheParams) error
+	GetSalaryCacheByBucket(ctx context.Context, bucket string) ([]sqlcgen.SalaryCache, error)
+}
+
 type Service struct {
-	q           domain.Repository
+	q           Repository
 	llmc        llm.Provider
 	levelsFyi   *LevelsFyiLoader
 	salaryModel string
 }
 
-func NewService(q domain.Repository, llmc llm.Provider, levelsFyi *LevelsFyiLoader, salaryModel string) *Service {
+func NewService(q Repository, llmc llm.Provider, levelsFyi *LevelsFyiLoader, salaryModel string) *Service {
 	return &Service{q: q, llmc: llmc, levelsFyi: levelsFyi, salaryModel: salaryModel}
 }
 
@@ -42,7 +45,7 @@ func (s *Service) Infer(ctx context.Context, jobID string) error {
 	bucket := makeBucket(job.Title, ptrStr(job.Location), "")
 
 	if job.SalaryRaw != nil && *job.SalaryRaw != "" {
-		if band, ok := domain.ParseSalaryRaw(*job.SalaryRaw); ok {
+		if band, ok := ParseSalaryRaw(*job.SalaryRaw); ok {
 			slog.Info("salary: parsed from salaryRaw", "job", jobID, "min", band.Min, "max", band.Max, "currency", band.Currency)
 			if err := s.persistJobSalary(ctx, uid, band); err != nil {
 				return err
@@ -52,8 +55,8 @@ func (s *Service) Infer(ctx context.Context, jobID string) error {
 		}
 	}
 
-	cacheBand, cacheOk := s.lookupCache(ctx, bucket, domain.SourceIngestedCache)
-	levelsBand, levelsOk := s.lookupCache(ctx, bucket, domain.SourceLevelsFyi)
+	cacheBand, cacheOk := s.lookupCache(ctx, bucket, SourceIngestedCache)
+	levelsBand, levelsOk := s.lookupCache(ctx, bucket, SourceLevelsFyi)
 
 	if cacheOk && levelsOk {
 		blended := blend(cacheBand, levelsBand)
@@ -79,14 +82,14 @@ func (s *Service) Infer(ctx context.Context, jobID string) error {
 	return s.persistJobSalary(ctx, uid, band)
 }
 
-func (s *Service) lookupCache(ctx context.Context, bucket string, source domain.SalarySource) (domain.SalaryBand, bool) {
+func (s *Service) lookupCache(ctx context.Context, bucket string, source SalarySource) (SalaryBand, bool) {
 	rows, err := s.q.GetSalaryCacheByBucket(ctx, bucket)
 	if err != nil || len(rows) == 0 {
-		return domain.SalaryBand{}, false
+		return SalaryBand{}, false
 	}
 	for _, r := range rows {
 		if r.Source == string(source) {
-			return domain.SalaryBand{
+			return SalaryBand{
 				Min:        intVal(r.SalaryMin),
 				Max:        intVal(r.SalaryMax),
 				Currency:   r.Currency,
@@ -95,10 +98,10 @@ func (s *Service) lookupCache(ctx context.Context, bucket string, source domain.
 			}, true
 		}
 	}
-	return domain.SalaryBand{}, false
+	return SalaryBand{}, false
 }
 
-func (s *Service) llmInfer(ctx context.Context, job sqlcgen.Job) (domain.SalaryBand, error) {
+func (s *Service) llmInfer(ctx context.Context, job sqlcgen.Job) (SalaryBand, error) {
 	location := "n/a"
 	if job.Location != nil && *job.Location != "" {
 		location = *job.Location
@@ -122,22 +125,22 @@ func (s *Service) llmInfer(ctx context.Context, job sqlcgen.Job) (domain.SalaryB
 		model = s.llmc.ModelName()
 	}
 
-	band, err := llm.CompleteStructured[domain.SalaryBand](ctx, s.llmc, prompt, &llm.CompleteOptions{
+	band, err := llm.CompleteStructured[SalaryBand](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You are a compensation analyst. Estimate realistic salary ranges based on job title, company, and location.",
 		Model:  model,
 	})
 	if err != nil {
-		return domain.SalaryBand{}, err
+		return SalaryBand{}, err
 	}
 
-	band.Source = domain.SourceLLM
+	band.Source = SourceLLM
 	if band.Confidence == 0 {
 		band.Confidence = 0.3
 	}
 	return band, nil
 }
 
-func (s *Service) persistJobSalary(ctx context.Context, uid pgtype.UUID, band domain.SalaryBand) error {
+func (s *Service) persistJobSalary(ctx context.Context, uid pgtype.UUID, band SalaryBand) error {
 	return s.q.UpdateJobSalary(ctx, sqlcgen.UpdateJobSalaryParams{
 		ID:               uid,
 		SalaryMin:        int32Ptr(int32(band.Min)),
@@ -148,7 +151,7 @@ func (s *Service) persistJobSalary(ctx context.Context, uid pgtype.UUID, band do
 	})
 }
 
-func (s *Service) upsertCache(ctx context.Context, bucket string, band domain.SalaryBand) error {
+func (s *Service) upsertCache(ctx context.Context, bucket string, band SalaryBand) error {
 	return s.q.UpsertSalaryCache(ctx, sqlcgen.UpsertSalaryCacheParams{
 		Bucket:     bucket,
 		SalaryMin:  int32Ptr(int32(band.Min)),
@@ -159,7 +162,7 @@ func (s *Service) upsertCache(ctx context.Context, bucket string, band domain.Sa
 	})
 }
 
-func blend(a, b domain.SalaryBand) domain.SalaryBand {
+func blend(a, b SalaryBand) SalaryBand {
 	wA := a.Confidence / (a.Confidence + b.Confidence)
 	wB := b.Confidence / (a.Confidence + b.Confidence)
 
@@ -172,12 +175,12 @@ func blend(a, b domain.SalaryBand) domain.SalaryBand {
 		currency = b.Currency
 	}
 
-	return domain.SalaryBand{
+	return SalaryBand{
 		Min:        min,
 		Max:        max,
 		Currency:   currency,
 		Confidence: confidence,
-		Source:     domain.SourceBlended,
+		Source:     SourceBlended,
 	}
 }
 

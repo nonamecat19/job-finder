@@ -1,6 +1,4 @@
-// Package worker holds the matching bounded context's inbound worker
-// adapter: the asynq "match" task handler. Mirrors matching.processor.ts.
-package worker
+package matching
 
 import (
 	"context"
@@ -12,8 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/activity"
-	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/matching/application"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/notifier"
 	"github.com/job-finder/api/internal/queue"
 )
@@ -34,13 +31,13 @@ type Generator interface {
 // (concurrency 1: local LLM handles one request at a time comfortably —
 // enforced by the asynq server's queue concurrency configuration in main).
 type Handler struct {
-	svc       *application.Service
+	svc       *Service
 	notifier  *notifier.Service
 	autogen   AutoGenerateGate
 	generator Generator
 }
 
-func NewHandler(svc *application.Service, notifier *notifier.Service, autogen AutoGenerateGate, generator Generator) *Handler {
+func NewHandler(svc *Service, notifier *notifier.Service, autogen AutoGenerateGate, generator Generator) *Handler {
 	return &Handler{svc: svc, notifier: notifier, autogen: autogen, generator: generator}
 }
 
@@ -52,7 +49,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 
 	var rec *activity.Recorder
 	if payload.ActivityID != nil && *payload.ActivityID != "" {
-		rec = activity.FromID(h.svc.Repo(), *payload.ActivityID)
+		rec = activity.FromID(h.svc.q, *payload.ActivityID)
 	}
 
 	if rec != nil {
@@ -79,7 +76,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 			}
 			return nil
 		}
-		if errors.Is(err, application.ErrNoProfileConfig) {
+		if errors.Is(err, ErrNoProfileConfig) {
 			slog.Warn("matching skipped: no profile config", "jobId", payload.JobID)
 			if rec != nil {
 				rec.Fail(ctx, err)

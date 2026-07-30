@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/job-finder/api/internal/config"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // TestLive_CerebrasComplete makes one real call to the Cerebras API, guarded
 // behind CEREBRAS_API_KEY (001-cerebras-model-toggle). Run with:
 //
-//	go test -tags live ./internal/llm/... -run TestLive_Cerebras
+//	go test -tags live ./internal/platform/llm/... -run TestLive_Cerebras
 func TestLive_CerebrasComplete(t *testing.T) {
 	cfg, err := config.Load()
 	if err != nil {

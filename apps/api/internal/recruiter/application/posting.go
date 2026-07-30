@@ -1,4 +1,4 @@
-package application
+package recruiter
 
 import (
 	"context"
@@ -6,8 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/recruiter/domain"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // extractedContact is the raw LLM structured-output shape for posting-text
@@ -50,7 +49,7 @@ var (
 // verified to actually occur in description before being trusted
 // (Constitution Principle II) — a hallucinated field is silently dropped,
 // never surfaced.
-func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string, description string) (*domain.ResolvedContact, error) {
+func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string, description string) (*ResolvedContact, error) {
 	text := strings.TrimSpace(description)
 	if text == "" {
 		return nil, nil
@@ -80,7 +79,7 @@ func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string,
 		return nil, fmt.Errorf("recruiter: posting extraction: %w", err)
 	}
 
-	return groundContact(out, text, domain.SourcePosting, postingConfidence)
+	return groundContact(out, text, SourcePosting, postingConfidence)
 }
 
 // groundContact validates every field the LLM returned actually occurs
@@ -96,7 +95,7 @@ func ExtractPostingContact(ctx context.Context, llmc llm.Provider, model string,
 // Shared by every extraction source (posting.go, companypage.go,
 // linkedin.go) so grounding/no-fabrication logic lives in exactly one
 // place; only the source label and confidence formula vary per source.
-func groundContact(out extractedContact, source, sourceName string, confidenceFn func(source, email, phone string) float64) (*domain.ResolvedContact, error) {
+func groundContact(out extractedContact, source, sourceName string, confidenceFn func(source, email, phone string) float64) (*ResolvedContact, error) {
 	lowerSource := strings.ToLower(source)
 
 	ground := func(v string) string {
@@ -132,7 +131,7 @@ func groundContact(out extractedContact, source, sourceName string, confidenceFn
 		phone = ""
 	}
 
-	contact := &domain.ResolvedContact{
+	contact := &ResolvedContact{
 		Name:       name,
 		Source:     sourceName,
 		Confidence: confidenceFn(source, email, phone),

@@ -5,7 +5,7 @@ import (
 	"github.com/job-finder/api/internal/recruiter/domain"
 	"testing"
 
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // fakeLLM implements llm.Provider and returns a fixed JSON response from

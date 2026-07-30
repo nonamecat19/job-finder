@@ -1,6 +1,6 @@
 //go:build live
 
-package application
+package recruiter
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/job-finder/api/internal/config"
-	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/platform/scraping"
+	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/scraping"
 )
 
 // TestLive_CompanyPage hits a real company website's About/Team page and
@@ -29,7 +29,7 @@ func TestLive_CompanyPage(t *testing.T) {
 		t.Fatalf("llm new: %v", err)
 	}
 
-	scrapingSvc := scraping.New(nil)
+	scrapingSvc := scraping.New()
 	defer scrapingSvc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -77,7 +77,7 @@ func TestLive_LinkedIn(t *testing.T) {
 		t.Fatalf("llm new: %v", err)
 	}
 
-	scrapingSvc := scraping.New(nil)
+	scrapingSvc := scraping.New()
 	defer scrapingSvc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

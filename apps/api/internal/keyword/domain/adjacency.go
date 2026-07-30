@@ -3,7 +3,7 @@ package domain
 import (
 	"embed"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sort"
 )
 
@@ -94,8 +94,8 @@ func mustLoadEmbeddedAdjacency() AdjacencyConfig {
 func LoadAdjacencyMap() {
 	adjacencyConfig = mustLoadEmbeddedAdjacency()
 	adjacencyIndex = buildAdjacencyIndex(adjacencyConfig)
-	log.Printf("keyword: loaded adjacency map version=%d entries=%d",
-		adjacencyConfig.Version, len(adjacencyConfig.Entries))
+	slog.Info("keyword: loaded adjacency map",
+		"version", adjacencyConfig.Version, "entries", len(adjacencyConfig.Entries))
 }
 
 // isSymmetric reports whether an edge implies its reverse (nil defaults true).

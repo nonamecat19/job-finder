@@ -1,6 +1,6 @@
 //go:build live
 
-package application_test
+package ghostjob_test
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/ghostjob/application"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/ghostjob"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // TestLive_GhostScore exercises the real Ollama round-trip against a real
@@ -43,7 +43,7 @@ func TestLive_GhostScore(t *testing.T) {
 		t.Fatalf("llm new: %v", err)
 	}
 
-	svc := application.NewService(database.Queries, llmProvider, cfg.ModelOr(cfg.LLMModelGhost))
+	svc := ghostjob.NewService(database.Queries, llmProvider, cfg.ModelOr(cfg.LLMModelGhost))
 
 	jobs, err := database.Queries.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{Limit: 1})
 	if err != nil || len(jobs) == 0 {
@@ -55,7 +55,7 @@ func TestLive_GhostScore(t *testing.T) {
 
 	out, err := svc.ScoreJob(ctx, jobID)
 	if err != nil {
-		if err == application.ErrDeclinedToScore {
+		if err == ghostjob.ErrDeclinedToScore {
 			t.Skip("this job's signals are all unknown; system correctly declined to score")
 		}
 		t.Fatalf("score job: %v", err)

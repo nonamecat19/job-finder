@@ -1,7 +1,7 @@
-// Package llm defines the LLM Provider abstraction (Ollama) and the shared
+// Package domain defines the LLM Provider abstraction and the shared
 // structured-output retry loop used by matching, generation and profile
 // import. Mirrors apps/api/src/modules/llm/*.
-package llm
+package domain
 
 import (
 	"context"
@@ -51,9 +51,10 @@ func (o *CompleteOptions) SystemPrompt() string {
 	return o.System
 }
 
-// Provider is the interface ollama.go implements. CompleteJSON is the
-// low-level "ask for JSON, no retry" call; the retry loop (strip fences →
-// parse → validate → retry with error) lives in CompleteStructured below.
+// Provider is the interface the infrastructure/ollama and
+// infrastructure/cerebras adapters implement. CompleteJSON is the low-level
+// "ask for JSON, no retry" call; the retry loop (strip fences → parse →
+// validate → retry with error) lives in CompleteStructured below.
 type Provider interface {
 	ModelName() string
 	Complete(ctx context.Context, prompt string, opts *CompleteOptions) (string, error)

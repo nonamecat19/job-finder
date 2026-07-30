@@ -1,4 +1,4 @@
-package application
+package profile
 
 import (
 	"context"
@@ -9,48 +9,26 @@ import (
 	"strings"
 
 	"github.com/pgvector/pgvector-go"
-	"gopkg.in/yaml.v3"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/domain"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation"
-	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/profile/domain"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 type Service struct {
-	q           domain.Repository
+	q           Repository
 	llmc        llm.Provider
 	embedModel  string
 	rendercvBin string
-
-	// snapshot is the profile-text cache (019-ai-job-throughput), wired in by
-	// SetSnapshotCache after construction (cmd/server) to avoid a
-	// construction-order cycle with NewSnapshotCache(svc). nil-safe: every
-	// invalidate call is a no-op until set.
-	snapshot *SnapshotCache
 }
 
-func NewService(q domain.Repository, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
+func NewService(q Repository, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
 	if embedModel == "" {
 		embedModel = "nomic-embed-text"
 	}
 	return &Service{q: q, llmc: llmc, embedModel: embedModel, rendercvBin: rendercvBin}
-}
-
-// SetSnapshotCache wires the profile-text cache so mutating methods can
-// invalidate it. Must be called once after both Service and its
-// SnapshotCache are constructed (cmd/server/compose_profile.go).
-func (s *Service) SetSnapshotCache(c *SnapshotCache) {
-	s.snapshot = c
-}
-
-func (s *Service) invalidateSnapshot() {
-	if s.snapshot != nil {
-		s.snapshot.Invalidate()
-	}
 }
 
 func (s *Service) List(ctx context.Context) ([]dto.ProfileDto, error) {
@@ -65,14 +43,14 @@ func (s *Service) List(ctx context.Context) ([]dto.ProfileDto, error) {
 	return out, nil
 }
 
-func (s *Service) Get(ctx context.Context, id string) (domain.Profile, error) {
+func (s *Service) Get(ctx context.Context, id string) (sqlcgen.Profile, error) {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
-		return domain.Profile{}, err
+		return sqlcgen.Profile{}, err
 	}
 	row, err := s.q.GetProfile(ctx, uid)
 	if err != nil {
-		return domain.Profile{}, fmt.Errorf("profile %s not found", id)
+		return sqlcgen.Profile{}, fmt.Errorf("profile %s not found", id)
 	}
 	return row, nil
 }
@@ -85,43 +63,41 @@ func (s *Service) GetDto(ctx context.Context, id string) (dto.ProfileDto, error)
 	return s.toDto(row), nil
 }
 
-func (s *Service) GetDefault(ctx context.Context) (domain.Profile, error) {
+func (s *Service) GetDefault(ctx context.Context) (sqlcgen.Profile, error) {
 	row, err := s.q.GetDefaultProfile(ctx)
 	if err != nil {
-		return domain.Profile{}, fmt.Errorf("no profile exists yet — create one first")
+		return sqlcgen.Profile{}, fmt.Errorf("no profile exists yet — create one first")
 	}
 	return row, nil
 }
 
-// Create makes a new profile. rendercvYaml is optional (spec 009 FR-001): a
-// profile with no config yet is a valid starting point for building a resume
-// entirely by hand in the Profile tab, not an error state.
 func (s *Service) Create(ctx context.Context, name string, rendercvYaml string, extraNotes *string) (dto.ProfileDto, error) {
 	if name == "" {
 		return dto.ProfileDto{}, fmt.Errorf("name is required")
 	}
-	params := sqlcgen.CreateProfileParams{Name: name, ExtraNotes: extraNotes}
-	if rendercvYaml != "" {
-		master, err := generation.ParseRendercv(rendercvYaml)
-		if err != nil {
-			return dto.ProfileDto{}, err
-		}
-		configJSON, err := json.Marshal(master)
-		if err != nil {
-			return dto.ProfileDto{}, err
-		}
-		params.RendercvYaml = &rendercvYaml
-		params.RendercvConfig = configJSON
+	if rendercvYaml == "" {
+		return dto.ProfileDto{}, fmt.Errorf("rendercv yaml is required")
 	}
-	row, err := s.q.CreateProfile(ctx, params)
+	master, err := generation.ParseRendercv(rendercvYaml)
 	if err != nil {
 		return dto.ProfileDto{}, err
 	}
-	id := row.ID
-	if rendercvYaml != "" {
-		if err := s.RefreshEmbedding(ctx, id); err != nil {
-			_ = err
-		}
+	configJSON, err := json.Marshal(master)
+	if err != nil {
+		return dto.ProfileDto{}, err
+	}
+	row, err := s.q.CreateProfile(ctx, sqlcgen.CreateProfileParams{
+		Name:           name,
+		RendercvYaml:   &rendercvYaml,
+		RendercvConfig: configJSON,
+		ExtraNotes:     extraNotes,
+	})
+	if err != nil {
+		return dto.ProfileDto{}, err
+	}
+	id := dbutil.UUIDString(row.ID)
+	if err := s.RefreshEmbedding(ctx, id); err != nil {
+		_ = err
 	}
 	row, _ = s.Get(ctx, id)
 	return s.toDto(row), nil
@@ -169,92 +145,8 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Pr
 	if in.RendercvYaml != nil {
 		_ = s.RefreshEmbedding(ctx, id)
 	}
-	s.invalidateSnapshot()
 	row, _ := s.Get(ctx, id)
 	return s.toDto(row), nil
-}
-
-// masterFor loads and parses the profile's current RendercvMaster, returning
-// an empty (cv.name only) master if the profile has no config yet — a valid,
-// non-error state (FR-012).
-func (s *Service) masterFor(row domain.Profile) (generation.RendercvMaster, error) {
-	if row.RendercvConfig == nil {
-		return generation.RendercvMaster{"cv": map[string]any{"name": row.Name}}, nil
-	}
-	var master generation.RendercvMaster
-	if err := json.Unmarshal(row.RendercvConfig, &master); err != nil {
-		return nil, err
-	}
-	return master, nil
-}
-
-// GetResume returns the structured, editable Resume view of a profile's
-// current resume content (spec 009, GET /profiles/{id}/resume).
-func (s *Service) GetResume(ctx context.Context, id string) (dto.Resume, error) {
-	row, err := s.Get(ctx, id)
-	if err != nil {
-		return dto.Resume{}, err
-	}
-	master, err := s.masterFor(row)
-	if err != nil {
-		return dto.Resume{}, err
-	}
-	return generation.MasterToResume(master)
-}
-
-// UpdateResume applies a structured Resume edit, validates it, converts it
-// back to RendercvMaster (preserving section order + any non-cv config
-// blocks), and persists it through the existing rendercvYaml/rendercvConfig
-// update path so both columns stay in sync (spec 009, PUT /profiles/{id}/resume).
-func (s *Service) UpdateResume(ctx context.Context, id string, resume dto.Resume) (dto.Resume, error) {
-	if verr := generation.ValidateResume(resume); verr != nil {
-		return dto.Resume{}, verr
-	}
-	row, err := s.Get(ctx, id)
-	if err != nil {
-		return dto.Resume{}, err
-	}
-	existing, err := s.masterFor(row)
-	if err != nil {
-		return dto.Resume{}, err
-	}
-	master, err := generation.ResumeToMaster(resume, existing)
-	if err != nil {
-		return dto.Resume{}, err
-	}
-	prepared, err := generation.PrepareMasterForMarshal(master)
-	if err != nil {
-		return dto.Resume{}, err
-	}
-	yamlBytes, err := yaml.Marshal(map[string]any(prepared))
-	if err != nil {
-		return dto.Resume{}, err
-	}
-	yamlText := string(yamlBytes)
-	if _, err := s.Update(ctx, id, UpdateInput{RendercvYaml: &yamlText}); err != nil {
-		return dto.Resume{}, err
-	}
-	return s.GetResume(ctx, id)
-}
-
-// HasResumeContent reports whether a profile already has resume content
-// beyond a bare name — used to gate the config-reupload overwrite warning
-// (FR-010, spec 009 contracts/profile-resume-api.md).
-func (s *Service) HasResumeContent(ctx context.Context, id string) (bool, error) {
-	resume, err := s.GetResume(ctx, id)
-	if err != nil {
-		return false, err
-	}
-	if resume.Headline != nil || resume.Location != nil || resume.Email != nil || resume.Phone != nil ||
-		resume.Website != nil || len(resume.SocialNetworks) > 0 || len(resume.CustomConnections) > 0 {
-		return true, nil
-	}
-	for _, sec := range resume.Sections {
-		if len(sec.Entries) > 0 {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileDto, error) {
@@ -292,15 +184,12 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 	}
 
 	// Check if a default profile exists to update
-	var profileRow domain.Profile
+	var profileRow sqlcgen.Profile
 	defaultProf, err := s.GetDefault(ctx)
 	if err == nil {
-		uid, parseErr := dbutil.ParseUUID(defaultProf.ID)
-		if parseErr != nil {
-			return dto.ProfileDto{}, parseErr
-		}
+		// Update existing profile
 		params := sqlcgen.UpdateProfileParams{
-			ID:             uid,
+			ID:             defaultProf.ID,
 			Name:           &name,
 			RendercvYaml:   &yamlText,
 			RendercvConfig: configJSON,
@@ -308,7 +197,7 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 		if err := s.q.UpdateProfile(ctx, params); err != nil {
 			return dto.ProfileDto{}, fmt.Errorf("failed to update profile: %w", err)
 		}
-		profileRow, err = s.Get(ctx, defaultProf.ID)
+		profileRow, err = s.Get(ctx, dbutil.UUIDString(defaultProf.ID))
 		if err != nil {
 			return dto.ProfileDto{}, err
 		}
@@ -325,11 +214,10 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 	}
 
 	// Refresh embedding
-	id := profileRow.ID
+	id := dbutil.UUIDString(profileRow.ID)
 	if err := s.RefreshEmbedding(ctx, id); err != nil {
 		slog.Error("failed to refresh embedding after config upload", "error", err)
 	}
-	s.invalidateSnapshot()
 
 	// Get fresh row
 	profileRow, err = s.Get(ctx, id)
@@ -403,19 +291,15 @@ func (s *Service) RefreshEmbedding(ctx context.Context, id string) error {
 	vec := pgvector.NewVector(embedding)
 	model := s.embedModel
 	uid, _ := dbutil.ParseUUID(id)
-	if err := s.q.UpdateProfileEmbedding(ctx, sqlcgen.UpdateProfileEmbeddingParams{ID: uid, Embedding: &vec, EmbedModel: &model}); err != nil {
-		return err
-	}
-	s.invalidateSnapshot()
-	return nil
+	return s.q.UpdateProfileEmbedding(ctx, sqlcgen.UpdateProfileEmbeddingParams{ID: uid, Embedding: &vec, EmbedModel: &model})
 }
 
-func (s *Service) toDto(p domain.Profile) dto.ProfileDto {
+func (s *Service) toDto(p sqlcgen.Profile) dto.ProfileDto {
 	out := dto.ProfileDto{
-		ID:         p.ID,
+		ID:         dbutil.UUIDString(p.ID),
 		Name:       p.Name,
 		ExtraNotes: p.ExtraNotes,
-		UpdatedAt:  p.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:  dbutil.Timestamp(p.UpdatedAt),
 	}
 	if p.RendercvConfig != nil {
 		var master generation.RendercvMaster

@@ -1,4 +1,4 @@
-package application_test
+package salary_test
 
 import (
 	"context"
@@ -8,12 +8,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/llm"
-	"github.com/job-finder/api/internal/salary/application"
-	"github.com/job-finder/api/internal/salary/domain"
+	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/salary"
 )
 
-var _ domain.Repository = (*sqlcgen.Queries)(nil)
+var _ salary.Repository = (*sqlcgen.Queries)(nil)
 
 type fakeRepo struct {
 	job          sqlcgen.Job
@@ -45,7 +44,7 @@ func (f *fakeRepo) GetSalaryCacheByBucket(ctx context.Context, bucket string) ([
 }
 
 type fakeLLM struct {
-	band domain.SalaryBand
+	band salary.SalaryBand
 	err  error
 }
 
@@ -86,13 +85,13 @@ func TestInfer_SalaryRawParses(t *testing.T) {
 	repo := &fakeRepo{
 		job: makeJob("Backend Engineer", "Acme", "US", "$120k-$150k"),
 	}
-	svc := application.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(domain.SourceIngestedCache) {
+	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(salary.SourceIngestedCache) {
 		t.Errorf("expected source ingested-cache, got %v", repo.updatedBand.SalarySource)
 	}
 	if repo.updatedBand.SalaryMin == nil || *repo.updatedBand.SalaryMin != 120000 {
@@ -112,17 +111,17 @@ func TestInfer_CacheHit(t *testing.T) {
 				SalaryMin: int32Ptr(100000),
 				SalaryMax: int32Ptr(140000),
 				Currency:  "USD",
-				Source:    string(domain.SourceIngestedCache),
+				Source:    string(salary.SourceIngestedCache),
 			},
 		},
 	}
-	svc := application.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(domain.SourceIngestedCache) {
+	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(salary.SourceIngestedCache) {
 		t.Errorf("expected source ingested-cache, got %v", repo.updatedBand.SalarySource)
 	}
 }
@@ -136,17 +135,17 @@ func TestInfer_LevelsFyiHit(t *testing.T) {
 				SalaryMin: int32Ptr(110000),
 				SalaryMax: int32Ptr(160000),
 				Currency:  "USD",
-				Source:    string(domain.SourceLevelsFyi),
+				Source:    string(salary.SourceLevelsFyi),
 			},
 		},
 	}
-	svc := application.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(domain.SourceLevelsFyi) {
+	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(salary.SourceLevelsFyi) {
 		t.Errorf("expected source levels-fyi, got %v", repo.updatedBand.SalarySource)
 	}
 }
@@ -160,24 +159,24 @@ func TestInfer_BlendCacheAndLevels(t *testing.T) {
 				SalaryMin: int32Ptr(100000),
 				SalaryMax: int32Ptr(140000),
 				Currency:  "USD",
-				Source:    string(domain.SourceIngestedCache),
+				Source:    string(salary.SourceIngestedCache),
 			},
 			{
 				Bucket:    "backend-engineer|us|unknown",
 				SalaryMin: int32Ptr(120000),
 				SalaryMax: int32Ptr(160000),
 				Currency:  "USD",
-				Source:    string(domain.SourceLevelsFyi),
+				Source:    string(salary.SourceLevelsFyi),
 			},
 		},
 	}
-	svc := application.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(domain.SourceBlended) {
+	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(salary.SourceBlended) {
 		t.Errorf("expected source blended, got %v", repo.updatedBand.SalarySource)
 	}
 }
@@ -187,13 +186,13 @@ func TestInfer_LLMFallback(t *testing.T) {
 		job:       makeJob("Backend Engineer", "Acme", "US", ""),
 		cacheRows: nil,
 	}
-	svc := application.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(domain.SourceLLM) {
+	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(salary.SourceLLM) {
 		t.Errorf("expected source llm, got %v", repo.updatedBand.SalarySource)
 	}
 }
@@ -202,7 +201,7 @@ func TestInfer_JobNotFound(t *testing.T) {
 	repo := &fakeRepo{
 		jobErr: errors.New("not found"),
 	}
-	svc := application.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err == nil {
@@ -213,7 +212,7 @@ func TestInfer_JobNotFound(t *testing.T) {
 func int32Ptr(v int32) *int32 { return &v }
 
 // strPtr/float64Ptr: shared with integration_test.go (also package
-// application_test) — service.go's own strPtr/float64Ptr are unexported to
-// package application and unreachable from here.
+// salary_test) — service.go's own strPtr/float64Ptr are unexported to
+// package salary and unreachable from here.
 func strPtr(v string) *string       { return &v }
 func float64Ptr(v float64) *float64 { return &v }

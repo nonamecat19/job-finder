@@ -1,6 +1,4 @@
-// Package worker holds the Document Generation bounded context's inbound
-// worker adapter: the asynq "generate" task handler.
-package worker
+package generation
 
 import (
 	"context"
@@ -12,17 +10,16 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/activity"
-	"github.com/job-finder/api/internal/generation/application"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/queue"
 )
 
 // Handler processes "generate" asynq tasks, mirroring generation.processor.ts.
 type Handler struct {
-	svc *application.Service
+	svc *Service
 }
 
-func NewHandler(svc *application.Service) *Handler {
+func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -34,7 +31,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 
 	var rec *activity.Recorder
 	if payload.ActivityID != nil && *payload.ActivityID != "" {
-		rec = activity.FromID(h.svc.Repo(), *payload.ActivityID)
+		rec = activity.FromID(h.svc.q, *payload.ActivityID)
 	}
 
 	if rec != nil {
@@ -52,19 +49,9 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	doc, err := h.svc.Generate(ctx, payload.JobID, payload.Type, payload.ProfileID, rec)
 	if err != nil {
 		if errors.Is(err, llm.ErrRateLimited) {
-			slog.Warn("generation cancelled: llm rate limited", "jobId", payload.JobID, "type", payload.Type, "error", err)
+			slog.Warn("generation cancelled: cerebras rate limited", "jobId", payload.JobID, "type", payload.Type)
 			if rec != nil {
 				rec.Cancel(ctx, err.Error())
-			}
-			return nil
-		}
-		if llm.Terminal(err) {
-			// Bad credential / missing model / no credits: an asynq retry
-			// would fail identically, so record the reason for the operator
-			// and stop instead of handing the task back to the queue.
-			slog.Error("generation failed: llm misconfigured", "jobId", payload.JobID, "type", payload.Type, "error", err)
-			if rec != nil {
-				rec.Fail(ctx, err)
 			}
 			return nil
 		}

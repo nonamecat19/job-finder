@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/job-finder/api/internal/config"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 type smokeSchema struct {
