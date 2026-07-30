@@ -272,7 +272,7 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, generationRouter, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
 	return &generationHandles{
 		Generation: generationSvc,
-		Handler:    generation.NewHandler(generationSvc),
+		Handler:    generation.NewHandler(generationSvc, p.DB.Queries),
 		Documents:  &httpapi.DocumentsHandler{Generation: generationSvc},
 	}, nil
 }
