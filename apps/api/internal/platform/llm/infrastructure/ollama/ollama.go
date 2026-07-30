@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/job-finder/api/internal/platform/llm/domain"
@@ -25,6 +27,32 @@ type Provider struct {
 	embedURL   string
 	modelName  string
 	embedModel string
+}
+
+// IsHosted reports whether this Ollama server is a hosted/remote instance
+// (e.g. Ollama Cloud) rather than a local one, per research.md R2: hosted
+// when an API key is set, or when the base URL host is not loopback/private.
+// Used by the LLM Router to resolve the admission-gate provider class
+// (019-ai-job-throughput).
+func (o *Provider) IsHosted() bool {
+	if o.apiKey != "" {
+		return true
+	}
+	u, err := url.Parse(o.baseURL)
+	if err != nil {
+		return true
+	}
+	return !isLoopbackOrPrivateHost(u.Hostname())
+}
+
+func isLoopbackOrPrivateHost(host string) bool {
+	if host == "" || host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsPrivate()
+	}
+	return false
 }
 
 // New builds a provider. embedURL empty falls back to baseURL; apiKey empty

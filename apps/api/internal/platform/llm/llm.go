@@ -27,6 +27,7 @@ type (
 	TaskSetting    = application.TaskSetting
 	RouterSnapshot = application.RouterSnapshot
 	SnapshotHolder = application.SnapshotHolder
+	ProviderClass  = application.ProviderClass
 
 	OllamaProvider   = ollama.Provider
 	CerebrasProvider = cerebras.Provider
@@ -36,6 +37,9 @@ type (
 const (
 	TaskProviderOllama   = application.TaskProviderOllama
 	TaskProviderCerebras = application.TaskProviderCerebras
+
+	ProviderClassLocal  = application.ProviderClassLocal
+	ProviderClassHosted = application.ProviderClassHosted
 
 	DefaultCerebrasModel = cerebras.DefaultModel
 )
@@ -50,7 +54,15 @@ var (
 	CerebrasModels           = cerebras.Models
 	IsSupportedCerebrasModel = cerebras.IsSupportedModel
 
-	ErrRateLimited = cerebras.ErrRateLimited
+	ErrRateLimited         = cerebras.ErrRateLimited
+	ErrCredentialRejected  = cerebras.ErrCredentialRejected
+	ErrInsufficientCredits = cerebras.ErrInsufficientCredits
+	ErrModelUnavailable    = cerebras.ErrModelUnavailable
+	ErrProviderUnavailable = cerebras.ErrProviderUnavailable
+	ErrInvalidResponse     = cerebras.ErrInvalidResponse
+
+	Terminal  = cerebras.Terminal
+	Retryable = cerebras.Retryable
 )
 
 // CompleteStructured is the Go equivalent of `completeStructured<T>`; see
