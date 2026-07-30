@@ -12,6 +12,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/salary/domain"
 )
 
 type Repository interface {
@@ -45,7 +46,7 @@ func (s *Service) Infer(ctx context.Context, jobID string) error {
 	bucket := makeBucket(job.Title, ptrStr(job.Location), "")
 
 	if job.SalaryRaw != nil && *job.SalaryRaw != "" {
-		if band, ok := ParseSalaryRaw(*job.SalaryRaw); ok {
+		if band, ok := domain.ParseSalaryRaw(*job.SalaryRaw); ok {
 			slog.Info("salary: parsed from salaryRaw", "job", jobID, "min", band.Min, "max", band.Max, "currency", band.Currency)
 			if err := s.persistJobSalary(ctx, uid, band); err != nil {
 				return err
@@ -55,8 +56,8 @@ func (s *Service) Infer(ctx context.Context, jobID string) error {
 		}
 	}
 
-	cacheBand, cacheOk := s.lookupCache(ctx, bucket, SourceIngestedCache)
-	levelsBand, levelsOk := s.lookupCache(ctx, bucket, SourceLevelsFyi)
+	cacheBand, cacheOk := s.lookupCache(ctx, bucket, domain.SourceIngestedCache)
+	levelsBand, levelsOk := s.lookupCache(ctx, bucket, domain.SourceLevelsFyi)
 
 	if cacheOk && levelsOk {
 		blended := blend(cacheBand, levelsBand)
@@ -82,14 +83,14 @@ func (s *Service) Infer(ctx context.Context, jobID string) error {
 	return s.persistJobSalary(ctx, uid, band)
 }
 
-func (s *Service) lookupCache(ctx context.Context, bucket string, source SalarySource) (SalaryBand, bool) {
+func (s *Service) lookupCache(ctx context.Context, bucket string, source domain.SalarySource) (domain.SalaryBand, bool) {
 	rows, err := s.q.GetSalaryCacheByBucket(ctx, bucket)
 	if err != nil || len(rows) == 0 {
-		return SalaryBand{}, false
+		return domain.SalaryBand{}, false
 	}
 	for _, r := range rows {
 		if r.Source == string(source) {
-			return SalaryBand{
+			return domain.SalaryBand{
 				Min:        intVal(r.SalaryMin),
 				Max:        intVal(r.SalaryMax),
 				Currency:   r.Currency,
@@ -98,10 +99,10 @@ func (s *Service) lookupCache(ctx context.Context, bucket string, source SalaryS
 			}, true
 		}
 	}
-	return SalaryBand{}, false
+	return domain.SalaryBand{}, false
 }
 
-func (s *Service) llmInfer(ctx context.Context, job sqlcgen.Job) (SalaryBand, error) {
+func (s *Service) llmInfer(ctx context.Context, job sqlcgen.Job) (domain.SalaryBand, error) {
 	location := "n/a"
 	if job.Location != nil && *job.Location != "" {
 		location = *job.Location
@@ -125,22 +126,22 @@ func (s *Service) llmInfer(ctx context.Context, job sqlcgen.Job) (SalaryBand, er
 		model = s.llmc.ModelName()
 	}
 
-	band, err := llm.CompleteStructured[SalaryBand](ctx, s.llmc, prompt, &llm.CompleteOptions{
+	band, err := llm.CompleteStructured[domain.SalaryBand](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You are a compensation analyst. Estimate realistic salary ranges based on job title, company, and location.",
 		Model:  model,
 	})
 	if err != nil {
-		return SalaryBand{}, err
+		return domain.SalaryBand{}, err
 	}
 
-	band.Source = SourceLLM
+	band.Source = domain.SourceLLM
 	if band.Confidence == 0 {
 		band.Confidence = 0.3
 	}
 	return band, nil
 }
 
-func (s *Service) persistJobSalary(ctx context.Context, uid pgtype.UUID, band SalaryBand) error {
+func (s *Service) persistJobSalary(ctx context.Context, uid pgtype.UUID, band domain.SalaryBand) error {
 	return s.q.UpdateJobSalary(ctx, sqlcgen.UpdateJobSalaryParams{
 		ID:               uid,
 		SalaryMin:        int32Ptr(int32(band.Min)),
@@ -151,7 +152,7 @@ func (s *Service) persistJobSalary(ctx context.Context, uid pgtype.UUID, band Sa
 	})
 }
 
-func (s *Service) upsertCache(ctx context.Context, bucket string, band SalaryBand) error {
+func (s *Service) upsertCache(ctx context.Context, bucket string, band domain.SalaryBand) error {
 	return s.q.UpsertSalaryCache(ctx, sqlcgen.UpsertSalaryCacheParams{
 		Bucket:     bucket,
 		SalaryMin:  int32Ptr(int32(band.Min)),
@@ -162,7 +163,7 @@ func (s *Service) upsertCache(ctx context.Context, bucket string, band SalaryBan
 	})
 }
 
-func blend(a, b SalaryBand) SalaryBand {
+func blend(a, b domain.SalaryBand) domain.SalaryBand {
 	wA := a.Confidence / (a.Confidence + b.Confidence)
 	wB := b.Confidence / (a.Confidence + b.Confidence)
 
@@ -175,12 +176,12 @@ func blend(a, b SalaryBand) SalaryBand {
 		currency = b.Currency
 	}
 
-	return SalaryBand{
+	return domain.SalaryBand{
 		Min:        min,
 		Max:        max,
 		Currency:   currency,
 		Confidence: confidence,
-		Source:     SourceBlended,
+		Source:     domain.SourceBlended,
 	}
 }
 
