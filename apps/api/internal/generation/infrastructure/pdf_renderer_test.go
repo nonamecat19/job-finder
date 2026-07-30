@@ -1,4 +1,4 @@
-package generation
+package infrastructure
 
 import (
 	"reflect"
@@ -21,13 +21,5 @@ func TestSplitParagraphs(t *testing.T) {
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("splitParagraphs(%q) = %#v, want %#v", c.in, got, c.want)
 		}
-	}
-}
-
-func TestSanitize(t *testing.T) {
-	got := sanitize("Acme Corp / Special Chars!! — Senior Engineer")
-	want := "acme_corp_special_chars_senior_engineer"
-	if got != want {
-		t.Errorf("sanitize() = %q, want %q", got, want)
 	}
 }

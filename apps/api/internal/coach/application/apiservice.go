@@ -1,4 +1,4 @@
-package coach
+package application
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/job-finder/api/internal/coach/domain"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
@@ -39,7 +40,7 @@ type DiffReader interface {
 // profile type so this package never needs to import internal/profile —
 // main.go closes over profile.Service when wiring the AssessmentService,
 // keeping the dependency graph acyclic (mirrors keyword.BulletsProvider).
-type ProfileEntriesFunc func(ctx context.Context) ([]ProfileEntry, error)
+type ProfileEntriesFunc func(ctx context.Context) ([]domain.ProfileEntry, error)
 
 // AssessmentService orchestrates the fit-gap coach for the HTTP layer
 // (009-wiring): it reads the persisted keyword diff and the profile's
@@ -59,7 +60,7 @@ type AssessmentService struct {
 	entries ProfileEntriesFunc
 
 	mu    sync.RWMutex
-	cache map[string]*FitGapAssessment
+	cache map[string]*domain.FitGapAssessment
 }
 
 // NewAssessmentService wires an AssessmentService. entries may be nil, in
@@ -70,7 +71,7 @@ func NewAssessmentService(svc *Service, diffs DiffReader, entries ProfileEntries
 		svc:     svc,
 		diffs:   diffs,
 		entries: entries,
-		cache:   make(map[string]*FitGapAssessment),
+		cache:   make(map[string]*domain.FitGapAssessment),
 	}
 }
 
@@ -83,7 +84,7 @@ func (a *AssessmentService) Assess(ctx context.Context, jobID string) (dto.FitGa
 		return dto.FitGapAssessmentDto{}, err
 	}
 
-	var entries []ProfileEntry
+	var entries []domain.ProfileEntry
 	if a.entries != nil {
 		entries, err = a.entries(ctx)
 		if err != nil {
@@ -183,33 +184,4 @@ func unmarshalDiffTerms(raw []byte) ([]keyword.DiffTerm, error) {
 		return nil, err
 	}
 	return terms, nil
-}
-
-// ToDto flattens a FitGapAssessment into its wire shape.
-func (a *FitGapAssessment) ToDto() dto.FitGapAssessmentDto {
-	gaps := make([]dto.FitGapItemDto, 0, len(a.Gaps))
-	for _, g := range a.Gaps {
-		evidence := make([]dto.FitGapEvidenceDto, 0, len(g.AdjacentEvidence))
-		for _, e := range g.AdjacentEvidence {
-			evidence = append(evidence, dto.FitGapEvidenceDto{
-				SourceEntry:  e.SourceEntry,
-				SourceBullet: e.SourceBullet,
-				Proximity:    string(e.Proximity),
-				Rephrase:     e.Rephrase,
-			})
-		}
-		gaps = append(gaps, dto.FitGapItemDto{
-			Term:               g.Term,
-			Polarity:           g.Polarity,
-			AdjacentEvidence:   evidence,
-			NoAdjacentEvidence: g.NoAdjacentEvidence,
-		})
-	}
-	return dto.FitGapAssessmentDto{
-		JobID:           a.JobID,
-		TotalMustHaves:  a.TotalMustHaves,
-		FailedMustHaves: a.FailedMustHaves,
-		CoveragePct:     a.CoveragePct,
-		Gaps:            gaps,
-	}
 }

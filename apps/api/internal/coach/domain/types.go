@@ -1,12 +1,13 @@
-package coach
+// Package domain holds the fit-gap coach's core model (spec 009 §1):
+// FitGapAssessment/GapItem/EvidenceItem/ProfileEntry, and the pure
+// grounding-verification helpers the application layer's LLM rephrase call
+// relies on.
+package domain
 
-// Package coach — fit-gap assessment for missing must-haves (spec 009 §1).
-// Produces the coach payload: 'you fail N of M must-haves', and per failed
-// must-have up to 3 concrete items from the profile that count as adjacent.
-// Every adjacent claim cites its source profile entry. If nothing adjacent
-// exists, noAdjacentEvidence is set true — the honest empty result.
-
-import "github.com/job-finder/api/internal/keyword"
+import (
+	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/keyword"
+)
 
 // FitGapAssessment is the coach output: failure summary + per-gap adjacent
 // evidence (spec 009 §1).
@@ -41,4 +42,33 @@ type ProfileEntry struct {
 	SourceLabel string
 	// Bullet is the verbatim profile bullet text
 	Bullet string
+}
+
+// ToDto flattens a FitGapAssessment into its wire shape.
+func (a *FitGapAssessment) ToDto() dto.FitGapAssessmentDto {
+	gaps := make([]dto.FitGapItemDto, 0, len(a.Gaps))
+	for _, g := range a.Gaps {
+		evidence := make([]dto.FitGapEvidenceDto, 0, len(g.AdjacentEvidence))
+		for _, e := range g.AdjacentEvidence {
+			evidence = append(evidence, dto.FitGapEvidenceDto{
+				SourceEntry:  e.SourceEntry,
+				SourceBullet: e.SourceBullet,
+				Proximity:    string(e.Proximity),
+				Rephrase:     e.Rephrase,
+			})
+		}
+		gaps = append(gaps, dto.FitGapItemDto{
+			Term:               g.Term,
+			Polarity:           g.Polarity,
+			AdjacentEvidence:   evidence,
+			NoAdjacentEvidence: g.NoAdjacentEvidence,
+		})
+	}
+	return dto.FitGapAssessmentDto{
+		JobID:           a.JobID,
+		TotalMustHaves:  a.TotalMustHaves,
+		FailedMustHaves: a.FailedMustHaves,
+		CoveragePct:     a.CoveragePct,
+		Gaps:            gaps,
+	}
 }

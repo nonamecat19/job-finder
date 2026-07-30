@@ -1,4 +1,6 @@
-package generation
+// Package worker holds the Document Generation bounded context's inbound
+// worker adapter: the asynq "generate" task handler.
+package worker
 
 import (
 	"context"
@@ -10,16 +12,17 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/generation/application"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/queue"
 )
 
 // Handler processes "generate" asynq tasks, mirroring generation.processor.ts.
 type Handler struct {
-	svc *Service
+	svc *application.Service
 }
 
-func NewHandler(svc *Service) *Handler {
+func NewHandler(svc *application.Service) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -31,7 +34,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 
 	var rec *activity.Recorder
 	if payload.ActivityID != nil && *payload.ActivityID != "" {
-		rec = activity.FromID(h.svc.q, *payload.ActivityID)
+		rec = activity.FromID(h.svc.Repo(), *payload.ActivityID)
 	}
 
 	if rec != nil {

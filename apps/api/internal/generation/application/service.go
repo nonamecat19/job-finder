@@ -1,9 +1,14 @@
-package generation
+// Package application holds the Document Generation use-case:
+// tailorResume/writeCoverLetter with grounding verify+retry, dispatching to
+// the HTML/chromedp and RenderCV rendering ports, and the ad-hoc/job-tied
+// document persistence. Mirrors modules/generation/*.
+package application
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,22 +17,38 @@ import (
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/domain"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/generation/domain"
 	"github.com/job-finder/api/internal/llm"
 	"github.com/job-finder/api/internal/strutil"
+
+	"gopkg.in/yaml.v3"
 )
 
 const groundingAttempts = 2
 
 var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 
+// HtmlRenderer is the outbound port for rendering a JSON-Resume cover letter
+// to PDF via html/template + a headless browser. The infrastructure package's
+// HtmlPdfRenderer satisfies it.
+type HtmlRenderer interface {
+	RenderCoverLetter(ctx context.Context, text string, name *string, company, title string, outName string) (string, error)
+}
+
+// RendercvRenderer is the outbound port for rendering a RendercvMaster to PDF
+// via the `rendercv` CLI. The infrastructure package's RenderCvRenderer
+// satisfies it.
+type RendercvRenderer interface {
+	Render(ctx context.Context, master domain.RendercvMaster, baseName string) (yamlPath, pdfPath string, err error)
+}
+
 type AdHocInput struct {
 	Vacancy        string
 	Company        string
 	Title          string
-	GroundingLevel *GroundingLevel
-	Hints          *VacancyHints
+	GroundingLevel *domain.GroundingLevel
+	Hints          *domain.VacancyHints
 }
 
 type coverLetterResult struct {
@@ -35,19 +56,28 @@ type coverLetterResult struct {
 }
 
 type Service struct {
-	q            Repository
-	profiles     ProfileStore
-	htmlRenderer *HtmlPdfRenderer
-	rendercv     *RenderCvRenderer
+	q            domain.Repository
+	profiles     domain.ProfileStore
+	htmlRenderer HtmlRenderer
+	rendercv     RendercvRenderer
 	llmc         llm.Provider
 	genModel     string
-	defaultLevel GroundingLevel
+	masterPath   string
+	defaultLevel domain.GroundingLevel
 }
 
-func NewService(q Repository, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, genModel, defaultLevel string) *Service {
+// Repo returns the underlying persistence port, so callers in another
+// package (the interfaces/worker Handler) can resume an activity.Recorder
+// from the same value without reaching into an unexported field.
+func (s *Service) Repo() domain.Repository { return s.q }
+
+func NewService(q domain.Repository, profiles domain.ProfileStore, htmlRenderer HtmlRenderer, rendercv RendercvRenderer, llmc llm.Provider, genModel, masterPath, defaultLevel string) *Service {
+	if masterPath == "" {
+		masterPath = "./resume/resume.yaml"
+	}
 	return &Service{
 		q: q, profiles: profiles, htmlRenderer: htmlRenderer, rendercv: rendercv, llmc: llmc, genModel: genModel,
-		defaultLevel: ParseGroundingLevel(defaultLevel),
+		masterPath: masterPath, defaultLevel: domain.ParseGroundingLevel(defaultLevel),
 	}
 }
 
@@ -69,8 +99,8 @@ func sanitize(s string) string {
 	return out
 }
 
-func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMaster, error) {
-	var prof domain.Profile
+func (s *Service) masterFor(ctx context.Context, profileID *string) (domain.RendercvMaster, error) {
+	var prof sqlcgen.Profile
 	var err error
 	if profileID != nil && *profileID != "" {
 		prof, err = s.profiles.Get(ctx, *profileID)
@@ -78,9 +108,19 @@ func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMas
 		prof, err = s.profiles.GetDefault(ctx)
 	}
 	if err == nil && prof.RendercvConfig != nil {
-		return MasterFromConfig(prof.RendercvConfig)
+		return domain.MasterFromProfile(prof)
 	}
-	return nil, fmt.Errorf("generation: no profile or RenderCV config found — upload a resume via the dashboard first")
+
+	// Dev fallback to masterPath if no profile exists
+	data, err := os.ReadFile(s.masterPath)
+	if err != nil {
+		return nil, fmt.Errorf("generation: read master resume from %s: %w", s.masterPath, err)
+	}
+	var master map[string]any
+	if err := yaml.Unmarshal(data, &master); err != nil {
+		return nil, fmt.Errorf("generation: parse master resume: %w", err)
+	}
+	return domain.RendercvMaster(domain.NormalizeYAMLMap(master).(map[string]any)), nil
 }
 
 // GenerateAdHoc tailors a resume and writes a cover letter from pasted
@@ -130,7 +170,7 @@ func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, 
 		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
 	}
 
-	profileText := RendercvToText(master)
+	profileText := domain.RendercvToText(master)
 	letter, err := s.writeCoverLetter(ctx, profileText, extraNotes, company, title, in.Vacancy)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
@@ -174,7 +214,7 @@ func (s *Service) ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocume
 	return out, nil
 }
 
-func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaster, vacancy string, level GroundingLevel, hints *VacancyHints, rec *activity.Recorder) (RendercvMaster, error) {
+func (s *Service) tailorRendercvResume(ctx context.Context, master domain.RendercvMaster, vacancy string, level domain.GroundingLevel, hints *domain.VacancyHints, rec *activity.Recorder) (domain.RendercvMaster, error) {
 	if rec != nil {
 		rec.Step(ctx, "analyzing vacancy", nil)
 	}
@@ -192,14 +232,14 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaste
 		if err != nil {
 			return nil, err
 		}
-		merged, err := mergeTailored(master, payload)
+		merged, err := domain.MergeTailored(master, payload)
 		if err != nil {
 			return nil, err
 		}
 		if rec != nil {
 			rec.Step(ctx, fmt.Sprintf("grounding check (attempt %d/%d)", attempt+1, groundingAttempts), nil)
 		}
-		lastViolations = verifyRendercvGrounding(master, merged, level)
+		lastViolations = domain.VerifyRendercvGrounding(master, merged, level)
 		if len(lastViolations) == 0 {
 			return merged, nil
 		}
@@ -221,7 +261,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("job %s not found", jobID)
 	}
 
-	var prof domain.Profile
+	var prof sqlcgen.Profile
 	if profileID != nil {
 		prof, err = s.profiles.Get(ctx, *profileID)
 	} else {
@@ -233,11 +273,11 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	if prof.RendercvConfig == nil {
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("precondition failed: profile has no RenderCV config — upload one first")
 	}
-	master, err := MasterFromConfig(prof.RendercvConfig)
+	master, err := domain.MasterFromProfile(prof)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
-	profileText := RendercvToText(master)
+	profileText := domain.RendercvToText(master)
 
 	maxVersion, err := s.q.MaxDocumentVersion(ctx, sqlcgen.MaxDocumentVersionParams{JobId: jid, Type: docType})
 	if err != nil {
@@ -410,7 +450,7 @@ func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.Gene
 	if prof.RendercvConfig == nil {
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("profile has no RenderCV config")
 	}
-	master, err := MasterFromConfig(prof.RendercvConfig)
+	master, err := domain.MasterFromProfile(prof)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}

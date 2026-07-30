@@ -1,6 +1,6 @@
 //go:build live
 
-package generation
+package infrastructure
 
 // Manual smoke test for the chromedp/chromium PDF path (not part of
 // `go test ./...` — requires a working chromium binary). Run with:
