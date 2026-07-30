@@ -1,8 +1,9 @@
-package keyword
+package rephraseadapter
 
 import (
 	"context"
 
+	"github.com/job-finder/api/internal/keyword/application"
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
@@ -15,7 +16,7 @@ type ProviderRephraseModel struct {
 	model string
 }
 
-var _ RephraseModel = (*ProviderRephraseModel)(nil)
+var _ application.RephraseModel = (*ProviderRephraseModel)(nil)
 
 // NewProviderRephraseModel wraps p; model overrides the provider default when
 // non-empty (per-task model selection, mirroring generation.Service.genModel).

@@ -11,6 +11,8 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/platform/llm"
+
+	"github.com/job-finder/api/internal/recruiter/domain"
 )
 
 // Repository is the outbound persistence port Resolve needs. *sqlcgen.Queries
@@ -108,7 +110,7 @@ func (s *Service) Resolve(ctx context.Context, jobID string) ([]dto.JobContactDt
 // never affects the others (FR-015).
 type resolutionSource struct {
 	name string
-	run  func(ctx context.Context) ([]ResolvedContact, error)
+	run  func(ctx context.Context) ([]domain.ResolvedContact, error)
 }
 
 // sources builds the ordered list of resolution sources to run for one
@@ -120,8 +122,8 @@ type resolutionSource struct {
 func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSource {
 	sources := []resolutionSource{
 		{
-			name: SourcePosting,
-			run: func(ctx context.Context) ([]ResolvedContact, error) {
+			name: domain.SourcePosting,
+			run: func(ctx context.Context) ([]domain.ResolvedContact, error) {
 				contact, err := ExtractPostingContact(ctx, s.llmc, s.postingModel, job.Description)
 				if err != nil {
 					return nil, err
@@ -129,7 +131,7 @@ func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSour
 				if contact == nil {
 					return nil, nil
 				}
-				return []ResolvedContact{*contact}, nil
+				return []domain.ResolvedContact{*contact}, nil
 			},
 		},
 		s.companyPageSource(job),
@@ -140,7 +142,7 @@ func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSour
 	return sources
 }
 
-func (s *Service) upsert(ctx context.Context, jobID pgtype.UUID, c ResolvedContact) (sqlcgen.JobContact, error) {
+func (s *Service) upsert(ctx context.Context, jobID pgtype.UUID, c domain.ResolvedContact) (sqlcgen.JobContact, error) {
 	return s.q.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
 		JobId:       jobID,
 		Name:        c.Name,

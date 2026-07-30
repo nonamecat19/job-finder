@@ -2,18 +2,45 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/outreach/domain"
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// maxDraftChars is the hard length ceiling (FR-009): outreach is a brief
-// opener a busy recruiter reads in one glance, not a cover letter.
-const maxDraftChars = 500
+// Re-export the domain model the orchestration below builds on, so the
+// application package's own tests and the cross-context callers that still
+// import this package can reference them unqualified (matching the shape
+// before the bounded-context split).
+type (
+	Tone           = domain.Tone
+	Fact           = domain.Fact
+	GroundingTrace = domain.GroundingTrace
+	OutreachDraft  = domain.OutreachDraft
+)
+
+const (
+	ToneWarm   = domain.ToneWarm
+	ToneDirect = domain.ToneDirect
+	ToneFormal = domain.ToneFormal
+
+	DefaultTone = domain.DefaultTone
+
+	MaxDraftChars = domain.MaxDraftChars
+)
+
+var (
+	AllTones          = domain.AllTones
+	ErrContactNotFound = domain.ErrContactNotFound
+	ErrContactRequired = domain.ErrContactRequired
+)
+
+// maxDraftChars shadows MaxDraftChars for the few call sites and tests that
+// still read the historical unexported name.
+const maxDraftChars = MaxDraftChars
 
 // maxAttempts bounds the grounded-generation retry loop (grounding
 // violation or over-length), mirroring coach.generateGroundedRephrase's
@@ -21,14 +48,21 @@ const maxDraftChars = 500
 // generic opener is used instead — never a fabricated or over-length draft.
 const maxAttempts = 3
 
-// ErrContactNotFound is returned when a caller passes a contactID that does
-// not match any resolved contact for the job.
-var ErrContactNotFound = errors.New("outreach: contact not found for job")
+// normalizeTone wraps domain.NormalizeTone for the historical unqualified
+// call site in this package.
+func normalizeTone(raw string) Tone { return domain.NormalizeTone(raw) }
 
-// ErrContactRequired is returned when more than one contact is resolved for
-// the job and the caller did not choose one (FR-008): the draft must
-// address exactly one recipient, never silently merge or guess among them.
-var ErrContactRequired = errors.New("outreach: multiple contacts resolved — choose one")
+// genericOpener wraps domain.GenericOpener for the historical unqualified
+// call sites in this package.
+func genericOpener(tone Tone, contactName, companyName string) string {
+	return domain.GenericOpener(tone, contactName, companyName)
+}
+
+// enforceLength wraps domain.EnforceLength for the historical unqualified
+// call site in this package.
+func enforceLength(text string, traces []GroundingTrace, max int) (string, []GroundingTrace) {
+	return domain.EnforceLength(text, traces, max)
+}
 
 // ContactsProvider is the outbound port onto the resolved contacts a draft
 // may address (plan 007). *recruiter.Service satisfies it structurally.
@@ -187,34 +221,6 @@ func factsFrom(intel *dto.CompanyIntelDto) []Fact {
 	}
 	if intel.TechStack != nil && strings.TrimSpace(*intel.TechStack) != "" {
 		out = append(out, Fact{Kind: "tech_stack", Value: strings.TrimSpace(*intel.TechStack)})
-	}
-	return out
-}
-
-// ToDto flattens an OutreachDraft into its wire shape.
-func (d *OutreachDraft) ToDto() dto.OutreachDraftDto {
-	traces := make([]dto.GroundingTraceDto, 0, len(d.GroundingTraces))
-	for _, tr := range d.GroundingTraces {
-		traces = append(traces, dto.GroundingTraceDto{
-			Claim:       tr.Claim,
-			SignalKind:  tr.SignalKind,
-			SignalValue: tr.SignalValue,
-		})
-	}
-	out := dto.OutreachDraftDto{
-		JobID:           d.JobID,
-		Tone:            string(d.Tone),
-		Text:            d.Text,
-		GroundingTraces: traces,
-		GeneratedAt:     d.GeneratedAt.Format(time.RFC3339),
-	}
-	if d.ContactID != "" {
-		id := d.ContactID
-		out.ContactID = &id
-	}
-	if d.ContactName != "" {
-		name := d.ContactName
-		out.ContactName = &name
 	}
 	return out
 }

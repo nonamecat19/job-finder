@@ -12,7 +12,7 @@ type (
 	CachedRephraser        = application.CachedRephraser
 	RephraseSuggestion     = application.RephraseSuggestion
 	RephraseModel          = application.RephraseModel
-	Rephraser              = application.Rephrase
+	Rephraser              = application.Rephraser
 	BulletsProvider        = application.BulletsProvider
 	DiffReader             = application.DiffReader
 	LexicalEvidenceFinder  = application.LexicalEvidenceFinder
