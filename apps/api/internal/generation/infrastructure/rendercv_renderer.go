@@ -1,4 +1,4 @@
-package infrastructure
+package generation
 
 import (
 	"bytes"
@@ -12,8 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/job-finder/api/internal/generation/domain"
-	"github.com/job-finder/api/internal/storage"
+	"github.com/job-finder/api/internal/platform/storage"
 )
 
 // RenderCvRenderer renders a (tailored) RenderCV master object to PDF by
@@ -42,7 +41,7 @@ func NewRenderCvRenderer(outDir, bin string) *RenderCvRenderer {
 // Render writes master to <outDir>/<baseName>.yaml and runs
 // `rendercv render <yaml> -o <outDir> -pdf <baseName>.pdf -nopng -nohtml -nomd`,
 // returning both file paths.
-func (r *RenderCvRenderer) Render(ctx context.Context, master domain.RendercvMaster, baseName string) (yamlPath, pdfPath string, err error) {
+func (r *RenderCvRenderer) Render(ctx context.Context, master RendercvMaster, baseName string) (yamlPath, pdfPath string, err error) {
 	outDir, err := ensureOutDir(r.outDir)
 	if err != nil {
 		return "", "", fmt.Errorf("rendercv: mkdir: %w", err)
@@ -50,11 +49,7 @@ func (r *RenderCvRenderer) Render(ctx context.Context, master domain.RendercvMas
 	yamlPath = filepath.Join(outDir, baseName+".yaml")
 	pdfPath = filepath.Join(outDir, baseName+".pdf")
 
-	prepared, err := PrepareMasterForMarshal(master)
-	if err != nil {
-		return "", "", fmt.Errorf("rendercv: prepare master: %w", err)
-	}
-	data, err := yaml.Marshal(map[string]any(prepared))
+	data, err := yaml.Marshal(map[string]any(master))
 	if err != nil {
 		return "", "", err
 	}
