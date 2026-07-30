@@ -15,6 +15,7 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation"
+	"github.com/job-finder/api/internal/matching/domain"
 	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/profile"
 	"github.com/job-finder/api/internal/strutil"
@@ -23,15 +24,21 @@ import (
 var ErrNoProfileConfig = errors.New("no profile config")
 
 type Service struct {
-	q          Repository
+	q          domain.Repository
 	profiles   *profile.Service
 	llmc       llm.Provider
 	threshold  float64
 	matchModel string
 }
 
-func NewService(q Repository, profiles *profile.Service, llmc llm.Provider, threshold float64, matchModel string) *Service {
+func NewService(q domain.Repository, profiles *profile.Service, llmc llm.Provider, threshold float64, matchModel string) *Service {
 	return &Service{q: q, profiles: profiles, llmc: llmc, threshold: threshold, matchModel: matchModel}
+}
+
+// Store exposes the repository as an activity.Store so the worker handler
+// can resume an activity record for a task's ActivityID.
+func (s *Service) Store() activity.Store {
+	return s.q
 }
 
 // fitModel returns the model used for fit scoring, falling back to the
@@ -137,7 +144,7 @@ func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Reco
 		rec.Step(ctx, "LLM fit analysis", nil)
 	}
 
-	fit, err := llm.CompleteStructured[FitResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
+	fit, err := llm.CompleteStructured[domain.FitResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
 		System: "You are a precise technical recruiter. Judge only from the given profile and job text.",
 		Model:  s.matchModel,
 	})

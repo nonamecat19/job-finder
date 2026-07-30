@@ -160,7 +160,3 @@ func TestRemotiveHealthCheck(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
-
-func strPtr(s string) *string {
-	return &s
-}

@@ -76,7 +76,11 @@ type Config struct {
 	// resulting session cookie in the DB (never in env).
 	JobLeadsEmail    string `mapstructure:"JOBLEADS_EMAIL"`
 	JobLeadsPassword string `mapstructure:"JOBLEADS_PASSWORD"`
-	JoobleAPIKey     string `mapstructure:"JOOBLE_API_KEY"`
+	// Djinni credentials: DjinniSession logs in with these and stores the
+	// resulting session cookie in the DB (never in env).
+	DjinniEmail    string `mapstructure:"DJINNI_EMAIL"`
+	DjinniPassword string `mapstructure:"DJINNI_PASSWORD"`
+	JoobleAPIKey   string `mapstructure:"JOOBLE_API_KEY"`
 	// DjinniDetailDelayMs is the pause before each detail-page fetch in the
 	// enrich queue (concurrency 1), to avoid rate-limiting/banning.
 	DjinniDetailDelayMs int `mapstructure:"DJINNI_DETAIL_DELAY_MS"`
@@ -91,6 +95,9 @@ type Config struct {
 
 	// Optional services
 	FlaresolverrURL string `mapstructure:"FLARESOLVERR_URL"`
+	// JobspyURL is the python jobspy sidecar endpoint (apps/jobspy-sidecar),
+	// used as JobSpyAdapter's default when a source's runtime config omits it.
+	JobspyURL string `mapstructure:"JOBSPY_URL"`
 
 	// Browser identity version — bumped whenever the UA/header/TLS profile changes.
 	BrowserIdentityVersion string `mapstructure:"BROWSER_IDENTITY_VERSION"`
@@ -121,6 +128,9 @@ type Config struct {
 	// RenderCV
 	ResumeGroundingLvl string `mapstructure:"RESUME_GROUNDING_LEVEL"`
 	RendercvBin        string `mapstructure:"RENDERCV_BIN"`
+	// ResumeMasterPath is the dev-fallback master resume YAML path, used when
+	// no profile exists yet. Empty falls back to ./resume/resume.yaml.
+	ResumeMasterPath string `mapstructure:"RESUME_MASTER_PATH"`
 
 	// Salary inference
 	LevelsFyiCSV   string `mapstructure:"LEVELS_FYI_CSV"`

@@ -41,7 +41,7 @@ func TestLive_Arbeitnow(t *testing.T) {
 func TestLive_WorkUa(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	a := WorkUaAdapter{Scraping: scraping.New(nil)}
+	a := WorkUaAdapter{Scraping: scraping.New()}
 	jobs, err := a.Search(ctx, dto.SearchQuery{Keywords: "php"}, nil)
 	if err != nil {
 		t.Fatalf("workua search failed: %v", err)

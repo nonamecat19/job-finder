@@ -117,7 +117,6 @@ func TestJobSpySearch(t *testing.T) {
 	adapter := JobSpyAdapter{}
 	query := dto.SearchQuery{
 		Keywords: "golang",
-		Site:     strPtr("linkedin"),
 		Remote:   boolPtr(true),
 	}
 

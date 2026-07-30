@@ -6,11 +6,12 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
-	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/platform/scraping"
+	"github.com/job-finder/api/internal/queue"
 )
 
 // Platform holds the process-wide shared infrastructure that every feature
@@ -18,12 +19,21 @@ import (
 // headless-scraping service, and the djinni session shared by pointer across
 // the adapter registry and the enrichment handler.
 type Platform struct {
-	Config      *config.Config
-	DB          *db.DB
-	Logger      *slog.Logger
-	RedisOpt    asynq.RedisClientOpt
-	AsynqClient *asynq.Client
-	Scraping    *scraping.Service
+	Config         *config.Config
+	DB             *db.DB
+	Logger         *slog.Logger
+	RedisOpt       asynq.RedisClientOpt
+	AsynqClient    *asynq.Client
+	AsynqInspector *asynq.Inspector
+	Scraping       *scraping.Service
+
+	// Policies is the resolved per-task-type concurrency/deadline
+	// configuration (019-ai-job-throughput), looked up by policyFor.
+	Policies []queue.TaskPolicy
+
+	// Sweeper reclaims activity runs stuck "running" past their deadline
+	// (019-ai-job-throughput).
+	Sweeper *activity.Sweeper
 
 	// DjinniSession is shared by pointer with every DjinniAdapter copy
 	// (registry + enrichment handler); its Sources back-reference is wired once
@@ -49,13 +59,27 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 
+	policies, err := queue.PoliciesFromConfig(cfg)
+	if err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		return nil, err
+	}
+
+	asynqInspector := asynq.NewInspector(redisOpt)
+	sweeper := activity.NewSweeper(database.Queries, asynqInspector,
+		cfg.ActivityStaleAfter, cfg.ActivitySweepInterval, cfg.ActivityQueuedGrace)
+
 	return &Platform{
-		Config:        cfg,
-		DB:            database,
-		Logger:        slog.Default(),
-		RedisOpt:      redisOpt,
-		AsynqClient:   asynq.NewClient(redisOpt),
-		Scraping:      scrapingSvc,
-		DjinniSession: &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
+		Config:         cfg,
+		DB:             database,
+		Logger:         slog.Default(),
+		RedisOpt:       redisOpt,
+		AsynqClient:    asynq.NewClient(redisOpt),
+		AsynqInspector: asynqInspector,
+		Scraping:       scrapingSvc,
+		Policies:       policies,
+		Sweeper:        sweeper,
+		DjinniSession:  &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
 	}, nil
 }

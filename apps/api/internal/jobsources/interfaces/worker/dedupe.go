@@ -13,6 +13,7 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/jobsources/domain"
 )
 
 var boardVendors = []string{"greenhouse", "lever", "ashby", "workable", "smartrecruiters"}
@@ -92,7 +93,7 @@ func DedupeKey(company, title, rawURL string) string {
 // It matches by normalized company name (case-insensitive) + similar title
 // (significant word overlap). Embedding similarity is deferred to the match
 // stage since jobs typically have no embedding at ingestion time.
-func FindMergeCandidate(ctx context.Context, q Repository, j dto.NormalizedJob) (pgtype.UUID, error) {
+func FindMergeCandidate(ctx context.Context, q domain.SearchRepository, j dto.NormalizedJob) (pgtype.UUID, error) {
 	if !IsBoardVendor(j.SourceKey) {
 		return pgtype.UUID{}, nil
 	}

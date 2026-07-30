@@ -84,10 +84,10 @@ func errMessage(status int, body []byte) string {
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &parsed); err == nil && parsed.Error.Message != "" {
-		switch {
-		case status == http.StatusTooManyRequests:
+		switch status {
+		case http.StatusTooManyRequests:
 			return fmt.Sprintf("cerebras: rate limit or quota exceeded: %s", parsed.Error.Message)
-		case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		case http.StatusUnauthorized, http.StatusForbidden:
 			return fmt.Sprintf("cerebras: credential rejected: %s", parsed.Error.Message)
 		default:
 			return fmt.Sprintf("cerebras: returned %d: %s", status, parsed.Error.Message)

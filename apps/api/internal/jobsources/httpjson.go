@@ -26,6 +26,11 @@ var defaultClient = &http.Client{
 // client is provided. Intended for tests that mock vendor API responses.
 func SetDefaultClient(c *http.Client) { defaultClient = c }
 
+// DefaultClient returns the HTTP client currently used by adapters when no
+// explicit client is provided. Intended for tests that save/restore it
+// around a SetDefaultClient swap.
+func DefaultClient() *http.Client { return defaultClient }
+
 // GetJSON performs a GET with query params and decodes the JSON response
 // body into out. Equivalent to `axios.get(url, { params, timeout })`.
 func GetJSON(ctx context.Context, client *http.Client, rawURL string, params url.Values, out any) error {

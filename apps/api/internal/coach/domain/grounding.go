@@ -121,7 +121,7 @@ func isPlainCapitalized(tok string) bool {
 		return false
 	}
 	r := []rune(tok)
-	if !(r[0] >= 'A' && r[0] <= 'Z') {
+	if r[0] < 'A' || r[0] > 'Z' {
 		return false
 	}
 	for _, c := range r[1:] {
