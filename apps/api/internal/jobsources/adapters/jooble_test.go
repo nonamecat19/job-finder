@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -121,7 +122,7 @@ func TestJoobleKind(t *testing.T) {
 
 func TestJoobleSearchMissingAPIKey(t *testing.T) {
 	adapter := JoobleAdapter{}
-	_, err := adapter.Search(nil, dto.SearchQuery{Keywords: "test"}, map[string]any{})
+	_, err := adapter.Search(context.TODO(), dto.SearchQuery{Keywords: "test"}, map[string]any{})
 	if err == nil {
 		t.Error("expected error for missing API key")
 	}

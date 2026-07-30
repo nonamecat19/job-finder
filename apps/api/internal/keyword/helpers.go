@@ -15,6 +15,27 @@ func lowerASCII(s string) string {
 	return string(b)
 }
 
+// titleCaseWords upper-cases the first ASCII letter of each space-separated
+// word, leaving the rest untouched. This exists in place of the deprecated
+// strings.Title (removed guidance: golang.org/x/text/cases) because we only
+// ever call it on already-lowercased, space-joined ASCII synonym-map keys —
+// the Unicode word-boundary subtleties strings.Title mishandles don't apply
+// here, so pulling in x/text/cases would be one dependency for zero benefit.
+func titleCaseWords(s string) string {
+	words := strings.Fields(s)
+	for i, w := range words {
+		if w == "" {
+			continue
+		}
+		b := []byte(w)
+		if b[0] >= 'a' && b[0] <= 'z' {
+			b[0] -= 'a' - 'A'
+		}
+		words[i] = string(b)
+	}
+	return strings.Join(words, " ")
+}
+
 // collapseSpace turns runs of whitespace into a single space.
 func collapseSpace(s string) string {
 	return strings.Join(strings.Fields(s), " ")

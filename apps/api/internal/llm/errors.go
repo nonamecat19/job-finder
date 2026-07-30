@@ -120,8 +120,6 @@ type rateLimitBreaker struct {
 	until atomic.Int64 // unix nano; 0 or in the past = not tripped
 }
 
-func (b *rateLimitBreaker) trip() { b.tripFor(rateLimitCooldown) }
-
 // tripFor holds the breaker for d, clamped to (0, maxRateLimitCooldown].
 // A later reset never shortens an earlier, longer one.
 func (b *rateLimitBreaker) tripFor(d time.Duration) {

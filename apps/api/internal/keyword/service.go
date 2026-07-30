@@ -35,21 +35,6 @@ var (
 	}
 )
 
-// Inline polarity markers (spec 008-1 §1.1 / §1.2).
-var (
-	requiredMarkers = []string{
-		"must have", "required", "essential", "minimum of", "requires",
-		"prerequisite", "necessary", "need to", "mandatory", "you will",
-		"you are responsible for", "you'll", "the ideal candidate will have",
-		"at least", "years of experience", "years experience", "years of",
-	}
-	preferredMarkers = []string{
-		"nice to have", "preferred", "a plus", "bonus", "desired",
-		"ideal but not required", "would be great", "familiarity with",
-		"knowledge of", "experience with", "plus if",
-	}
-)
-
 // headerRe matches a section header: a line that is short, possibly bolded
 // (markdown **...** or leading #), and ends before a blank line.
 var headerRe = regexp.MustCompile(`(?m)^(?:\s*(?:#{1,3}\s*|\*\*)?)([A-Z][A-Za-z0-9 /&+'.()-]{2,60}?)(?:\s*\*\*)?\s*[:\s]*$`)
@@ -221,7 +206,7 @@ func mergeMultiWord(candidate string) []string {
 				continue
 			}
 			phrase := strings.Join(tokens[i:i+span], " ")
-			if _, ok := synonymMap[strings.Title(strings.ToLower(phrase))]; ok {
+			if _, ok := synonymMap[titleCaseWords(strings.ToLower(phrase))]; ok {
 				best = span
 				break
 			}
