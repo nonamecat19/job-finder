@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/job-finder/api/internal/generation/domain"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/strutil"
 )
 

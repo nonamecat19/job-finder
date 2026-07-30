@@ -27,7 +27,7 @@ import (
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
 	"github.com/job-finder/api/internal/retrieval"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 const (

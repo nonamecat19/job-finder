@@ -1,4 +1,4 @@
-package ingestion_test
+package worker_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	"github.com/job-finder/api/internal/ingestion"
+	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -15,7 +15,7 @@ import (
 // retrying cannot fix — otherwise a malformed payload burns the whole retry
 // budget re-running a decode that will never succeed.
 func TestProcessTask_InvalidPayloadIsNotRetried(t *testing.T) {
-	h := ingestion.NewHandler(&fakeRepo{}, nil, nil, &fakeEnqueuer{})
+	h := worker.NewHandler(&fakeRepo{}, nil, nil, &fakeEnqueuer{})
 
 	err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeIngest, []byte("not json")))
 	if err == nil {

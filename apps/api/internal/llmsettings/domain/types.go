@@ -8,7 +8,7 @@ import (
 	"errors"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // TaskKeys are the fixed set of chat tasks that have an independent

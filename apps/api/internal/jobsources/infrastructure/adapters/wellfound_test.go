@@ -11,7 +11,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/retrieval"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 func loadWellfoundFixture(t *testing.T, name string) string {

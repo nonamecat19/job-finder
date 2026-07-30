@@ -1,4 +1,4 @@
-package ingestion_test
+package worker_test
 
 import (
 	"context"
@@ -10,7 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/ingestion"
+	"github.com/job-finder/api/internal/jobsources/application"
+	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -18,7 +19,7 @@ import (
 // went on to read it back — GetSavedSearch is RunSearch's first call, so it
 // stands in for "the run actually started" without needing a live registry.
 type schedulerFakeRepo struct {
-	ingestion.Repository
+	domain.SearchRepository
 	search      sqlcgen.SavedSearch
 	claimErr    error
 	claimedWith pgtype.Timestamp
@@ -104,7 +105,7 @@ func dueSearch() sqlcgen.SavedSearch {
 // it made the due decision on so the write is a compare-and-swap.
 func TestTick_ClaimsBeforeRunning(t *testing.T) {
 	repo := &schedulerFakeRepo{search: dueSearch()}
-	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, &fakeEnqueuer{}))
+	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &fakeEnqueuer{}))
 
 	s.Tick(context.Background())
 
@@ -124,7 +125,7 @@ func TestTick_ClaimsBeforeRunning(t *testing.T) {
 // slot — the search must not be scraped a second time.
 func TestTick_LostClaimSkipsRun(t *testing.T) {
 	repo := &schedulerFakeRepo{search: dueSearch(), claimErr: pgx.ErrNoRows}
-	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, &fakeEnqueuer{}))
+	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &fakeEnqueuer{}))
 
 	s.Tick(context.Background())
 
@@ -146,7 +147,7 @@ func TestTick_ReconcilesJobsWithNoMatchResult(t *testing.T) {
 		},
 	}
 	enq := &countingEnqueuer{}
-	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, enq))
+	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, enq))
 
 	s.Tick(context.Background())
 
@@ -175,7 +176,7 @@ func TestTick_ReconcilesJobsWithNoMatchResult(t *testing.T) {
 }
 
 type countingEnqueuer struct {
-	ingestion.Enqueuer
+	application.Enqueuer
 	count int
 	types []string
 }
@@ -206,7 +207,7 @@ func TestTick_RunsDueSubscriptions(t *testing.T) {
 		claimErr: pgx.ErrNoRows, // skip the search run; this test is about subs
 		subs:     []sqlcgen.Subscription{dueSubscription()},
 	}
-	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, &countingEnqueuer{}))
+	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
 
 	s.Tick(context.Background())
 
@@ -222,7 +223,7 @@ func TestTick_SkipsSubscriptionNotYetDue(t *testing.T) {
 	sub := dueSubscription()
 	sub.LastRunAt = pgtype.Timestamp{Time: time.Now(), Valid: true}
 	repo := &schedulerFakeRepo{search: dueSearch(), claimErr: pgx.ErrNoRows, subs: []sqlcgen.Subscription{sub}}
-	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, &countingEnqueuer{}))
+	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
 
 	s.Tick(context.Background())
 
@@ -238,7 +239,7 @@ func TestTick_LostSubscriptionClaimSkipsRun(t *testing.T) {
 		subs:        []sqlcgen.Subscription{dueSubscription()},
 		subClaimErr: pgx.ErrNoRows,
 	}
-	s := ingestion.NewScheduler(repo, ingestion.NewService(repo, nil, nil, &countingEnqueuer{}))
+	s := 	NewScheduler(repo, 	application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))
 
 	s.Tick(context.Background())
 

@@ -14,7 +14,7 @@ import (
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
-	ads "github.com/job-finder/api/internal/jobsources/adapters"
+	ads "github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/jobsources/roster"
 )
 

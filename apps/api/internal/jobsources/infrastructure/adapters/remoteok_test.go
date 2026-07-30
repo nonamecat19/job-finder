@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 func loadRemoteOKFixture(t *testing.T, name string) string {

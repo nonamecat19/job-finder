@@ -1,4 +1,4 @@
-package generation
+package infrastructure
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 	"github.com/job-finder/api/internal/platform/storage"
 )
 

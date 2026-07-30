@@ -10,7 +10,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"github.com/job-finder/api/internal/activity"
-	"github.com/job-finder/api/internal/llm"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
 // ClassResolver resolves the current provider class for a task at admission

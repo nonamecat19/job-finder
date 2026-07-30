@@ -1,4 +1,4 @@
-package outreach
+package domain
 
 import (
 	"context"

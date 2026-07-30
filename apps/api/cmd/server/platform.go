@@ -10,7 +10,7 @@ import (
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/queue"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 // Platform holds the process-wide shared infrastructure that every feature
