@@ -7,6 +7,6 @@ import (
 )
 
 type Repository interface {
-	GetAutoGenerateSetting(ctx context.Context) (sqlcgen.AutoGenerateSetting, error)
-	UpdateAutoGenerateSetting(ctx context.Context, arg sqlcgen.UpdateAutoGenerateSettingParams) (sqlcgen.AutoGenerateSetting, error)
+	GetAutoGenerateSetting(ctx context.Context, featureKey string) (sqlcgen.AiFeatureSetting, error)
+	UpdateAutoGenerateSetting(ctx context.Context, arg sqlcgen.UpdateAiFeatureSettingParams) (sqlcgen.AiFeatureSetting, error)
 }
