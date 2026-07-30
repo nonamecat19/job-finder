@@ -6,7 +6,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/extauth/domain"
 )
 
@@ -30,9 +29,9 @@ func (s *Service) IssueBootstrapCode(ctx context.Context) (code string, expiresA
 		return "", time.Time{}, err
 	}
 	expiresAt = time.Now().Add(domain.BootstrapCodeTTL)
-	if _, err := s.repo.InsertBootstrapCode(ctx, sqlcgen.InsertBootstrapCodeParams{
+	if _, err := s.repo.InsertBootstrapCode(ctx, domain.InsertBootstrapCodeParams{
 		CodeHash:  hash,
-		ExpiresAt: toPgTimestamp(expiresAt),
+		ExpiresAt: expiresAt,
 	}); err != nil {
 		return "", time.Time{}, err
 	}
@@ -72,7 +71,7 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (domai
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
-	if err := s.repo.RevokeRefreshToken(ctx, sqlcgen.RevokeRefreshTokenParams{
+	if err := s.repo.RevokeRefreshToken(ctx, domain.RevokeRefreshTokenParams{
 		ID:          old.ID,
 		RotatedToId: newID,
 	}); err != nil {
@@ -95,9 +94,9 @@ func (s *Service) issuePair(ctx context.Context) (domain.TokenPair, pgtype.UUID,
 		return domain.TokenPair{}, pgtype.UUID{}, err
 	}
 	refreshExp := time.Now().Add(domain.RefreshTokenTTL)
-	row, err := s.repo.InsertRefreshToken(ctx, sqlcgen.InsertRefreshTokenParams{
+	row, err := s.repo.InsertRefreshToken(ctx, domain.InsertRefreshTokenParams{
 		TokenHash: refreshHash,
-		ExpiresAt: toPgTimestamp(refreshExp),
+		ExpiresAt: refreshExp,
 	})
 	if err != nil {
 		return domain.TokenPair{}, pgtype.UUID{}, err
@@ -109,8 +108,4 @@ func (s *Service) issuePair(ctx context.Context) (domain.TokenPair, pgtype.UUID,
 		RefreshTokenExpiresAt: refreshExp,
 		Scope:                 domain.ScopeProfileRead,
 	}, row.ID, nil
-}
-
-func toPgTimestamp(t time.Time) pgtype.Timestamp {
-	return pgtype.Timestamp{Time: t.UTC(), Valid: true}
 }
