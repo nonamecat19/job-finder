@@ -1,4 +1,4 @@
-package companyintel
+package domain
 
 // Registry holds every registered Scraper, grouped by the external domain
 // they hit so the caller can pace/parallelize per FR-012 ("no faster than

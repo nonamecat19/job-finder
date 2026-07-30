@@ -15,7 +15,7 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 	"github.com/job-finder/api/internal/storage"
 )
 
@@ -30,7 +30,7 @@ func mmToInches(mm float64) float64 { return mm / 25.4 }
 // (chromedp), mirroring pdf-renderer.ts (which used Handlebars + Playwright's
 // page.pdf()).
 type HtmlPdfRenderer struct {
-	scraping  *scraping.Service
+	scraping  scraping.Scraper
 	outDir    string
 	resumeTpl *template.Template
 	letterTpl *template.Template
@@ -39,7 +39,7 @@ type HtmlPdfRenderer struct {
 	Store storage.Blobstore
 }
 
-func NewHtmlPdfRenderer(scrapingSvc *scraping.Service, outDir string) (*HtmlPdfRenderer, error) {
+func NewHtmlPdfRenderer(scrapingSvc scraping.Scraper, outDir string) (*HtmlPdfRenderer, error) {
 	if outDir == "" {
 		outDir = "/data/documents"
 	}

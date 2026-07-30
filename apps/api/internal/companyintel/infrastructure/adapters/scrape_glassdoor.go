@@ -1,4 +1,4 @@
-package companyintel
+package adapters
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/companyintel/domain"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 const glassdoorDomain = "glassdoor.com"
@@ -18,13 +19,13 @@ const glassdoorDomain = "glassdoor.com"
 // best-effort"): any fetch/parse/challenge failure returns an error, which
 // the caller logs at Warn and simply omits the signal — never a card error.
 type GlassdoorScraper struct {
-	Scraping *scraping.Service
+	Scraping scraping.Scraper
 }
 
-func (GlassdoorScraper) Kind() string   { return KindGlassdoorRating }
+func (GlassdoorScraper) Kind() string   { return domain.KindGlassdoorRating }
 func (GlassdoorScraper) Domain() string { return glassdoorDomain }
 
-func (s GlassdoorScraper) Scrape(ctx context.Context, in Input) (*SignalResult, error) {
+func (s GlassdoorScraper) Scrape(ctx context.Context, in domain.Input) (*domain.SignalResult, error) {
 	slug := crunchbaseSlug(in.CompanyName) // same "lowercase, hyphenate" shape Glassdoor URLs use
 	if slug == "" {
 		return nil, nil
@@ -47,7 +48,7 @@ func (s GlassdoorScraper) Scrape(ctx context.Context, in Input) (*SignalResult, 
 // `.rating-summary .rating-value`. A missing/unparsable rating (blocked
 // page, login wall, layout change) is a hard failure — the signal is
 // omitted from the card, matching the "fails closed" contract.
-func parseGlassdoorRating(doc *goquery.Document, sourceURL string) (*SignalResult, error) {
+func parseGlassdoorRating(doc *goquery.Document, sourceURL string) (*domain.SignalResult, error) {
 	text := strings.TrimSpace(doc.Find(".rating-summary .rating-value").First().Text())
 	if text == "" {
 		return nil, fmt.Errorf("glassdoor: no rating found at %s", sourceURL)
@@ -57,8 +58,8 @@ func parseGlassdoorRating(doc *goquery.Document, sourceURL string) (*SignalResul
 		return nil, fmt.Errorf("glassdoor: unparsable rating %q at %s: %w", text, sourceURL, err)
 	}
 
-	return &SignalResult{
-		Kind:   KindGlassdoorRating,
+	return &domain.SignalResult{
+		Kind:   domain.KindGlassdoorRating,
 		Value:  rating,
 		Source: sourceURL,
 		Raw:    text,

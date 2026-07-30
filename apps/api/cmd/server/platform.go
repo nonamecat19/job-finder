@@ -5,53 +5,31 @@ import (
 	"log/slog"
 
 	"github.com/hibiken/asynq"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/redis/go-redis/v9"
 
-	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/adapters"
+	"github.com/job-finder/api/internal/platform/scraping"
 	"github.com/job-finder/api/internal/queue"
-	"github.com/job-finder/api/internal/retrieval"
-	"github.com/job-finder/api/internal/scraping"
 )
 
 // Platform holds the process-wide shared infrastructure that every feature
 // composer draws on: the database pool, logger, Redis/asynq client, the
-// headless-scraping service, and the jobleads session shared by pointer across
+// headless-scraping service, and the djinni session shared by pointer across
 // the adapter registry and the enrichment handler.
 type Platform struct {
-	Config         *config.Config
-	DB             *db.DB
-	Logger         *slog.Logger
-	RedisOpt       asynq.RedisClientOpt
-	RedisClient    redis.UniversalClient
-	AsynqClient    *asynq.Client
-	AsynqInspector *asynq.Inspector
-	Scraping       *scraping.Service
-	Retrieval      retrieval.Service
+	Config      *config.Config
+	DB          *db.DB
+	Logger      *slog.Logger
+	RedisOpt    asynq.RedisClientOpt
+	AsynqClient *asynq.Client
+	Scraping    scraping.Scraper
 
-	// MinioReady is a lightweight client used only to probe MinIO connectivity
-	// for the readiness endpoint (see internal/httpapi/health.go). It is nil
-	// when cfg.MinioEndpoint is unset, matching the "MinIO disabled" convention
-	// used by internal/storage.NewMinioStore.
-	MinioReady *minio.Client
-
-	// JobLeadsSession is the same pattern as DjinniSession, for the
-	// login-gated JobLeads source.
-	JobLeadsSession *adapters.JobLeadsSession
-
-	// Policies is the validated set of per-task-type concurrency/deadline
-	// policies (019-ai-job-throughput), built once at startup so buildServers
-	// and the sweeper read one source (research.md R3).
-	Policies []queue.TaskPolicy
-
-	// Sweeper closes out ActivityRun rows whose worker vanished
-	// (019-ai-job-throughput). Run once at startup and every
-	// ACTIVITY_SWEEP_INTERVAL by runServers.
-	Sweeper *activity.Sweeper
+	// DjinniSession is shared by pointer with every DjinniAdapter copy
+	// (registry + enrichment handler); its Sources back-reference is wired once
+	// jobsources.Service exists (see composeJobSources), breaking the
+	// adapter<->service construction cycle.
+	DjinniSession *adapters.DjinniSession
 }
 
 // buildPlatform opens the shared infrastructure. Callers own the lifecycle:
@@ -62,29 +40,7 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 
-	// Initialise the browser identity and retrieval state store.
-	identityVersion := cfg.BrowserIdentityVersion
-	if identityVersion == "" {
-		identityVersion = "chrome126"
-	}
-	identity, err := retrieval.NewBrowserIdentity(identityVersion)
-	if err != nil {
-		database.Close()
-		return nil, err
-	}
-	stateStore := retrieval.NewStateStore(database.Queries, cfg.ConfigEncryptionKey)
-	rateOverrides := map[string]float64{}
-	if cfg.DjinniRateOverrideRPS > 0 {
-		rateOverrides["djinni.co"] = cfg.DjinniRateOverrideRPS
-	}
-	retrieval.ConfigureDefaultTransport(stateStore, rateOverrides)
-	retSvc, err := retrieval.NewServiceImpl(identity, stateStore, cfg)
-	if err != nil {
-		database.Close()
-		return nil, err
-	}
-
-	scrapingSvc := scraping.New(retSvc)
+	scrapingSvc := scraping.New()
 
 	redisOpt, err := queue.RedisOpt(cfg.RedisURL)
 	if err != nil {
@@ -93,42 +49,13 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 
-	policies, err := queue.PoliciesFromConfig(cfg)
-	if err != nil {
-		database.Close()
-		scrapingSvc.Close()
-		return nil, err
-	}
-
-	var minioReady *minio.Client
-	if cfg.MinioEndpoint != "" {
-		minioReady, err = minio.New(cfg.MinioEndpoint, &minio.Options{
-			Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
-			Secure: cfg.MinioUseSSL,
-		})
-		if err != nil {
-			database.Close()
-			scrapingSvc.Close()
-			return nil, err
-		}
-	}
-
 	return &Platform{
-		Config:          cfg,
-		DB:              database,
-		Logger:          slog.Default(),
-		RedisOpt:        redisOpt,
-		RedisClient:     redisOpt.MakeRedisClient().(redis.UniversalClient),
-		AsynqClient:     asynq.NewClient(redisOpt),
-		AsynqInspector:  asynq.NewInspector(redisOpt),
-		Scraping:        scrapingSvc,
-		Retrieval:       retSvc,
-		MinioReady:      minioReady,
-		JobLeadsSession: &adapters.JobLeadsSession{Email: cfg.JobLeadsEmail, Password: cfg.JobLeadsPassword, Key: "jobleads"},
-		Policies:        policies,
-		Sweeper: activity.NewSweeper(
-			database.Queries, asynq.NewInspector(redisOpt),
-			cfg.ActivityStaleAfter, cfg.ActivitySweepInterval, cfg.ActivityQueuedGrace,
-		),
+		Config:        cfg,
+		DB:            database,
+		Logger:        slog.Default(),
+		RedisOpt:      redisOpt,
+		AsynqClient:   asynq.NewClient(redisOpt),
+		Scraping:      scrapingSvc,
+		DjinniSession: &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
 	}, nil
 }

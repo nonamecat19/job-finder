@@ -16,7 +16,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 var douRemoteRe = regexp.MustCompile(`(?i)\bвіддалено\b|\bremote\b|\bдистанційно\b`)
@@ -27,7 +27,7 @@ const (
 )
 
 type DouAdapter struct {
-	Scraping *scraping.Service
+	Scraping scraping.Scraper
 }
 
 func (DouAdapter) Key() string          { return "dou" }

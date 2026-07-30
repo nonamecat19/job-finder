@@ -17,7 +17,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 	"github.com/job-finder/api/internal/strutil"
 )
 
@@ -35,7 +35,7 @@ var workuaRemoteRe = regexp.MustCompile(`(?i)remote|віддалено|дист�
 // WorkUaAdapter — work.ua, general-purpose Ukrainian job board, server-rendered HTML.
 // No credentials required.
 type WorkUaAdapter struct {
-	Scraping *scraping.Service
+	Scraping scraping.Scraper
 }
 
 func (WorkUaAdapter) Key() string          { return "workua" }

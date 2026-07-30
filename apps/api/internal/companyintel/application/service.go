@@ -1,4 +1,7 @@
-package companyintel
+// Package application orchestrates the company-intel scrapers and the
+// Company/CompanySignal persistence, serving the two card endpoints (GET
+// intel, POST refresh).
+package application
 
 import (
 	"context"
@@ -6,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,39 +16,28 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/job-finder/api/internal/companyintel/domain"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 )
 
-// ErrNoCompany is returned when the job's company name is empty/whitespace
-// — the card is hidden entirely per FR-014, so there is nothing to probe.
-var ErrNoCompany = errors.New("companyintel: job has no parseable company name")
-
-// Repository is the outbound persistence port for the companyintel
-// use-case. *sqlcgen.Queries satisfies it structurally.
-type Repository interface {
-	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
-	GetCompanyByNormalizedName(ctx context.Context, normalizedName string) (sqlcgen.Company, error)
-	UpsertCompany(ctx context.Context, arg sqlcgen.UpsertCompanyParams) (sqlcgen.Company, error)
-	UpdateCompanyLastRefreshed(ctx context.Context, id pgtype.UUID) error
-	GetCompanySignals(ctx context.Context, companyId pgtype.UUID) ([]sqlcgen.CompanySignal, error)
-	GetCompanySignalByKind(ctx context.Context, arg sqlcgen.GetCompanySignalByKindParams) (sqlcgen.CompanySignal, error)
-	UpsertCompanySignal(ctx context.Context, arg sqlcgen.UpsertCompanySignalParams) (sqlcgen.CompanySignal, error)
-}
+// ErrNoCompany re-exports domain.ErrNoCompany for callers that only import
+// application (e.g. the httpapi handler).
+var ErrNoCompany = domain.ErrNoCompany
 
 // Service orchestrates the company-intel scrapers and the Company /
 // CompanySignal persistence, serving the two card endpoints (GET intel,
 // POST refresh).
 type Service struct {
-	q        Repository
-	registry *Registry
+	q        domain.Repository
+	registry *domain.Registry
 	// domainPace is the minimum interval between two requests to the same
 	// external domain (FR-012), defaulting to 2s in NewService.
 	domainPace time.Duration
 }
 
-func NewService(q Repository, registry *Registry, domainPace time.Duration) *Service {
+func NewService(q domain.Repository, registry *domain.Registry, domainPace time.Duration) *Service {
 	if domainPace <= 0 {
 		domainPace = 2 * time.Second
 	}
@@ -67,7 +58,7 @@ func (s *Service) GetIntel(ctx context.Context, jobID string) (*dto.CompanyIntel
 		return nil, fmt.Errorf("companyintel: job %s not found: %w", jobID, err)
 	}
 
-	normalized := normalizeCompanyName(job.Company)
+	normalized := domain.NormalizeCompanyName(job.Company)
 	if normalized == "" {
 		return nil, nil
 	}
@@ -108,9 +99,9 @@ func (s *Service) Refresh(ctx context.Context, jobID string) (*dto.CompanyIntelD
 		return nil, fmt.Errorf("companyintel: job %s not found: %w", jobID, err)
 	}
 
-	normalized := normalizeCompanyName(job.Company)
+	normalized := domain.NormalizeCompanyName(job.Company)
 	if normalized == "" {
-		return nil, ErrNoCompany
+		return nil, domain.ErrNoCompany
 	}
 
 	company, err := s.q.UpsertCompany(ctx, sqlcgen.UpsertCompanyParams{
@@ -130,16 +121,16 @@ func (s *Service) Refresh(ctx context.Context, jobID string) (*dto.CompanyIntelD
 	var previousHeadcount *int
 	if prev, err := s.q.GetCompanySignalByKind(ctx, sqlcgen.GetCompanySignalByKindParams{
 		CompanyId: company.ID,
-		Kind:      KindHeadcount,
+		Kind:      domain.KindHeadcount,
 	}); err == nil {
-		if n, ok := parseLeadingInt(prev.Value); ok {
+		if n, ok := domain.ParseLeadingInt(prev.Value); ok {
 			previousHeadcount = &n
 		}
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		slog.Warn("companyintel: read previous headcount failed", "company", normalized, "error", err)
 	}
 
-	in := Input{
+	in := domain.Input{
 		CompanyName:       strings.TrimSpace(job.Company),
 		Website:           website,
 		JobDescription:    job.Description,
@@ -170,14 +161,14 @@ func (s *Service) Refresh(ctx context.Context, jobID string) (*dto.CompanyIntelD
 // enforced between requests within a domain group (FR-012). It returns the
 // count of scrapers that produced a signal (success or deliberate
 // zero-result) that was persisted.
-func (s *Service) runScrapers(ctx context.Context, companyID pgtype.UUID, in Input) int {
+func (s *Service) runScrapers(ctx context.Context, companyID pgtype.UUID, in domain.Input) int {
 	var succeeded int32
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for domain, scrapers := range s.registry.ByDomain() {
+	for group, scrapers := range s.registry.ByDomain() {
 		wg.Add(1)
-		go func(domain string, scrapers []Scraper) {
+		go func(group string, scrapers []domain.Scraper) {
 			defer wg.Done()
 			for i, sc := range scrapers {
 				if i > 0 {
@@ -191,7 +182,7 @@ func (s *Service) runScrapers(ctx context.Context, companyID pgtype.UUID, in Inp
 				result, err := sc.Scrape(ctx, in)
 				if err != nil {
 					slog.Warn("companyintel: scrape failed",
-						"domain", domain, "kind", sc.Kind(), "company", in.CompanyName, "error", err)
+						"domain", group, "kind", sc.Kind(), "company", in.CompanyName, "error", err)
 					continue
 				}
 				if result == nil {
@@ -202,7 +193,7 @@ func (s *Service) runScrapers(ctx context.Context, companyID pgtype.UUID, in Inp
 
 				if err := s.persistSignal(ctx, companyID, *result); err != nil {
 					slog.Warn("companyintel: persist signal failed",
-						"domain", domain, "kind", sc.Kind(), "company", in.CompanyName, "error", err)
+						"domain", group, "kind", sc.Kind(), "company", in.CompanyName, "error", err)
 					continue
 				}
 
@@ -210,14 +201,14 @@ func (s *Service) runScrapers(ctx context.Context, companyID pgtype.UUID, in Inp
 				succeeded++
 				mu.Unlock()
 			}
-		}(domain, scrapers)
+		}(group, scrapers)
 	}
 
 	wg.Wait()
 	return int(succeeded)
 }
 
-func (s *Service) persistSignal(ctx context.Context, companyID pgtype.UUID, result SignalResult) error {
+func (s *Service) persistSignal(ctx context.Context, companyID pgtype.UUID, result domain.SignalResult) error {
 	valueJSON, err := json.Marshal(result.Value)
 	if err != nil {
 		return fmt.Errorf("marshal value: %w", err)
@@ -244,14 +235,6 @@ func (s *Service) persistSignal(ctx context.Context, companyID pgtype.UUID, resu
 	return err
 }
 
-// normalizeCompanyName lowercases and trims a job's company field —
-// the sole company-identity join key (spec.md "Company name is the join
-// key"). Returns "" for an empty/whitespace-only name, which callers treat
-// as "no company" (FR-014).
-func normalizeCompanyName(name string) string {
-	return strings.ToLower(strings.TrimSpace(name))
-}
-
 // buildDto flattens a Company row and its CompanySignal rows into the wire
 // DTO. FetchedAt is the most recent of the individual signal timestamps.
 func buildDto(company sqlcgen.Company, signals []sqlcgen.CompanySignal) dto.CompanyIntelDto {
@@ -267,25 +250,25 @@ func buildDto(company sqlcgen.Company, signals []sqlcgen.CompanySignal) dto.Comp
 		}
 
 		switch sig.Kind {
-		case KindFunding:
-			if v, ok := decodeString(sig.Value); ok {
+		case domain.KindFunding:
+			if v, ok := domain.DecodeString(sig.Value); ok {
 				out.Funding = &v
 			}
-		case KindLayoffs:
-			if v, ok := decodeString(sig.Value); ok {
+		case domain.KindLayoffs:
+			if v, ok := domain.DecodeString(sig.Value); ok {
 				out.Layoffs = &v
 			}
-		case KindGlassdoorRating:
+		case domain.KindGlassdoorRating:
 			var v float64
 			if err := json.Unmarshal(sig.Value, &v); err == nil {
 				out.GlassdoorRating = &v
 			}
-		case KindHeadcount:
-			if v, ok := decodeString(sig.Value); ok {
+		case domain.KindHeadcount:
+			if v, ok := domain.DecodeString(sig.Value); ok {
 				out.Headcount = &v
 			}
-		case KindTechStack:
-			if v, ok := decodeString(sig.Value); ok {
+		case domain.KindTechStack:
+			if v, ok := domain.DecodeString(sig.Value); ok {
 				out.TechStack = &v
 			}
 		}
@@ -298,31 +281,4 @@ func buildDto(company sqlcgen.Company, signals []sqlcgen.CompanySignal) dto.Comp
 	}
 
 	return out
-}
-
-func decodeString(raw []byte) (string, bool) {
-	var v string
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return "", false
-	}
-	return v, true
-}
-
-// parseLeadingInt extracts the leading integer from a previously-stored
-// headcount value string (e.g. "350 employees (baseline captured)" -> 350)
-// so the next refresh can compute a trend.
-func parseLeadingInt(raw []byte) (int, bool) {
-	s, ok := decodeString(raw)
-	if !ok {
-		return 0, false
-	}
-	fields := strings.Fields(s)
-	if len(fields) == 0 {
-		return 0, false
-	}
-	n, err := strconv.Atoi(strings.ReplaceAll(fields[0], ",", ""))
-	if err != nil {
-		return 0, false
-	}
-	return n, true
 }

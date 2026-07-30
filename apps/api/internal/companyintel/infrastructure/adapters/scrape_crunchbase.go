@@ -1,4 +1,4 @@
-package companyintel
+package adapters
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/companyintel/domain"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 const crunchbaseDomain = "crunchbase.com"
@@ -20,13 +21,13 @@ var crunchbaseSlugRe = regexp.MustCompile(`[^a-z0-9]+`)
 // recent-first, so the first matched row is the one surfaced (spec.md
 // "Conflicting funding data between rounds").
 type CrunchbaseScraper struct {
-	Scraping *scraping.Service
+	Scraping scraping.Scraper
 }
 
-func (CrunchbaseScraper) Kind() string   { return KindFunding }
+func (CrunchbaseScraper) Kind() string   { return domain.KindFunding }
 func (CrunchbaseScraper) Domain() string { return crunchbaseDomain }
 
-func (s CrunchbaseScraper) Scrape(ctx context.Context, in Input) (*SignalResult, error) {
+func (s CrunchbaseScraper) Scrape(ctx context.Context, in domain.Input) (*domain.SignalResult, error) {
 	slug := crunchbaseSlug(in.CompanyName)
 	if slug == "" {
 		return nil, nil
@@ -60,7 +61,7 @@ func crunchbaseSlug(name string) string {
 // Crunchbase organization page. Layout: a list of `.funding-round` rows,
 // most-recent first, each with `.round-name`, `.round-amount` (optional),
 // and `.round-date` (optional) children.
-func parseCrunchbaseFunding(doc *goquery.Document, sourceURL string) (*SignalResult, error) {
+func parseCrunchbaseFunding(doc *goquery.Document, sourceURL string) (*domain.SignalResult, error) {
 	row := doc.Find(".funding-round").First()
 	if row.Length() == 0 {
 		return nil, fmt.Errorf("crunchbase: no funding rounds found at %s", sourceURL)
@@ -83,8 +84,8 @@ func parseCrunchbaseFunding(doc *goquery.Document, sourceURL string) (*SignalRes
 
 	rawHTML, _ := row.Html()
 
-	return &SignalResult{
-		Kind:   KindFunding,
+	return &domain.SignalResult{
+		Kind:   domain.KindFunding,
 		Value:  value,
 		Source: sourceURL,
 		Raw:    rawHTML,

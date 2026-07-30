@@ -1,4 +1,4 @@
-package companyintel
+package adapters
 
 import (
 	"context"
@@ -9,7 +9,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/companyintel/domain"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 const builtwithDomain = "builtwith.com"
@@ -49,20 +50,20 @@ func compileTechKeywordRes(keywords []string) map[string]*regexp.Regexp {
 // posting's own description when BuiltWith is unreachable or empty
 // (FR-015). If both sources are empty, the signal is omitted entirely.
 type TechStackScraper struct {
-	Scraping *scraping.Service
+	Scraping scraping.Scraper
 }
 
-func (TechStackScraper) Kind() string   { return KindTechStack }
+func (TechStackScraper) Kind() string   { return domain.KindTechStack }
 func (TechStackScraper) Domain() string { return builtwithDomain }
 
-func (s TechStackScraper) Scrape(ctx context.Context, in Input) (*SignalResult, error) {
+func (s TechStackScraper) Scrape(ctx context.Context, in domain.Input) (*domain.SignalResult, error) {
 	if result := s.tryBuiltWith(ctx, in.Website); result != nil {
 		return result, nil
 	}
 
 	if techs := matchKnownTech(in.JobDescription); len(techs) > 0 {
-		return &SignalResult{
-			Kind:   KindTechStack,
+		return &domain.SignalResult{
+			Kind:   domain.KindTechStack,
 			Value:  strings.Join(techs, ", "),
 			Source: "job-posting-description",
 		}, nil
@@ -74,7 +75,7 @@ func (s TechStackScraper) Scrape(ctx context.Context, in Input) (*SignalResult, 
 // tryBuiltWith attempts the primary source and returns nil (not an error)
 // on any failure — the caller falls through to the description keyword
 // fallback, matching FR-015 exactly.
-func (s TechStackScraper) tryBuiltWith(ctx context.Context, website string) *SignalResult {
+func (s TechStackScraper) tryBuiltWith(ctx context.Context, website string) *domain.SignalResult {
 	domain := hostOf(website)
 	if domain == "" {
 		return nil
@@ -106,7 +107,7 @@ func hostOf(website string) string {
 // parseBuiltWith collects every `.tech-item` label on the lookup page.
 // Returns nil (no error) when the page has no matches — the caller treats
 // that identically to a fetch failure and falls back to keyword matching.
-func parseBuiltWith(doc *goquery.Document, sourceURL string) *SignalResult {
+func parseBuiltWith(doc *goquery.Document, sourceURL string) *domain.SignalResult {
 	var techs []string
 	doc.Find(".tech-item").Each(func(_ int, sel *goquery.Selection) {
 		if t := strings.TrimSpace(sel.Text()); t != "" {
@@ -116,8 +117,8 @@ func parseBuiltWith(doc *goquery.Document, sourceURL string) *SignalResult {
 	if len(techs) == 0 {
 		return nil
 	}
-	return &SignalResult{
-		Kind:   KindTechStack,
+	return &domain.SignalResult{
+		Kind:   domain.KindTechStack,
 		Value:  strings.Join(techs, ", "),
 		Source: sourceURL,
 	}

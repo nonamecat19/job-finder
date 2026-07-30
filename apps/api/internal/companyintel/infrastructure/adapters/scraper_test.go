@@ -1,4 +1,4 @@
-package companyintel
+package adapters
 
 // Fixtures under testdata/ are hand-authored, minimal reproductions of the
 // selectors each parser targets (crunchbase_org.html, layoffs_fyi.html,
@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
+
+	"github.com/job-finder/api/internal/companyintel/domain"
 )
 
 func loadFixture(t *testing.T, name string) string {
@@ -42,8 +44,8 @@ func TestParseCrunchbaseFunding_LatestRound(t *testing.T) {
 	if result.Value != want {
 		t.Errorf("Value = %q, want %q", result.Value, want)
 	}
-	if result.Kind != KindFunding {
-		t.Errorf("Kind = %q, want %q", result.Kind, KindFunding)
+	if result.Kind != domain.KindFunding {
+		t.Errorf("Kind = %q, want %q", result.Kind, domain.KindFunding)
 	}
 }
 
@@ -74,8 +76,8 @@ func TestParseLayoffsRow_Match(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected a result")
 	}
-	if result.Kind != KindLayoffs {
-		t.Errorf("Kind = %q, want %q", result.Kind, KindLayoffs)
+	if result.Kind != domain.KindLayoffs {
+		t.Errorf("Kind = %q, want %q", result.Kind, domain.KindLayoffs)
 	}
 	want := "120 laid off (15%) on 2025-03-01"
 	if result.Value != want {
@@ -216,7 +218,7 @@ func TestMatchKnownTech_EmptyDescription(t *testing.T) {
 }
 
 func TestScraperKindsAndDomains(t *testing.T) {
-	scrapers := []Scraper{
+	scrapers := []domain.Scraper{
 		CrunchbaseScraper{},
 		LayoffsScraper{},
 		GlassdoorScraper{},
@@ -224,11 +226,11 @@ func TestScraperKindsAndDomains(t *testing.T) {
 		TechStackScraper{},
 	}
 	wantKinds := map[string]string{
-		"CrunchbaseScraper": KindFunding,
-		"LayoffsScraper":    KindLayoffs,
-		"GlassdoorScraper":  KindGlassdoorRating,
-		"HeadcountScraper":  KindHeadcount,
-		"TechStackScraper":  KindTechStack,
+		"CrunchbaseScraper": domain.KindFunding,
+		"LayoffsScraper":    domain.KindLayoffs,
+		"GlassdoorScraper":  domain.KindGlassdoorRating,
+		"HeadcountScraper":  domain.KindHeadcount,
+		"TechStackScraper":  domain.KindTechStack,
 	}
 	for _, s := range scrapers {
 		if s.Domain() == "" {
@@ -242,7 +244,7 @@ func TestScraperKindsAndDomains(t *testing.T) {
 }
 
 func TestRegistryByDomain(t *testing.T) {
-	reg := NewRegistry(
+	reg := domain.NewRegistry(
 		CrunchbaseScraper{},
 		LayoffsScraper{},
 		GlassdoorScraper{},
@@ -253,19 +255,5 @@ func TestRegistryByDomain(t *testing.T) {
 	}
 	if len(reg.All()) != 3 {
 		t.Fatalf("expected 3 scrapers, got %d", len(reg.All()))
-	}
-}
-
-func TestNormalizeCompanyName(t *testing.T) {
-	cases := map[string]string{
-		"Acme Corp":   "acme corp",
-		"  ACME CORP": "acme corp",
-		"":            "",
-		"   ":         "",
-	}
-	for in, want := range cases {
-		if got := normalizeCompanyName(in); got != want {
-			t.Errorf("normalizeCompanyName(%q) = %q, want %q", in, got, want)
-		}
 	}
 }

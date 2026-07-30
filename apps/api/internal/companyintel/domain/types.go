@@ -1,10 +1,11 @@
-// Package companyintel scrapes public, best-effort company-level signals
-// (funding, layoffs, Glassdoor rating, headcount, tech stack) and persists
-// them as normalized Company + CompanySignal rows, mirroring
+// Package domain scrapes public, best-effort company-level signals
+// (funding, layoffs, Glassdoor rating, headcount, tech stack) and holds the
+// core model: the Scraper extensibility point, the Registry, the
+// Repository persistence port, and the ErrNoCompany sentinel, mirroring
 // specs/004-company-intel-card. Every scraper fails independently and
 // closed (FR-006): a blocked or errored source degrades to "no data" for
 // that one signal, never a card-level failure.
-package companyintel
+package domain
 
 import "context"
 
