@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, FileDown } from 'lucide-react';
+import { ArrowLeft, ExternalLink, FileDown, X, FileText } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
@@ -46,6 +46,7 @@ export default function JobDetailPage() {
   }, [documents]);
   const markApplied = useMarkJobApplied(id);
   const saveLetter = useSaveDocument(id, () => setEditingDoc(null));
+  const [resumeOpen, setResumeOpen] = useState(false);
 
   useEffect(() => {
     if (generate.isSuccess && generate.variables && handledMutationRef.current !== generate.variables) {
@@ -162,30 +163,56 @@ export default function JobDetailPage() {
         </Tile>
         {resumeDoc ? (
           <Tile span="standard" title="Resume">
-            <ResumePreview doc={resumeDoc} />
+            <button
+              onClick={() => setResumeOpen(true)}
+              className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-surface-secondary"
+            >
+              <FileText className="h-8 w-8 text-accent" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">v{resumeDoc.version}</p>
+                <p className="text-xs text-muted">Click to preview</p>
+              </div>
+            </button>
           </Tile>
         ) : null}
+
+        {resumeOpen && resumeDoc && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setResumeOpen(false)} />
+            <div className="relative flex h-full w-full max-w-4xl flex-col border-l border-border bg-surface shadow-2xl">
+              <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-accent" />
+                  <h2 className="text-sm font-semibold tracking-wide text-foreground/90">
+                    Resume v{resumeDoc.version}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={api.documents.pdfUrl(resumeDoc.id)} target="_blank" rel="noreferrer">
+                    <Button variant="secondary">
+                      <FileDown className="h-4 w-4" aria-hidden="true" />
+                      open PDF
+                    </Button>
+                  </a>
+                  <button
+                    onClick={() => setResumeOpen(false)}
+                    className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              <iframe
+                title="Resume preview"
+                src={`${api.documents.pdfUrl(resumeDoc.id)}#toolbar=0&navpanes=0&scrollbar=0`}
+                className="flex-1 w-full border-0 bg-white"
+              />
+            </div>
+          </div>
+        )}
       </DashboardGrid>
     </div>
-  );
-}
-
-function ResumePreview({ doc }: { doc: GeneratedDocumentDto }) {
-  return (
-    <>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <a href={api.documents.pdfUrl(doc.id)} target="_blank" rel="noreferrer">
-          <Button variant="secondary">
-            open PDF <FileDown className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </a>
-      </div>
-      <iframe
-        title="Resume preview"
-        src={api.documents.pdfUrl(doc.id)}
-        className="h-[75vh] w-full rounded-md border border-border bg-white"
-      />
-    </>
   );
 }
 
