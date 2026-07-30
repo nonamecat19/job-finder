@@ -7,6 +7,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// SectionOrderKey is the synthetic cv.sections key ParseRendercv writes the
+// original section key order under, so downstream mapping can preserve the
+// author's intended order rather than the map's random iteration order.
+const SectionOrderKey = "_order"
+
 func ParseRendercv(yamlText string) (RendercvMaster, error) {
 	var master map[string]any
 	if err := yaml.Unmarshal([]byte(yamlText), &master); err != nil {
@@ -32,7 +37,7 @@ func ParseRendercv(yamlText string) (RendercvMaster, error) {
 			for i, k := range order {
 				orderAny[i] = k
 			}
-			sections[sectionOrderKey] = orderAny
+			sections[SectionOrderKey] = orderAny
 		}
 	}
 

@@ -262,3 +262,5 @@ cv:
 		t.Fatalf("social networks after round trip = %+v, want 3 entries", resume2.SocialNetworks)
 	}
 }
+
+func strp(s string) *string { return &s }

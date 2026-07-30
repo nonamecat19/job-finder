@@ -14,6 +14,8 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/generation/domain"
+	"github.com/job-finder/api/internal/generation/infrastructure"
 	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/strutil"
 
@@ -28,8 +30,8 @@ type AdHocInput struct {
 	Vacancy        string
 	Company        string
 	Title          string
-	GroundingLevel *GroundingLevel
-	Hints          *VacancyHints
+	GroundingLevel *domain.GroundingLevel
+	Hints          *domain.VacancyHints
 }
 
 type coverLetterResult struct {
@@ -37,23 +39,23 @@ type coverLetterResult struct {
 }
 
 type Service struct {
-	q            Repository
-	profiles     ProfileStore
-	htmlRenderer *HtmlPdfRenderer
-	rendercv     *RenderCvRenderer
+	q            domain.Repository
+	profiles     domain.ProfileStore
+	htmlRenderer *infrastructure.HtmlPdfRenderer
+	rendercv     *infrastructure.RenderCvRenderer
 	llmc         llm.Provider
 	genModel     string
 	masterPath   string
-	defaultLevel GroundingLevel
+	defaultLevel domain.GroundingLevel
 }
 
-func NewService(q Repository, profiles ProfileStore, htmlRenderer *HtmlPdfRenderer, rendercv *RenderCvRenderer, llmc llm.Provider, genModel, masterPath, defaultLevel string) *Service {
+func NewService(q domain.Repository, profiles domain.ProfileStore, htmlRenderer *infrastructure.HtmlPdfRenderer, rendercv *infrastructure.RenderCvRenderer, llmc llm.Provider, genModel, masterPath, defaultLevel string) *Service {
 	if masterPath == "" {
 		masterPath = "./resume/resume.yaml"
 	}
 	return &Service{
 		q: q, profiles: profiles, htmlRenderer: htmlRenderer, rendercv: rendercv, llmc: llmc, genModel: genModel,
-		masterPath: masterPath, defaultLevel: ParseGroundingLevel(defaultLevel),
+		masterPath: masterPath, defaultLevel: domain.ParseGroundingLevel(defaultLevel),
 	}
 }
 
@@ -75,7 +77,7 @@ func sanitize(s string) string {
 	return out
 }
 
-func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMaster, error) {
+func (s *Service) masterFor(ctx context.Context, profileID *string) (domain.RendercvMaster, error) {
 	var prof sqlcgen.Profile
 	var err error
 	if profileID != nil && *profileID != "" {
@@ -84,7 +86,7 @@ func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMas
 		prof, err = s.profiles.GetDefault(ctx)
 	}
 	if err == nil && prof.RendercvConfig != nil {
-		return MasterFromProfile(prof)
+		return domain.MasterFromProfile(prof)
 	}
 
 	// Dev fallback to masterPath if no profile exists
@@ -96,7 +98,7 @@ func (s *Service) masterFor(ctx context.Context, profileID *string) (RendercvMas
 	if err := yaml.Unmarshal(data, &master); err != nil {
 		return nil, fmt.Errorf("generation: parse master resume: %w", err)
 	}
-	return RendercvMaster(NormalizeYAMLMap(master).(map[string]any)), nil
+	return domain.RendercvMaster(domain.NormalizeYAMLMap(master).(map[string]any)), nil
 }
 
 // GenerateAdHoc tailors a resume and writes a cover letter from pasted
@@ -146,7 +148,7 @@ func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, 
 		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
 	}
 
-	profileText := RendercvToText(master)
+	profileText := domain.RendercvToText(master)
 	letter, err := s.writeCoverLetter(ctx, profileText, extraNotes, company, title, in.Vacancy)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
@@ -190,7 +192,7 @@ func (s *Service) ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocume
 	return out, nil
 }
 
-func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaster, vacancy string, level GroundingLevel, hints *VacancyHints, rec *activity.Recorder) (RendercvMaster, error) {
+func (s *Service) tailorRendercvResume(ctx context.Context, master domain.RendercvMaster, vacancy string, level domain.GroundingLevel, hints *domain.VacancyHints, rec *activity.Recorder) (domain.RendercvMaster, error) {
 	if rec != nil {
 		rec.Step(ctx, "analyzing vacancy", nil)
 	}
@@ -208,14 +210,14 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master RendercvMaste
 		if err != nil {
 			return nil, err
 		}
-		merged, err := mergeTailored(master, payload)
+		merged, err := domain.MergeTailored(master, payload)
 		if err != nil {
 			return nil, err
 		}
 		if rec != nil {
 			rec.Step(ctx, fmt.Sprintf("grounding check (attempt %d/%d)", attempt+1, groundingAttempts), nil)
 		}
-		lastViolations = verifyRendercvGrounding(master, merged, level)
+		lastViolations = domain.VerifyRendercvGrounding(master, merged, level)
 		if len(lastViolations) == 0 {
 			return merged, nil
 		}
@@ -249,11 +251,11 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	if prof.RendercvConfig == nil {
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("precondition failed: profile has no RenderCV config — upload one first")
 	}
-	master, err := MasterFromProfile(prof)
+	master, err := domain.MasterFromProfile(prof)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
-	profileText := RendercvToText(master)
+	profileText := domain.RendercvToText(master)
 
 	maxVersion, err := s.q.MaxDocumentVersion(ctx, sqlcgen.MaxDocumentVersionParams{JobId: jid, Type: docType})
 	if err != nil {
@@ -336,7 +338,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	return toDocumentDto(doc), nil
 }
 
-func (s *Service) tailorResume(ctx context.Context, master RendercvMaster, profileText string, extraNotes *string, job sqlcgen.Job, matchedSkills []string) (dto.JsonResume, error) {
+func (s *Service) tailorResume(ctx context.Context, master domain.RendercvMaster, profileText string, extraNotes *string, job sqlcgen.Job, matchedSkills []string) (dto.JsonResume, error) {
 	prompt := "Create a tailored resume for this job application by selecting, reordering and rephrasing " +
 		"content from the candidate's master profile.\n\n" +
 		"STRICT RULES:\n" +
@@ -369,7 +371,7 @@ func (s *Service) tailorResume(ctx context.Context, master RendercvMaster, profi
 		if err != nil {
 			return dto.JsonResume{}, err
 		}
-		lastViolations = verifyGroundingFromRendercv(master, tailored)
+		lastViolations = domain.VerifyGroundingFromRendercv(master, tailored)
 		if len(lastViolations) == 0 {
 			return tailored, nil
 		}
@@ -467,7 +469,7 @@ func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.Gene
 	if prof.RendercvConfig == nil {
 		return dto.GeneratedDocumentDto{}, fmt.Errorf("profile has no RenderCV config")
 	}
-	master, err := MasterFromProfile(prof)
+	master, err := domain.MasterFromProfile(prof)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}

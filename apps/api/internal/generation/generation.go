@@ -39,6 +39,14 @@ var (
 	RendercvToText      = domain.RendercvToText
 	ParseRendercv       = domain.ParseRendercv
 
+	// sectionOrderKey mirrors domain.SectionOrderKey for the in-package
+	// resume_mapping.go, which reads the order key ParseRendercv writes.
+	sectionOrderKey = domain.SectionOrderKey
+
+	// deepCloneYAML mirrors domain.DeepCloneYAML for the in-package
+	// resume_mapping.go.
+	deepCloneYAML = domain.DeepCloneYAML
+
 	NewService          = application.NewService
 	GetDefaultMasterID  = application.GetDefaultMasterID
 	NewHtmlPdfRenderer  = infrastructure.NewHtmlPdfRenderer

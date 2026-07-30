@@ -240,7 +240,7 @@ func TestMergeTailored_ProtectedSectionsNeverDropped(t *testing.T) {
 
 func TestVerifyRendercvGrounding_RejectsFabricatedCompany(t *testing.T) {
 	master := loadSampleMaster(t)
-	merged, err := deepCloneYAML(master)
+	merged, err := DeepCloneYAML(master)
 	if err != nil {
 		t.Fatalf("clone: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestVerifyRendercvGrounding_RejectsFabricatedCompany(t *testing.T) {
 
 func TestVerifyRendercvGrounding_StrictRejectsUnlistedSkill(t *testing.T) {
 	master := loadSampleMaster(t)
-	merged, err := deepCloneYAML(master)
+	merged, err := DeepCloneYAML(master)
 	if err != nil {
 		t.Fatalf("clone: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestVerifyRendercvGrounding_StrictRejectsUnlistedSkill(t *testing.T) {
 
 func TestVerifyRendercvGrounding_RejectsAddedSection(t *testing.T) {
 	master := loadSampleMaster(t)
-	merged, err := deepCloneYAML(master)
+	merged, err := DeepCloneYAML(master)
 	if err != nil {
 		t.Fatalf("clone: %v", err)
 	}
