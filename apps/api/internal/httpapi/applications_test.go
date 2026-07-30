@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/job-finder/api/internal/applications"
+	applications "github.com/job-finder/api/internal/applications/application"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/testutil"

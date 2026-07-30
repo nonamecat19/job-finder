@@ -1,4 +1,4 @@
-package applications_test
+package application_test
 
 import (
 	"context"
@@ -9,14 +9,15 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/job-finder/api/internal/applications"
+	"github.com/job-finder/api/internal/applications/application"
+	"github.com/job-finder/api/internal/applications/domain"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
 )
 
 // fakeRepo embeds the Repository port; the test overrides only what it needs.
 type fakeRepo struct {
-	applications.Repository
+	domain.Repository
 	rows    []sqlcgen.ListApplicationsRow
 	listErr error
 }
@@ -26,7 +27,7 @@ func (f *fakeRepo) ListApplications(ctx context.Context, status *string) ([]sqlc
 }
 
 func TestListEmpty(t *testing.T) {
-	svc := applications.NewService(&fakeRepo{})
+	svc := application.NewService(&fakeRepo{})
 	out, err := svc.List(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -42,7 +43,7 @@ func TestListEmpty(t *testing.T) {
 }
 
 func TestListError(t *testing.T) {
-	svc := applications.NewService(&fakeRepo{listErr: errors.New("db down")})
+	svc := application.NewService(&fakeRepo{listErr: errors.New("db down")})
 	if _, err := svc.List(context.Background(), nil); err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -55,7 +56,7 @@ const testAppID = "11111111-1111-1111-1111-111111111111"
 // fakeWriteRepo records the writes Update performs so the outcome-capture path
 // can be asserted without a database.
 type fakeWriteRepo struct {
-	applications.Repository
+	domain.Repository
 	existing sqlcgen.Application
 
 	outcomes    []sqlcgen.InsertApplicationOutcomeParams
@@ -124,8 +125,8 @@ func TestUpdateRecordsOutcomeEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := newWriteRepo(tt.from)
-			svc := applications.NewService(repo)
-			if _, err := svc.Update(context.Background(), testAppID, applications.UpdateInput{Status: statusPtr(tt.to)}); err != nil {
+			svc := application.NewService(repo)
+			if _, err := svc.Update(context.Background(), testAppID, application.UpdateInput{Status: statusPtr(tt.to)}); err != nil {
 				t.Fatalf("Update: %v", err)
 			}
 			if tt.wantEvent == "" {
@@ -151,8 +152,8 @@ func TestUpdateRecordsOutcomeEvent(t *testing.T) {
 // signal depends on: "appliedAt" is the same instant as the `applied` event.
 func TestUpdateAppliedAtMatchesEventTimestamp(t *testing.T) {
 	repo := newWriteRepo("shortlisted")
-	svc := applications.NewService(repo)
-	if _, err := svc.Update(context.Background(), testAppID, applications.UpdateInput{Status: statusPtr(dto.StatusApplied)}); err != nil {
+	svc := application.NewService(repo)
+	if _, err := svc.Update(context.Background(), testAppID, application.UpdateInput{Status: statusPtr(dto.StatusApplied)}); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
 	if !repo.updateParam.AppliedAt.Valid {
@@ -172,14 +173,14 @@ func TestUpdateNoStatusChangeRecordsNothing(t *testing.T) {
 	notes := "just a note"
 	for _, tt := range []struct {
 		name string
-		in   applications.UpdateInput
+		in   application.UpdateInput
 	}{
-		{"same status resubmitted", applications.UpdateInput{Status: statusPtr(dto.StatusApplied)}},
-		{"notes only", applications.UpdateInput{Notes: func() **string { p := &notes; return &p }()}},
+		{"same status resubmitted", application.UpdateInput{Status: statusPtr(dto.StatusApplied)}},
+		{"notes only", application.UpdateInput{Notes: func() **string { p := &notes; return &p }()}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := newWriteRepo("applied")
-			svc := applications.NewService(repo)
+			svc := application.NewService(repo)
 			if _, err := svc.Update(context.Background(), testAppID, tt.in); err != nil {
 				t.Fatalf("Update: %v", err)
 			}
@@ -196,8 +197,8 @@ func TestUpdateNoStatusChangeRecordsNothing(t *testing.T) {
 func TestUpdateDuplicateTerminalEventIsNotAnError(t *testing.T) {
 	repo := newWriteRepo("interview")
 	repo.outcomeErr = pgx.ErrNoRows
-	svc := applications.NewService(repo)
-	out, err := svc.Update(context.Background(), testAppID, applications.UpdateInput{Status: statusPtr(dto.StatusOffer)})
+	svc := application.NewService(repo)
+	out, err := svc.Update(context.Background(), testAppID, application.UpdateInput{Status: statusPtr(dto.StatusOffer)})
 	if err != nil {
 		t.Fatalf("expected duplicate terminal event to be a no-op, got %v", err)
 	}
@@ -210,8 +211,8 @@ func TestUpdateDuplicateTerminalEventIsNotAnError(t *testing.T) {
 func TestUpdateOutcomeWriteErrorFails(t *testing.T) {
 	repo := newWriteRepo("shortlisted")
 	repo.outcomeErr = errors.New("db down")
-	svc := applications.NewService(repo)
-	if _, err := svc.Update(context.Background(), testAppID, applications.UpdateInput{Status: statusPtr(dto.StatusApplied)}); err == nil {
+	svc := application.NewService(repo)
+	if _, err := svc.Update(context.Background(), testAppID, application.UpdateInput{Status: statusPtr(dto.StatusApplied)}); err == nil {
 		t.Fatal("expected outcome insert failure to fail the update")
 	}
 }
@@ -219,7 +220,7 @@ func TestUpdateOutcomeWriteErrorFails(t *testing.T) {
 // --------------- timeline read-back ---------------
 
 type fakeTimelineRepo struct {
-	applications.Repository
+	domain.Repository
 	rows []sqlcgen.ApplicationOutcome
 	err  error
 }
@@ -234,7 +235,7 @@ func TestTimeline(t *testing.T) {
 		{EventType: "applied", OccurredAt: pgtype.Timestamp{Time: base, Valid: true}, RecordedAt: pgtype.Timestamp{Time: base, Valid: true}},
 		{EventType: "screen", OccurredAt: pgtype.Timestamp{Time: base.AddDate(0, 0, 4), Valid: true}, RecordedAt: pgtype.Timestamp{Time: base, Valid: true}},
 	}}
-	out, err := applications.NewService(repo).Timeline(context.Background(), testAppID)
+	out, err := application.NewService(repo).Timeline(context.Background(), testAppID)
 	if err != nil {
 		t.Fatalf("Timeline: %v", err)
 	}
@@ -250,7 +251,7 @@ func TestTimeline(t *testing.T) {
 }
 
 func TestTimelineEmpty(t *testing.T) {
-	out, err := applications.NewService(&fakeTimelineRepo{}).Timeline(context.Background(), testAppID)
+	out, err := application.NewService(&fakeTimelineRepo{}).Timeline(context.Background(), testAppID)
 	if err != nil {
 		t.Fatalf("Timeline: %v", err)
 	}
@@ -261,7 +262,7 @@ func TestTimelineEmpty(t *testing.T) {
 }
 
 func TestTimelineInvalidID(t *testing.T) {
-	if _, err := applications.NewService(&fakeTimelineRepo{}).Timeline(context.Background(), "not-a-uuid"); err == nil {
+	if _, err := application.NewService(&fakeTimelineRepo{}).Timeline(context.Background(), "not-a-uuid"); err == nil {
 		t.Fatal("expected error for malformed application id")
 	}
 }

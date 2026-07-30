@@ -1,6 +1,7 @@
-// Package applications ports modules/applications/*: status transitions,
-// kanban feed, and the /stats aggregate.
-package applications
+// Package application holds the application-tracking use-case: status
+// transitions, kanban feed, and the /stats aggregate. Mirrors
+// applications.service.ts.
+package application
 
 import (
 	"context"
@@ -12,26 +13,25 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/job-finder/api/internal/applications/domain"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 )
 
-// ErrNotFound is a sentinel so callers (the HTTP layer) can distinguish
-// "no such application" (404) from other Update failures like an invalid
-// status value (400) — mirrors NestJS's NotFoundException vs
-// BadRequestException split in applications.service.ts:25,28.
-var ErrNotFound = errors.New("application not found")
+// ErrNotFound re-exports domain.ErrNotFound for callers that only import
+// application (e.g. the httpapi handler).
+var ErrNotFound = domain.ErrNotFound
 
 type Service struct {
-	q  Repository
-	tx TxRunner
+	q  domain.Repository
+	tx domain.TxRunner
 }
 
 // NewService builds the use-case. Pass a TxRunner (e.g. *db.DB) to make a
 // status change and the outcome event it records commit atomically; omit it
 // and the writes run sequentially against q, which is what unit-test fakes do.
-func NewService(q Repository, tx ...TxRunner) *Service {
+func NewService(q domain.Repository, tx ...domain.TxRunner) *Service {
 	s := &Service{q: q}
 	if len(tx) > 0 {
 		s.tx = tx[0]
@@ -42,7 +42,7 @@ func NewService(q Repository, tx ...TxRunner) *Service {
 // inTx runs fn against a transaction-bound Repository when a TxRunner is
 // injected, and against the plain repository otherwise. *sqlcgen.Queries
 // satisfies Repository structurally, so both paths share one fn body.
-func (s *Service) inTx(ctx context.Context, fn func(Repository) error) error {
+func (s *Service) inTx(ctx context.Context, fn func(domain.Repository) error) error {
 	if s.tx == nil {
 		return fn(s.q)
 	}
@@ -77,7 +77,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 	}
 	existing, err := s.q.GetApplicationByID(ctx, uid)
 	if err != nil {
-		return dto.ApplicationDto{}, fmt.Errorf("application %s not found: %w", id, ErrNotFound)
+		return dto.ApplicationDto{}, fmt.Errorf("application %s not found: %w", id, domain.ErrNotFound)
 	}
 	if in.Status != nil && !dto.IsValidApplicationStatus(string(*in.Status)) {
 		return dto.ApplicationDto{}, fmt.Errorf("invalid status '%s'", *in.Status)
@@ -123,7 +123,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 	// Status write, outcome-event append, and the mirrored job status all commit
 	// together — the current-state column and the event log must never diverge.
 	var updated sqlcgen.Application
-	err = s.inTx(ctx, func(q Repository) error {
+	err = s.inTx(ctx, func(q domain.Repository) error {
 		var err error
 		if updated, err = q.UpdateApplication(ctx, params); err != nil {
 			return err
