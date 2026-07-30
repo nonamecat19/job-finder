@@ -80,8 +80,13 @@ export default function FeedPage() {
 
   const [searchInput, setSearchInput] = useState(filters.q ?? '');
   useEffect(() => {
+    // Deliberate prop-to-state sync: searchInput is a locally-editable,
+    // debounced mirror of the URL-driven filters.q (see the effect below),
+    // not state derivable from props alone during render — the two effects
+    // together implement a controlled+debounced search box. Reviewed as
+    // safe (spec 023-workflow-quality-gates FR-012 lint adoption).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearchInput(filters.q ?? '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.q]);
   useEffect(() => {
     if (searchInput === (filters.q ?? '')) return;

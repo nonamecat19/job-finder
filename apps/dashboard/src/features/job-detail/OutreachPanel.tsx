@@ -26,6 +26,11 @@ export default function OutreachPanel({ jobId }: { jobId: string | undefined }) 
 
   useEffect(() => {
     if (!tone && tones && tones.length > 0) {
+      // Defaults the tone once the async tones list arrives — reacting to
+      // an external query resolving, not state derivable from props alone
+      // during render. Reviewed as safe (spec 023-workflow-quality-gates
+      // FR-012 lint adoption).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTone(tones.find((t) => t.default)?.value ?? tones[0].value);
     }
   }, [tones, tone]);

@@ -1,5 +1,3 @@
-import { type ReactNode } from 'react';
-import { Chip } from '@heroui/react/chip';
 import { cn } from '../lib/utils';
 
 export function ScoreBadge({ score }: { score?: number | null }) {
