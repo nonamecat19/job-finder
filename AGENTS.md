@@ -27,7 +27,16 @@ workflow can't repair it, `git commit --no-verify` / `git push --no-verify`
 bypasses both git hooks. This is the documented, deliberate escape hatch —
 its use is visible in shell history and in the agent's transcript, so it is
 a traceable act, not a silent bypass. Reach for it only to restore a broken
-trunk, never as a way to skip review.
+trunk, never as a way to skip review. The expectation is that the trunk can
+be restored from a broken state within one hour using this override — if
+recovery is taking longer than that, stop and reconsider the approach
+rather than accumulating more direct-to-master commits.
+
+**New clone or new worktree**: run `make setup-hooks` once — it is not
+automatic, and an unactivated hook is an absent gate. It sets
+`core.hooksPath` at the repository-config level, so a single run in the
+main working tree covers every worktree that shares this clone; a fresh
+`git clone` elsewhere needs its own run.
 
 ## Project layout
 
@@ -49,7 +58,7 @@ trunk, never as a way to skip review.
   targets (they need containers/a browser) and are not part of
   `test-lint`.
 - `make sqlc-generate` — regenerate sqlc code after editing `apps/api/internal/db/queries/*.sql`
-- `tygo generate` (run from `apps/api`) — regenerate `packages/shared/src/generated.ts` from Go DTOs after editing `apps/api/internal/dto/dto.go`
+- `make tygo-generate` — regenerate `packages/shared/src/generated.ts` from Go DTOs after editing any `apps/api/internal/dto/*.go` file
 - `pnpm --filter @job-finder/shared build` — rebuild the shared package's `dist/` (the dashboard imports the built package, not source)
 
 While you work, the committed `.claude/settings.json` hooks do some of this
@@ -57,12 +66,14 @@ automatically: editing a `*.sql` query under `apps/api/internal/db/queries/`
 or a DTO under `apps/api/internal/dto/` regenerates the corresponding
 generated output in the working tree (review it before committing — it is
 never applied invisibly); editing Go source runs `gofmt` and `go vet` on
-the affected package. Ending a session runs a scoped `test-lint` and blocks
-completion if it fails (see specs/023-workflow-quality-gates).
+the affected package. Ending a session runs `lint-go`/`test-go` and/or
+`lint-web`/`test-react` — whichever this session actually touched — and
+blocks completion if any of them fail (see
+specs/023-workflow-quality-gates).
 
 ## Conventions
 
-- Go DTO field names/JSON tags in `apps/api/internal/dto/dto.go` must match `packages/shared/src/index.ts` field-for-field — `index.ts` is hand-maintained (not auto-imported from the tygo-generated `generated.ts`), so update both when adding a DTO field.
+- Go DTO field names/JSON tags in `apps/api/internal/dto/*.go` must match `packages/shared/src/index.ts` field-for-field — `index.ts` is hand-maintained (not auto-imported from the tygo-generated `generated.ts`), so update both when adding a DTO field. Editing a DTO file regenerates `generated.ts` automatically (see "While you work" above); `index.ts` still needs a matching hand edit until feature 024 removes the duplicate.
 - New HTTP handlers are wired in `apps/api/cmd/server/main.go` via `httpapi.NewRouter(...)`'s variadic mounts, not by editing `router.go` directly.
 - sqlc queries live in `apps/api/internal/db/queries/*.sql`; regenerate after changes.
 

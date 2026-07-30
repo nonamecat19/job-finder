@@ -68,7 +68,13 @@ pnpm install
 pnpm --filter @job-finder/shared build
 cd apps/api && pnpm db:migrate && cd ../..
 pnpm dev                   # api :3000 + dashboard :5173 (proxies /api)
+make setup-hooks           # once per clone — activates the branch-protection git hooks
 ```
+
+`make setup-hooks` (`git config core.hooksPath .githooks`) is a repository-level config
+value, so one run covers every worktree sharing this clone — but it does not happen
+automatically, and an unactivated hook is an absent gate. See
+`specs/023-workflow-quality-gates/` for what it enforces.
 
 Useful:
 
