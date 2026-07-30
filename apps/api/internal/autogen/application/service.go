@@ -17,7 +17,7 @@ type Service struct {
 }
 
 func NewService(ctx context.Context, q domain.Repository) (*Service, error) {
-	row, err := q.GetAutoGenerateSetting(ctx)
+	row, err := q.GetAutoGenerateSetting(ctx, "resume")
 	if err != nil {
 		return nil, fmt.Errorf("autogen: load: %w", err)
 	}
@@ -31,9 +31,10 @@ func (s *Service) Get() domain.State {
 }
 
 func (s *Service) Update(ctx context.Context, enabled bool, threshold int) (domain.State, error) {
-	row, err := s.q.UpdateAutoGenerateSetting(ctx, sqlcgen.UpdateAutoGenerateSettingParams{
-		Enabled:   enabled,
-		Threshold: int32(threshold),
+	row, err := s.q.UpdateAutoGenerateSetting(ctx, sqlcgen.UpdateAiFeatureSettingParams{
+		FeatureKey: "resume",
+		Enabled:    enabled,
+		Threshold:  int32(threshold),
 	})
 	if err != nil {
 		return domain.State{}, fmt.Errorf("autogen: update: %w", err)

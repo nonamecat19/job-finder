@@ -6,6 +6,7 @@ package domain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/invopop/jsonschema"
 )
+
+var ErrInvalidResponse = errors.New("llm: structured output failed after all retries")
 
 // CompleteOptions mirrors llm.types.ts CompleteOptions. Temperature/MaxTokens
 // are pointers so "unset" (use provider default) is distinguishable from an

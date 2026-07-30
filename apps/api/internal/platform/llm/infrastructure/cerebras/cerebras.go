@@ -10,39 +10,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync/atomic"
 	"time"
 
 	"github.com/job-finder/api/internal/platform/llm/domain"
 )
-
-// ErrRateLimited is returned (wrapped) whenever Cerebras responds 429, or
-// while the process-wide breaker below is tripped from a prior 429. Callers
-// (the asynq task handlers) treat it as "skip this task" rather than "retry
-// it" — see rateLimitCooldown.
-var ErrRateLimited = errors.New("llm: cerebras rate limited")
-
-// rateLimitCooldown is how long the breaker stays tripped after a 429,
-// matching Cerebras free-tier's per-minute request quota.
-const rateLimitCooldown = 60 * time.Second
-
-// rateLimitBreaker is a tiny process-wide circuit breaker: the first 429 from
-// Cerebras trips it, and every other in-flight/queued task sharing this
-// *Provider (there is exactly one per process, shared by every task Router)
-// immediately fails fast with ErrRateLimited instead of also burning a
-// request against the same exhausted quota.
-type rateLimitBreaker struct {
-	until atomic.Int64 // unix nano; 0 or in the past = not tripped
-}
-
-func (b *rateLimitBreaker) trip() {
-	b.until.Store(time.Now().Add(rateLimitCooldown).UnixNano())
-}
-
-func (b *rateLimitBreaker) tripped() bool {
-	u := b.until.Load()
-	return u != 0 && time.Now().UnixNano() < u
-}
 
 // Provider talks to Cerebras's OpenAI-compatible /chat/completions API.
 // Cerebras has no embeddings endpoint, so Embed delegates to an Ollama
@@ -150,7 +121,7 @@ func (c *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
 		return "", err
 	}
 	if res.StatusCode == http.StatusTooManyRequests {
-		c.breaker.trip()
+		c.breaker.tripFor(rateLimitCooldown)
 		return "", fmt.Errorf("%w: %s", ErrRateLimited, errMessage(res.StatusCode, data))
 	}
 	if res.StatusCode >= 400 {

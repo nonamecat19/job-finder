@@ -8,7 +8,7 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/jobsources"
+	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/jobsources/roster"
 )
 
@@ -22,23 +22,23 @@ import (
 type employerFetcher func(ctx context.Context, employer sqlcgen.EmployerBoard) (statusCode int, jobs []dto.NormalizedJob, err error)
 
 // boardRunState is embedded (by pointer) in every ATS board adapter to
-// satisfy jobsources.EmployerReporter. A mutex guards it because the
+// satisfy domain.EmployerReporter. A mutex guards it because the
 // registry holds one shared adapter instance that asynq may drive from
 // multiple worker goroutines.
 type boardRunState struct {
 	mu     sync.Mutex
-	detail []jobsources.EmployerRunOutcome
+	detail []domain.EmployerRunOutcome
 }
 
-func (b *boardRunState) LastRunDetail() []jobsources.EmployerRunOutcome {
+func (b *boardRunState) LastRunDetail() []domain.EmployerRunOutcome {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := make([]jobsources.EmployerRunOutcome, len(b.detail))
+	out := make([]domain.EmployerRunOutcome, len(b.detail))
 	copy(out, b.detail)
 	return out
 }
 
-func (b *boardRunState) setDetail(d []jobsources.EmployerRunOutcome) {
+func (b *boardRunState) setDetail(d []domain.EmployerRunOutcome) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.detail = d
@@ -58,13 +58,13 @@ func runBoardVendor(ctx context.Context, rosterSvc *roster.Service, state *board
 	}
 
 	var jobs []dto.NormalizedJob
-	detail := make([]jobsources.EmployerRunOutcome, 0, len(employers))
+	detail := make([]domain.EmployerRunOutcome, 0, len(employers))
 	successCount := 0
 
 	for _, e := range employers {
 		status, found, ferr := fetch(ctx, e)
 		outcome := classifyOutcome(status, found, ferr)
-		if outcome == jobsources.EmployerOutcomeRead || outcome == jobsources.EmployerOutcomeNoPostings {
+		if outcome == domain.EmployerOutcomeRead || outcome == domain.EmployerOutcomeNoPostings {
 			successCount++
 		}
 		if len(found) > roster.MaxPostingsPerEmployer {
@@ -73,7 +73,7 @@ func runBoardVendor(ctx context.Context, rosterSvc *roster.Service, state *board
 		if ferr == nil {
 			jobs = append(jobs, found...)
 		}
-		detail = append(detail, jobsources.EmployerRunOutcome{
+		detail = append(detail, domain.EmployerRunOutcome{
 			EmployerIdentifier: e.EmployerIdentifier,
 			Outcome:            outcome,
 			PostingsFound:      len(found),
@@ -92,19 +92,19 @@ func runBoardVendor(ctx context.Context, rosterSvc *roster.Service, state *board
 	return jobs, nil
 }
 
-func classifyOutcome(status int, jobs []dto.NormalizedJob, err error) jobsources.EmployerOutcome {
+func classifyOutcome(status int, jobs []dto.NormalizedJob, err error) domain.EmployerOutcome {
 	switch {
 	case err == nil:
 		if len(jobs) == 0 {
-			return jobsources.EmployerOutcomeNoPostings
+			return domain.EmployerOutcomeNoPostings
 		}
-		return jobsources.EmployerOutcomeRead
+		return domain.EmployerOutcomeRead
 	case status == 404:
-		return jobsources.EmployerOutcomeNotFound
+		return domain.EmployerOutcomeNotFound
 	case status == 401 || status == 403 || status == 429:
-		return jobsources.EmployerOutcomeRefused
+		return domain.EmployerOutcomeRefused
 	default:
-		return jobsources.EmployerOutcomeUnreadable
+		return domain.EmployerOutcomeUnreadable
 	}
 }
 
