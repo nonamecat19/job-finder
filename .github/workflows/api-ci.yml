@@ -44,6 +44,25 @@ jobs:
       - name: Check generated TypeScript matches Go DTOs
         run: ./scripts/tygo-check.sh
 
+  lint-go:
+    name: lint (go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+
+      - name: Read pinned golangci-lint version
+        id: gl
+        run: echo "version=$(tr -d '[:space:]' < apps/api/.golangci-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v${{ steps.gl.outputs.version }}
+          working-directory: apps/api
+
   go-vet:
     name: go vet
     runs-on: ubuntu-latest
@@ -119,3 +138,27 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+  lint-web:
+    name: lint (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @job-finder/shared build
+
+      - name: make lint-web
+        run: make lint-web
