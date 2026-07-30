@@ -1,4 +1,4 @@
-package generation
+package domain
 
 import (
 	"context"

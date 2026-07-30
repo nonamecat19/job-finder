@@ -1,4 +1,4 @@
-package ghostjob_test
+package application_test
 
 import (
 	"context"

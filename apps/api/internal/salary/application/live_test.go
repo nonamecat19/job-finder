@@ -1,6 +1,6 @@
 //go:build live
 
-package salary_test
+package application_test
 
 import (
 	"context"

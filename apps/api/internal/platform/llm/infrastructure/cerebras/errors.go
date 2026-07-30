@@ -1,4 +1,4 @@
-package llm
+package cerebras
 
 import (
 	"encoding/json"

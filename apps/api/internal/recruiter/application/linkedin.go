@@ -1,4 +1,4 @@
-package recruiter
+package application
 
 import (
 	"context"

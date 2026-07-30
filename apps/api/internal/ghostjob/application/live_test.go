@@ -1,6 +1,6 @@
 //go:build live
 
-package ghostjob_test
+package application_test
 
 import (
 	"context"

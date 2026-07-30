@@ -1,4 +1,4 @@
-package generation
+package application
 
 import (
 	"context"

@@ -7,6 +7,20 @@ test.describe('Feed page', () => {
   });
 
   test('displays search input and filters', async ({ page }) => {
+    await page.route('**/api/jobs*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [], total: 0, page: 1, pageSize: 50 }),
+      });
+    });
+    await page.route('**/api/sources', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/subscriptions', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+
     await page.goto('/');
     const searchInput = page.getByPlaceholder('Search title/company…');
     await expect(searchInput).toBeVisible();
@@ -41,6 +55,12 @@ test.describe('Feed page', () => {
         }),
       });
     });
+    await page.route('**/api/sources', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/subscriptions', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
 
     await page.goto('/');
     const jobLink = page.getByText('Senior React Developer');
@@ -59,6 +79,9 @@ test.describe('Feed page', () => {
       });
     });
     await page.route('**/api/sources', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/subscriptions', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
 

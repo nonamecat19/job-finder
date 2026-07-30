@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/scraping"
+	"github.com/job-finder/api/internal/platform/scraping"
 )
 
 func loadHimalayasFixture(t *testing.T, name string) string {

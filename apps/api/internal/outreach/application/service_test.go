@@ -1,4 +1,4 @@
-package outreach
+package application
 
 import (
 	"context"
