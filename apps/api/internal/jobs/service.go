@@ -390,6 +390,14 @@ func jobToDto(j sqlcgen.Job) dto.JobDto {
 		SalaryMin: int32PtrToIntPtr(j.SalaryMin), SalaryMax: int32PtrToIntPtr(j.SalaryMax),
 		SalaryCurrency: j.SalaryCurrency, SalaryConfidence: j.SalaryConfidence, SalarySource: j.SalarySource,
 		SubscriptionID: dbutil.UUIDStringPtr(j.SubscriptionId),
+		ExperienceLevel:       j.ExperienceLevel,
+		ExperienceMinYears:    int32PtrToIntPtr(j.ExperienceMinYears),
+		EnglishLevel:          j.EnglishLevel,
+		SalaryEstimateRaw:     j.SalaryEstimateRaw,
+		SalaryEstimateMin:     int32PtrToIntPtr(j.SalaryEstimateMin),
+		SalaryEstimateMax:     int32PtrToIntPtr(j.SalaryEstimateMax),
+		SalaryEstimateCurrency: j.SalaryEstimateCurrency,
+		SalaryIsEstimated:     j.SalaryEstimateMin != nil || j.SalaryEstimateMax != nil,
 	}
 	var rawFields struct {
 		DetailHTML *string `json:"detailHtml"`

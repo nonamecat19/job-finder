@@ -26,10 +26,16 @@ type DocumentLister interface {
 	ListDocuments(ctx context.Context, jobID string) ([]dto.GeneratedDocumentDto, error)
 }
 
+// Reenricher is the interface JobsHandler needs to re-trigger detail scraping.
+type Reenricher interface {
+	RescrapeOne(ctx context.Context, jobID string) error
+}
+
 // JobsHandler wires /api/jobs, mirroring jobs.controller.ts.
 type JobsHandler struct {
 	Jobs       JobsProvider
 	Generation DocumentLister
+	Enrichment Reenricher
 }
 
 func (h *JobsHandler) Mount(r chi.Router) {
@@ -40,6 +46,9 @@ func (h *JobsHandler) Mount(r chi.Router) {
 	r.Post("/jobs/{id}/hide", h.hide)
 	r.Post("/jobs/{id}/generate", h.generate)
 	r.Get("/jobs/{id}/documents", h.documents)
+	if h.Enrichment != nil {
+		r.Post("/jobs/{id}/re-enrich", h.reenrich)
+	}
 }
 
 func (h *JobsHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -155,4 +164,13 @@ func (h *JobsHandler) documents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *JobsHandler) reenrich(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.Enrichment.RescrapeOne(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

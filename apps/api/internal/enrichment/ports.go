@@ -20,6 +20,7 @@ type Repository interface {
 	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
 	ListJobsNeedingDetail(ctx context.Context, arg sqlcgen.ListJobsNeedingDetailParams) ([]sqlcgen.Job, error)
 	UpdateJobDetail(ctx context.Context, arg sqlcgen.UpdateJobDetailParams) (sqlcgen.Job, error)
+	ClearJobDetailScrapedAt(ctx context.Context, id pgtype.UUID) error
 }
 
 // Enqueuer is the outbound task-queue port. *asynq.Client satisfies it.

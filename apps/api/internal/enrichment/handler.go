@@ -157,13 +157,21 @@ func (h *Handler) enrichDjinni(ctx context.Context, payload queue.EnrichPayload,
 		raw = []byte("{}")
 	}
 	if _, err := h.q.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
-		ID:          uid,
-		Description: patch.Description,
-		SalaryRaw:   patch.SalaryRaw,
-		Location:    patch.Location,
-		Remote:      patch.Remote,
-		Raw:         raw,
-		PostedAt:    dbutil.TimestampFromPtr(patch.PostedAt),
+		ID:                     uid,
+		Company:                patch.Company,
+		Description:            patch.Description,
+		SalaryRaw:              patch.SalaryRaw,
+		Location:    nil,
+		Remote:      true,
+		Raw:                    raw,
+		PostedAt:               dbutil.TimestampFromPtr(patch.PostedAt),
+		ExperienceLevel:        patch.ExperienceLevel,
+		ExperienceMinYears:     intPtrToInt32Ptr(patch.ExperienceMinYears),
+		EnglishLevel:           patch.EnglishLevel,
+		SalaryEstimateRaw:      patch.SalaryEstimateRaw,
+		SalaryEstimateMin:      intPtrToInt32Ptr(patch.SalaryEstimateMin),
+		SalaryEstimateMax:      intPtrToInt32Ptr(patch.SalaryEstimateMax),
+		SalaryEstimateCurrency: patch.SalaryEstimateCurrency,
 	}); err != nil {
 		return fmt.Errorf("enrichment: update djinni job detail: %w", err)
 	}
@@ -531,4 +539,51 @@ func (h *Handler) EnqueueBackfill(ctx context.Context, sourceKey string, limit i
 		n++
 	}
 	return n, nil
+}
+
+func intPtrToInt32Ptr(v *int) *int32 {
+	if v == nil {
+		return nil
+	}
+	n := int32(*v)
+	return &n
+}
+
+func (h *Handler) ReenrichOne(ctx context.Context, jobID string) error {
+	uid, err := dbutil.ParseUUID(jobID)
+	if err != nil {
+		return fmt.Errorf("enrichment: invalid job id: %w", err)
+	}
+	if err := h.q.ClearJobDetailScrapedAt(ctx, uid); err != nil {
+		return fmt.Errorf("enrichment: clear detailScrapedAt: %w", err)
+	}
+	payload, err := json.Marshal(queue.EnrichPayload{JobID: jobID})
+	if err != nil {
+		return fmt.Errorf("enrichment: marshal payload: %w", err)
+	}
+	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload), opts...); err != nil {
+		return fmt.Errorf("enrichment: enqueue: %w", err)
+	}
+	return nil
+}
+
+// RescrapeOne fetches and persists detail for a single job synchronously,
+// bypassing the async enrichment queue. Used by the manual re-scrape button.
+func (h *Handler) RescrapeOne(ctx context.Context, jobID string) error {
+	uid, err := dbutil.ParseUUID(jobID)
+	if err != nil {
+		return fmt.Errorf("enrichment: invalid job id: %w", err)
+	}
+	job, err := h.q.GetJobByID(ctx, uid)
+	if err != nil {
+		return fmt.Errorf("enrichment: get job: %w", err)
+	}
+	switch job.SourceKey {
+	case "djinni":
+		return h.enrichDjinni(ctx, queue.EnrichPayload{JobID: jobID}, uid, job)
+	default:
+		// enqueue async for other sources
+		return h.ReenrichOne(ctx, jobID)
+	}
 }
