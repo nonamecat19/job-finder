@@ -30,20 +30,49 @@ if ! [[ "$COMMAND" =~ (^|[[:space:]\;\&\|])git[[:space:]]+(commit|push)([[:space
   exit 0
 fi
 
-# --no-verify is the documented FR-005 override. Let it through here too —
-# the git hook itself is the actual enforcement point for --no-verify, and
-# refusing to let the agent even issue the override command would remove the
-# only escape hatch for repairing a genuinely broken trunk. What matters is
-# that using it is visible in the transcript, which it already is: this
-# script does not suppress or rewrite the command.
+# --no-verify is deliberately NOT an escape hatch at this layer: the whole
+# point of the PreToolUse check (contracts/hooks.md) is that the agent cannot
+# route around it. The git hook is where --no-verify is honoured, by a human.
 #
-# Check the branch of the project the agent is actually working in
-# ($CLAUDE_PROJECT_DIR, exported to every hook subprocess), not this script's
-# own location — the two differ whenever the hook is invoked from a worktree
-# other than the one scripts/hooks/ happens to live under. Fall back to the
-# current working directory for standalone/manual invocation.
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+# Resolve the checkout the command actually writes to, which is not always
+# the session's own directory: an agent working in a git worktree runs
+# `cd <worktree> && git commit` (or `git -C <worktree> commit`) while
+# $CLAUDE_PROJECT_DIR still points at the main checkout. Reading only the
+# project dir's branch gets this wrong in both directions — it blocks commits
+# that land on a worktree's feature branch, and it waves through commits that
+# really do land on master whenever the session itself runs from a worktree.
+#
+# Both patterns use a greedy `.*` prefix so the LAST occurrence wins, which is
+# the one in effect by the time git runs in a chained command.
+target_dir_from_command() {
+  local cmd="$1" dir=""
+  if [[ "$cmd" =~ .*git[[:space:]]+-C[[:space:]]+([^[:space:]\;\&\|]+) ]]; then
+    dir="${BASH_REMATCH[1]}"
+  elif [[ "$cmd" =~ .*(^|[[:space:]\;\&\|])cd[[:space:]]+([^[:space:]\;\&\|]+) ]]; then
+    dir="${BASH_REMATCH[2]}"
+  fi
+  # Strip one layer of quoting; anything more exotic falls back to the
+  # session directory below, which is the safe (still-guarded) answer.
+  dir="${dir#[\"\']}"
+  dir="${dir%[\"\']}"
+  printf '%s' "$dir"
+}
+
+# .cwd is the directory the Bash tool runs in, which tracks the session more
+# closely than $CLAUDE_PROJECT_DIR does; both are absent for a standalone
+# invocation, hence $PWD last.
+SESSION_DIR="$(hook_field '.cwd')"
+BASE_DIR="${SESSION_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+
+TARGET_DIR="$(target_dir_from_command "$COMMAND")"
+if [[ -n "$TARGET_DIR" && "$TARGET_DIR" != /* ]]; then
+  TARGET_DIR="$BASE_DIR/$TARGET_DIR"
+fi
+if [[ -z "$TARGET_DIR" || ! -d "$TARGET_DIR" ]]; then
+  TARGET_DIR="$BASE_DIR"
+fi
+
+BRANCH="$(git -C "$TARGET_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
 
 if [[ "$BRANCH" == "master" ]]; then
   echo "On master. Agent-authored changes never land directly on master." >&2
