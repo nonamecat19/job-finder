@@ -12,6 +12,15 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
+const clearJobDetailScrapedAt = `-- name: ClearJobDetailScrapedAt :exec
+UPDATE "Job" SET "detailScrapedAt" = NULL WHERE "id" = $1
+`
+
+func (q *Queries) ClearJobDetailScrapedAt(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearJobDetailScrapedAt, id)
+	return err
+}
+
 const deleteAllJobs = `-- name: DeleteAllJobs :execrows
 DELETE FROM "Job"
 `
@@ -64,7 +73,7 @@ func (q *Queries) GetJobByDedupeKey(ctx context.Context, dedupekey string) (pgty
 }
 
 const getJobByID = `-- name: GetJobByID :one
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash" FROM "Job" WHERE "id" = $1
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency FROM "Job" WHERE "id" = $1
 `
 
 func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
@@ -97,6 +106,13 @@ func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
 		&i.SubscriptionId,
 		&i.SeenOnSources,
 		&i.EmbeddingHash,
+		&i.ExperienceLevel,
+		&i.ExperienceMinYears,
+		&i.EnglishLevel,
+		&i.SalaryEstimateRaw,
+		&i.SalaryEstimateMin,
+		&i.SalaryEstimateMax,
+		&i.SalaryEstimateCurrency,
 	)
 	return i, err
 }
@@ -110,7 +126,7 @@ INSERT INTO "Job" (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
   ARRAY[$2]
 )
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
 `
 
 type InsertJobParams struct {
@@ -173,6 +189,13 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, erro
 		&i.SubscriptionId,
 		&i.SeenOnSources,
 		&i.EmbeddingHash,
+		&i.ExperienceLevel,
+		&i.ExperienceMinYears,
+		&i.EnglishLevel,
+		&i.SalaryEstimateRaw,
+		&i.SalaryEstimateMin,
+		&i.SalaryEstimateMax,
+		&i.SalaryEstimateCurrency,
 	)
 	return i, err
 }
@@ -232,7 +255,7 @@ func (q *Queries) ListJobsMissingMatch(ctx context.Context, arg ListJobsMissingM
 }
 
 const listJobsNeedingDetail = `-- name: ListJobsNeedingDetail :many
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash" FROM "Job"
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency FROM "Job"
 WHERE "sourceKey" = $1 AND "detailScrapedAt" IS NULL
 ORDER BY "ingestedAt" ASC
 LIMIT $2
@@ -279,6 +302,13 @@ func (q *Queries) ListJobsNeedingDetail(ctx context.Context, arg ListJobsNeeding
 			&i.SubscriptionId,
 			&i.SeenOnSources,
 			&i.EmbeddingHash,
+			&i.ExperienceLevel,
+			&i.ExperienceMinYears,
+			&i.EnglishLevel,
+			&i.SalaryEstimateRaw,
+			&i.SalaryEstimateMin,
+			&i.SalaryEstimateMax,
+			&i.SalaryEstimateCurrency,
 		); err != nil {
 			return nil, err
 		}
@@ -296,7 +326,7 @@ UPDATE "Job" SET
   "sourceKey" = $3,
   "seenOnSources" = array_append("seenOnSources", $4)
 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
 `
 
 type MergeJobBoardParams struct {
@@ -341,6 +371,13 @@ func (q *Queries) MergeJobBoard(ctx context.Context, arg MergeJobBoardParams) (J
 		&i.SubscriptionId,
 		&i.SeenOnSources,
 		&i.EmbeddingHash,
+		&i.ExperienceLevel,
+		&i.ExperienceMinYears,
+		&i.EnglishLevel,
+		&i.SalaryEstimateRaw,
+		&i.SalaryEstimateMin,
+		&i.SalaryEstimateMax,
+		&i.SalaryEstimateCurrency,
 	)
 	return i, err
 }
@@ -349,7 +386,7 @@ const recordJobRepost = `-- name: RecordJobRepost :one
 UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now(),
   "subscriptionId" = COALESCE("subscriptionId", $2)
 WHERE "dedupeKey" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
 `
 
 type RecordJobRepostParams struct {
@@ -393,41 +430,72 @@ func (q *Queries) RecordJobRepost(ctx context.Context, arg RecordJobRepostParams
 		&i.SubscriptionId,
 		&i.SeenOnSources,
 		&i.EmbeddingHash,
+		&i.ExperienceLevel,
+		&i.ExperienceMinYears,
+		&i.EnglishLevel,
+		&i.SalaryEstimateRaw,
+		&i.SalaryEstimateMin,
+		&i.SalaryEstimateMax,
+		&i.SalaryEstimateCurrency,
 	)
 	return i, err
 }
 
 const updateJobDetail = `-- name: UpdateJobDetail :one
 UPDATE "Job" SET
-  "description" = COALESCE(NULLIF($1, ''), "description"),
-  "salaryRaw" = COALESCE($2, "salaryRaw"),
-  "location" = COALESCE($3, "location"),
-  "remote" = "remote" OR $4::bool,
-  "raw" = $5,
-  "postedAt" = COALESCE($6, "postedAt"),
-  "detailScrapedAt" = now()
-WHERE "id" = $7
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
+  "company" = COALESCE(NULLIF($1, ''), "company"),
+  "description" = COALESCE(NULLIF($2, ''), "description"),
+  "salaryRaw" = COALESCE($3, "salaryRaw"),
+  "location" = COALESCE($4, "location"),
+  "remote" = "remote" OR $5::bool,
+  "raw" = $6,
+  "postedAt" = COALESCE($7, "postedAt"),
+  "detailScrapedAt" = now(),
+  "experience_level" = COALESCE($8, "experience_level"),
+  "experience_min_years" = COALESCE($9, "experience_min_years"),
+  "english_level" = COALESCE($10, "english_level"),
+  "salary_estimate_raw" = COALESCE($11, "salary_estimate_raw"),
+  "salary_estimate_min" = COALESCE($12, "salary_estimate_min"),
+  "salary_estimate_max" = COALESCE($13, "salary_estimate_max"),
+  "salary_estimate_currency" = COALESCE($14, "salary_estimate_currency")
+WHERE "id" = $15
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
 `
 
 type UpdateJobDetailParams struct {
-	Description interface{}      `json:"description"`
-	SalaryRaw   *string          `json:"salaryRaw"`
-	Location    *string          `json:"location"`
-	Remote      bool             `json:"remote"`
-	Raw         []byte           `json:"raw"`
-	PostedAt    pgtype.Timestamp `json:"postedAt"`
-	ID          pgtype.UUID      `json:"id"`
+	Company                interface{}      `json:"company"`
+	Description            interface{}      `json:"description"`
+	SalaryRaw              *string          `json:"salaryRaw"`
+	Location               *string          `json:"location"`
+	Remote                 bool             `json:"remote"`
+	Raw                    []byte           `json:"raw"`
+	PostedAt               pgtype.Timestamp `json:"postedAt"`
+	ExperienceLevel        *string          `json:"experience_level"`
+	ExperienceMinYears     *int32           `json:"experience_min_years"`
+	EnglishLevel           *string          `json:"english_level"`
+	SalaryEstimateRaw      *string          `json:"salary_estimate_raw"`
+	SalaryEstimateMin      *int32           `json:"salary_estimate_min"`
+	SalaryEstimateMax      *int32           `json:"salary_estimate_max"`
+	SalaryEstimateCurrency *string          `json:"salary_estimate_currency"`
+	ID                     pgtype.UUID      `json:"id"`
 }
 
 func (q *Queries) UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams) (Job, error) {
 	row := q.db.QueryRow(ctx, updateJobDetail,
+		arg.Company,
 		arg.Description,
 		arg.SalaryRaw,
 		arg.Location,
 		arg.Remote,
 		arg.Raw,
 		arg.PostedAt,
+		arg.ExperienceLevel,
+		arg.ExperienceMinYears,
+		arg.EnglishLevel,
+		arg.SalaryEstimateRaw,
+		arg.SalaryEstimateMin,
+		arg.SalaryEstimateMax,
+		arg.SalaryEstimateCurrency,
 		arg.ID,
 	)
 	var i Job
@@ -458,6 +526,13 @@ func (q *Queries) UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams
 		&i.SubscriptionId,
 		&i.SeenOnSources,
 		&i.EmbeddingHash,
+		&i.ExperienceLevel,
+		&i.ExperienceMinYears,
+		&i.EnglishLevel,
+		&i.SalaryEstimateRaw,
+		&i.SalaryEstimateMin,
+		&i.SalaryEstimateMax,
+		&i.SalaryEstimateCurrency,
 	)
 	return i, err
 }
@@ -495,7 +570,7 @@ func (q *Queries) UpdateJobEmbeddingWithHash(ctx context.Context, arg UpdateJobE
 
 const updateJobStatus = `-- name: UpdateJobStatus :one
 UPDATE "Job" SET "status" = $2 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
 `
 
 type UpdateJobStatusParams struct {
@@ -533,6 +608,13 @@ func (q *Queries) UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams
 		&i.SubscriptionId,
 		&i.SeenOnSources,
 		&i.EmbeddingHash,
+		&i.ExperienceLevel,
+		&i.ExperienceMinYears,
+		&i.EnglishLevel,
+		&i.SalaryEstimateRaw,
+		&i.SalaryEstimateMin,
+		&i.SalaryEstimateMax,
+		&i.SalaryEstimateCurrency,
 	)
 	return i, err
 }

@@ -100,7 +100,7 @@ func (q *Queries) GetJobDocuments(ctx context.Context, jobid pgtype.UUID) ([]Gen
 }
 
 const listJobsByDate = `-- name: ListJobsByDate :many
-SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", j."subscriptionId", j."seenOnSources", j."embeddingHash", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
+SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", j."subscriptionId", j."seenOnSources", j."embeddingHash", j.experience_level, j.experience_min_years, j.english_level, j.salary_estimate_raw, j.salary_estimate_min, j.salary_estimate_max, j.salary_estimate_currency, mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
   mr."matchedSkills" AS mr_matched_skills, mr."missingSkills" AS mr_missing_skills,
   mr."summary" AS mr_summary, mr."redFlags" AS mr_red_flags, mr."model" AS mr_model,
   mr."createdAt" AS mr_created_at
@@ -144,41 +144,48 @@ type ListJobsByDateParams struct {
 }
 
 type ListJobsByDateRow struct {
-	ID               pgtype.UUID      `json:"id"`
-	DedupeKey        string           `json:"dedupeKey"`
-	SourceKey        string           `json:"sourceKey"`
-	ExternalId       *string          `json:"externalId"`
-	Title            string           `json:"title"`
-	Company          string           `json:"company"`
-	Location         *string          `json:"location"`
-	Remote           bool             `json:"remote"`
-	SalaryRaw        *string          `json:"salaryRaw"`
-	Url              string           `json:"url"`
-	Description      string           `json:"description"`
-	Raw              []byte           `json:"raw"`
-	PostedAt         pgtype.Timestamp `json:"postedAt"`
-	IngestedAt       pgtype.Timestamp `json:"ingestedAt"`
-	Embedding        *pgvector.Vector `json:"embedding"`
-	Status           string           `json:"status"`
-	DetailScrapedAt  pgtype.Timestamp `json:"detailScrapedAt"`
-	SalaryMin        *int32           `json:"salaryMin"`
-	SalaryMax        *int32           `json:"salaryMax"`
-	SalaryCurrency   *string          `json:"salaryCurrency"`
-	SalaryConfidence *float64         `json:"salaryConfidence"`
-	SalarySource     *string          `json:"salarySource"`
-	SeenCount        int32            `json:"seenCount"`
-	SubscriptionId   pgtype.UUID      `json:"subscriptionId"`
-	SeenOnSources    []string         `json:"seenOnSources"`
-	EmbeddingHash    *string          `json:"embeddingHash"`
-	MrID             pgtype.UUID      `json:"mr_id"`
-	MrSimilarity     *float64         `json:"mr_similarity"`
-	MrScore          *int32           `json:"mr_score"`
-	MrMatchedSkills  []byte           `json:"mr_matched_skills"`
-	MrMissingSkills  []byte           `json:"mr_missing_skills"`
-	MrSummary        *string          `json:"mr_summary"`
-	MrRedFlags       []byte           `json:"mr_red_flags"`
-	MrModel          *string          `json:"mr_model"`
-	MrCreatedAt      pgtype.Timestamp `json:"mr_created_at"`
+	ID                     pgtype.UUID      `json:"id"`
+	DedupeKey              string           `json:"dedupeKey"`
+	SourceKey              string           `json:"sourceKey"`
+	ExternalId             *string          `json:"externalId"`
+	Title                  string           `json:"title"`
+	Company                string           `json:"company"`
+	Location               *string          `json:"location"`
+	Remote                 bool             `json:"remote"`
+	SalaryRaw              *string          `json:"salaryRaw"`
+	Url                    string           `json:"url"`
+	Description            string           `json:"description"`
+	Raw                    []byte           `json:"raw"`
+	PostedAt               pgtype.Timestamp `json:"postedAt"`
+	IngestedAt             pgtype.Timestamp `json:"ingestedAt"`
+	Embedding              *pgvector.Vector `json:"embedding"`
+	Status                 string           `json:"status"`
+	DetailScrapedAt        pgtype.Timestamp `json:"detailScrapedAt"`
+	SalaryMin              *int32           `json:"salaryMin"`
+	SalaryMax              *int32           `json:"salaryMax"`
+	SalaryCurrency         *string          `json:"salaryCurrency"`
+	SalaryConfidence       *float64         `json:"salaryConfidence"`
+	SalarySource           *string          `json:"salarySource"`
+	SeenCount              int32            `json:"seenCount"`
+	SubscriptionId         pgtype.UUID      `json:"subscriptionId"`
+	SeenOnSources          []string         `json:"seenOnSources"`
+	EmbeddingHash          *string          `json:"embeddingHash"`
+	ExperienceLevel        *string          `json:"experience_level"`
+	ExperienceMinYears     *int32           `json:"experience_min_years"`
+	EnglishLevel           *string          `json:"english_level"`
+	SalaryEstimateRaw      *string          `json:"salary_estimate_raw"`
+	SalaryEstimateMin      *int32           `json:"salary_estimate_min"`
+	SalaryEstimateMax      *int32           `json:"salary_estimate_max"`
+	SalaryEstimateCurrency *string          `json:"salary_estimate_currency"`
+	MrID                   pgtype.UUID      `json:"mr_id"`
+	MrSimilarity           *float64         `json:"mr_similarity"`
+	MrScore                *int32           `json:"mr_score"`
+	MrMatchedSkills        []byte           `json:"mr_matched_skills"`
+	MrMissingSkills        []byte           `json:"mr_missing_skills"`
+	MrSummary              *string          `json:"mr_summary"`
+	MrRedFlags             []byte           `json:"mr_red_flags"`
+	MrModel                *string          `json:"mr_model"`
+	MrCreatedAt            pgtype.Timestamp `json:"mr_created_at"`
 }
 
 func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) ([]ListJobsByDateRow, error) {
@@ -227,6 +234,13 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 			&i.SubscriptionId,
 			&i.SeenOnSources,
 			&i.EmbeddingHash,
+			&i.ExperienceLevel,
+			&i.ExperienceMinYears,
+			&i.EnglishLevel,
+			&i.SalaryEstimateRaw,
+			&i.SalaryEstimateMin,
+			&i.SalaryEstimateMax,
+			&i.SalaryEstimateCurrency,
 			&i.MrID,
 			&i.MrSimilarity,
 			&i.MrScore,
@@ -248,7 +262,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 }
 
 const listJobsByScore = `-- name: ListJobsByScore :many
-SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", j."subscriptionId", j."seenOnSources", j."embeddingHash", mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
+SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j.location, j.remote, j."salaryRaw", j.url, j.description, j.raw, j."postedAt", j."ingestedAt", j.embedding, j.status, j."detailScrapedAt", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryConfidence", j."salarySource", j."seenCount", j."subscriptionId", j."seenOnSources", j."embeddingHash", j.experience_level, j.experience_min_years, j.english_level, j.salary_estimate_raw, j.salary_estimate_min, j.salary_estimate_max, j.salary_estimate_currency, mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr_score,
   mr."matchedSkills" AS mr_matched_skills, mr."missingSkills" AS mr_missing_skills,
   mr."summary" AS mr_summary, mr."redFlags" AS mr_red_flags, mr."model" AS mr_model,
   mr."createdAt" AS mr_created_at
@@ -292,41 +306,48 @@ type ListJobsByScoreParams struct {
 }
 
 type ListJobsByScoreRow struct {
-	ID               pgtype.UUID      `json:"id"`
-	DedupeKey        string           `json:"dedupeKey"`
-	SourceKey        string           `json:"sourceKey"`
-	ExternalId       *string          `json:"externalId"`
-	Title            string           `json:"title"`
-	Company          string           `json:"company"`
-	Location         *string          `json:"location"`
-	Remote           bool             `json:"remote"`
-	SalaryRaw        *string          `json:"salaryRaw"`
-	Url              string           `json:"url"`
-	Description      string           `json:"description"`
-	Raw              []byte           `json:"raw"`
-	PostedAt         pgtype.Timestamp `json:"postedAt"`
-	IngestedAt       pgtype.Timestamp `json:"ingestedAt"`
-	Embedding        *pgvector.Vector `json:"embedding"`
-	Status           string           `json:"status"`
-	DetailScrapedAt  pgtype.Timestamp `json:"detailScrapedAt"`
-	SalaryMin        *int32           `json:"salaryMin"`
-	SalaryMax        *int32           `json:"salaryMax"`
-	SalaryCurrency   *string          `json:"salaryCurrency"`
-	SalaryConfidence *float64         `json:"salaryConfidence"`
-	SalarySource     *string          `json:"salarySource"`
-	SeenCount        int32            `json:"seenCount"`
-	SubscriptionId   pgtype.UUID      `json:"subscriptionId"`
-	SeenOnSources    []string         `json:"seenOnSources"`
-	EmbeddingHash    *string          `json:"embeddingHash"`
-	MrID             pgtype.UUID      `json:"mr_id"`
-	MrSimilarity     *float64         `json:"mr_similarity"`
-	MrScore          *int32           `json:"mr_score"`
-	MrMatchedSkills  []byte           `json:"mr_matched_skills"`
-	MrMissingSkills  []byte           `json:"mr_missing_skills"`
-	MrSummary        *string          `json:"mr_summary"`
-	MrRedFlags       []byte           `json:"mr_red_flags"`
-	MrModel          *string          `json:"mr_model"`
-	MrCreatedAt      pgtype.Timestamp `json:"mr_created_at"`
+	ID                     pgtype.UUID      `json:"id"`
+	DedupeKey              string           `json:"dedupeKey"`
+	SourceKey              string           `json:"sourceKey"`
+	ExternalId             *string          `json:"externalId"`
+	Title                  string           `json:"title"`
+	Company                string           `json:"company"`
+	Location               *string          `json:"location"`
+	Remote                 bool             `json:"remote"`
+	SalaryRaw              *string          `json:"salaryRaw"`
+	Url                    string           `json:"url"`
+	Description            string           `json:"description"`
+	Raw                    []byte           `json:"raw"`
+	PostedAt               pgtype.Timestamp `json:"postedAt"`
+	IngestedAt             pgtype.Timestamp `json:"ingestedAt"`
+	Embedding              *pgvector.Vector `json:"embedding"`
+	Status                 string           `json:"status"`
+	DetailScrapedAt        pgtype.Timestamp `json:"detailScrapedAt"`
+	SalaryMin              *int32           `json:"salaryMin"`
+	SalaryMax              *int32           `json:"salaryMax"`
+	SalaryCurrency         *string          `json:"salaryCurrency"`
+	SalaryConfidence       *float64         `json:"salaryConfidence"`
+	SalarySource           *string          `json:"salarySource"`
+	SeenCount              int32            `json:"seenCount"`
+	SubscriptionId         pgtype.UUID      `json:"subscriptionId"`
+	SeenOnSources          []string         `json:"seenOnSources"`
+	EmbeddingHash          *string          `json:"embeddingHash"`
+	ExperienceLevel        *string          `json:"experience_level"`
+	ExperienceMinYears     *int32           `json:"experience_min_years"`
+	EnglishLevel           *string          `json:"english_level"`
+	SalaryEstimateRaw      *string          `json:"salary_estimate_raw"`
+	SalaryEstimateMin      *int32           `json:"salary_estimate_min"`
+	SalaryEstimateMax      *int32           `json:"salary_estimate_max"`
+	SalaryEstimateCurrency *string          `json:"salary_estimate_currency"`
+	MrID                   pgtype.UUID      `json:"mr_id"`
+	MrSimilarity           *float64         `json:"mr_similarity"`
+	MrScore                *int32           `json:"mr_score"`
+	MrMatchedSkills        []byte           `json:"mr_matched_skills"`
+	MrMissingSkills        []byte           `json:"mr_missing_skills"`
+	MrSummary              *string          `json:"mr_summary"`
+	MrRedFlags             []byte           `json:"mr_red_flags"`
+	MrModel                *string          `json:"mr_model"`
+	MrCreatedAt            pgtype.Timestamp `json:"mr_created_at"`
 }
 
 func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams) ([]ListJobsByScoreRow, error) {
@@ -375,6 +396,13 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 			&i.SubscriptionId,
 			&i.SeenOnSources,
 			&i.EmbeddingHash,
+			&i.ExperienceLevel,
+			&i.ExperienceMinYears,
+			&i.EnglishLevel,
+			&i.SalaryEstimateRaw,
+			&i.SalaryEstimateMin,
+			&i.SalaryEstimateMax,
+			&i.SalaryEstimateCurrency,
 			&i.MrID,
 			&i.MrSimilarity,
 			&i.MrScore,

@@ -52,15 +52,26 @@ RETURNING *;
 
 -- name: UpdateJobDetail :one
 UPDATE "Job" SET
+  "company" = COALESCE(NULLIF(sqlc.arg('company'), ''), "company"),
   "description" = COALESCE(NULLIF(sqlc.arg('description'), ''), "description"),
   "salaryRaw" = COALESCE(sqlc.narg('salaryRaw'), "salaryRaw"),
   "location" = COALESCE(sqlc.narg('location'), "location"),
   "remote" = "remote" OR sqlc.arg('remote')::bool,
   "raw" = sqlc.arg('raw'),
   "postedAt" = COALESCE(sqlc.narg('postedAt'), "postedAt"),
-  "detailScrapedAt" = now()
+  "detailScrapedAt" = now(),
+  "experience_level" = COALESCE(sqlc.narg('experience_level'), "experience_level"),
+  "experience_min_years" = COALESCE(sqlc.narg('experience_min_years'), "experience_min_years"),
+  "english_level" = COALESCE(sqlc.narg('english_level'), "english_level"),
+  "salary_estimate_raw" = COALESCE(sqlc.narg('salary_estimate_raw'), "salary_estimate_raw"),
+  "salary_estimate_min" = COALESCE(sqlc.narg('salary_estimate_min'), "salary_estimate_min"),
+  "salary_estimate_max" = COALESCE(sqlc.narg('salary_estimate_max'), "salary_estimate_max"),
+  "salary_estimate_currency" = COALESCE(sqlc.narg('salary_estimate_currency'), "salary_estimate_currency")
 WHERE "id" = sqlc.arg('id')
 RETURNING *;
+
+-- name: ClearJobDetailScrapedAt :exec
+UPDATE "Job" SET "detailScrapedAt" = NULL WHERE "id" = $1;
 
 -- name: FindJobByCompany :one
 SELECT id, "sourceKey", "title" FROM "Job"
