@@ -36,6 +36,13 @@ export interface NormalizedJob {
   description: string;
   postedAt?: string; // ISO date
   raw: unknown;
+  experienceLevel?: string;
+  experienceMinYears?: number;
+  englishLevel?: string;
+  salaryEstimateRaw?: string;
+  salaryEstimateMin?: number;
+  salaryEstimateMax?: number;
+  salaryEstimateCurrency?: string;
 }
 
 /** Query shape a saved search stores and adapters receive. */
@@ -157,6 +164,15 @@ export interface JobDto {
    * field is simply absent, never a zero-valued panel (FR-017, SC-008).
    */
   ghostSignal?: JobSignalDto | null;
+  // Djinni scraping enhancement (spec 022)
+  experienceLevel?: string | null;
+  experienceMinYears?: number | null;
+  englishLevel?: string | null;
+  salaryEstimateRaw?: string | null;
+  salaryEstimateMin?: number | null;
+  salaryEstimateMax?: number | null;
+  salaryEstimateCurrency?: string | null;
+  salaryIsEstimated: boolean;
 }
 
 export interface JobListResponse {

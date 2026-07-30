@@ -306,6 +306,13 @@ export interface NormalizedJob {
   description: string;
   postedAt?: string;
   raw: any;
+  experienceLevel?: string;
+  experienceMinYears?: number /* int */;
+  englishLevel?: string;
+  salaryEstimateRaw?: string;
+  salaryEstimateMin?: number /* int */;
+  salaryEstimateMax?: number /* int */;
+  salaryEstimateCurrency?: string;
 }
 export interface SearchQuery {
   keywords: string;
@@ -342,6 +349,14 @@ export interface JobDto {
   salarySource?: string;
   salaryBelowFloor: boolean;
   ghostSignal?: JobSignalDto;
+  experienceLevel?: string;
+  experienceMinYears?: number /* int */;
+  englishLevel?: string;
+  salaryEstimateRaw?: string;
+  salaryEstimateMin?: number /* int */;
+  salaryEstimateMax?: number /* int */;
+  salaryEstimateCurrency?: string;
+  salaryIsEstimated: boolean;
 }
 export interface JobListResponse {
   items: JobDto[];

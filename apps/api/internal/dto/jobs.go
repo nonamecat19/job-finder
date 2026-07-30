@@ -14,6 +14,14 @@ type NormalizedJob struct {
 	Description string  `json:"description"`
 	PostedAt    *string `json:"postedAt,omitempty"`
 	Raw         any     `json:"raw"`
+
+	ExperienceLevel       *string `json:"experienceLevel,omitempty"`
+	ExperienceMinYears    *int    `json:"experienceMinYears,omitempty"`
+	EnglishLevel          *string `json:"englishLevel,omitempty"`
+	SalaryEstimateRaw     *string `json:"salaryEstimateRaw,omitempty"`
+	SalaryEstimateMin     *int    `json:"salaryEstimateMin,omitempty"`
+	SalaryEstimateMax     *int    `json:"salaryEstimateMax,omitempty"`
+	SalaryEstimateCurrency *string `json:"salaryEstimateCurrency,omitempty"`
 }
 
 type SearchQuery struct {
@@ -52,6 +60,15 @@ type JobDto struct {
 	SalarySource     *string  `json:"salarySource"`
 	SalaryBelowFloor bool     `json:"salaryBelowFloor"`
 	GhostSignal *JobSignalDto `json:"ghostSignal,omitempty"`
+
+	ExperienceLevel       *string `json:"experienceLevel"`
+	ExperienceMinYears    *int    `json:"experienceMinYears"`
+	EnglishLevel          *string `json:"englishLevel"`
+	SalaryEstimateRaw     *string `json:"salaryEstimateRaw"`
+	SalaryEstimateMin     *int    `json:"salaryEstimateMin"`
+	SalaryEstimateMax     *int    `json:"salaryEstimateMax"`
+	SalaryEstimateCurrency *string `json:"salaryEstimateCurrency"`
+	SalaryIsEstimated     bool    `json:"salaryIsEstimated"`
 }
 
 type JobListResponse struct {
