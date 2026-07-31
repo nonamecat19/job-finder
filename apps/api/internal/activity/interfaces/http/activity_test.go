@@ -11,6 +11,7 @@ import (
 	activityhttp "github.com/job-finder/api/internal/activity/interfaces/http"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/testutil"
 )
@@ -31,6 +32,15 @@ func TestActivityList(t *testing.T) {
 		t.Fatalf("db open: %v", err)
 	}
 	defer database.Close()
+
+	// `go test ./...` runs packages in parallel; this suite TRUNCATEs a table
+	// other suites also touch, so it takes the shared advisory lock like every
+	// other integration package does (internal/dbtest/lock.go).
+	unlock, err := dbtest.LockSharedDB(ctx, database.Pool)
+	if err != nil {
+		t.Fatalf("lock shared db: %v", err)
+	}
+	defer unlock()
 
 	// Clear activities
 	_, _ = database.Pool.Exec(ctx, `TRUNCATE TABLE "ActivityRun" CASCADE`)
