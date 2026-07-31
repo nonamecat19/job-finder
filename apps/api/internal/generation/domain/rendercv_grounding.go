@@ -3,11 +3,12 @@ package domain
 // verifyRendercvGrounding is the post-merge grounding check for the RenderCV
 // path. It verifies:
 // - No fabricated companies (experience entries must exist in master)
-// - No fabricated sections in SectionsToDrop (must be real master sections)
-// - ExperienceOrder companies must be a subset of master companies
-// - ExperienceOrder must include all master companies (no entries lost)
-// - Dropped experience entries must still exist in master
+// - No added sections (merged sections are a subset of master sections)
 // - On strict grounding, no skill tokens outside the master skill pool.
+//
+// It does not check structural invariants (block sequence, experience order,
+// total experience years) — those are enforced by MergeTailored and
+// VerifyStructureIntegrity (see rendercv_structure.go).
 func VerifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel) []string {
 	var violations []string
 

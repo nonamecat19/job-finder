@@ -219,3 +219,19 @@ var CerebrasModels = []CerebrasModel{
 
 `IsSupportedCerebrasModel("")` returns true — empty means "use the default". Exactly one
 entry must carry `IsDefault`.
+
+## Gateway cost tracking
+
+With the LiteLLM proxy gateway (feature 029), per-request spend is visible two ways:
+
+- `docker compose logs litellm` — LiteLLM logs token counts and cost for every call, so
+  the container logs are the quickest place to check spend.
+- `GET /spend/logs` on the proxy (host port `4000`), authenticated with the master key:
+
+  ```bash
+  curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+    http://localhost:4000/spend/logs
+  ```
+
+The proxy records spend against the task key sent as `model`, so each task's cost reflects
+whatever provider/model `gateway/config.yaml` routes it to.

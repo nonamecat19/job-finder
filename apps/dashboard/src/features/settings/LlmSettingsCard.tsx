@@ -11,7 +11,7 @@ const TASK_LABELS: Record<string, string> = {
   default: 'Other (recruiter, outreach, salary)',
 };
 
-type Provider = 'ollama' | 'cerebras';
+type Provider = 'ollama' | 'cerebras' | 'gateway';
 
 function taskLabel(taskKey: string): string {
   return TASK_LABELS[taskKey] ?? taskKey;
@@ -52,22 +52,28 @@ export default function LlmSettingsCard() {
   }
 
   function switchAll(provider: Provider) {
-    const next: LlmTaskSettingDto[] = tasks.map((t) => ({ taskKey: t.taskKey, provider, model: '' }));
+    const next: LlmTaskSettingDto[] = tasks.map((t) => ({
+      taskKey: t.taskKey,
+      provider,
+      model: provider === 'gateway' ? t.taskKey : '',
+    }));
     update.mutate(next);
   }
 
   function setTask(taskKey: string, patch: Partial<LlmTaskSettingDto>) {
     const current = tasks.find((t) => t.taskKey === taskKey);
     if (!current) return;
-    update.mutate([{ taskKey, provider: current.provider, model: current.model, ...patch }]);
+    const provider = patch.provider ?? current.provider;
+    const model = provider === 'gateway' ? taskKey : (patch.model ?? current.model);
+    update.mutate([{ taskKey, provider, model }]);
   }
 
   return (
     <>
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted">
-          Choose which chat tasks run on the local Ollama model versus a Cerebras
-          free-tier model. Embeddings always stay on Ollama.
+          Choose which chat tasks run on the local Ollama model, a Cerebras free-tier
+          model, or the LiteLLM gateway. Embeddings always stay on Ollama.
         </p>
         <div className="flex shrink-0 gap-2">
           <Button variant="secondary" onClick={() => switchAll('ollama')} disabled={update.isPending}>
@@ -75,6 +81,9 @@ export default function LlmSettingsCard() {
           </Button>
           <Button variant="secondary" onClick={() => switchAll('cerebras')} disabled={update.isPending}>
             Switch all to Cerebras
+          </Button>
+          <Button variant="secondary" onClick={() => switchAll('gateway')} disabled={update.isPending}>
+            Switch all to Gateway
           </Button>
         </div>
       </div>
@@ -108,12 +117,13 @@ export default function LlmSettingsCard() {
             >
               <option value="ollama">Ollama</option>
               <option value="cerebras">Cerebras</option>
+              <option value="gateway">Gateway</option>
             </Select>
             <Select
               aria-label={`${taskLabel(task.taskKey)} model`}
               className="w-64"
               value={task.model}
-              disabled={update.isPending || task.provider === 'ollama'}
+              disabled={update.isPending || task.provider === 'ollama' || task.provider === 'gateway'}
               onChange={(e) => setTask(task.taskKey, { model: e.target.value })}
             >
               <option value="">Default</option>

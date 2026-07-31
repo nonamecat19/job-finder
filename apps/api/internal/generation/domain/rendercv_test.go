@@ -117,50 +117,27 @@ func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Experience reordering
+// Feature 028: US1 — block sequence is immutable
 // ---------------------------------------------------------------------------
 
-func TestMergeTailored_ReordersExperience(t *testing.T) {
-	master := loadSampleMaster(t)
-	payload := TailoredSections{
-		Summary: "Summary",
-		Skills:  []TailoredSkillGroup{{Index: 0, Details: "Go"}},
-		Experience: []TailoredExperience{
-			{Company: "Acme Corp", Highlights: []string{"Relevant thing"}},
-			{Company: "StartupX", Highlights: []string{"Less relevant thing"}},
+func TestMergeTailoredPreservesBlockOrder(t *testing.T) {
+	master := RendercvMaster{
+		"cv": map[string]any{
+			"sections": map[string]any{
+				"_order":     []any{"experience", "education", "skills", "summary", "projects"},
+				"experience": []any{map[string]any{"company": "Acme Corp", "position": "Senior Engineer", "start_date": "2020-01", "end_date": "present", "highlights": []any{"Did a thing"}}},
+				"education":  []any{map[string]any{"institution": "MIT", "area": "Computer Science"}},
+				"skills":     []any{map[string]any{"label": "Backend", "details": "Go, Postgres, Docker"}},
+				"summary":    []any{"Old summary"},
+				"projects":   []any{map[string]any{"name": "SideProject", "highlights": []any{"Had fun"}}},
+			},
 		},
-		ExperienceOrder: []string{"StartupX", "Acme Corp"},
 	}
-	merged, err := MergeTailored(master, payload)
-	if err != nil {
-		t.Fatalf("MergeTailored: %v", err)
-	}
-
-	sections := CvSections(merged)
-	exp := AsSliceOfMaps(sections["experience"])
-	if len(exp) != 2 {
-		t.Fatalf("expected 2 experience entries, got %d", len(exp))
-	}
-	if StringField(exp[0], "company") != "StartupX" {
-		t.Fatalf("expected StartupX first after reorder, got %s", StringField(exp[0], "company"))
-	}
-	if StringField(exp[1], "company") != "Acme Corp" {
-		t.Fatalf("expected Acme Corp second after reorder, got %s", StringField(exp[1], "company"))
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Experience drop
-// ---------------------------------------------------------------------------
-
-func TestMergeTailored_DropsExperience(t *testing.T) {
-	master := loadSampleMaster(t)
 	payload := TailoredSections{
-		Summary: "Summary",
-		Skills:  []TailoredSkillGroup{{Index: 0, Details: "Go"}},
+		Summary: "New tailored summary.",
+		Skills:  []TailoredSkillGroup{{Index: 0, Details: "Go, Kubernetes"}},
 		Experience: []TailoredExperience{
-			{Company: "Acme Corp", Highlights: []string{"Relevant thing"}},
-			{Company: "StartupX", Highlights: []string{"Not relevant"}, Drop: true},
+			{Company: "Acme Corp", Highlights: []string{"Shipped feature X"}},
 		},
 	}
 	merged, err := MergeTailored(master, payload)
@@ -169,68 +146,229 @@ func TestMergeTailored_DropsExperience(t *testing.T) {
 	}
 
 	sections := CvSections(merged)
+	wantOrder := []string{"experience", "education", "skills", "summary", "projects"}
+	order := StringSliceField(sections, "_order")
+	if len(order) != len(wantOrder) {
+		t.Fatalf("merged _order changed: got %v, want %v", order, wantOrder)
+	}
+	for i := range wantOrder {
+		if order[i] != wantOrder[i] {
+			t.Fatalf("merged _order changed at %d: got %v, want %v", i, order, wantOrder)
+		}
+	}
+
+	// No section added, removed, renamed, or reordered: exact key set match.
+	masterSections := CvSections(master)
+	if len(sections) != len(masterSections) {
+		t.Fatalf("section set changed: master %v vs merged %v", SectionKeys(masterSections), SectionKeys(sections))
+	}
+	for k := range masterSections {
+		if _, ok := sections[k]; !ok {
+			t.Fatalf("section %q missing from merged resume", k)
+		}
+	}
+	// Non-protected, user-authored blocks survive.
+	if _, ok := sections["projects"]; !ok {
+		t.Fatal("projects section was removed by merge")
+	}
+
+	// Contents: summary replaced, highlights replaced, identity verbatim.
+	if got := StringSliceField(sections, "summary"); len(got) != 1 || got[0] != "New tailored summary." {
+		t.Fatalf("summary not replaced: %v", got)
+	}
 	exp := AsSliceOfMaps(sections["experience"])
 	if len(exp) != 1 {
-		t.Fatalf("expected 1 experience entry after drop, got %d", len(exp))
+		t.Fatalf("experience entries changed: %v", exp)
 	}
-	if StringField(exp[0], "company") != "Acme Corp" {
-		t.Fatalf("expected Acme Corp to remain, got %s", StringField(exp[0], "company"))
+	if hl := StringSliceField(exp[0], "highlights"); len(hl) != 1 || hl[0] != "Shipped feature X" {
+		t.Fatalf("highlights not replaced: %v", exp[0])
+	}
+	if StringField(exp[0], "company") != "Acme Corp" || StringField(exp[0], "position") != "Senior Engineer" || StringField(exp[0], "start_date") != "2020-01" {
+		t.Fatalf("experience identity fields changed: %v", exp[0])
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Section dropping
+// Feature 028: US2 — experience order and identity are preserved
 // ---------------------------------------------------------------------------
 
-func TestMergeTailored_DropsSections(t *testing.T) {
-	master := loadSampleMaster(t)
+func TestMergeTailoredPreservesExperienceOrder(t *testing.T) {
+	master := RendercvMaster{
+		"cv": map[string]any{
+			"sections": map[string]any{
+				"experience": []any{
+					map[string]any{"company": "Acme Corp", "position": "Engineer", "start_date": "2019-01", "end_date": "2020-12", "highlights": []any{"Acme bullet"}},
+					map[string]any{"company": "Globex", "position": "Engineer", "start_date": "2021-01", "end_date": "2022-12", "highlights": []any{"Globex bullet"}},
+					map[string]any{"company": "Initech", "position": "Engineer", "start_date": "2023-01", "end_date": "present", "highlights": []any{"Initech bullet"}},
+				},
+			},
+		},
+	}
+	// LLM tries to reorder (Initech first) and drops Globex by omission.
 	payload := TailoredSections{
 		Summary: "Summary",
-		Skills:  []TailoredSkillGroup{{Index: 0, Details: "Go"}},
 		Experience: []TailoredExperience{
-			{Company: "Acme Corp", Highlights: []string{"Thing"}},
+			{Company: "Initech", Highlights: []string{"Initech new bullet"}},
+			{Company: "Acme Corp", Highlights: []string{"Acme new bullet"}},
 		},
-		SectionsToDrop: []string{"patents", "invited_talks", "publications", "projects"},
 	}
 	merged, err := MergeTailored(master, payload)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
 
-	sections := CvSections(merged)
-	for _, key := range []string{"patents", "invited_talks", "publications", "projects"} {
-		if _, ok := sections[key]; ok {
-			t.Errorf("expected section %q to be dropped", key)
+	exp := AsSliceOfMaps(CvSections(merged)["experience"])
+	if len(exp) != 3 {
+		t.Fatalf("expected 3 experience entries (no drops), got %d", len(exp))
+	}
+	want := []string{"Acme Corp", "Globex", "Initech"}
+	for i := range want {
+		if StringField(exp[i], "company") != want[i] {
+			t.Fatalf("experience order changed at %d: got %s, want %s", i, StringField(exp[i], "company"), want[i])
 		}
 	}
-	// Protected sections must survive
-	for _, key := range []string{"summary", "experience", "education", "skills"} {
-		if _, ok := sections[key]; !ok {
-			t.Errorf("expected protected section %q to survive", key)
-		}
+	// The entry the payload omitted (Globex) retains its master highlights.
+	if hl := StringSliceField(exp[1], "highlights"); len(hl) != 1 || hl[0] != "Globex bullet" {
+		t.Fatalf("omitted entry's highlights changed: %v", exp[1])
+	}
+	// Covered entries get the new highlights.
+	if hl := StringSliceField(exp[0], "highlights"); len(hl) != 1 || hl[0] != "Acme new bullet" {
+		t.Fatalf("covered entry highlights not replaced: %v", exp[0])
+	}
+	if hl := StringSliceField(exp[2], "highlights"); len(hl) != 1 || hl[0] != "Initech new bullet" {
+		t.Fatalf("covered entry highlights not replaced: %v", exp[2])
 	}
 }
 
-func TestMergeTailored_ProtectedSectionsNeverDropped(t *testing.T) {
-	master := loadSampleMaster(t)
-	payload := TailoredSections{
-		Summary: "Summary",
-		Skills:  []TailoredSkillGroup{{Index: 0, Details: "Go"}},
-		Experience: []TailoredExperience{
-			{Company: "Acme Corp", Highlights: []string{"Thing"}},
+// ---------------------------------------------------------------------------
+// Feature 028: US3 — dates are immutable, text-asserted years are flagged
+// ---------------------------------------------------------------------------
+
+func TestMergeTailoredPreservesDates(t *testing.T) {
+	master := RendercvMaster{
+		"cv": map[string]any{
+			"sections": map[string]any{
+				"experience": []any{
+					map[string]any{"company": "Acme Corp", "position": "Engineer", "start_date": "2019-01", "end_date": "2023-06", "highlights": []any{"Old bullet"}},
+				},
+			},
 		},
-		SectionsToDrop: []string{"summary", "experience", "education", "skills"},
+	}
+	payload := TailoredSections{
+		Summary:    "Summary",
+		Experience: []TailoredExperience{{Company: "Acme Corp", Highlights: []string{"New bullet"}}},
 	}
 	merged, err := MergeTailored(master, payload)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
 
-	sections := CvSections(merged)
-	for _, key := range []string{"summary", "experience", "education", "skills"} {
-		if _, ok := sections[key]; !ok {
-			t.Errorf("protected section %q was incorrectly dropped", key)
-		}
+	exp := AsSliceOfMaps(CvSections(merged)["experience"])
+	if got := StringField(exp[0], "start_date"); got != "2019-01" {
+		t.Fatalf("start_date changed: %q", got)
+	}
+	if got := StringField(exp[0], "end_date"); got != "2023-06" {
+		t.Fatalf("end_date changed: %q", got)
+	}
+}
+
+// yearsMaster derives to exactly 5 years: 2019–2021 (2) + 2021–2024 (3).
+func yearsMaster() RendercvMaster {
+	return RendercvMaster{
+		"cv": map[string]any{
+			"sections": map[string]any{
+				"experience": []any{
+					map[string]any{"company": "Acme Corp", "start_date": "2019-01", "end_date": "2021-01"},
+					map[string]any{"company": "Globex", "start_date": "2021-01", "end_date": "2024-01"},
+				},
+				"summary": []any{"Old summary"},
+			},
+		},
+	}
+}
+
+func TestVerifyStructureIntegrityFlagsYearsAssertion(t *testing.T) {
+	master := yearsMaster()
+	merged, err := DeepCloneYAML(master)
+	if err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	CvSections(merged)["summary"] = []any{"Senior engineer with over 12 years of experience."}
+
+	violations := VerifyStructureIntegrity(master, merged)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation, got %d: %+v", len(violations), violations)
+	}
+	v := violations[0]
+	if v.Kind != StructureTotalExperienceYears {
+		t.Fatalf("unexpected kind %q", v.Kind)
+	}
+	if v.Path != "cv.sections.summary[0]" {
+		t.Fatalf("unexpected path %q", v.Path)
+	}
+	if !strings.Contains(v.Message, "12") || !strings.Contains(v.Message, "5") {
+		t.Fatalf("message should cite both asserted 12 and derived 5: %q", v.Message)
+	}
+}
+
+func TestVerifyStructureIntegrityNoYearsAssertion(t *testing.T) {
+	master := yearsMaster()
+	merged, err := DeepCloneYAML(master)
+	if err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	CvSections(merged)["summary"] = []any{"Senior backend engineer specializing in distributed systems."}
+
+	if v := VerifyStructureIntegrity(master, merged); len(v) != 0 {
+		t.Fatalf("expected no violations, got %+v", v)
+	}
+}
+
+func TestVerifyStructureIntegrityFlagsAssertionInHighlights(t *testing.T) {
+	master := yearsMaster()
+	merged, err := DeepCloneYAML(master)
+	if err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	exp := AsSliceOfMaps(CvSections(merged)["experience"])
+	exp[0]["highlights"] = []any{"Led teams for 8+ years of experience"}
+
+	violations := VerifyStructureIntegrity(master, merged)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation, got %d: %+v", len(violations), violations)
+	}
+	v := violations[0]
+	if v.Path != "cv.sections.experience[Acme Corp].highlights[0]" {
+		t.Fatalf("unexpected path %q", v.Path)
+	}
+}
+
+func TestStripStructureViolationsRemovesYearsClaims(t *testing.T) {
+	master := yearsMaster()
+	merged, err := DeepCloneYAML(master)
+	if err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	CvSections(merged)["summary"] = []any{"Senior engineer with over 12 years of experience. Plus more."}
+	exp := AsSliceOfMaps(CvSections(merged)["experience"])
+	exp[1]["highlights"] = []any{"Built systems for 8+ years of experience and led the team."}
+
+	violations := VerifyStructureIntegrity(master, merged)
+	if len(violations) == 0 {
+		t.Fatal("expected violations before strip")
+	}
+	StripStructureViolations(merged, violations)
+
+	if got := StringSliceField(CvSections(merged), "summary"); len(got) != 1 || strings.Contains(got[0], "12") {
+		t.Fatalf("summary years claim not stripped: %v", got)
+	}
+	exp2 := AsSliceOfMaps(CvSections(merged)["experience"])
+	hl := StringSliceField(exp2[1], "highlights")
+	if len(hl) != 1 || strings.Contains(hl[0], "8+") {
+		t.Fatalf("highlight years claim not stripped: %v", hl)
+	}
+	if !strings.Contains(hl[0], "led the team") {
+		t.Fatalf("highlight content beyond the claim should be preserved: %q", hl[0])
 	}
 }
 

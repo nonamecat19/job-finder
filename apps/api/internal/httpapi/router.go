@@ -7,11 +7,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+
+	"github.com/job-finder/api/internal/httpx"
 )
 
 var startTime = time.Now()
 
-func NewRouter(mounts ...func(chi.Router)) *chi.Mux {
+// NewRouter builds the API router. acquireTimeout bounds how long any request
+// may wait on a database connection before failing with a capacity error
+// (026-db-pool-capacity); pass 0 to leave requests unbounded.
+func NewRouter(acquireTimeout time.Duration, mounts ...func(chi.Router)) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// middleware.RealIP is deprecated (spoofable via X-Forwarded-For/X-Real-IP
@@ -22,6 +27,9 @@ func NewRouter(mounts ...func(chi.Router)) *chi.Mux {
 	r.Use(middleware.RealIP) //nolint:staticcheck // SA1019: see rationale above
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
+	if acquireTimeout > 0 {
+		r.Use(acquireDeadline(acquireTimeout))
+	}
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -37,7 +45,7 @@ func NewRouter(mounts ...func(chi.Router)) *chi.Mux {
 	}
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusNotFound, "not found: "+r.URL.Path)
+		httpx.WriteError(w, http.StatusNotFound, "not found: "+r.URL.Path)
 	})
 
 	r.Route("/api", mountAll)
@@ -47,7 +55,7 @@ func NewRouter(mounts ...func(chi.Router)) *chi.Mux {
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":     true,
 		"uptime": time.Since(startTime).Seconds(),
 	})

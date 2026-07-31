@@ -57,7 +57,9 @@ func (s *Service) Update(ctx context.Context, updates []domain.TaskUpdate) (doma
 		if !domain.IsKnownTaskKey(u.TaskKey) {
 			return domain.State{}, fmt.Errorf("%w: %q", domain.ErrUnknownTaskKey, u.TaskKey)
 		}
-		if u.Provider != string(llm.TaskProviderOllama) && u.Provider != string(llm.TaskProviderCerebras) {
+		if u.Provider != string(llm.TaskProviderOllama) &&
+			u.Provider != string(llm.TaskProviderCerebras) &&
+			u.Provider != string(llm.TaskProviderGateway) {
 			return domain.State{}, fmt.Errorf("%w: %q", domain.ErrInvalidProvider, u.Provider)
 		}
 		if u.Provider == string(llm.TaskProviderCerebras) && !llm.IsSupportedCerebrasModel(u.Model) {

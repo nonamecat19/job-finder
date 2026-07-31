@@ -1,0 +1,44 @@
+# LiteLLM proxy configuration (029-litellm-proxy-gateway).
+# Contract: specs/029-litellm-proxy-gateway/contracts/gateway-config.md
+#
+# The Go backend sends the task key as the `model` field; the proxy resolves it
+# to the provider/model below. Fallback chains (FR-005) let the proxy retry a
+# different provider/model when the primary fails.
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+model_list:
+  - model_name: match
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-pro
+      api_key: os.environ/OPENROUTER_API_KEY
+      fallbacks:
+        - cerebras/gpt-oss-120b
+
+  - model_name: generation
+    litellm_params:
+      model: openrouter/qwen/qwen3.7-max
+      api_key: os.environ/OPENROUTER_API_KEY
+      fallbacks:
+        - cerebras/gpt-oss-120b
+
+  - model_name: rephrase
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: ghost
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-pro
+      api_key: os.environ/OPENROUTER_API_KEY
+      fallbacks:
+        - cerebras/gpt-oss-120b
+
+  - model_name: default
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false

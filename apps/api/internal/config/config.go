@@ -48,6 +48,15 @@ type Config struct {
 	CerebrasAPIKey  string `mapstructure:"CEREBRAS_API_KEY"`
 	CerebrasBaseURL string `mapstructure:"CEREBRAS_BASE_URL"`
 
+	// Gateway (029-litellm-proxy-gateway): an optional LiteLLM proxy that
+	// presents one OpenAI-compatible endpoint and routes each task key to a
+	// configured provider+model. GatewayURL is the proxy root (empty = gateway
+	// unavailable and every gateway task falls back to Ollama). LiteLLMMasterKey
+	// authenticates the backend to the proxy; it must be set whenever
+	// GatewayURL is.
+	GatewayURL       string `mapstructure:"GATEWAY_URL"`
+	LiteLLMMasterKey string `mapstructure:"LITELLM_MASTER_KEY"`
+
 	// KeywordRephraseCacheTTLSec is the lifetime, in seconds, of a cached set of
 	// keyword-diff rephrase suggestions. Suggestions are generated async and
 	// cached because each is a live LLM call; a stale entry past this age is
@@ -153,6 +162,12 @@ type Config struct {
 	IngestConcurrency  int `mapstructure:"INGEST_CONCURRENCY"`
 	EnrichConcurrency  int `mapstructure:"ENRICH_CONCURRENCY"`
 
+	// IngestPersistChunkSize is how many postings one ingest run stores per
+	// statement batch. Chunks sit inside the run's transaction, so this bounds
+	// statement size and lock duration without being a consistency boundary:
+	// all chunks of a run commit together, and one failing rolls back the run.
+	IngestPersistChunkSize int `mapstructure:"INGEST_PERSIST_CHUNK_SIZE"`
+
 	// Per-task-type deadlines (019-ai-job-throughput). A task exceeding its
 	// deadline is finalized `timed_out` rather than hanging indefinitely.
 	AITaskTimeoutMatch    time.Duration `mapstructure:"AI_TASK_TIMEOUT_MATCH"`
@@ -178,6 +193,32 @@ type Config struct {
 	// request.
 	OllamaKeepAlive        string `mapstructure:"OLLAMA_KEEP_ALIVE"`
 	LLMMaxIdleConnsPerHost int    `mapstructure:"LLM_MAX_IDLE_CONNS_PER_HOST"`
+
+	// Database connection capacity (026-db-pool-capacity). Without these the
+	// pool is sized by pgx's incidental default, max(4, NumCPU), which is
+	// unrelated to how many connections this workload actually holds.
+
+	// DBMaxConns is the pool's maximum size. 0 derives it from total worker
+	// concurrency + background allowance + DBInteractiveReserve.
+	DBMaxConns int `mapstructure:"DB_MAX_CONNS"`
+	// DBMinConns is how many connections stay open while idle, so the first
+	// request after a quiet period does not pay a connect round-trip.
+	DBMinConns int `mapstructure:"DB_MIN_CONNS"`
+	// DBMaxConnLifetime is the age at which a connection is retired regardless
+	// of use.
+	DBMaxConnLifetime time.Duration `mapstructure:"DB_MAX_CONN_LIFETIME"`
+	// DBMaxConnIdleTime is the idle age at which a connection is retired,
+	// reclaiming connections silently dropped by intermediaries.
+	DBMaxConnIdleTime time.Duration `mapstructure:"DB_MAX_CONN_IDLE_TIME"`
+	// DBAcquireTimeout bounds how long an interactive HTTP request waits for a
+	// free connection before failing with a capacity error instead of hanging.
+	DBAcquireTimeout time.Duration `mapstructure:"DB_ACQUIRE_TIMEOUT"`
+	// DBServerMaxConns is Postgres's own max_connections as declared by the
+	// operator. Validated against, never queried (research.md R4).
+	DBServerMaxConns int `mapstructure:"DB_SERVER_MAX_CONNS"`
+	// DBInteractiveReserve is the connections budgeted for dashboard/API
+	// traffic above total worker concurrency.
+	DBInteractiveReserve int `mapstructure:"DB_INTERACTIVE_RESERVE"`
 }
 
 func (c *Config) ModelOr(m string) string {
@@ -206,6 +247,9 @@ func Load() (*Config, error) {
 	cfg := &Config{}
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("config: %w", err)
+	}
+	if err := validateDBPool(cfg); err != nil {
+		return nil, err
 	}
 	return cfg, nil
 }

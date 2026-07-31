@@ -7,13 +7,12 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
@@ -60,14 +59,37 @@ func lastAttempt(ctx context.Context) bool {
 // Handler processes "ingest" asynq tasks: adapter.Search -> dedupe -> persist
 // -> enqueue match. Mirrors ingestion.processor.ts.
 type Handler struct {
-	q        domain.SearchRepository
-	registry *domain.Registry
-	sources  *application.Service
-	client   application.Enqueuer
+	q         domain.SearchRepository
+	registry  *domain.Registry
+	sources   *application.Service
+	client    application.Enqueuer
+	tx        domain.TxRunner
+	chunkSize int
 }
 
-func NewHandler(q domain.SearchRepository, registry *domain.Registry, sources *application.Service, client application.Enqueuer) *Handler {
-	return &Handler{q: q, registry: registry, sources: sources, client: client}
+// HandlerOption configures optional collaborators. They are options rather
+// than constructor parameters so the unit tests, which need neither a real
+// transaction runner nor a tuned chunk size, keep constructing the handler
+// from its ports alone.
+type HandlerOption func(*Handler)
+
+// WithTxRunner makes the persist phase atomic. Without one the handler falls
+// back to sequential writes against its own repository.
+func WithTxRunner(tx domain.TxRunner) HandlerOption {
+	return func(h *Handler) { h.tx = tx }
+}
+
+// WithChunkSize overrides the number of postings stored per statement batch.
+func WithChunkSize(n int) HandlerOption {
+	return func(h *Handler) { h.chunkSize = n }
+}
+
+func NewHandler(q domain.SearchRepository, registry *domain.Registry, sources *application.Service, client application.Enqueuer, opts ...HandlerOption) *Handler {
+	h := &Handler{q: q, registry: registry, sources: sources, client: client, chunkSize: defaultChunkSize}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
@@ -189,22 +211,23 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	// actually have.
 	needsDetail := domain.NeedsDetail(adapter)
 
-	for _, j := range jobs {
-		isNew, err := h.persistIfNew(ctx, j, subscriptionID, needsDetail)
-		if err != nil {
-			h.finishError(ctx, run.ID, source, payload.SourceKey, err)
-			return err
-		}
-		if isNew {
-			created++
-		}
-	}
-
-	if err := h.q.FinishSourceRunOk(ctx, sqlcgen.FinishSourceRunOkParams{
-		ID: run.ID, Found: int32(len(jobs)), New: int32(created),
-	}); err != nil {
+	batch := NewPostingBatch(jobs, subscriptionID, run.ID, needsDetail)
+	started := time.Now()
+	result, err := h.persist(ctx, batch)
+	if err != nil {
+		h.finishError(ctx, run.ID, source, payload.SourceKey, err)
 		return err
 	}
+	created = len(result.Inserted)
+	slog.Info("ingest persisted",
+		"source", payload.SourceKey, "durationMs", time.Since(started).Milliseconds(),
+		"statements", result.Statements, "inserted", created,
+		"reposted", result.Reposted, "merged", result.Merged, "skipped", result.Skipped)
+
+	// Redis cannot join the Postgres transaction, so downstream work is
+	// queued after commit and only for genuinely new rows. A crash in between
+	// leaves the job for the ListJobsMissingMatch sweep, exactly as before.
+	h.enqueueInserted(ctx, result, needsDetail)
 
 	verdict := computeVerdict(len(jobs), nil)
 	h.writeVerdict(ctx, run.ID, verdict, 0, "")
@@ -236,95 +259,62 @@ func (h *Handler) finishError(ctx context.Context, runID pgtype.UUID, source sql
 	slog.Error("ingest failed", "source", sourceKey, "error", msg)
 }
 
-// persistIfNew dedupes by sha256(lower(company)|lower(title)|canonicalUrl)
-// where canonicalUrl strips the query string and trailing slashes — must
-// match ingestion.processor.ts:74 exactly.
+// persist stores the whole run atomically. The dedupe key is
+// sha256(lower(company)|lower(title)|canonicalUrl) where canonicalUrl strips
+// the query string and trailing slashes — it must match
+// ingestion.processor.ts:74 exactly, and is unchanged by batching, so every
+// previously stored posting is still recognised.
 //
-// needsDetail comes from the source's adapter: when true the row is a
-// list-only stub, so match and ghost scoring are left to enrichment (which
-// runs them once the real description has landed) instead of being enqueued
-// twice against two different versions of the same job.
-func (h *Handler) persistIfNew(ctx context.Context, j dto.NormalizedJob, subscriptionID pgtype.UUID, needsDetail bool) (bool, error) {
-	dedupeKey := DedupeKey(j.Company, j.Title, j.URL)
-
-	_, err := h.q.GetJobByDedupeKey(ctx, dedupeKey)
-	if err == nil {
-		if _, err := h.q.RecordJobRepost(ctx, sqlcgen.RecordJobRepostParams{
-			DedupeKey:      dedupeKey,
-			SubscriptionId: subscriptionID,
-		}); err != nil {
-			slog.Warn("ingestion: record repost failed", "dedupeKey", dedupeKey, "error", err)
-		}
-		return false, nil
+// Without a transaction runner injected the same code runs against the
+// handler's own repository, so unit tests need no database.
+func (h *Handler) persist(ctx context.Context, batch PostingBatch) (PersistResult, error) {
+	if h.tx == nil {
+		return persistBatch(ctx, h.q, batch, h.chunkSize)
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return false, err
-	}
-
-	if IsBoardVendor(j.SourceKey) {
-		existingID, err := FindMergeCandidate(ctx, h.q, j)
-		if err != nil {
-			slog.Warn("ingestion: merge candidate check failed", "sourceKey", j.SourceKey, "company", j.Company, "error", err)
-		} else if existingID.Valid {
-			if _, err := h.q.MergeJobBoard(ctx, sqlcgen.MergeJobBoardParams{
-				ID:          existingID,
-				Url:         j.URL,
-				SourceKey:   j.SourceKey,
-				ArrayAppend: j.SourceKey,
-			}); err != nil {
-				return false, fmt.Errorf("ingestion: merge job: %w", err)
-			}
-			slog.Info("ingestion: merged board posting into existing job", "existing", dbutil.UUIDString(existingID), "sourceKey", j.SourceKey, "company", j.Company)
-			return false, nil
-		}
-	}
-
-	raw, err := json.Marshal(j.Raw)
-	if err != nil {
-		raw = []byte("{}")
-	}
-
-	created, err := h.q.InsertJob(ctx, sqlcgen.InsertJobParams{
-		DedupeKey:      dedupeKey,
-		SourceKey:      j.SourceKey,
-		ExternalId:     j.ExternalID,
-		Title:          j.Title,
-		Company:        j.Company,
-		Location:       j.Location,
-		Remote:         j.Remote,
-		SalaryRaw:      j.SalaryRaw,
-		Url:            j.URL,
-		Description:    j.Description,
-		Raw:            raw,
-		PostedAt:       dbutil.TimestampFromPtr(j.PostedAt),
-		SubscriptionId: subscriptionID,
+	var result PersistResult
+	err := h.tx.WithinTx(ctx, func(q *sqlcgen.Queries) error {
+		var err error
+		result, err = persistBatch(ctx, q, batch, h.chunkSize)
+		return err
 	})
 	if err != nil {
-		return false, fmt.Errorf("ingestion: insert job: %w", err)
+		return PersistResult{}, err
 	}
-
-	jobID := dbutil.UUIDString(created.ID)
-
-	if needsDetail {
-		if err := h.enqueueEnrich(ctx, jobID, j); err != nil {
-			return true, err
-		}
-		return true, nil
-	}
-
-	h.enqueueMatch(ctx, jobID, j)
-	h.enqueueGhostScore(ctx, jobID)
-	return true, nil
+	return result, nil
 }
 
-func (h *Handler) enqueueMatch(ctx context.Context, jobID string, j dto.NormalizedJob) {
-	var actID *string
-	matchRec := activity.New(ctx, h.q, "match", fmt.Sprintf("%s — %s", j.Company, j.Title), &jobID, nil, "")
-	if matchRec != nil {
-		idStr := dbutil.UUIDString(matchRec.ID())
-		actID = &idStr
+// enqueueInserted queues downstream work for the postings this run actually
+// inserted. needsDetail comes from the source's adapter: when true the row is
+// a list-only stub, so match and ghost scoring are left to enrichment (which
+// runs them once the real description has landed) instead of being enqueued
+// twice against two different versions of the same job.
+func (h *Handler) enqueueInserted(ctx context.Context, result PersistResult, needsDetail bool) {
+	for _, ins := range result.Inserted {
+		jobID := dbutil.UUIDString(ins.JobID)
+		if needsDetail {
+			if err := h.enqueueEnrich(ctx, jobID, ins.Posting, activityID(ins, opEnrich)); err != nil {
+				slog.Warn("ingestion: enqueue enrich failed", "job", jobID, "error", err)
+			}
+			continue
+		}
+		h.enqueueMatch(ctx, jobID, activityID(ins, opMatch))
+		h.enqueueGhostScore(ctx, jobID, activityID(ins, opGhost))
 	}
+}
 
+// activityID renders the pre-created ActivityRun id for an op, or nil when the
+// batch insert produced no row for it — the task is still queued, just
+// untracked, matching the old behaviour when activity.New failed.
+func activityID(ins InsertedJob, op string) *string {
+	id, ok := ins.ActivityIDs[op]
+	if !ok || !id.Valid {
+		return nil
+	}
+	s := dbutil.UUIDString(id)
+	return &s
+}
+
+func (h *Handler) enqueueMatch(ctx context.Context, jobID string, actID *string) {
 	payload, err := json.Marshal(queue.MatchPayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
 		return
@@ -343,14 +333,7 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, j dto.Normaliz
 // right after ingestion. The activity record is tracked for retry/visibility
 // only — a scoring failure here must never affect ingestion or the job's own
 // record (FR-018); the handler always returns nil to asynq regardless.
-func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string) {
-	var actID *string
-	rec := activity.New(ctx, h.q, "ghost_score", "ghost score", &jobID, nil, "")
-	if rec != nil {
-		idStr := dbutil.UUIDString(rec.ID())
-		actID = &idStr
-	}
-
+func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string, actID *string) {
 	payload, err := json.Marshal(queue.GhostScorePayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
 		return
@@ -367,14 +350,7 @@ func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string) {
 // enqueueEnrich queues a detail-fetch task for a shallow (list-only) job
 // row. No retry: a fetch failure just leaves detailScrapedAt NULL, and the
 // next backfill sweep (POST /sources/djinni/enrich) picks it up again.
-func (h *Handler) enqueueEnrich(ctx context.Context, jobID string, j dto.NormalizedJob) error {
-	var actID *string
-	enrichRec := activity.New(ctx, h.q, "enrich", fmt.Sprintf("%s — %s", j.Company, j.Title), &jobID, &j.SourceKey, "")
-	if enrichRec != nil {
-		idStr := dbutil.UUIDString(enrichRec.ID())
-		actID = &idStr
-	}
-
+func (h *Handler) enqueueEnrich(ctx context.Context, jobID string, j dto.NormalizedJob, actID *string) error {
 	payload, err := json.Marshal(queue.EnrichPayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
 		return err

@@ -162,3 +162,31 @@ rm internal/jobs/violation.go
 - **File-pattern matching is by path glob.** A feature that does not follow the `internal/<feature>/interfaces/` layout is not covered by rule 3. FR-002's requirement that every module adopt the layout is therefore load-bearing for this rule, not merely cosmetic.
 - **Rules are additive only.** They prevent regression; they do not verify the initial move was complete. SC-006 is checked by the inventory audit in quickstart.md, not by the linter.
 - **Verify glob syntax against the pinned golangci-lint version** before relying on it. `depguard`'s `files` patterns and `list-mode` semantics have changed across major versions; the config above targets v2.x, matching `apps/api/.golangci-version`. Confirm with a deliberate violation (above) rather than assuming the config parses as intended — a `depguard` rule that silently matches nothing is indistinguishable from a passing build.
+
+---
+
+## Implementation notes (as landed)
+
+Two deviations from §1, both forced by what `depguard` v2.12.2 actually does:
+
+1. **`no-cross-feature-internals` cannot use a glob in `pkg`.** `depguard` matches
+   `deny[].pkg` by **prefix**, not by glob, so the specified
+   `github.com/job-finder/api/internal/*/infrastructure` matches nothing and the
+   rule would have shipped silently dead — precisely the failure mode the
+   Verification section warns about. Confirmed empirically: with the glob in
+   place, a deliberate `import _ ".../generation/infrastructure"` from
+   `internal/jobs/interfaces/http` produced `0 issues`. The five feature
+   `infrastructure` packages are therefore enumerated. `platform/*` is
+   deliberately excluded — it is shared infrastructure, not a feature.
+
+2. **`httpx-stays-a-leaf` allows `internal/apperr`.** `helpers.go` held four
+   helpers, not the two §1 anticipated: `writeAppError` and `decodeJSON` as well
+   as `writeJSON`/`writeError`. `WriteAppError` renders an `*apperr.Error` and
+   cannot do so without naming the type. `apperr` imports only `fmt` and
+   `net/http`, so a leaf importing a leaf carries no cycle risk, and the
+   alternative (moving HTTP rendering into `apperr`) would have dragged an HTTP
+   package into every domain layer that reports errors. The rule keeps its deny
+   on all of `internal/`; `apperr` is a single named `allow`.
+
+Verified rejecting (T044): all three rules and the placement test were each
+observed failing on a deliberate violation, then passing on the clean tree.

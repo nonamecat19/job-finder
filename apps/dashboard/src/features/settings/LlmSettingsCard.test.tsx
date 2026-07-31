@@ -56,6 +56,45 @@ describe('LlmSettingsCard', () => {
     }
   })
 
+  it('switch-all to Gateway PUTs every task with provider gateway and its taskKey as model', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.settings.getLlm).mockResolvedValue(seededSettings())
+    vi.mocked(api.settings.putLlm).mockResolvedValue(seededSettings())
+    renderWithProviders(<LlmSettingsCard />)
+
+    await waitFor(() => screen.getByText('Job matching / scoring'))
+    await user.click(screen.getByRole('button', { name: 'Switch all to Gateway' }))
+
+    await waitFor(() => {
+      expect(api.settings.putLlm).toHaveBeenCalledTimes(1)
+    })
+    const sentTasks = vi.mocked(api.settings.putLlm).mock.calls[0][0]
+    expect(sentTasks).toHaveLength(TASKS.length)
+    for (const t of sentTasks) {
+      expect(t.provider).toBe('gateway')
+      expect(t.model).toBe(t.taskKey)
+    }
+  })
+
+  it('changing one task provider to Gateway sets its model to the task key', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.settings.getLlm).mockResolvedValue(seededSettings())
+    vi.mocked(api.settings.putLlm).mockResolvedValue(seededSettings())
+    renderWithProviders(<LlmSettingsCard />)
+
+    await waitFor(() => screen.getByText('Resume & cover letter generation'))
+    const providerSelect = screen.getByRole('combobox', {
+      name: 'Resume & cover letter generation provider',
+    })
+    await user.selectOptions(providerSelect, 'gateway')
+
+    await waitFor(() => {
+      expect(api.settings.putLlm).toHaveBeenCalledTimes(1)
+    })
+    const sentTasks = vi.mocked(api.settings.putLlm).mock.calls[0][0]
+    expect(sentTasks).toEqual([{ taskKey: 'generation', provider: 'gateway', model: 'generation' }])
+  })
+
   it('switch-all to Cerebras PUTs every task with provider cerebras', async () => {
     const user = userEvent.setup()
     vi.mocked(api.settings.getLlm).mockResolvedValue(seededSettings())
@@ -96,6 +135,22 @@ describe('LlmSettingsCard', () => {
 
   it('model dropdown is disabled while provider is ollama', async () => {
     vi.mocked(api.settings.getLlm).mockResolvedValue(seededSettings())
+    renderWithProviders(<LlmSettingsCard />)
+
+    await waitFor(() => screen.getByText('Ghost-job detection'))
+    const modelSelect = screen.getByRole('combobox', { name: 'Ghost-job detection model' })
+    expect(modelSelect).toBeDisabled()
+  })
+
+  it('model dropdown is disabled while provider is gateway', async () => {
+    vi.mocked(api.settings.getLlm).mockResolvedValue({
+      credentialConfigured: true,
+      tasks: TASKS.map((taskKey) => ({
+        taskKey,
+        provider: taskKey === 'ghost' ? 'gateway' : 'ollama',
+        model: taskKey === 'ghost' ? 'ghost' : '',
+      })),
+    })
     renderWithProviders(<LlmSettingsCard />)
 
     await waitFor(() => screen.getByText('Ghost-job detection'))

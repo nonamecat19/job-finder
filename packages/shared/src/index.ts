@@ -822,8 +822,9 @@ export interface OutreachToneOptionDto {
 
 /** One chat task's assigned provider/model, served by GET/PUT
  * /v1/settings/llm. taskKey is "match" | "generation" | "rephrase" | "ghost"
- * | "default"; provider is "ollama" | "cerebras". model is ""
- * when the provider's own default model applies. */
+ * | "default"; provider is "ollama" | "cerebras" | "gateway". model is ""
+ * when the provider's own default model applies, or the taskKey when provider
+ * is "gateway" (the LiteLLM proxy resolves it to the upstream model). */
 export interface LlmTaskSettingDto {
   taskKey: string;
   provider: string;

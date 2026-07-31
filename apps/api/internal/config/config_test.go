@@ -38,6 +38,31 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.CerebrasBaseURL != "https://api.cerebras.ai/v1" {
 		t.Errorf("CerebrasBaseURL default = %q, want https://api.cerebras.ai/v1", cfg.CerebrasBaseURL)
 	}
+	if cfg.GatewayURL != "" {
+		t.Errorf("GatewayURL should default empty, got %q", cfg.GatewayURL)
+	}
+	if cfg.LiteLLMMasterKey != "" {
+		t.Errorf("LiteLLMMasterKey should default empty, got %q", cfg.LiteLLMMasterKey)
+	}
+}
+
+func TestLoadGatewayOverride(t *testing.T) {
+	if err := unsetForTest(t); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GATEWAY_URL", "http://litellm:4000")
+	t.Setenv("LITELLM_MASTER_KEY", "sk-test")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.GatewayURL != "http://litellm:4000" {
+		t.Errorf("GatewayURL = %q, want http://litellm:4000", cfg.GatewayURL)
+	}
+	if cfg.LiteLLMMasterKey != "sk-test" {
+		t.Errorf("LiteLLMMasterKey = %q, want sk-test", cfg.LiteLLMMasterKey)
+	}
 }
 
 func TestLoadCerebrasAPIKeyOverride(t *testing.T) {

@@ -39,7 +39,7 @@ func TestRouterResolvesOllamaByDefault(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, true))
-	r := NewRouter("match", holder, ollama, cerebras)
+	r := NewRouter("match", holder, ollama, cerebras, nil)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -56,7 +56,7 @@ func TestRouterResolvesCerebrasWhenSelectedAndConfigured(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"generation": {Provider: TaskProviderCerebras, Model: "llama-3.3-70b"},
 	}, true))
-	r := NewRouter("generation", holder, ollama, cerebras)
+	r := NewRouter("generation", holder, ollama, cerebras, nil)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestRouterFallsBackToOllamaWhenCredentialMissing(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"ghost": {Provider: TaskProviderCerebras, Model: "gpt-oss-120b"},
 	}, false))
-	r := NewRouter("ghost", holder, ollama, nil)
+	r := NewRouter("ghost", holder, ollama, nil, nil)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -92,7 +92,7 @@ func TestRouterEmbedAlwaysUsesOllamaForCerebrasTask(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"default": {Provider: TaskProviderCerebras},
 	}, true))
-	r := NewRouter("default", holder, ollama, cerebras)
+	r := NewRouter("default", holder, ollama, cerebras, nil)
 
 	vec, err := r.Embed(context.Background(), "text")
 	if err != nil {
@@ -108,7 +108,7 @@ func TestRouterEmptyModelUsesProviderDefault(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"rephrase": {Provider: TaskProviderOllama, Model: ""},
 	}, true))
-	r := NewRouter("rephrase", holder, ollama, nil)
+	r := NewRouter("rephrase", holder, ollama, nil, nil)
 
 	if _, err := r.Complete(context.Background(), "hi", nil); err != nil {
 		t.Fatalf("Complete: %v", err)
@@ -124,7 +124,7 @@ func TestRouterEmbedAlwaysUsesOllama(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"default": {Provider: TaskProviderCerebras},
 	}, true))
-	r := NewRouter("default", holder, ollama, cerebras)
+	r := NewRouter("default", holder, ollama, cerebras, nil)
 
 	vec, err := r.Embed(context.Background(), "text")
 	if err != nil {
@@ -141,7 +141,7 @@ func TestRouterSnapshotSwapIsLive(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, true))
-	r := NewRouter("match", holder, ollama, cerebras)
+	r := NewRouter("match", holder, ollama, cerebras, nil)
 
 	out, _ := r.Complete(context.Background(), "hi", nil)
 	if out != "ollama" {
@@ -163,7 +163,7 @@ func TestProviderClass_LoopbackIsLocal(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, false))
-	r := NewRouter("match", holder, ollama, nil)
+	r := NewRouter("match", holder, ollama, nil, nil)
 	if got := r.ProviderClass(); got != ProviderClassLocal {
 		t.Errorf("expected local, got %v", got)
 	}
@@ -174,7 +174,7 @@ func TestProviderClass_LoopbackWithKeySetIsHosted(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, false))
-	r := NewRouter("match", holder, ollama, nil)
+	r := NewRouter("match", holder, ollama, nil, nil)
 	if got := r.ProviderClass(); got != ProviderClassHosted {
 		t.Errorf("expected hosted (key set on loopback), got %v", got)
 	}
@@ -185,7 +185,7 @@ func TestProviderClass_CloudURLIsHosted(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderOllama},
 	}, false))
-	r := NewRouter("match", holder, ollama, nil)
+	r := NewRouter("match", holder, ollama, nil, nil)
 	if got := r.ProviderClass(); got != ProviderClassHosted {
 		t.Errorf("expected hosted, got %v", got)
 	}
@@ -197,7 +197,7 @@ func TestProviderClass_CerebrasWithCredentialIsHosted(t *testing.T) {
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderCerebras},
 	}, true))
-	r := NewRouter("match", holder, ollama, cerebras)
+	r := NewRouter("match", holder, ollama, cerebras, nil)
 	if got := r.ProviderClass(); got != ProviderClassHosted {
 		t.Errorf("expected hosted, got %v", got)
 	}
@@ -208,8 +208,75 @@ func TestProviderClass_CerebrasWithoutCredentialFollowsOllamaFallback(t *testing
 	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
 		"match": {Provider: TaskProviderCerebras},
 	}, false))
-	r := NewRouter("match", holder, ollama, nil)
+	r := NewRouter("match", holder, ollama, nil, nil)
 	if got := r.ProviderClass(); got != ProviderClassLocal {
 		t.Errorf("expected local (fallback to local ollama), got %v", got)
+	}
+}
+
+// --- Gateway routing tests (029-litellm-proxy-gateway) ---
+
+func TestRouterResolvesGatewayWhenSelectedAndConfigured(t *testing.T) {
+	ollama := &stubProvider{name: "ollama"}
+	gateway := &stubProvider{name: "gateway"}
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"match": {Provider: TaskProviderGateway, Model: "match"},
+	}, true))
+	r := NewRouter("match", holder, ollama, nil, gateway)
+
+	out, err := r.Complete(context.Background(), "hi", nil)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if out != "gateway" {
+		t.Errorf("Complete() = %q, want gateway", out)
+	}
+	if gateway.gotModel != "match" {
+		t.Errorf("model passed to gateway = %q, want match (task key)", gateway.gotModel)
+	}
+}
+
+func TestRouterFallsBackToOllamaWhenGatewayNotConfigured(t *testing.T) {
+	ollama := &stubProvider{name: "ollama"}
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"generation": {Provider: TaskProviderGateway, Model: "generation"},
+	}, false))
+	r := NewRouter("generation", holder, ollama, nil, nil)
+
+	out, err := r.Complete(context.Background(), "hi", nil)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if out != "ollama" {
+		t.Errorf("Complete() = %q, want ollama (gateway nil fallback)", out)
+	}
+}
+
+func TestRouterEmbedAlwaysUsesOllamaForGatewayTask(t *testing.T) {
+	ollama := &stubProvider{name: "ollama"}
+	gateway := &stubProvider{name: "gateway"}
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"ghost": {Provider: TaskProviderGateway},
+	}, true))
+	r := NewRouter("ghost", holder, ollama, nil, gateway)
+
+	vec, err := r.Embed(context.Background(), "text")
+	if err != nil {
+		t.Fatalf("Embed: %v", err)
+	}
+	if len(vec) != 1 {
+		t.Errorf("Embed should delegate to ollama stub, got %v", vec)
+	}
+}
+
+func TestProviderClass_GatewayWithConfigIsHosted(t *testing.T) {
+	ollama := ollamaprovider.New("http://localhost:11434", "", "", "", "")
+	gateway := &stubProvider{name: "gateway"}
+	holder := NewSnapshotHolder(snapshotWith(map[string]TaskSetting{
+		"default": {Provider: TaskProviderGateway},
+	}, true))
+	r := NewRouter("default", holder, ollama, nil, gateway)
+	if got := r.ProviderClass(); got != ProviderClassHosted {
+		t.Errorf("expected hosted, got %v", got)
 	}
 }
