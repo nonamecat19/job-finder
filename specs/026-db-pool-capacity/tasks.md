@@ -119,13 +119,18 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
 - [X] T018 [US1] Map a deadline-exceeded failure on the acquire path to a distinguishable error response identifying connection-capacity exhaustion, via the existing `writeError` helper and `internal/apperr` conventions — not a bare 500. Check how `apperr` classifies errors today and follow it rather than inventing a parallel scheme.
 - [X] T019 [P] [US1] Write `internal/httpapi` unit tests for the middleware: a handler that outlives the deadline produces the capacity error; a fast handler is unaffected; the middleware does not shorten a request context that is already shorter.
 - [X] T020 [US1] Write `internal/db/pool_integration_test.go` (`//go:build integration`) following the `internal/dbtest` helper convention: open a pool with `MaxConns=2`, hold both connections, assert a third acquire fails within the configured timeout rather than blocking indefinitely, and assert it succeeds once one is released.
-- [ ] T021 **NOT EXECUTED** — SC-001's loaded/idle latency ratio needs every worker pool
-  saturated by real ingestion across enabled job sources. This sandbox has no seeded
-  sources and no outbound scraping, so no honest number can be produced. The interactive
-  path itself is verified: a request served in 5.2ms against a live pool, and
-  `pool_integration_test.go` proves a starved acquire fails on its deadline rather than
-  blocking. **SC-001 remains unmeasured and must be measured before merge.**
-- [ ] T021a Skipped — depends on T021, which was not executed.
+- [ ] T021 **ATTEMPTED, still not conclusive** — measured idle mean of 20 requests to
+  `/api/jobs?limit=50` at **3.66ms**, then fired real ingestion runs against every enabled
+  source (djinni, dou, jobspy) to saturate the pool. `jobspy` failed (sidecar not running:
+  `connect: connection refused`) and `dou` failed (keyword search not implemented for that
+  source) — both pre-existing, unrelated to this feature. Only `djinni` completed (15
+  postings), which was too small and too fast to sustain pool pressure —
+  `acquired_conns` stayed at 0 throughout. **SC-001's loaded/idle ratio is still
+  unmeasured**; it needs either a larger real source or a synthetic load generator against
+  the pool, neither of which this session produced. The interactive path itself is
+  verified: `pool_integration_test.go` proves a starved acquire fails on its deadline
+  rather than blocking, run against real Postgres.
+- [ ] T021a Skipped — depends on T021, which is still not conclusively measured.
 
 **Checkpoint**: US1 complete. SC-001 and SC-002 measured, not asserted.
 
@@ -145,7 +150,8 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
 - [X] T027 [US3] Create `internal/db/saturation.go`: a ticker-driven sampler per data-model.md §4 that warns **only** after N consecutive saturated samples (default 4 at 30s ⇒ ~2 minutes), with the specified fields. Launch it from `runServers` alongside the existing `p.Sweeper.Run(ctx)`, and stop it on context cancellation.
 - [X] T028 [P] [US3] Unit-test the saturation sampler with an injected clock and a fake stats source: 3 consecutive saturated samples produce no log; 4 produce exactly one; an intervening unsaturated sample resets the counter; a second sustained episode produces a second log.
 - [ ] T029 **PARTIALLY EXECUTED** — the readiness `pool` block was verified live against a
-  running server (`max_conns=25`, `saturated=false`, counters climbing), and the
+  running server rebuilt on the merged code (`max_conns=25`, `derived=true`,
+  `saturated=false`, counters climbing after real ingestion), and the
   "once per sustained episode, not once per sample" behaviour is covered by
   `saturation_test.go` (3 samples silent, 4 warn once, 12 warn once, reset, second
   episode warns again). What was **not** done is forcing ~2 minutes of real saturation
@@ -163,10 +169,15 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
   against a real throwaway Postgres). `make lint-web` could not run: pnpm aborts with
   `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` and forcing it would purge the user's
   `node_modules`. Unrelated to this diff, which touches no web files.
-- [ ] T032 Pending — no PR opened (commits are being split separately). Numbers to record:
-  baseline pool size **16** (= NumCPU), derived capacity **25** (workers=15 background=2
-  reserve=8), latency ratio **not yet measured** (T021).
-- [ ] T033 Pending — out of scope for this agent; commits/PR handled separately.
+- [X] T032 Numbers recorded here (no PR body exists — see T033): baseline pool size **16**
+  (= NumCPU), derived capacity **25** (workers=15 background=2 reserve=8), confirmed live
+  post-merge via startup log and `/api/health/ready` (`max_conns=25 derived=true`), latency
+  ratio **still not measured** (T021).
+- [X] T033 **Landed directly on `master`** (commit `e1c1c3e`, bundled with specs
+  025/027/028/029) rather than via a reviewed PR — done by a separate concurrent session
+  sharing this working tree, not through this feature's intended review flow. `go build`,
+  `go vet`, `go test`, and `go test -tags integration ./internal/db/...` are all green on
+  `master` post-merge.
 
 ---
 
