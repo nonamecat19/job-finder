@@ -45,9 +45,9 @@ func insertTestJob(t *testing.T, q *sqlcgen.Queries, dedupeKey, company string) 
 // which can only ever return 1 because "dedupeKey" is UNIQUE.
 func TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne(t *testing.T) {
 	database := openTestDB(t)
-	defer database.Close()
-	q := database.Queries
 	ctx := context.Background()
+
+	q := database.Queries
 
 	dedupeKey := "ghostjob-repost-" + time.Now().Format("20060102150405.000000")
 	job := insertTestJob(t, q, dedupeKey, "RepostCo")
@@ -73,9 +73,9 @@ func TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne(t *testing.T) {
 // unprogressed — the posting got a real answer, it wasn't ignored.
 func TestIntegration_CountAlwaysHiringByCompany_RejectedCountsAsProgression(t *testing.T) {
 	database := openTestDB(t)
-	defer database.Close()
-	q := database.Queries
 	ctx := context.Background()
+
+	q := database.Queries
 
 	company := "AlwaysHiringCo-" + time.Now().Format("20060102150405.000000")
 
@@ -102,9 +102,9 @@ func TestIntegration_CountAlwaysHiringByCompany_RejectedCountsAsProgression(t *t
 // SC-010: deleting a job removes its "JobSignal" row too — zero orphans.
 func TestIntegration_JobSignalCascadesOnJobDelete(t *testing.T) {
 	database := openTestDB(t)
-	defer database.Close()
-	q := database.Queries
 	ctx := context.Background()
+
+	q := database.Queries
 
 	job := insertTestJob(t, q, "ghostjob-cascade-"+time.Now().Format("20060102150405.000000"), "CascadeCo")
 	model := "test-model"
