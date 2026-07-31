@@ -14,8 +14,43 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Mirrors api-ci.yml's `changes` job. Duplicated rather than shared because a
+  # reusable workflow cannot return outputs to a caller's `if:` without an extra
+  # runner hop, and this job is ~15s.
+  #
+  # Only pull_request is filtered — the nightly schedule, workflow_dispatch and
+  # pushes to master must always run the suite (FR-019 requires "at least
+  # daily", which a filtered-out nightly would silently violate).
+  changes:
+    name: detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.e2e == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # Wider than api-ci.yml's `web` filter: the specs mock the API with
+          # page.route, but they still exercise the dashboard against types
+          # generated from the Go DTOs, so any apps/api change counts.
+          filters: |
+            e2e:
+              - '.github/workflows/e2e.yml'
+              - 'Makefile'
+              - 'apps/api/**'
+              - 'apps/dashboard/**'
+              - 'packages/shared/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'tsconfig.base.json'
+
   e2e:
     name: e2e (playwright)
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

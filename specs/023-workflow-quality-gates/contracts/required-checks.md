@@ -6,20 +6,38 @@ This table **is** the declared gating set that FR-003 requires: the single place
 
 Job `name:` values are the identifiers a GitHub ruleset would list as required status checks. Renaming a job silently drops it from that list — the check keeps running and stops gating. Any rename must update this file in the same change (FR-003).
 
-| Job name | Trigger | Runtime budget | Status |
-|---|---|---|---|
-| `sqlc generate is up to date` | PR, push master | ~1 min | existing |
-| `tygo generate is up to date` | PR, push master | ~1 min | existing |
-| `go vet` | PR, push master | ~2 min | existing |
-| `go test` | PR, push master | ~3 min | existing |
-| `frontend test (vitest)` | PR, push master | ~2 min | existing |
-| `frontend typecheck` | PR, push master | ~2 min | existing |
-| `lint (go)` | PR, push master | ~2 min | **new** |
-| `lint (web)` | PR, push master | ~1 min | **new** |
-| `integration test` | PR, push master | ~5 min | **new** |
-| `e2e (playwright)` | PR, push master, nightly, manual | ~4 min | **new** |
+| Job name | Trigger | Path filter (PR only) | Runtime budget | Status |
+|---|---|---|---|---|
+| `sqlc generate is up to date` | PR, push master | `sqlc` | ~1 min | existing |
+| `tygo generate is up to date` | PR, push master | `tygo` | ~1 min | existing |
+| `go vet` | PR, push master | `go` | ~2 min | existing |
+| `go test` | PR, push master | `go` | ~3 min | existing |
+| `frontend test (vitest)` | PR, push master | `web` | ~2 min | existing |
+| `frontend typecheck` | PR, push master | `web` | ~2 min | existing |
+| `lint (go)` | PR, push master | `go` | ~2 min | **new** |
+| `lint (web)` | PR, push master | `web` | ~1 min | **new** |
+| `integration test` | PR, push master | `go` | ~5 min | **new** |
+| `e2e (playwright)` | PR, push master, nightly, manual | `e2e` | ~4 min | **new** |
 
 Whole set runs in parallel; wall clock target ≤10 min (plan Performance Goals).
+
+`detect changed areas` (the `changes` job in each workflow) is **not** in the gating set and must not be listed in the ruleset — it is scaffolding, and adding it would defeat the point by making a job required that the filtered jobs already depend on.
+
+## Path filtering
+
+Each job carries `needs: changes` and `if: needs.changes.outputs.<filter> == 'true'`, where `changes` runs `dorny/paths-filter@v3`. A specs-only or docs-only change therefore matches no filter and skips the entire set.
+
+Two constraints this design exists to satisfy:
+
+1. **Never a top-level `on: paths:`.** A workflow skipped by a top-level path filter reports no checks at all, so every entry in the table above would sit at "Expected" forever once the Phase 2 ruleset is applied, and the PR could never merge. A job skipped by `if:` reports a `skipped` conclusion, which GitHub's required-status-check evaluation treats as passing. This distinction is the whole reason for the `changes` job.
+2. **Filters are PR-only.** Each output is `github.event_name != 'pull_request' || steps.filter.outputs.<f> == 'true'`, so pushes to master, the nightly e2e schedule and `workflow_dispatch` always run everything. `paths-filter` diffs against the previous commit on push — a weaker signal than a PR's merge-base — and a filtered-out nightly would silently violate FR-019's "at least daily".
+
+Filter definitions live in the `filters:` block of each workflow's `changes` job. Two non-obvious memberships:
+
+- `tygo` watches **both** `apps/api/**` and `packages/shared/src/generated.ts`, because `scripts/tygo-check.sh` reads Go DTOs and writes that TypeScript file.
+- `web` does **not** need to watch `apps/api/internal/dto`. The tygo output is committed under `packages/shared/`, so a regenerated DTO change already matches `web`; an *un*regenerated one is exactly what `tygo generate is up to date` exists to fail on.
+
+Every filter includes `.github/workflows/**` and `Makefile`, since a change to either can alter any job's verdict.
 
 ## `lint (go)`
 
