@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
+	"github.com/job-finder/api/internal/dbtest"
 )
 
 // stubHost is a fake job-board host: an httptest server plus a real
@@ -22,15 +22,15 @@ import (
 // sequential fetches as it likes and inspect every PageOutcome without
 // touching a live third party.
 type stubHost struct {
-	t       *testing.T
-	server  *httptest.Server
-	svc     *ServiceImpl
-	store   *StateStore
-	host    string
-	url     string
-	dbConn  *db.DB
-	mu      sync.Mutex
-	delay   string // Crawl-delay value served by /robots.txt; empty means no line
+	t        *testing.T
+	server   *httptest.Server
+	svc      *ServiceImpl
+	store    *StateStore
+	host     string
+	url      string
+	dbConn   *db.DB
+	mu       sync.Mutex
+	delay    string // Crawl-delay value served by /robots.txt; empty means no line
 	pageHTML string
 }
 
@@ -40,18 +40,9 @@ type stubHost struct {
 func newStubHost(t *testing.T) *stubHost {
 	t.Helper()
 
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
-	database, err := db.Open(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := db.Migrate(dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
+	// Own database per test (internal/dbtest), dropped on cleanup: the host
+	// policy rows written here stay invisible to packages running in parallel.
+	database := dbtest.New(t)
 
 	// IsChallenged treats anything under 200 bytes as suspicious, so the stub
 	// page must be padded well past that floor to read as a normal response.

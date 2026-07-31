@@ -4,11 +4,9 @@ package application_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/salary/domain"
@@ -16,21 +14,10 @@ import (
 
 func TestIntegration_SalaryCacheUpsert(t *testing.T) {
 	ctx := context.Background()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
 
-	database, err := db.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer database.Close()
-
-	if err := db.Migrate(dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
+	// Own database per test (internal/dbtest): the Job and SalaryCache rows
+	// below are invisible to packages running in parallel, and vice versa.
+	database := dbtest.New(t)
 	q := database.Queries
 
 	bucket := "test-title|test-location|unknown"
@@ -42,7 +29,7 @@ func TestIntegration_SalaryCacheUpsert(t *testing.T) {
 		Source:     domain.SourceIngestedCache,
 	}
 
-	err = q.UpsertSalaryCache(ctx, sqlcgen.UpsertSalaryCacheParams{
+	err := q.UpsertSalaryCache(ctx, sqlcgen.UpsertSalaryCacheParams{
 		Bucket:     bucket,
 		SalaryMin:  int32Ptr(int32(band.Min)),
 		SalaryMax:  int32Ptr(int32(band.Max)),
@@ -94,30 +81,10 @@ func TestIntegration_SalaryCacheUpsert(t *testing.T) {
 
 func TestIntegration_JobSalaryPersistence(t *testing.T) {
 	ctx := context.Background()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
 
-	database, err := db.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer database.Close()
-
-	if err := db.Migrate(dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
-	// Other integration suites TRUNCATE "Job" while holding this same
-	// session-level advisory lock; take it too so their cleanup can't wipe
-	// the row this test inserts before it reads it back (internal/dbtest/lock.go).
-	unlock, err := dbtest.LockSharedDB(ctx, database.Pool)
-	if err != nil {
-		t.Fatalf("lock shared db: %v", err)
-	}
-	defer unlock()
-
+	// Own database per test (internal/dbtest): the Job and SalaryCache rows
+	// below are invisible to packages running in parallel, and vice versa.
+	database := dbtest.New(t)
 	q := database.Queries
 
 	dedupeKey := "test-salary-persist-" + t.Name() + time.Now().Format("20060102150405")

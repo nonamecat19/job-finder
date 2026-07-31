@@ -4,7 +4,6 @@ package activity_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -45,31 +44,12 @@ func insertRun(ctx context.Context, t *testing.T, testDB *db.DB, state string, h
 }
 
 func TestSweeper_Integration_ExactlyStaleRowsInterrupted(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := db.Migrate(dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	testDB, err := db.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("db open: %v", err)
-	}
-	defer testDB.Close()
-
-	unlock, err := dbtest.LockSharedDB(ctx, testDB.Pool)
-	if err != nil {
-		t.Fatalf("lock shared db: %v", err)
-	}
-	defer unlock()
-
-	if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "ActivityRun" CASCADE`); err != nil {
-		t.Fatalf("truncate: %v", err)
-	}
+	// Own database per suite: no shared tables, so no truncation and no
+	// cross-package coordination (internal/dbtest).
+	testDB := dbtest.New(t)
 
 	stale := time.Now().Add(-10 * time.Minute)
 	fresh := time.Now()

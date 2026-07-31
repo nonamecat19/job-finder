@@ -5,11 +5,9 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
@@ -19,41 +17,12 @@ import (
 func setupMergeTest(t *testing.T) (context.Context, *sqlcgen.Queries, func()) {
 	t.Helper()
 
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-	if err := db.Migrate(dsn); err != nil {
-		cancel()
-		t.Fatalf("migrate: %v", err)
-	}
-	testDB, err := db.Open(ctx, dsn)
-	if err != nil {
-		cancel()
-		t.Fatalf("db open: %v", err)
-	}
-
-	unlock, err := dbtest.LockSharedDB(ctx, testDB.Pool)
-	if err != nil {
-		cancel()
-		testDB.Close()
-		t.Fatalf("lock shared db: %v", err)
-	}
-
-	cleanup := func() {
-		unlock()
-		testDB.Close()
-		cancel()
-	}
-
-	for _, tbl := range []string{"MatchResult", "Application", "Job", "JobSource"} {
-		if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "`+tbl+`" CASCADE`); err != nil {
-			cleanup()
-			t.Fatalf("truncate %s: %v", tbl, err)
-		}
-	}
+	// Own database per test (internal/dbtest): no shared tables, so no
+	// truncation and no cross-package coordination. dbtest drops it on cleanup.
+	testDB := dbtest.New(t)
+	cleanup := cancel
 
 	for _, key := range []struct{ key, kind string }{
 		{"adzuna", "api"},
@@ -343,7 +312,10 @@ func TestIsBoardVendor(t *testing.T) {
 }
 
 func TestTitlesOverlap(t *testing.T) {
-	cases := []struct{ a, b string; want bool }{
+	cases := []struct {
+		a, b string
+		want bool
+	}{
 		{"Senior Go Engineer", "Senior Go Engineer", true},
 		{"Sr. Go Engineer", "Senior Go Engineer", true},
 		{"Go Engineer", "Senior Go Engineer", true},
