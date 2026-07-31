@@ -54,6 +54,12 @@ func TestMatchJob_SkipsProfileWithoutConfig(t *testing.T) {
 	}
 	defer unlock()
 
+	// Queueing behind the other suites can outlast the setup budget above, so
+	// the test body gets a fresh one starting from when we hold the lock.
+	cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	for _, tbl := range []string{"MatchResult", "Job", "JobSource", "Profile"} {
 		if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "`+tbl+`" CASCADE`); err != nil {
 			t.Fatalf("truncate %s: %v", tbl, err)

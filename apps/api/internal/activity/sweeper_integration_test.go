@@ -67,6 +67,12 @@ func TestSweeper_Integration_ExactlyStaleRowsInterrupted(t *testing.T) {
 	}
 	defer unlock()
 
+	// Queueing behind the other suites can outlast the setup budget above, so
+	// the test body gets a fresh one starting from when we hold the lock.
+	cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "ActivityRun" CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

@@ -221,6 +221,12 @@ func setupATSTest(t *testing.T) (context.Context, *sqlcgen.Queries, *roster.Serv
 	}
 	t.Cleanup(unlock)
 
+	// Queueing behind the other suites can outlast the setup budget above, so
+	// the test body gets a fresh one starting from when we hold the lock.
+	cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+
 	for _, tbl := range []string{"EmployerBoard", "BoardCandidate", "Job", "JobSource"} {
 		if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "`+tbl+`" CASCADE`); err != nil {
 			t.Fatalf("truncate %s: %v", tbl, err)

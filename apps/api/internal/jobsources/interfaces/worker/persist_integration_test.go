@@ -46,6 +46,11 @@ func setupPersistTest(t *testing.T) (context.Context, *db.DB, func()) {
 		t.Fatalf("lock shared db: %v", err)
 	}
 
+	// Queueing behind the other suites can outlast the setup budget above, so
+	// the test body gets a fresh one starting from when we hold the lock.
+	cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), 60*time.Second)
+
 	cleanup := func() {
 		unlock()
 		testDB.Close()
