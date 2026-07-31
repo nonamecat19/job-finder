@@ -197,17 +197,11 @@ jobs:
         with:
           go-version-file: apps/api/go.mod
 
-      # Two-step run, ordering matters: only internal/db's suite calls
-      # Migrate() (internal/db/integration_test.go:31); the other
-      # integration-tagged packages assume the schema already exists, and
-      # `go test ./...` runs packages in parallel, so a single combined
-      # invocation can start a dependent package before migration finishes.
-      # The advisory lock in internal/dbtest/lock.go serialises TRUNCATE
-      # between suites, not schema creation.
-      - name: Migrate test database
-        working-directory: apps/api
-        run: go test -tags integration ./internal/db/... -run TestMigrate
-
+      # One invocation, packages in parallel: each suite creates its own
+      # database from a migrated template (internal/dbtest), so no suite
+      # depends on another having migrated or truncated the shared one.
+      # DATABASE_URL names the database dbtest connects to in order to create
+      # and drop those clones.
       - name: go test -tags integration ./...
         working-directory: apps/api
         run: go test -tags integration ./...

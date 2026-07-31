@@ -5,29 +5,21 @@ package application_test
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
 )
 
+// openTestDB returns a database of this test's own (internal/dbtest), so the
+// Job rows these tests insert cannot be truncated by a package running in
+// parallel. dbtest drops it when the test ends.
 func openTestDB(t *testing.T) *db.DB {
 	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
-	database, err := db.Open(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := db.Migrate(dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return database
+	return dbtest.New(t)
 }
 
 func insertTestJob(t *testing.T, q *sqlcgen.Queries, dedupeKey, company string) sqlcgen.Job {

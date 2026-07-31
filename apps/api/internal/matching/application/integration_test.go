@@ -4,16 +4,14 @@ package application_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/matching"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/profile"
 )
 
@@ -31,40 +29,12 @@ func (noopLLM) Embed(ctx context.Context, text string) ([]float32, error) {
 }
 
 func TestMatchJob_SkipsProfileWithoutConfig(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := db.Migrate(dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	testDB, err := db.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("db open: %v", err)
-	}
-	defer testDB.Close()
-
-	// Other integration suites truncate these same tables in parallel; take turns.
-	unlock, err := dbtest.LockSharedDB(ctx, testDB.Pool)
-	if err != nil {
-		t.Fatalf("lock shared db: %v", err)
-	}
-	defer unlock()
-
-	// Queueing behind the other suites can outlast the setup budget above, so
-	// the test body gets a fresh one starting from when we hold the lock.
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	for _, tbl := range []string{"MatchResult", "Job", "JobSource", "Profile"} {
-		if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "`+tbl+`" CASCADE`); err != nil {
-			t.Fatalf("truncate %s: %v", tbl, err)
-		}
-	}
+	// Own database per suite: no shared tables, so no truncation and no
+	// cross-package coordination (internal/dbtest).
+	testDB := dbtest.New(t)
 
 	if err := testDB.Queries.UpsertJobSource(ctx, sqlcgen.UpsertJobSourceParams{
 		Key: "mj-src", Kind: "api", Config: []byte(`{}`),

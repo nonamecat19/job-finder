@@ -1,6 +1,6 @@
 //go:build integration
 
-package db
+package db_test
 
 import (
 	"context"
@@ -12,41 +12,27 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
 )
 
-var testDB *DB
+var testDB *db.DB
 
 func TestMain(m *testing.M) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := Migrate(dsn); err != nil {
-		panic("migrate: " + err.Error())
-	}
-
-	var err error
-	testDB, err = Open(ctx, dsn)
+	// Each suite runs against its own database (internal/dbtest), so these
+	// tests can TRUNCATE freely without disturbing packages running in
+	// parallel.
+	database, release, err := dbtest.NewForMain("db")
 	if err != nil {
-		panic("db open: " + err.Error())
+		panic("dbtest: " + err.Error())
 	}
-	defer testDB.Close()
+	testDB = database
 
-	// Suites in other packages truncate the same tables; take turns.
-	unlock, err := dbtest.LockSharedDB(context.Background(), testDB.Pool)
-	if err != nil {
-		panic("lock shared db: " + err.Error())
-	}
-	defer unlock()
-
-	os.Exit(m.Run())
+	code := m.Run()
+	release()
+	os.Exit(code)
 }
 
 // truncateAll cleans every table in dependency-safe order.

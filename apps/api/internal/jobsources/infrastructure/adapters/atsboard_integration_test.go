@@ -7,12 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dto"
@@ -198,40 +196,12 @@ func mockVendorClient(ts *httptest.Server) *http.Client {
 func setupATSTest(t *testing.T) (context.Context, *sqlcgen.Queries, *roster.Service, *http.ServeMux, *httptest.Server) {
 	t.Helper()
 
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 
-	if err := db.Migrate(dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	testDB, err := db.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("db open: %v", err)
-	}
-	t.Cleanup(testDB.Close)
-
-	unlock, err := dbtest.LockSharedDB(ctx, testDB.Pool)
-	if err != nil {
-		t.Fatalf("lock shared db: %v", err)
-	}
-	t.Cleanup(unlock)
-
-	// Queueing behind the other suites can outlast the setup budget above, so
-	// the test body gets a fresh one starting from when we hold the lock.
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	t.Cleanup(cancel)
-
-	for _, tbl := range []string{"EmployerBoard", "BoardCandidate", "Job", "JobSource"} {
-		if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "`+tbl+`" CASCADE`); err != nil {
-			t.Fatalf("truncate %s: %v", tbl, err)
-		}
-	}
+	// Own database per test (internal/dbtest): no shared tables, so no
+	// truncation and no cross-package coordination. dbtest drops it on cleanup.
+	testDB := dbtest.New(t)
 
 	q := testDB.Queries
 

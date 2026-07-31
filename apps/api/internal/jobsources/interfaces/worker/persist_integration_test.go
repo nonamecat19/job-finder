@@ -5,7 +5,6 @@ package worker
 import (
 	"context"
 	"errors"
-	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -23,46 +22,13 @@ import (
 func setupPersistTest(t *testing.T) (context.Context, *db.DB, func()) {
 	t.Helper()
 
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
-	if err := db.Migrate(dsn); err != nil {
-		cancel()
-		t.Fatalf("migrate: %v", err)
-	}
-	testDB, err := db.Open(ctx, dsn)
-	if err != nil {
-		cancel()
-		t.Fatalf("db open: %v", err)
-	}
+	// Own database per test (internal/dbtest): no shared tables, so no
+	// truncation and no cross-package coordination. dbtest drops it on cleanup.
+	testDB := dbtest.New(t)
+	cleanup := cancel
 
-	unlock, err := dbtest.LockSharedDB(ctx, testDB.Pool)
-	if err != nil {
-		cancel()
-		testDB.Close()
-		t.Fatalf("lock shared db: %v", err)
-	}
-
-	// Queueing behind the other suites can outlast the setup budget above, so
-	// the test body gets a fresh one starting from when we hold the lock.
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 60*time.Second)
-
-	cleanup := func() {
-		unlock()
-		testDB.Close()
-		cancel()
-	}
-
-	for _, tbl := range []string{"ActivityRun", "MatchResult", "Application", "Job", "SourceRun", "JobSource"} {
-		if _, err := testDB.Pool.Exec(ctx, `TRUNCATE TABLE "`+tbl+`" CASCADE`); err != nil {
-			cleanup()
-			t.Fatalf("truncate %s: %v", tbl, err)
-		}
-	}
 	if err := testDB.Queries.UpsertJobSource(ctx, sqlcgen.UpsertJobSourceParams{
 		Key: "adzuna", Kind: "api", Config: []byte(`{}`),
 	}); err != nil {

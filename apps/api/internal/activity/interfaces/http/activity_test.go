@@ -5,11 +5,9 @@ package http_test
 import (
 	"context"
 	"net/http"
-	"os"
 	"testing"
 
 	activityhttp "github.com/job-finder/api/internal/activity/interfaces/http"
-	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dto"
@@ -17,36 +15,14 @@ import (
 )
 
 func TestActivityList(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
-
 	ctx := context.Background()
-	if err := db.Migrate(dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 
-	database, err := db.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("db open: %v", err)
-	}
-	defer database.Close()
-
-	// `go test ./...` runs packages in parallel; this suite TRUNCATEs a table
-	// other suites also touch, so it takes the shared advisory lock like every
-	// other integration package does (internal/dbtest/lock.go).
-	unlock, err := dbtest.LockSharedDB(ctx, database.Pool)
-	if err != nil {
-		t.Fatalf("lock shared db: %v", err)
-	}
-	defer unlock()
-
-	// Clear activities
-	_, _ = database.Pool.Exec(ctx, `TRUNCATE TABLE "ActivityRun" CASCADE`)
+	// Own database per suite: no shared tables, so no truncation and no
+	// cross-package coordination (internal/dbtest).
+	database := dbtest.New(t)
 
 	// Insert a mock activity
-	_, err = database.Queries.InsertActivityRun(ctx, sqlcgen.InsertActivityRunParams{
+	_, err := database.Queries.InsertActivityRun(ctx, sqlcgen.InsertActivityRunParams{
 		Op:    "ingest",
 		Label: "test scrape",
 		Meta:  []byte("{}"),

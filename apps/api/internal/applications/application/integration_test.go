@@ -18,28 +18,17 @@ import (
 var itDB *db.DB
 
 func TestMain(m *testing.M) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
-	}
-	if err := db.Migrate(dsn); err != nil {
-		panic("migrate: " + err.Error())
-	}
-	var err error
-	itDB, err = db.Open(context.Background(), dsn)
+	// This suite owns its database (internal/dbtest), so seedApplication can
+	// TRUNCATE between tests without disturbing packages running in parallel.
+	database, release, err := dbtest.NewForMain("applications")
 	if err != nil {
-		panic("db open: " + err.Error())
+		panic("dbtest: " + err.Error())
 	}
-	defer itDB.Close()
+	itDB = database
 
-	// Suites in other packages truncate the same tables; take turns.
-	unlock, err := dbtest.LockSharedDB(context.Background(), itDB.Pool)
-	if err != nil {
-		panic("lock shared db: " + err.Error())
-	}
-	defer unlock()
-
-	os.Exit(m.Run())
+	code := m.Run()
+	release()
+	os.Exit(code)
 }
 
 // seedApplication creates the job source / job / application chain the service
