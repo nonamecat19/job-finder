@@ -11,6 +11,7 @@ import (
 
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/dbutil"
 )
 
@@ -54,8 +55,18 @@ func insertTestJob(t *testing.T, q *sqlcgen.Queries, dedupeKey, company string) 
 func TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne(t *testing.T) {
 	database := openTestDB(t)
 	defer database.Close()
-	q := database.Queries
 	ctx := context.Background()
+
+	// Other integration suites TRUNCATE "Job" while holding this same
+	// session-level advisory lock; take it too so their cleanup can't wipe
+	// rows this test just inserted (internal/dbtest/lock.go).
+	unlock, err := dbtest.LockSharedDB(ctx, database.Pool)
+	if err != nil {
+		t.Fatalf("lock shared db: %v", err)
+	}
+	defer unlock()
+
+	q := database.Queries
 
 	dedupeKey := "ghostjob-repost-" + time.Now().Format("20060102150405.000000")
 	job := insertTestJob(t, q, dedupeKey, "RepostCo")
@@ -82,8 +93,18 @@ func TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne(t *testing.T) {
 func TestIntegration_CountAlwaysHiringByCompany_RejectedCountsAsProgression(t *testing.T) {
 	database := openTestDB(t)
 	defer database.Close()
-	q := database.Queries
 	ctx := context.Background()
+
+	// See TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne: without
+	// this lock another suite's TRUNCATE "Job" can land between the insert
+	// below and the count query, silently zeroing the result.
+	unlock, err := dbtest.LockSharedDB(ctx, database.Pool)
+	if err != nil {
+		t.Fatalf("lock shared db: %v", err)
+	}
+	defer unlock()
+
+	q := database.Queries
 
 	company := "AlwaysHiringCo-" + time.Now().Format("20060102150405.000000")
 
@@ -111,8 +132,18 @@ func TestIntegration_CountAlwaysHiringByCompany_RejectedCountsAsProgression(t *t
 func TestIntegration_JobSignalCascadesOnJobDelete(t *testing.T) {
 	database := openTestDB(t)
 	defer database.Close()
-	q := database.Queries
 	ctx := context.Background()
+
+	// See TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne. This test
+	// is doubly sensitive: it calls DeleteAllJobs, which would itself wipe
+	// out any concurrently-running suite's fixtures if not serialised.
+	unlock, err := dbtest.LockSharedDB(ctx, database.Pool)
+	if err != nil {
+		t.Fatalf("lock shared db: %v", err)
+	}
+	defer unlock()
+
+	q := database.Queries
 
 	job := insertTestJob(t, q, "ghostjob-cascade-"+time.Now().Format("20060102150405.000000"), "CascadeCo")
 	model := "test-model"
@@ -126,7 +157,7 @@ func TestIntegration_JobSignalCascadesOnJobDelete(t *testing.T) {
 		t.Fatalf("delete all jobs: %v", err)
 	}
 
-	_, err := q.GetJobSignal(ctx, sqlcgen.GetJobSignalParams{JobId: job.ID, Kind: "ghost"})
+	_, err = q.GetJobSignal(ctx, sqlcgen.GetJobSignalParams{JobId: job.ID, Kind: "ghost"})
 	if err == nil {
 		t.Fatal("expected the JobSignal row to be gone after cascading delete")
 	}

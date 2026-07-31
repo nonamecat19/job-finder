@@ -10,6 +10,7 @@ import (
 
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/salary/domain"
 )
 
@@ -107,6 +108,15 @@ func TestIntegration_JobSalaryPersistence(t *testing.T) {
 	if err := db.Migrate(dsn); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+
+	// Other integration suites TRUNCATE "Job" while holding this same
+	// session-level advisory lock; take it too so their cleanup can't wipe
+	// the row this test inserts before it reads it back (internal/dbtest/lock.go).
+	unlock, err := dbtest.LockSharedDB(ctx, database.Pool)
+	if err != nil {
+		t.Fatalf("lock shared db: %v", err)
+	}
+	defer unlock()
 
 	q := database.Queries
 
