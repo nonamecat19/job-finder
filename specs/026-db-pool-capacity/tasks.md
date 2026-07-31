@@ -54,7 +54,7 @@ Two branches are already in flight against this: `fix/ci-build-failures`
 is one of the broken packages and T006 depends on it directly. No baseline can be measured
 (T002), no test can run, and SC-001/SC-002 cannot be evaluated until this is resolved.
 
-- [ ] T000 Land a green build on `master` before starting Phase 1 — either by finishing
+- [X] T000 Land a green build on `master` before starting Phase 1 — either by finishing
   `fix/ci-build-failures` or by fixing the seven packages directly. Confirm with
   `cd apps/api && go build ./... && go test ./...`. Do not start this feature on a red tree.
 
@@ -62,8 +62,12 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the feature branch: `git checkout -b 026-db-pool-capacity`. Do not work on `master` — `.githooks/pre-commit` and `scripts/hooks/guard-master.sh` will reject it.
-- [ ] T002 Confirm the baseline claim before changing anything: start the backend and record the effective pool size, so the "before" number in SC-005 is measured rather than assumed. `psql "$DATABASE_URL" -c "SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE '%job-finder%' OR datname='jobfinder';"` under load, or add a one-off `slog` line locally. Record the value in the PR description.
+- [X] T001 ~~Create the feature branch~~ — **superseded**: implemented on the shared
+  `feat/specs-025-027-implementation` branch alongside specs 025 and 027. Not on `master`.
+- [X] T002 Baseline measured, not assumed: opening the pool with no options on this
+  16-core host yields `MaxConns=16`, confirming research.md R1's `max(4, NumCPU)` claim.
+  The explicit derived value is 25. (Measured with a throwaway `pgvector/pgvector:pg16`
+  container; the probe was a one-off and is not committed.)
 
 **Checkpoint**: on a branch, baseline recorded.
 
@@ -75,13 +79,13 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
 
 **⚠️ No user story work can begin until this phase is complete.**
 
-- [ ] T003 [P] Add the seven configuration fields to `internal/config/config.go` exactly as specified in `contracts/config.md`: `DBMaxConns`, `DBMinConns`, `DBMaxConnLifetime`, `DBMaxConnIdleTime`, `DBAcquireTimeout`, `DBServerMaxConns`, `DBInteractiveReserve`, each with a `mapstructure` tag equal to its env var name and a comment stating its effect (match the density of the surrounding fields).
-- [ ] T004 [P] Register defaults in `internal/config/defaults.go` under a `// 026-db-pool-capacity` comment block, mirroring the existing `// 019-ai-job-throughput` block style: `DB_MAX_CONNS: 0`, `DB_MIN_CONNS: 2`, `DB_MAX_CONN_LIFETIME: "1h"`, `DB_MAX_CONN_IDLE_TIME: "30m"`, `DB_ACQUIRE_TIMEOUT: "5s"`, `DB_SERVER_MAX_CONNS: 100`, `DB_INTERACTIVE_RESERVE: 8`.
-- [ ] T005 Create `internal/db/capacity.go` with `CapacityBudget` and its `Required()` method per data-model.md §2. `BackgroundSlots` is a named constant `backgroundConnectionSlots = 2` whose comment enumerates what it covers (ingestion scheduler, activity sweeper) and instructs raising it when another long-lived connection-holding goroutine is added.
-- [ ] T006 Add `db.BudgetFromPolicies(policies []queue.TaskPolicy, reserve, serverMax int) CapacityBudget`, summing `TaskPolicy.PoolSize()`. **Use `PoolSize()`, not the live provider class** — this is what satisfies FR-013 (see research.md R3). Note: this makes `internal/db` import `internal/queue`; verify `queue` does not import `db` (it does not — `queue` imports only `config` and `asynq`) so no cycle is created.
-- [ ] T007 [P] Write `internal/db/capacity_test.go`: `Required()` arithmetic at shipped defaults equals 25; raising `AI_CONCURRENCY_CLOUD` raises the requirement; a policy set whose `LocalConcurrency` exceeds `HostedConcurrency` is budgeted at the local value. Include a test asserting `backgroundConnectionSlots` matches the number of long-lived goroutines launched in `cmd/server/servers.go:runServers` — a comment alone will not survive a future edit.
-- [ ] T008 Implement validation in `internal/config` per the table in `contracts/config.md`, producing every listed message verbatim. Fail on under-capacity; warn on over-declared capacity and on unreachable idle retirement.
-- [ ] T009 [P] Write `internal/config/config_test.go` cases for each row of the validation table — one test per failure condition asserting the message names the offending key, plus one asserting shipped defaults validate cleanly.
+- [X] T003 [P] Add the seven configuration fields to `internal/config/config.go` exactly as specified in `contracts/config.md`: `DBMaxConns`, `DBMinConns`, `DBMaxConnLifetime`, `DBMaxConnIdleTime`, `DBAcquireTimeout`, `DBServerMaxConns`, `DBInteractiveReserve`, each with a `mapstructure` tag equal to its env var name and a comment stating its effect (match the density of the surrounding fields).
+- [X] T004 [P] Register defaults in `internal/config/defaults.go` under a `// 026-db-pool-capacity` comment block, mirroring the existing `// 019-ai-job-throughput` block style: `DB_MAX_CONNS: 0`, `DB_MIN_CONNS: 2`, `DB_MAX_CONN_LIFETIME: "1h"`, `DB_MAX_CONN_IDLE_TIME: "30m"`, `DB_ACQUIRE_TIMEOUT: "5s"`, `DB_SERVER_MAX_CONNS: 100`, `DB_INTERACTIVE_RESERVE: 8`.
+- [X] T005 Create `internal/db/capacity.go` with `CapacityBudget` and its `Required()` method per data-model.md §2. `BackgroundSlots` is a named constant `backgroundConnectionSlots = 2` whose comment enumerates what it covers (ingestion scheduler, activity sweeper) and instructs raising it when another long-lived connection-holding goroutine is added.
+- [X] T006 Add `db.BudgetFromPolicies(policies []queue.TaskPolicy, reserve, serverMax int) CapacityBudget`, summing `TaskPolicy.PoolSize()`. **Use `PoolSize()`, not the live provider class** — this is what satisfies FR-013 (see research.md R3). Note: this makes `internal/db` import `internal/queue`; verify `queue` does not import `db` (it does not — `queue` imports only `config` and `asynq`) so no cycle is created.
+- [X] T007 [P] Write `internal/db/capacity_test.go`: `Required()` arithmetic at shipped defaults equals 25; raising `AI_CONCURRENCY_CLOUD` raises the requirement; a policy set whose `LocalConcurrency` exceeds `HostedConcurrency` is budgeted at the local value. Include a test asserting `backgroundConnectionSlots` matches the number of long-lived goroutines launched in `cmd/server/servers.go:runServers` — a comment alone will not survive a future edit.
+- [X] T008 Implement validation in `internal/config` per the table in `contracts/config.md`, producing every listed message verbatim. Fail on under-capacity; warn on over-declared capacity and on unreachable idle retirement.
+- [X] T009 [P] Write `internal/config/config_test.go` cases for each row of the validation table — one test per failure condition asserting the message names the offending key, plus one asserting shipped defaults validate cleanly.
 
 **Checkpoint**: capacity can be computed and validated; nothing yet applies it to a pool.
 
@@ -93,13 +97,13 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
 
 **Independent Test**: quickstart.md steps 1–5. Deliverable on its own: even with no observability work, the pool stops being 4 on a 4-core host.
 
-- [ ] T010 [US2] Add functional options to `internal/db/db.go`: `type Option func(*pgxpool.Config)` and `WithPoolConfig(PoolConfig) Option`. Change `Open(ctx, databaseURL string, opts ...Option)`. **Variadic, not a required parameter** — `db.Open` has 15 call sites, 13 of them tests (`grep -rn "db.Open(" apps/api`); a required parameter buries a 6-file change under 13 mechanical test edits.
-- [ ] T011 [US2] Rewrite `Open` to `pgxpool.ParseConfig(databaseURL)` → apply options → `pgxpool.NewWithConfig(ctx, cfg)` → `Ping`. Preserve the existing error wrapping (`db: connect: %w`, `db: ping: %w`) and the existing `pool.Close()` on ping failure.
-- [ ] T012 [US2] In `cmd/server/platform.go`, build the budget from `queue.PoliciesFromConfig(cfg)` — note `buildPlatform` currently receives only `cfg`, and `Platform.Policies` is populated later; either build policies once in `buildPlatform` and reuse them, or move budget construction to where policies already exist. Do not compute policies twice, and do not duplicate the concurrency arithmetic.
-- [ ] T013 [US2] Emit the single startup info line specified in `contracts/config.md`, including `derived=true|false` and the full breakdown.
-- [ ] T014 [US2] Update `apps/api/.env.example` with the documented block from `contracts/config.md` verbatim, including the explanatory comments.
-- [ ] T015 [US2] Update `README.md` and `AGENTS.md` where connection or concurrency configuration is described, so the documented behaviour matches the implemented behaviour (Constitution: docs must not contradict enforcement).
-- [ ] T016 [US2] Verification: run quickstart.md steps 1–5 and confirm each expected message appears. A validation rule never seen rejecting anything has not been tested.
+- [X] T010 [US2] Add functional options to `internal/db/db.go`: `type Option func(*pgxpool.Config)` and `WithPoolConfig(PoolConfig) Option`. Change `Open(ctx, databaseURL string, opts ...Option)`. **Variadic, not a required parameter** — `db.Open` has 15 call sites, 13 of them tests (`grep -rn "db.Open(" apps/api`); a required parameter buries a 6-file change under 13 mechanical test edits.
+- [X] T011 [US2] Rewrite `Open` to `pgxpool.ParseConfig(databaseURL)` → apply options → `pgxpool.NewWithConfig(ctx, cfg)` → `Ping`. Preserve the existing error wrapping (`db: connect: %w`, `db: ping: %w`) and the existing `pool.Close()` on ping failure.
+- [X] T012 [US2] In `cmd/server/platform.go`, build the budget from `queue.PoliciesFromConfig(cfg)` — note `buildPlatform` currently receives only `cfg`, and `Platform.Policies` is populated later; either build policies once in `buildPlatform` and reuse them, or move budget construction to where policies already exist. Do not compute policies twice, and do not duplicate the concurrency arithmetic.
+- [X] T013 [US2] Emit the single startup info line specified in `contracts/config.md`, including `derived=true|false` and the full breakdown.
+- [X] T014 [US2] Update `apps/api/.env.example` with the documented block from `contracts/config.md` verbatim, including the explanatory comments.
+- [X] T015 [US2] Update `README.md` and `AGENTS.md` where connection or concurrency configuration is described, so the documented behaviour matches the implemented behaviour (Constitution: docs must not contradict enforcement).
+- [X] T016 [US2] Verification: run quickstart.md steps 1–5 and confirm each expected message appears. A validation rule never seen rejecting anything has not been tested.
 
 **Checkpoint**: US2 complete and independently landable. Pool is explicit and validated.
 
@@ -111,12 +115,17 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
 
 **Independent Test**: quickstart.md step 6 — measured idle vs loaded latency.
 
-- [ ] T017 [US1] Add an acquisition-deadline middleware in `internal/httpapi` that derives a `context.WithTimeout(r.Context(), cfg.DBAcquireTimeout)` for the request. Register it in `NewRouter` after `middleware.Recoverer`. Per research.md R5 this bounds the interactive path only; background workers keep their `TaskPolicy.MaxDuration` deadlines.
-- [ ] T018 [US1] Map a deadline-exceeded failure on the acquire path to a distinguishable error response identifying connection-capacity exhaustion, via the existing `writeError` helper and `internal/apperr` conventions — not a bare 500. Check how `apperr` classifies errors today and follow it rather than inventing a parallel scheme.
-- [ ] T019 [P] [US1] Write `internal/httpapi` unit tests for the middleware: a handler that outlives the deadline produces the capacity error; a fast handler is unaffected; the middleware does not shorten a request context that is already shorter.
-- [ ] T020 [US1] Write `internal/db/pool_integration_test.go` (`//go:build integration`) following the `internal/dbtest` helper convention: open a pool with `MaxConns=2`, hold both connections, assert a third acquire fails within the configured timeout rather than blocking indefinitely, and assert it succeeds once one is released.
-- [ ] T021 [US1] Verification: run quickstart.md step 6 and record idle mean, loaded mean, and the ratio in the PR description. **SC-001 requires ratio ≤ 1.5.** If it is not met, stop — a number that misses the criterion is the finding, not a rounding matter.
-- [ ] T021a [US1] **If T021 misses SC-001**: the reserve default is provisional (spec Assumptions, contracts/config.md), so the first remedy is to raise `DB_INTERACTIVE_RESERVE` from 8 and re-measure, not to redesign. Record every value tried and its ratio. Only if raising the reserve fails to converge does the design assumption itself need revisiting — in which case stop and report rather than continuing to tune. Skip this task if T021 passed.
+- [X] T017 [US1] Add an acquisition-deadline middleware in `internal/httpapi` that derives a `context.WithTimeout(r.Context(), cfg.DBAcquireTimeout)` for the request. Register it in `NewRouter` after `middleware.Recoverer`. Per research.md R5 this bounds the interactive path only; background workers keep their `TaskPolicy.MaxDuration` deadlines.
+- [X] T018 [US1] Map a deadline-exceeded failure on the acquire path to a distinguishable error response identifying connection-capacity exhaustion, via the existing `writeError` helper and `internal/apperr` conventions — not a bare 500. Check how `apperr` classifies errors today and follow it rather than inventing a parallel scheme.
+- [X] T019 [P] [US1] Write `internal/httpapi` unit tests for the middleware: a handler that outlives the deadline produces the capacity error; a fast handler is unaffected; the middleware does not shorten a request context that is already shorter.
+- [X] T020 [US1] Write `internal/db/pool_integration_test.go` (`//go:build integration`) following the `internal/dbtest` helper convention: open a pool with `MaxConns=2`, hold both connections, assert a third acquire fails within the configured timeout rather than blocking indefinitely, and assert it succeeds once one is released.
+- [ ] T021 **NOT EXECUTED** — SC-001's loaded/idle latency ratio needs every worker pool
+  saturated by real ingestion across enabled job sources. This sandbox has no seeded
+  sources and no outbound scraping, so no honest number can be produced. The interactive
+  path itself is verified: a request served in 5.2ms against a live pool, and
+  `pool_integration_test.go` proves a starved acquire fails on its deadline rather than
+  blocking. **SC-001 remains unmeasured and must be measured before merge.**
+- [ ] T021a Skipped — depends on T021, which was not executed.
 
 **Checkpoint**: US1 complete. SC-001 and SC-002 measured, not asserted.
 
@@ -128,14 +137,19 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
 
 **Independent Test**: quickstart.md steps 7–8.
 
-- [ ] T022 [P] [US3] Add `PoolStats` and `(*DB).PoolStats()` to `internal/db`, mapping from `pgxpool.Pool.Stat()` per data-model.md §3, including the derived `Saturated` field.
-- [ ] T023 [US3] Add the `PoolStatter` interface and nil-able `Pool` field to `internal/httpapi/health.go` per `contracts/readiness.md`. **Do not widen the existing `Pinger` interface** — Redis and MinIO have no pool and would need meaningless implementations. When `Pool` is nil, omit the `pool` key entirely rather than emitting zeros.
-- [ ] T024 [US3] Confirm `ok` is unaffected by saturation. A saturated pool is still serving; flipping readiness to false under load would remove the process from rotation for a load condition and make it worse (contracts/readiness.md).
-- [ ] T025 [US3] Wire the pool into `HealthHandler` in `cmd/server/compose.go` alongside the existing `Postgres`/`Redis`/`Minio` wiring. **If feature 027 has already landed**, `HealthHandler` lives in `internal/health`, not `internal/httpapi` — target that package instead. 027 moves it unconditionally (027 T039), so this is a location change only, not a design question.
-- [ ] T026 [P] [US3] Extend `internal/httpapi/health_test.go`: the `pool` block appears with correct values when `Pool` is set; the key is absent when nil; `ok` stays true when `saturated` is true.
-- [ ] T027 [US3] Create `internal/db/saturation.go`: a ticker-driven sampler per data-model.md §4 that warns **only** after N consecutive saturated samples (default 4 at 30s ⇒ ~2 minutes), with the specified fields. Launch it from `runServers` alongside the existing `p.Sweeper.Run(ctx)`, and stop it on context cancellation.
-- [ ] T028 [P] [US3] Unit-test the saturation sampler with an injected clock and a fake stats source: 3 consecutive saturated samples produce no log; 4 produce exactly one; an intervening unsaturated sample resets the counter; a second sustained episode produces a second log.
-- [ ] T029 [US3] Verification: run quickstart.md steps 7 and 8. Confirm the warning fires once per sustained episode, not once per sample, and that a starved interactive request fails within `DB_ACQUIRE_TIMEOUT` instead of hanging.
+- [X] T022 [P] [US3] Add `PoolStats` and `(*DB).PoolStats()` to `internal/db`, mapping from `pgxpool.Pool.Stat()` per data-model.md §3, including the derived `Saturated` field.
+- [X] T023 [US3] Add the `PoolStatter` interface and nil-able `Pool` field to `internal/httpapi/health.go` per `contracts/readiness.md`. **Do not widen the existing `Pinger` interface** — Redis and MinIO have no pool and would need meaningless implementations. When `Pool` is nil, omit the `pool` key entirely rather than emitting zeros.
+- [X] T024 [US3] Confirm `ok` is unaffected by saturation. A saturated pool is still serving; flipping readiness to false under load would remove the process from rotation for a load condition and make it worse (contracts/readiness.md).
+- [X] T025 [US3] Wire the pool into `HealthHandler` in `cmd/server/compose.go` alongside the existing `Postgres`/`Redis`/`Minio` wiring. **If feature 027 has already landed**, `HealthHandler` lives in `internal/health`, not `internal/httpapi` — target that package instead. 027 moves it unconditionally (027 T039), so this is a location change only, not a design question.
+- [X] T026 [P] [US3] Extend `internal/httpapi/health_test.go`: the `pool` block appears with correct values when `Pool` is set; the key is absent when nil; `ok` stays true when `saturated` is true.
+- [X] T027 [US3] Create `internal/db/saturation.go`: a ticker-driven sampler per data-model.md §4 that warns **only** after N consecutive saturated samples (default 4 at 30s ⇒ ~2 minutes), with the specified fields. Launch it from `runServers` alongside the existing `p.Sweeper.Run(ctx)`, and stop it on context cancellation.
+- [X] T028 [P] [US3] Unit-test the saturation sampler with an injected clock and a fake stats source: 3 consecutive saturated samples produce no log; 4 produce exactly one; an intervening unsaturated sample resets the counter; a second sustained episode produces a second log.
+- [ ] T029 **PARTIALLY EXECUTED** — the readiness `pool` block was verified live against a
+  running server (`max_conns=25`, `saturated=false`, counters climbing), and the
+  "once per sustained episode, not once per sample" behaviour is covered by
+  `saturation_test.go` (3 samples silent, 4 warn once, 12 warn once, reset, second
+  episode warns again). What was **not** done is forcing ~2 minutes of real saturation
+  in a live process — same blocker as T021.
 
 **Checkpoint**: all three stories complete.
 
@@ -143,10 +157,16 @@ is one of the broken packages and T006 depends on it directly. No baseline can b
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T030 Verification: quickstart.md step 9 — restart Postgres beneath the running process, confirm recovery within 60s with no API restart (SC-006, FR-011).
-- [ ] T031 Run the full merge gate: `make test-lint`, plus `go test -tags integration ./internal/db/...`. Both must pass (AGENTS.md).
-- [ ] T032 [P] Record in the PR description: baseline pool size from T002, derived capacity, and the T021 latency ratio. These three numbers are the evidence for SC-001, SC-002 and SC-005.
-- [ ] T033 Open the PR against `master` and confirm CI is green before merge.
+- [X] T030 Verification: quickstart.md step 9 — restart Postgres beneath the running process, confirm recovery within 60s with no API restart (SC-006, FR-011).
+- [ ] T031 **PARTIAL** — `make lint-go` reports 0 issues; `go build ./...`, `go vet ./...`,
+  `go test ./...` and `go test -tags integration ./internal/db/...` all pass (the latter
+  against a real throwaway Postgres). `make lint-web` could not run: pnpm aborts with
+  `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` and forcing it would purge the user's
+  `node_modules`. Unrelated to this diff, which touches no web files.
+- [ ] T032 Pending — no PR opened (commits are being split separately). Numbers to record:
+  baseline pool size **16** (= NumCPU), derived capacity **25** (workers=15 background=2
+  reserve=8), latency ratio **not yet measured** (T021).
+- [ ] T033 Pending — out of scope for this agent; commits/PR handled separately.
 
 ---
 

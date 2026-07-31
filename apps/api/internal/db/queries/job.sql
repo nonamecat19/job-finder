@@ -108,3 +108,88 @@ WHERE mr."id" IS NULL
   AND j."ingestedAt" > sqlc.arg('newer_than')::timestamp
 ORDER BY j."ingestedAt" DESC
 LIMIT sqlc.arg('limit');
+
+-- name: GetJobsByDedupeKeys :many
+-- Batch replacement for the per-posting GetJobByDedupeKey in the ingest
+-- persist loop. Returns only the subset of $1 that already exists, so the
+-- caller classifies known vs new from one round trip.
+SELECT "id", "dedupeKey" FROM "Job" WHERE "dedupeKey" = ANY(sqlc.arg('dedupe_keys')::text[]);
+
+-- name: FindJobsByCompanies :many
+-- Batch replacement for FindJobByCompany. One candidate per company: the most
+-- recently ingested job from a DIFFERENT source, matching the per-posting
+-- query's ORDER BY "ingestedAt" DESC LIMIT 1 semantics.
+-- Served by "Job_lower_company_idx" (migration 00032) — the per-posting form
+-- had no supporting index and scanned the whole table for every board posting.
+SELECT DISTINCT ON (LOWER("company"))
+  LOWER("company") AS company_key, "id", "sourceKey", "title"
+FROM "Job"
+WHERE LOWER("company") = ANY(sqlc.arg('companies')::text[])
+  AND "sourceKey" != sqlc.arg('source_key')
+ORDER BY LOWER("company"), "ingestedAt" DESC;
+
+-- name: BulkInsertJobs :many
+-- One statement per chunk, replacing N InsertJob calls. ON CONFLICT DO NOTHING
+-- handles both in-batch duplicates that survived Go-side dedup and genuine
+-- races with a concurrent run: the loser gets no RETURNING row, so it queues
+-- no downstream work and neither run fails.
+-- COPY was rejected here precisely because it cannot express ON CONFLICT.
+-- "postedAt" is cast to timestamp[], not timestamptz[]: the column is
+-- timestamp(3) and the rest of the ingest path carries pgtype.Timestamp.
+-- The arrays are zipped by parallel unnest() calls in a subquery select list
+-- rather than the multi-argument unnest(a, b, ...) table form, which sqlc's
+-- analyzer cannot resolve. PostgreSQL evaluates several set-returning
+-- functions in one select list in lockstep (ROWS FROM semantics), so the
+-- position alignment is identical.
+INSERT INTO "Job" (
+  "dedupeKey", "sourceKey", "externalId", "title", "company", "location",
+  "remote", "salaryRaw", "url", "description", "raw", "postedAt",
+  "subscriptionId", "seenOnSources"
+)
+SELECT
+  d, s, NULLIF(e, ''), t, c, NULLIF(l, ''), r, NULLIF(sr, ''), u, ds, rw, pa,
+  sqlc.arg('subscription_id'), ARRAY[s]
+FROM (
+  SELECT
+    unnest(sqlc.arg('dedupe_keys')::text[]) AS d,
+    unnest(sqlc.arg('source_keys')::text[]) AS s,
+    unnest(sqlc.arg('external_ids')::text[]) AS e,
+    unnest(sqlc.arg('titles')::text[]) AS t,
+    unnest(sqlc.arg('companies')::text[]) AS c,
+    unnest(sqlc.arg('locations')::text[]) AS l,
+    unnest(sqlc.arg('remotes')::bool[]) AS r,
+    unnest(sqlc.arg('salary_raws')::text[]) AS sr,
+    unnest(sqlc.arg('urls')::text[]) AS u,
+    unnest(sqlc.arg('descriptions')::text[]) AS ds,
+    unnest(sqlc.arg('raws')::jsonb[]) AS rw,
+    unnest(sqlc.arg('posted_ats')::timestamp[]) AS pa
+) AS x
+ON CONFLICT ("dedupeKey") DO NOTHING
+RETURNING "id", "dedupeKey";
+
+-- name: BulkRecordJobReposts :execrows
+-- Set-based replacement for N RecordJobRepost calls, plus the retry guard.
+-- "lastSeenRunId" IS DISTINCT FROM $3 (not != $3) because the column is NULL
+-- for every row predating migration 00032, and NULL != $3 is NULL, which would
+-- exclude every pre-existing row from ever being counted.
+UPDATE "Job" SET
+  "seenCount" = "seenCount" + 1,
+  "ingestedAt" = now(),
+  "subscriptionId" = COALESCE("subscriptionId", sqlc.arg('subscription_id')),
+  "lastSeenRunId" = sqlc.arg('run_id')
+WHERE "dedupeKey" = ANY(sqlc.arg('dedupe_keys')::text[])
+  AND "lastSeenRunId" IS DISTINCT FROM sqlc.arg('run_id');
+
+-- name: BulkMergeJobBoards :execrows
+-- Batch form of MergeJobBoard: folds board-vendor postings into an existing
+-- job from another source. Arrays are position-aligned; unnest pairs them.
+UPDATE "Job" SET
+  "url" = x.url,
+  "sourceKey" = x.source_key,
+  "seenOnSources" = array_append("seenOnSources", x.source_key)
+FROM (
+  SELECT unnest(sqlc.arg('ids')::uuid[]) AS id,
+         unnest(sqlc.arg('urls')::text[]) AS url,
+         unnest(sqlc.arg('source_keys')::text[]) AS source_key
+) AS x
+WHERE "Job"."id" = x.id;

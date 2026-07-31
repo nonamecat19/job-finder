@@ -28,7 +28,7 @@ func IsKnownTaskKey(key string) bool {
 
 var (
 	ErrUnknownTaskKey  = errors.New("llmsettings: unknown task key")
-	ErrInvalidProvider = errors.New("llmsettings: provider must be \"ollama\" or \"cerebras\"")
+	ErrInvalidProvider = errors.New("llmsettings: provider must be \"ollama\", \"cerebras\", or \"gateway\"")
 	ErrInvalidModel    = errors.New("llmsettings: model is not a supported Cerebras free-tier model")
 )
 

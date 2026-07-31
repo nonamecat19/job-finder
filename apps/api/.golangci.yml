@@ -18,6 +18,12 @@ version: "2"
 # / package.json for the dashboard side of that same cap).
 linters:
   default: standard
+  enable:
+    # 027-http-handler-decomposition: keep HTTP adapters inside their feature
+    # modules and keep the router free of feature dependencies. These rules are
+    # what stops the flat-httpapi arrangement from growing back — it took 23
+    # handlers to accumulate the first time, one convenient exception at a time.
+    - depguard
   disable:
     # Deferred per FR-012: 44 violations measured, exceeding the 30-violation
     # threshold for "fix and enable" on first adoption. Almost entirely
@@ -27,6 +33,80 @@ linters:
     # follow-up change once the cap has headroom; do not silently widen this
     # by adding exceptions instead of fixing violations.
     - errcheck
+
+  settings:
+    depguard:
+      rules:
+        # Rule 1 — nothing imports the router except the composition root.
+        # Enforces FR-004/SC-001 in both directions: the router cannot reach
+        # into a feature, and a feature cannot reach back into the router.
+        router-is-not-a-library:
+          list-mode: lax
+          files:
+            - "!**/cmd/server/**"
+            - "!**/internal/httpapi/**"
+          deny:
+            - pkg: github.com/job-finder/api/internal/httpapi
+              desc: >-
+                internal/httpapi is the router, not a library. Put HTTP handlers
+                in internal/<feature>/interfaces/http and register them via
+                NewRouter's variadic mounts in cmd/server. Shared response
+                helpers live in internal/httpx.
+
+        # Rule 2 — the shared helper package stays a leaf.
+        # If httpx grows an internal dependency it stops being safely importable
+        # from every feature and the cycle risk returns.
+        httpx-stays-a-leaf:
+          list-mode: lax
+          files:
+            - "**/internal/httpx/**"
+          allow:
+            # apperr is the single exception: it is the error vocabulary the
+            # whole codebase already speaks, it imports nothing but fmt and
+            # net/http, and WriteAppError cannot render an *apperr.Error
+            # without naming the type. A leaf importing a leaf carries no cycle
+            # risk. Nothing else may be added here.
+            - github.com/job-finder/api/internal/apperr
+          deny:
+            - pkg: github.com/job-finder/api/internal
+              desc: >-
+                internal/httpx must depend on the standard library (and apperr)
+                only. It is imported by every feature's HTTP adapter; any other
+                internal dependency here risks an import cycle and couples all
+                features to it.
+
+        # Rule 3 — feature adapters do not reach into another feature's guts.
+        # Prefix-based and therefore approximate; it catches the mechanical
+        # regressions, which are the ones that actually occur.
+        #
+        # contracts/depguard.md specifies this as the single pattern
+        # `internal/*/infrastructure`. depguard matches `pkg` by prefix, not by
+        # glob, so that entry matches nothing and the rule ships silently dead
+        # — the exact failure mode the verification step exists to catch. The
+        # feature infrastructure packages are therefore enumerated. A new
+        # feature that adds one belongs on this list.
+        #
+        # platform/* is deliberately absent: it is shared infrastructure, not a
+        # feature, and FR-012 permits adapters to depend on it.
+        no-cross-feature-internals:
+          list-mode: lax
+          files:
+            - "**/internal/*/interfaces/**"
+          deny:
+            - pkg: github.com/job-finder/api/internal/companyintel/infrastructure
+              desc: &cross-feature-desc >-
+                An adapter must not import another feature's infrastructure.
+                Go through that feature's exported application service, or
+                declare a local port it satisfies.
+            - pkg: github.com/job-finder/api/internal/generation/infrastructure
+              desc: *cross-feature-desc
+            - pkg: github.com/job-finder/api/internal/jobsources/infrastructure
+              desc: *cross-feature-desc
+            - pkg: github.com/job-finder/api/internal/keyword/infrastructure
+              desc: *cross-feature-desc
+            - pkg: github.com/job-finder/api/internal/referral/infrastructure
+              desc: *cross-feature-desc
+
   exclusions:
     generated: strict
     paths:

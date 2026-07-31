@@ -219,10 +219,43 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		}
 		lastViolations = domain.VerifyRendercvGrounding(master, merged, level)
 		if len(lastViolations) == 0 {
-			return merged, nil
+			return s.fixStructureIntegrity(ctx, master, merged, analysis, level, rec)
 		}
 	}
 	return nil, fmt.Errorf("tailored rendercv resume failed grounding check: %s", strings.Join(lastViolations, "; "))
+}
+
+// fixStructureIntegrity runs the structural-integrity verifier (feature 028)
+// on an already-grounded merge. Block sequence, experience order and job
+// drops are enforced deterministically by MergeTailored and never reach here;
+// the only violation kind is a text-asserted years figure contradicting the
+// master's derivable total. On first detection it runs a single targeted
+// re-prompt feeding the violation back; if the claim recurs, it strips the
+// offending clause and logs the intervention on the activity row.
+func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, rec *activity.Recorder) (domain.RendercvMaster, error) {
+	structViolations := domain.VerifyStructureIntegrity(master, merged)
+	if len(structViolations) == 0 {
+		return merged, nil
+	}
+	if rec != nil {
+		rec.Step(ctx, "structure integrity: years assertion detected, re-prompting", map[string]any{"violations": len(structViolations)})
+	}
+	rePrompted, err := retailorForStructure(ctx, s.llmc, s.genModel, master, analysis, level, structViolations)
+	if err != nil {
+		return nil, err
+	}
+	reMerged, err := domain.MergeTailored(master, rePrompted)
+	if err != nil {
+		return nil, err
+	}
+	reViolations := domain.VerifyStructureIntegrity(master, reMerged)
+	if len(reViolations) == 0 {
+		return reMerged, nil
+	}
+	if rec != nil {
+		rec.Step(ctx, "structure integrity: years assertion recurred, stripped", map[string]any{"violations": len(reViolations)})
+	}
+	return domain.StripStructureViolations(reMerged, reViolations), nil
 }
 
 func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID *string, rec *activity.Recorder) (dto.GeneratedDocumentDto, error) {

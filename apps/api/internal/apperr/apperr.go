@@ -15,7 +15,12 @@ const (
 	KindForbidden       Kind = "forbidden"
 	KindPrecondition    Kind = "precondition_failed"
 	KindTooManyRequests Kind = "too_many_requests"
-	KindInternal        Kind = "internal"
+	// KindUnavailable is a transient capacity condition — the request was not
+	// served because a shared resource (today: the database connection pool)
+	// was exhausted. Distinct from KindInternal: nothing is broken and the
+	// same request is expected to succeed on retry.
+	KindUnavailable Kind = "unavailable"
+	KindInternal    Kind = "internal"
 )
 
 type Error struct {
@@ -79,6 +84,8 @@ func HTTPStatusCode(k Kind) int {
 		return http.StatusPreconditionFailed
 	case KindTooManyRequests:
 		return http.StatusTooManyRequests
+	case KindUnavailable:
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}

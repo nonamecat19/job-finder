@@ -100,3 +100,26 @@ func TestBuildSelectPrompt_IncludesPreviousViolations(t *testing.T) {
 		t.Fatalf("prompt should include previous violations:\n%s", prompt)
 	}
 }
+
+// Feature 028 (T016): the prompt must no longer instruct the LLM to reorder
+// experience, drop jobs, or drop/rename/reorder sections.
+func TestBuildSelectPromptNoReorderOrDrop(t *testing.T) {
+	master := loadSampleMaster(t)
+	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
+	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil)
+
+	for _, forbidden := range []string{"Reorder experience", "drop: true", "Decide which sections to drop"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Errorf("prompt must not contain %q:\n%s", forbidden, prompt)
+		}
+	}
+	for _, required := range []string{
+		"Keep experience entries in the EXACT order",
+		"never set drop",
+		"Do not drop, add, rename, or reorder any resume section",
+	} {
+		if !strings.Contains(prompt, required) {
+			t.Errorf("prompt must contain %q:\n%s", required, prompt)
+		}
+	}
+}

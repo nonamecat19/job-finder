@@ -14,6 +14,7 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/application"
 	"github.com/job-finder/api/internal/platform/llm/domain"
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/cerebras"
+	"github.com/job-finder/api/internal/platform/llm/infrastructure/gateway"
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/ollama"
 )
 
@@ -32,11 +33,13 @@ type (
 	OllamaProvider   = ollama.Provider
 	CerebrasProvider = cerebras.Provider
 	CerebrasModel    = cerebras.Model
+	GatewayProvider  = gateway.Provider
 )
 
 const (
 	TaskProviderOllama   = application.TaskProviderOllama
 	TaskProviderCerebras = application.TaskProviderCerebras
+	TaskProviderGateway  = application.TaskProviderGateway
 
 	ProviderClassLocal  = application.ProviderClassLocal
 	ProviderClassHosted = application.ProviderClassHosted
@@ -50,6 +53,7 @@ var (
 
 	NewOllama   = ollama.New
 	NewCerebras = cerebras.New
+	NewGateway  = gateway.New
 
 	CerebrasModels           = cerebras.Models
 	IsSupportedCerebrasModel = cerebras.IsSupportedModel
@@ -78,19 +82,31 @@ func New(cfg *config.Config) (Provider, error) {
 	return ollama.New(cfg.OllamaURL, cfg.OllamaKey, cfg.LLMModel, cfg.EmbedModel, cfg.EmbedURL), nil
 }
 
-// NewProviders builds the Ollama provider plus, when CerebrasAPIKey is
-// configured, the Cerebras provider (001-cerebras-model-toggle). Cerebras is
-// nil when no key is set — cmd/server then wires every llm.Router with a nil
-// Cerebras leg, which makes the Router fall back to Ollama regardless of a
-// task's persisted setting (FR-008).
-func NewProviders(cfg *config.Config) (*OllamaProvider, *CerebrasProvider, error) {
+// NewProviders builds the Ollama provider plus, when configured, the Cerebras
+// and gateway providers. Each is nil when its credential/URL is absent —
+// cmd/server then wires the Router with a nil leg for that provider, which
+// makes the Router fall back to Ollama regardless of a task's persisted
+// setting (FR-008).
+func NewProviders(cfg *config.Config) (*OllamaProvider, *CerebrasProvider, *GatewayProvider, error) {
 	o := ollama.New(cfg.OllamaURL, cfg.OllamaKey, cfg.LLMModel, cfg.EmbedModel, cfg.EmbedURL)
-	if cfg.CerebrasAPIKey == "" {
-		return o, nil, nil
+
+	var c *CerebrasProvider
+	if cfg.CerebrasAPIKey != "" {
+		cp, err := cerebras.New(cfg.CerebrasBaseURL, cfg.CerebrasAPIKey, "", o)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		c = cp
 	}
-	c, err := cerebras.New(cfg.CerebrasBaseURL, cfg.CerebrasAPIKey, "", o)
-	if err != nil {
-		return nil, nil, err
+
+	var gw *GatewayProvider
+	if cfg.GatewayURL != "" {
+		gwp, err := gateway.New(cfg.GatewayURL, cfg.LiteLLMMasterKey, o)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		gw = gwp
 	}
-	return o, c, nil
+
+	return o, c, gw, nil
 }

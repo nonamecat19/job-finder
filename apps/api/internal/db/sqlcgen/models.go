@@ -201,6 +201,7 @@ type Job struct {
 	SalaryEstimateMin      *int32           `json:"salary_estimate_min"`
 	SalaryEstimateMax      *int32           `json:"salary_estimate_max"`
 	SalaryEstimateCurrency *string          `json:"salary_estimate_currency"`
+	LastSeenRunId          pgtype.UUID      `json:"lastSeenRunId"`
 }
 
 type JobContact struct {

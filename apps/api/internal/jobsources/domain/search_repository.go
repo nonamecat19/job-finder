@@ -17,6 +17,7 @@ import (
 // activity.FromID).
 type SearchRepository interface {
 	activity.Store
+	BatchRepository
 
 	ClaimSavedSearchRun(ctx context.Context, arg sqlcgen.ClaimSavedSearchRunParams) (pgtype.UUID, error)
 	ClaimSubscriptionRun(ctx context.Context, arg sqlcgen.ClaimSubscriptionRunParams) (pgtype.UUID, error)

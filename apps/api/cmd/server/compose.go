@@ -7,67 +7,86 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	activityhttp "github.com/job-finder/api/internal/activity/interfaces/http"
 	"github.com/job-finder/api/internal/aifeature"
+	aifeaturehttp "github.com/job-finder/api/internal/aifeature/interfaces/http"
 	"github.com/job-finder/api/internal/applications"
+	applicationshttp "github.com/job-finder/api/internal/applications/interfaces/http"
 	"github.com/job-finder/api/internal/coach"
+	coachhttp "github.com/job-finder/api/internal/coach/interfaces/http"
 	"github.com/job-finder/api/internal/companyintel"
+	companyintelhttp "github.com/job-finder/api/internal/companyintel/interfaces/http"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/generation"
+	generationhttp "github.com/job-finder/api/internal/generation/interfaces/http"
 	"github.com/job-finder/api/internal/ghostjob"
-	"github.com/job-finder/api/internal/httpapi"
+	ghostjobhttp "github.com/job-finder/api/internal/ghostjob/interfaces/http"
+	"github.com/job-finder/api/internal/health"
 	"github.com/job-finder/api/internal/interviewprep"
+	interviewprephttp "github.com/job-finder/api/internal/interviewprep/interfaces/http"
 	"github.com/job-finder/api/internal/jobs"
+	jobshttp "github.com/job-finder/api/internal/jobs/interfaces/http"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
+	jobsourceshttp "github.com/job-finder/api/internal/jobsources/interfaces/http"
 	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/jobsources/roster"
 	"github.com/job-finder/api/internal/keyword"
+	keywordhttp "github.com/job-finder/api/internal/keyword/interfaces/http"
 	"github.com/job-finder/api/internal/llmsettings"
+	llmsettingshttp "github.com/job-finder/api/internal/llmsettings/interfaces/http"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"
+	notifierhttp "github.com/job-finder/api/internal/notifier/interfaces/http"
 	"github.com/job-finder/api/internal/outreach"
+	outreachhttp "github.com/job-finder/api/internal/outreach/interfaces/http"
 	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/platform/storage"
 	"github.com/job-finder/api/internal/postage"
+	postagehttp "github.com/job-finder/api/internal/postage/interfaces/http"
 	"github.com/job-finder/api/internal/profile"
+	profilehttp "github.com/job-finder/api/internal/profile/interfaces/http"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/recruiter"
+	recruiterhttp "github.com/job-finder/api/internal/recruiter/interfaces/http"
 	"github.com/job-finder/api/internal/referral"
+	referralhttp "github.com/job-finder/api/internal/referral/interfaces/http"
 	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/subscriptions"
+	subscriptionshttp "github.com/job-finder/api/internal/subscriptions/interfaces/http"
 )
 
 // App is the fully wired set of HTTP and worker handlers plus the scheduler,
 // consumed by buildServers (router mounting + worker muxes) and runServers.
 type App struct {
 	// HTTP handlers (each exposes Mount).
-	Sources       *httpapi.SourcesHandler
-	Roster        *httpapi.RosterHandler
-	Searches      *httpapi.SearchesHandler
-	Documents     *httpapi.DocumentsHandler
-	Profiles      *httpapi.ProfilesHandler
-	Jobs          *httpapi.JobsHandler
-	Applications  *httpapi.ApplicationsHandler
-	Subs          *httpapi.SubscriptionsHandler
-	Activity      *httpapi.ActivityHandler
-	Keyword       *httpapi.KeywordHandler
-	PostAge       *httpapi.PostAgeHandler
-	Notification  *httpapi.NotificationHandler
-	Companies     *httpapi.CompaniesHandler
-	GhostJob      *httpapi.GhostJobHandler
-	Coach         *httpapi.CoachHandler
-	Contacts      *httpapi.ContactsHandler
-	Referral      *httpapi.ReferralHandler
-	Outreach      *httpapi.OutreachHandler
-	LlmSettings   *httpapi.LlmSettingsHandler
-	AiFeatures    *httpapi.AiFeatureHandler
-	InterviewPrep *httpapi.InterviewPrepHandler
-	Health        *httpapi.HealthHandler
-	Hosts         *httpapi.HostsHandler
+	Sources       *jobsourceshttp.SourcesHandler
+	Roster        *jobsourceshttp.RosterHandler
+	Searches      *jobsourceshttp.SearchesHandler
+	Documents     *generationhttp.DocumentsHandler
+	Profiles      *profilehttp.ProfilesHandler
+	Jobs          *jobshttp.JobsHandler
+	Applications  *applicationshttp.ApplicationsHandler
+	Subs          *subscriptionshttp.SubscriptionsHandler
+	Activity      *activityhttp.ActivityHandler
+	Keyword       *keywordhttp.KeywordHandler
+	PostAge       *postagehttp.PostAgeHandler
+	Notification  *notifierhttp.NotificationHandler
+	Companies     *companyintelhttp.CompaniesHandler
+	GhostJob      *ghostjobhttp.GhostJobHandler
+	Coach         *coachhttp.CoachHandler
+	Contacts      *recruiterhttp.ContactsHandler
+	Referral      *referralhttp.ReferralHandler
+	Outreach      *outreachhttp.OutreachHandler
+	LlmSettings   *llmsettingshttp.LlmSettingsHandler
+	AiFeatures    *aifeaturehttp.AiFeatureHandler
+	InterviewPrep *interviewprephttp.InterviewPrepHandler
+	Health        *health.HealthHandler
+	Hosts         *jobsourceshttp.HostsHandler
 
 	// Worker handlers (each exposes ProcessTask).
 	Ingestion  *worker.Handler
@@ -146,20 +165,23 @@ type ingestionHandles struct {
 	Ingestion *application.SearchService
 	Handler   *worker.Handler
 	Scheduler *worker.Scheduler
-	Sources   *httpapi.SourcesHandler
-	Searches  *httpapi.SearchesHandler
+	Sources   *jobsourceshttp.SourcesHandler
+	Searches  *jobsourceshttp.SearchesHandler
 }
 
 func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
 	ingestionSvc := application.NewSearchService(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient)
-	ingestionHandler := worker.NewHandler(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient)
+	ingestionHandler := worker.NewHandler(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient,
+		worker.WithTxRunner(p.DB),
+		worker.WithChunkSize(p.Config.IngestPersistChunkSize),
+	)
 	scheduler := worker.NewScheduler(p.DB.Queries, ingestionSvc)
 	return &ingestionHandles{
 		Ingestion: ingestionSvc,
 		Handler:   ingestionHandler,
 		Scheduler: scheduler,
-		Sources:   &httpapi.SourcesHandler{Sources: sources.Sources, Ingestion: ingestionSvc},
-		Searches:  &httpapi.SearchesHandler{Ingestion: ingestionSvc},
+		Sources:   &jobsourceshttp.SourcesHandler{Sources: sources.Sources, Ingestion: ingestionSvc},
+		Searches:  &jobsourceshttp.SearchesHandler{Ingestion: ingestionSvc},
 	}
 }
 
@@ -171,7 +193,7 @@ type llmHandles struct {
 	GhostRouter      *llm.Router
 	DefaultRouter    *llm.Router
 	Settings         *llmsettings.Service
-	SettingsHandler  *httpapi.LlmSettingsHandler
+	SettingsHandler  *llmsettingshttp.LlmSettingsHandler
 }
 
 // composeLLM builds the shared providers and one llm.Router per named chat
@@ -180,13 +202,17 @@ type llmHandles struct {
 // unconfigured; the typed-nil is converted to a nil Provider interface so the
 // routers see a genuinely absent provider.
 func composeLLM(ctx context.Context, p *Platform) (*llmHandles, error) {
-	ollamaProvider, cerebrasProvider, err := llm.NewProviders(p.Config)
+	ollamaProvider, cerebrasProvider, gatewayProvider, err := llm.NewProviders(p.Config)
 	if err != nil {
 		return nil, err
 	}
 	var cerebrasIface llm.Provider
 	if cerebrasProvider != nil {
 		cerebrasIface = cerebrasProvider
+	}
+	var gatewayIface llm.Provider
+	if gatewayProvider != nil {
+		gatewayIface = gatewayProvider
 	}
 	llmSettingsSvc, err := llmsettings.NewService(ctx, p.DB.Queries, p.Config.CerebrasAPIKey != "")
 	if err != nil {
@@ -195,19 +221,19 @@ func composeLLM(ctx context.Context, p *Platform) (*llmHandles, error) {
 	llmHolder := llmSettingsSvc.Holder()
 	return &llmHandles{
 		Ollama:           ollamaProvider,
-		MatchRouter:      llm.NewRouter("match", llmHolder, ollamaProvider, cerebrasIface),
-		GenerationRouter: llm.NewRouter("generation", llmHolder, ollamaProvider, cerebrasIface),
-		RephraseRouter:   llm.NewRouter("rephrase", llmHolder, ollamaProvider, cerebrasIface),
-		GhostRouter:      llm.NewRouter("ghost", llmHolder, ollamaProvider, cerebrasIface),
-		DefaultRouter:    llm.NewRouter("default", llmHolder, ollamaProvider, cerebrasIface),
+		MatchRouter:      llm.NewRouter("match", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
+		GenerationRouter: llm.NewRouter("generation", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
+		RephraseRouter:   llm.NewRouter("rephrase", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
+		GhostRouter:      llm.NewRouter("ghost", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
+		DefaultRouter:    llm.NewRouter("default", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
 		Settings:         llmSettingsSvc,
-		SettingsHandler:  &httpapi.LlmSettingsHandler{Settings: llmSettingsSvc},
+		SettingsHandler:  &llmsettingshttp.LlmSettingsHandler{Settings: llmSettingsSvc},
 	}, nil
 }
 
 type profileHandles struct {
 	Profile *profile.Service
-	Handler *httpapi.ProfilesHandler
+	Handler *profilehttp.ProfilesHandler
 }
 
 // composeProfile wires profile.Service to Ollama directly (it only ever
@@ -216,7 +242,7 @@ func composeProfile(p *Platform, ollama *llm.OllamaProvider) *profileHandles {
 	profileSvc := profile.NewService(p.DB.Queries, ollama, p.Config.EmbedModel, p.Config.RendercvBin)
 	return &profileHandles{
 		Profile: profileSvc,
-		Handler: &httpapi.ProfilesHandler{Profiles: profileSvc},
+		Handler: &profilehttp.ProfilesHandler{Profiles: profileSvc},
 	}
 }
 
@@ -224,7 +250,7 @@ type matchingHandles struct {
 	Jobs             *jobs.Service
 	Notifier         *notifier.Service
 	AiFeatures       *aifeature.Service
-	AiFeatureHandler *httpapi.AiFeatureHandler
+	AiFeatureHandler *aifeaturehttp.AiFeatureHandler
 	Handler          *matching.Handler
 }
 
@@ -255,14 +281,14 @@ func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Servi
 		Jobs:             jobsSvc,
 		Notifier:         notifierSvc,
 		AiFeatures:       aiFeatureSvc,
-		AiFeatureHandler: &httpapi.AiFeatureHandler{Settings: aiFeatureSvc},
+		AiFeatureHandler: &aifeaturehttp.AiFeatureHandler{Settings: aiFeatureSvc},
 		Handler:          matching.NewHandler(matchingSvc, notifierSvc, resumeAutoGenerateGate{aiFeatureSvc}, jobsSvc),
 	}, nil
 }
 
 type ghostHandles struct {
 	Worker      *ghostjob.Handler
-	HTTPHandler *httpapi.GhostJobHandler
+	HTTPHandler *ghostjobhttp.GhostJobHandler
 }
 
 // composeGhostJob builds the ghost-job detector, kept separate from
@@ -271,14 +297,14 @@ func composeGhostJob(p *Platform, ghostRouter *llm.Router) *ghostHandles {
 	ghostSvc := ghostjob.NewService(p.DB.Queries, ghostRouter, "")
 	return &ghostHandles{
 		Worker:      ghostjob.NewHandler(ghostSvc, p.DB.Queries),
-		HTTPHandler: &httpapi.GhostJobHandler{Ghost: ghostSvc},
+		HTTPHandler: &ghostjobhttp.GhostJobHandler{Ghost: ghostSvc},
 	}
 }
 
 type generationHandles struct {
 	Generation *generation.Service
 	Handler    *generation.Handler
-	Documents  *httpapi.DocumentsHandler
+	Documents  *generationhttp.DocumentsHandler
 }
 
 // composeGeneration wires the renderers (and their optional MinIO blob store)
@@ -313,20 +339,20 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	return &generationHandles{
 		Generation: generationSvc,
 		Handler:    generation.NewHandler(generationSvc, p.DB.Queries),
-		Documents:  &httpapi.DocumentsHandler{Generation: generationSvc},
+		Documents:  &generationhttp.DocumentsHandler{Generation: generationSvc},
 	}, nil
 }
 
-func composeApplications(p *Platform) *httpapi.ApplicationsHandler {
+func composeApplications(p *Platform) *applicationshttp.ApplicationsHandler {
 	// p.DB (not p.DB.Queries) is passed as the TxRunner so a status change and
 	// its "ApplicationOutcome" event commit atomically.
 	applicationsSvc := applications.NewService(p.DB.Queries, p.DB)
-	return &httpapi.ApplicationsHandler{Applications: applicationsSvc}
+	return &applicationshttp.ApplicationsHandler{Applications: applicationsSvc}
 }
 
-func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestionSvc *application.SearchService) *httpapi.SubscriptionsHandler {
+func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestionSvc *application.SearchService) *subscriptionshttp.SubscriptionsHandler {
 	subsSvc := subscriptions.NewService(p.DB.Queries, sourcesSvc)
-	return &httpapi.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
+	return &subscriptionshttp.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
 }
 
 // composeEnrichment builds the enrichment worker handler, reusing the same
@@ -374,7 +400,7 @@ func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) 
 }
 
 type keywordHandles struct {
-	Handler       *httpapi.KeywordHandler
+	Handler       *keywordhttp.KeywordHandler
 	RephraseModel *keyword.ProviderRephraseModel
 }
 
@@ -389,14 +415,14 @@ func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile
 	)
 	diffService := keyword.NewDiffService(p.DB.Queries).WithRephraser(cachedRephraser, profileSvc)
 	return &keywordHandles{
-		Handler:       &httpapi.KeywordHandler{Diff: diffService},
+		Handler:       &keywordhttp.KeywordHandler{Diff: diffService},
 		RephraseModel: rephraseModel,
 	}
 }
 
 // composeCoach builds the fit-gap coach. ProfileEntries closes over profileSvc
 // rather than coach importing internal/profile, keeping that edge one-directional.
-func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, profileSvc *profile.Service) *httpapi.CoachHandler {
+func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, profileSvc *profile.Service) *coachhttp.CoachHandler {
 	coachSvc := coach.NewService(rephraseModel)
 	coachAssessSvc := coach.NewAssessmentService(coachSvc, p.DB.Queries, func(ctx context.Context) ([]coach.ProfileEntry, error) {
 		entries, err := profileSvc.ProfileEntries(ctx)
@@ -409,22 +435,22 @@ func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, pro
 		}
 		return out, nil
 	})
-	return &httpapi.CoachHandler{Coach: coachAssessSvc}
+	return &coachhttp.CoachHandler{Coach: coachAssessSvc}
 }
 
-func composePostAge(p *Platform) *httpapi.PostAgeHandler {
+func composePostAge(p *Platform) *postagehttp.PostAgeHandler {
 	postageSvc := postage.NewService(p.DB.Queries)
-	return &httpapi.PostAgeHandler{PostAge: postageSvc}
+	return &postagehttp.PostAgeHandler{PostAge: postageSvc}
 }
 
-func composeNotifications(p *Platform) *httpapi.NotificationHandler {
+func composeNotifications(p *Platform) *notifierhttp.NotificationHandler {
 	notificationSvc := notifier.NewNotificationService(p.DB.Queries, p.DB.Queries)
-	return &httpapi.NotificationHandler{Provider: notificationSvc}
+	return &notifierhttp.NotificationHandler{Provider: notificationSvc}
 }
 
 type companyIntelHandles struct {
 	Service *companyintel.Service
-	Handler *httpapi.CompaniesHandler
+	Handler *companyintelhttp.CompaniesHandler
 }
 
 func composeCompanyIntel(p *Platform) *companyIntelHandles {
@@ -438,13 +464,13 @@ func composeCompanyIntel(p *Platform) *companyIntelHandles {
 	companyIntelSvc := companyintel.NewService(p.DB.Queries, companyIntelRegistry, 2*time.Second)
 	return &companyIntelHandles{
 		Service: companyIntelSvc,
-		Handler: &httpapi.CompaniesHandler{CompanyIntel: companyIntelSvc},
+		Handler: &companyintelhttp.CompaniesHandler{CompanyIntel: companyIntelSvc},
 	}
 }
 
 type recruiterHandles struct {
 	Service *recruiter.Service
-	Handler *httpapi.ContactsHandler
+	Handler *recruiterhttp.ContactsHandler
 }
 
 // composeRecruiter builds recruiter/hiring-manager resolution. LinkedIn only
@@ -453,27 +479,27 @@ func composeRecruiter(p *Platform, defaultRouter *llm.Router) *recruiterHandles 
 	recruiterSvc := recruiter.NewService(p.DB.Queries, defaultRouter, "", p.Scraping, p.Config.LinkedInScrapeEnabled)
 	return &recruiterHandles{
 		Service: recruiterSvc,
-		Handler: &httpapi.ContactsHandler{Recruiter: recruiterSvc},
+		Handler: &recruiterhttp.ContactsHandler{Recruiter: recruiterSvc},
 	}
 }
 
-func composeReferral(p *Platform) *httpapi.ReferralHandler {
+func composeReferral(p *Platform) *referralhttp.ReferralHandler {
 	referralSvc := referral.NewService(p.DB.Queries, p.DB.Queries, referral.NewGitHubCrossReferencer())
-	return &httpapi.ReferralHandler{Referral: referralSvc}
+	return &referralhttp.ReferralHandler{Referral: referralSvc}
 }
 
 // composeOutreach builds the post-apply outreach draft generator. It consumes
 // 007's resolved contacts and 004's company-intel signals as its sole sources,
 // re-resolving neither. Draft-only: no send path exists.
-func composeOutreach(p *Platform, recruiterSvc *recruiter.Service, companyIntelSvc *companyintel.Service, defaultRouter *llm.Router) *httpapi.OutreachHandler {
+func composeOutreach(p *Platform, recruiterSvc *recruiter.Service, companyIntelSvc *companyintel.Service, defaultRouter *llm.Router) *outreachhttp.OutreachHandler {
 	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, defaultRouter, "")
-	return &httpapi.OutreachHandler{Outreach: outreachSvc}
+	return &outreachhttp.OutreachHandler{Outreach: outreachSvc}
 }
 
 // composeInterviewPrep builds the interview-prep pack (013): derived
 // questions + gap summary (008 keyword diff) + STAR stories from the default
 // profile + a company-news briefing reshaped from company-intel (004).
-func composeInterviewPrep(p *Platform, profileSvc *profile.Service, companyIntelSvc *companyintel.Service) *httpapi.InterviewPrepHandler {
+func composeInterviewPrep(p *Platform, profileSvc *profile.Service, companyIntelSvc *companyintel.Service) *interviewprephttp.InterviewPrepHandler {
 	stories := func(ctx context.Context) ([]keyword.StarStory, error) {
 		prof, err := profileSvc.GetDefault(ctx)
 		if err != nil {
@@ -504,7 +530,7 @@ func composeInterviewPrep(p *Platform, profileSvc *profile.Service, companyIntel
 		return out, nil
 	}
 	prepSvc := interviewprep.NewService(p.DB.Queries, p.DB.Queries, stories, companyIntelSvc)
-	return &httpapi.InterviewPrepHandler{InterviewPrep: prepSvc}
+	return &interviewprephttp.InterviewPrepHandler{InterviewPrep: prepSvc}
 }
 
 // redisPinger adapts redis.UniversalClient's Ping (which returns a command,
@@ -518,11 +544,12 @@ func (p redisPinger) Ping(ctx context.Context) error {
 // composeHealth wires /health/ready's dependency pings (FR-004): Postgres and
 // Redis are always checked; Minio stays disabled here since object storage is
 // optional and its client isn't shared on Platform.
-func composeHealth(p *Platform) *httpapi.HealthHandler {
+func composeHealth(p *Platform) *health.HealthHandler {
 	redisClient, _ := p.RedisOpt.MakeRedisClient().(redis.UniversalClient)
-	return &httpapi.HealthHandler{
+	return &health.HealthHandler{
 		Postgres: p.DB.Pool,
 		Redis:    redisPinger{client: redisClient},
+		Pool:     p.DB,
 	}
 }
 
@@ -582,8 +609,8 @@ func composeRetrieval(p *Platform) (retrieval.Service, error) {
 
 // composeHosts builds the host-retrieval introspection/debug endpoints
 // (rung, cooling-off, cookies).
-func composeHosts(retrievalSvc retrieval.Service) *httpapi.HostsHandler {
-	return &httpapi.HostsHandler{Retrieval: hostRetrievalAdapter{svc: retrievalSvc}}
+func composeHosts(retrievalSvc retrieval.Service) *jobsourceshttp.HostsHandler {
+	return &jobsourceshttp.HostsHandler{Retrieval: hostRetrievalAdapter{svc: retrievalSvc}}
 }
 
 // queueClassResolvers maps each LLM task policy's queue name to the router
@@ -630,7 +657,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	jobsHandler := &httpapi.JobsHandler{Jobs: matchingH.Jobs, Generation: generationH.Generation}
+	jobsHandler := &jobshttp.JobsHandler{Jobs: matchingH.Jobs, Generation: generationH.Generation}
 
 	retrievalSvc, err := composeRetrieval(p)
 	if err != nil {
@@ -650,14 +677,14 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 
 	return &App{
 		Sources:       ingestionH.Sources,
-		Roster:        &httpapi.RosterHandler{Roster: sources.Roster},
+		Roster:        &jobsourceshttp.RosterHandler{Roster: roster.NewView(sources.Roster)},
 		Searches:      ingestionH.Searches,
 		Documents:     generationH.Documents,
 		Profiles:      profileH.Handler,
 		Jobs:          jobsHandler,
 		Applications:  composeApplications(p),
 		Subs:          composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
-		Activity:      httpapi.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector, p.Policies, queueClassResolvers(p.Policies, llmH)),
+		Activity:      activityhttp.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector, p.Policies, queueClassResolvers(p.Policies, llmH)),
 		Keyword:       keywordH.Handler,
 		PostAge:       composePostAge(p),
 		Notification:  composeNotifications(p),

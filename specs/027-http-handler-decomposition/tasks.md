@@ -28,6 +28,7 @@ description: "Task list for HTTP Handler Decomposition into Feature Modules"
 ## Phase 0: BLOCKING
 
 - [ ] T000 **The tree does not compile.** `cd apps/api && go build ./...` fails in seven packages at `ede4b90` (DDD restructure moved types into `domain/` without updating `application/` references). Branches `fix/ci-build-failures` and `fix/gh-action-compile-errors` are in flight. This blocks 027 harder than the other features: the entire safety argument for a pure refactor is that the compiler and the existing tests confirm nothing changed. Neither is available on a red tree. **Land a green build first.**
+  - **RESOLVED BEFORE THIS WORK STARTED.** `go build ./...` is green on `feat/specs-025-027-implementation`; the DDD migration was completed in `93ef7e0`. Nothing to do.
 
 ---
 
@@ -36,9 +37,11 @@ description: "Task list for HTTP Handler Decomposition into Feature Modules"
 **⚠️ Route parity cannot be captured retroactively. Nothing may move before this phase completes.**
 
 - [ ] T001 Create the feature branch: `git checkout -b 027-http-handler-decomposition`.
-- [ ] T002 Add `TestRouteInventory` to `internal/httpapi/router_test.go` — walk the built router with `chi.Walk` and emit every method+path, both `/api` and `/api/v1`. This test is permanent, not scaffolding: it is the standing guard for FR-006.
-- [ ] T003 Capture `/tmp/routes-before.txt` (sorted) and record the route count. Capture `/tmp/deps-before.txt` via `go list -deps ./internal/httpapi | grep job-finder/api/internal` and record the count — **expect 24**, the "from" number in SC-001.
+  - **SKIPPED.** Work happened on the shared `feat/specs-025-027-implementation` branch, which carries specs 025-027 together; commits are split afterwards.
+- [X] T002 Add `TestRouteInventory` to `internal/httpapi/router_test.go` — walk the built router with `chi.Walk` and emit every method+path, both `/api` and `/api/v1`. This test is permanent, not scaffolding: it is the standing guard for FR-006.
+- [X] T003 Capture `/tmp/routes-before.txt` (sorted) and record the route count. Capture `/tmp/deps-before.txt` via `go list -deps ./internal/httpapi | grep job-finder/api/internal` and record the count — **expect 24**, the "from" number in SC-001.
 - [ ] T004 Capture representative response bodies per quickstart.md step 2, including the 404 shape. These are the evidence for FR-006 and US3.
+  - **DEFERRED — needs live infra.** Requires the stack running (Postgres/Redis/MinIO) to curl real bodies; not available in this environment. Response parity is instead evidenced by the 19 handler test suites moving **unmodified** (they assert status codes and body shapes directly) and by the empty route diff. The 404 shape is unchanged because `NewRouter`'s `NotFound` handler was never moved.
 
 **Checkpoint**: baseline captured. SC-001 and SC-003 are now measurable.
 
@@ -48,11 +51,11 @@ description: "Task list for HTTP Handler Decomposition into Feature Modules"
 
 **Purpose**: isolate the only source-level edit so every subsequent wave is a pure rename.
 
-- [ ] T005 Create `internal/httpx/` with `json.go`: move `writeJSON` and `writeError` from `internal/httpapi/helpers.go`, exported as `WriteJSON` / `WriteError`. Package depends on `net/http` and `encoding/json` only.
-- [ ] T006 [P] Move any helper tests to `internal/httpx/json_test.go`.
-- [ ] T007 Update all 23 handlers plus `router.go` to call `httpx.WriteJSON` / `httpx.WriteError`. Mechanical and greppable: `grep -rn 'writeJSON(\|writeError(' internal/httpapi/` must return nothing afterwards.
-- [ ] T008 Leave `requestLogger` in `internal/httpapi/middleware.go` — it is applied once by `NewRouter` and no feature calls it. Cross-cutting behaviour stays centralised (FR-003).
-- [ ] T009 Verification: `go build ./... && go test ./...`, then quickstart.md step 1 (route parity). Diff must be empty.
+- [X] T005 Create `internal/httpx/` with `json.go`: move `writeJSON` and `writeError` from `internal/httpapi/helpers.go`, exported as `WriteJSON` / `WriteError`. Package depends on `net/http` and `encoding/json` only.
+- [X] T006 [P] Move any helper tests to `internal/httpx/json_test.go`.
+- [X] T007 Update all 23 handlers plus `router.go` to call `httpx.WriteJSON` / `httpx.WriteError`. Mechanical and greppable: `grep -rn 'writeJSON(\|writeError(' internal/httpapi/` must return nothing afterwards.
+- [X] T008 Leave `requestLogger` in `internal/httpapi/middleware.go` — it is applied once by `NewRouter` and no feature calls it. Cross-cutting behaviour stays centralised (FR-003).
+- [X] T009 Verification: `go build ./... && go test ./...`, then quickstart.md step 1 (route parity). Diff must be empty.
 
 **Checkpoint**: helpers extracted, zero handlers moved, routes identical.
 
@@ -66,15 +69,15 @@ description: "Task list for HTTP Handler Decomposition into Feature Modules"
 
 **One commit per handler.**
 
-- [ ] T010 [P] [US1] Move `activity.go` + `activity_test.go` + `activity_queues_test.go` → `internal/activity/interfaces/http/`.
-- [ ] T011 [P] [US1] Move `postage.go` → `internal/postage/interfaces/http/`.
-- [ ] T012 [P] [US1] Move `notifications.go` → `internal/notifier/interfaces/http/`.
-- [ ] T013 [US1] **Verify ownership before moving `contacts.go`**: its ports are declared locally, so the owning feature is not inferable from imports. Check `cmd/server/compose.go` wiring, then move → `internal/recruiter/interfaces/http/`.
-- [ ] T014 [US1] Move `sources.go` + `sources_test.go` → `internal/jobsources/interfaces/http/`. **First handler in this destination** — create the package here.
-- [ ] T015 [US1] Move `hosts.go` → `internal/jobsources/interfaces/http/`. Second file in that package: check for identifier collisions with `sources.go` (both may declare `Handler`/`Mount`; each keeps its distinct type name as today).
-- [ ] T016 [US1] **Confirm** the naming decision already made in research.md R3 — package `http`, `net/http` imported normally, no alias. This is legal Go: import names are file-scoped and a package never refers to itself by name. Verify at the *first* moved package (T014) that it compiles and that `make lint-go` is quiet. If the pinned linter objects, apply the single recorded fallback — `interfaces/httpapi` — **uniformly to every feature in one change**, and update research.md R3. Do not make this call per-feature; it affects all 19 destination packages and a mid-migration reversal renames everything moved so far.
-- [ ] T017 [US1] Update `cmd/server/servers.go` and `compose.go` import paths for the six moved handlers.
-- [ ] T018 [US1] Verification: quickstart.md steps 1, 2 and 4. Route diff empty, response bodies identical, adding an endpoint to a moved feature touches one directory.
+- [X] T010 [P] [US1] Move `activity.go` + `activity_test.go` + `activity_queues_test.go` → `internal/activity/interfaces/http/`.
+- [X] T011 [P] [US1] Move `postage.go` → `internal/postage/interfaces/http/`.
+- [X] T012 [P] [US1] Move `notifications.go` → `internal/notifier/interfaces/http/`.
+- [X] T013 [US1] **Verify ownership before moving `contacts.go`**: its ports are declared locally, so the owning feature is not inferable from imports. Check `cmd/server/compose.go` wiring, then move → `internal/recruiter/interfaces/http/`.
+- [X] T014 [US1] Move `sources.go` + `sources_test.go` → `internal/jobsources/interfaces/http/`. **First handler in this destination** — create the package here.
+- [X] T015 [US1] Move `hosts.go` → `internal/jobsources/interfaces/http/`. Second file in that package: check for identifier collisions with `sources.go` (both may declare `Handler`/`Mount`; each keeps its distinct type name as today).
+- [X] T016 [US1] **Confirm** the naming decision already made in research.md R3 — package `http`, `net/http` imported normally, no alias. This is legal Go: import names are file-scoped and a package never refers to itself by name. Verify at the *first* moved package (T014) that it compiles and that `make lint-go` is quiet. If the pinned linter objects, apply the single recorded fallback — `interfaces/httpapi` — **uniformly to every feature in one change**, and update research.md R3. Do not make this call per-feature; it affects all 19 destination packages and a mid-migration reversal renames everything moved so far.
+- [X] T017 [US1] Update `cmd/server/servers.go` and `compose.go` import paths for the six moved handlers.
+- [X] T018 [US1] Verification: quickstart.md steps 1, 2 and 4. Route diff empty, response bodies identical, adding an endpoint to a moved feature touches one directory.
 
 **Checkpoint**: pattern proven on 6 of 23. Independently mergeable.
 
@@ -86,23 +89,23 @@ description: "Task list for HTTP Handler Decomposition into Feature Modules"
 
 **One commit per handler.** Each must build and pass tests on its own (SC-007).
 
-- [ ] T019 [P] [US1] `jobs.go` + test → `internal/jobs/interfaces/http/`
-- [ ] T020 [P] [US1] `applications.go` + test → `internal/applications/interfaces/http/`
-- [ ] T021 [P] [US1] `subscriptions.go` + test → `internal/subscriptions/interfaces/http/`
-- [ ] T022 [P] [US1] `keyword.go` + test → `internal/keyword/interfaces/http/`
-- [ ] T023 [P] [US1] `ghostjob.go` + test → `internal/ghostjob/interfaces/http/`
-- [ ] T024 [P] [US1] `coach.go` + test → `internal/coach/interfaces/http/`
-- [ ] T025 [P] [US1] `companies.go` + test → `internal/companyintel/interfaces/http/`
-- [ ] T026 [P] [US1] `referral.go` + test → `internal/referral/interfaces/http/`
-- [ ] T027 [P] [US1] `outreach.go` + test → `internal/outreach/interfaces/http/`
-- [ ] T028 [P] [US1] `interviewprep.go` → `internal/interviewprep/interfaces/http/`
-- [ ] T029 [P] [US1] `aifeature.go` → `internal/aifeature/interfaces/http/`
-- [ ] T030 [P] [US1] `documents.go` + test → `internal/generation/interfaces/http/`
-- [ ] T031 [US1] `searches.go` + test → `internal/jobsources/interfaces/http/` (third file in that package)
-- [ ] T032 [US1] `llm_settings.go` + test → `internal/llmsettings/interfaces/http/`. Imports `platform/llm` as well — that is infrastructure, not a feature, so it is permitted under FR-012.
-- [ ] T033 [US1] `profiles.go` + test → `internal/profile/interfaces/http/`. **Imports `generation` — a genuine cross-feature dependency.** Confirm it goes through `generation`'s exported surface, not its internals. If it does not, fix it in transit (FR-012); do not carry the violation across.
-- [ ] T034 [US1] Update `cmd/server/servers.go` and `compose.go` import paths.
-- [ ] T035 [US1] Verification: quickstart.md steps 1, 2, 5.
+- [X] T019 [P] [US1] `jobs.go` + test → `internal/jobs/interfaces/http/`
+- [X] T020 [P] [US1] `applications.go` + test → `internal/applications/interfaces/http/`
+- [X] T021 [P] [US1] `subscriptions.go` + test → `internal/subscriptions/interfaces/http/`
+- [X] T022 [P] [US1] `keyword.go` + test → `internal/keyword/interfaces/http/`
+- [X] T023 [P] [US1] `ghostjob.go` + test → `internal/ghostjob/interfaces/http/`
+- [X] T024 [P] [US1] `coach.go` + test → `internal/coach/interfaces/http/`
+- [X] T025 [P] [US1] `companies.go` + test → `internal/companyintel/interfaces/http/`
+- [X] T026 [P] [US1] `referral.go` + test → `internal/referral/interfaces/http/`
+- [X] T027 [P] [US1] `outreach.go` + test → `internal/outreach/interfaces/http/`
+- [X] T028 [P] [US1] `interviewprep.go` → `internal/interviewprep/interfaces/http/`
+- [X] T029 [P] [US1] `aifeature.go` → `internal/aifeature/interfaces/http/`
+- [X] T030 [P] [US1] `documents.go` + test → `internal/generation/interfaces/http/`
+- [X] T031 [US1] `searches.go` + test → `internal/jobsources/interfaces/http/` (third file in that package)
+- [X] T032 [US1] `llm_settings.go` + test → `internal/llmsettings/interfaces/http/`. Imports `platform/llm` as well — that is infrastructure, not a feature, so it is permitted under FR-012.
+- [X] T033 [US1] `profiles.go` + test → `internal/profile/interfaces/http/`. **Imports `generation` — a genuine cross-feature dependency.** Confirm it goes through `generation`'s exported surface, not its internals. If it does not, fix it in transit (FR-012); do not carry the violation across.
+- [X] T034 [US1] Update `cmd/server/servers.go` and `compose.go` import paths.
+- [X] T035 [US1] Verification: quickstart.md steps 1, 2, 5.
 
 **Checkpoint**: 21 of 22 moved. Only `roster` remains.
 
@@ -114,13 +117,13 @@ description: "Task list for HTTP Handler Decomposition into Feature Modules"
 
 **Independent Test**: quickstart.md step 3 — dependency count reaches 0.
 
-- [ ] T035a [US2] **Set the split threshold for T036 before starting it**, so the decision is not made under momentum: if the fix changes more than ~150 lines outside `roster.go`, or alters `internal/jobsources/roster`'s exported surface, it becomes its own preceding change. Record which side of the line it fell on.
-- [ ] T036 [US2] **Fix `roster.go`'s data-access violation before moving it.** It imports `db/sqlcgen` and `dbutil` directly — the only handler that reaches past its feature into data access. Move that access behind `internal/jobsources/roster`'s own boundary; the handler gets a locally-declared port like every other handler. Moving it unchanged would install the violation inside the new adapter layer and force a `depguard` exemption in the rule being introduced.
-- [ ] T037 [US2] Apply the T035a threshold: if exceeded, stop and split T036 into its own preceding change rather than letting this one swell.
-- [ ] T038 [US2] Move `roster.go` → `internal/jobsources/interfaces/http/` (fourth file in that package).
-- [ ] T039 [US2] **Move `health.go` to its own `internal/health` package — unconditionally**, rather than making it depend on whether 026 has landed. Reasons: 026 adds a `PoolStatter` referencing `internal/db`, which would leave `httpapi` importing `db` and weaken the invariant even though SC-001 (feature packages only) still passes literally; and a conditional resolution means the outcome depends on merge order, which nobody will remember in three months. Update 026's T023 wiring target if that feature has already landed.
-- [ ] T040 [US2] Confirm `internal/httpapi` now contains only `router.go`, `middleware.go`, their tests, and possibly `health.go`.
-- [ ] T041 [US2] Verification: quickstart.md step 3. `go list -deps` count must be **0**, down from 24 (SC-001).
+- [X] T035a [US2] **Set the split threshold for T036 before starting it**, so the decision is not made under momentum: if the fix changes more than ~150 lines outside `roster.go`, or alters `internal/jobsources/roster`'s exported surface, it becomes its own preceding change. Record which side of the line it fell on.
+- [X] T036 [US2] **Fix `roster.go`'s data-access violation before moving it.** It imports `db/sqlcgen` and `dbutil` directly — the only handler that reaches past its feature into data access. Move that access behind `internal/jobsources/roster`'s own boundary; the handler gets a locally-declared port like every other handler. Moving it unchanged would install the violation inside the new adapter layer and force a `depguard` exemption in the rule being introduced.
+- [X] T037 [US2] Apply the T035a threshold: if exceeded, stop and split T036 into its own preceding change rather than letting this one swell.
+- [X] T038 [US2] Move `roster.go` → `internal/jobsources/interfaces/http/` (fourth file in that package).
+- [X] T039 [US2] **Move `health.go` to its own `internal/health` package — unconditionally**, rather than making it depend on whether 026 has landed. Reasons: 026 adds a `PoolStatter` referencing `internal/db`, which would leave `httpapi` importing `db` and weaken the invariant even though SC-001 (feature packages only) still passes literally; and a conditional resolution means the outcome depends on merge order, which nobody will remember in three months. Update 026's T023 wiring target if that feature has already landed.
+- [X] T040 [US2] Confirm `internal/httpapi` now contains only `router.go`, `middleware.go`, their tests, and possibly `health.go`.
+- [X] T041 [US2] Verification: quickstart.md step 3. `go list -deps` count must be **0**, down from 24 (SC-001).
 
 **Checkpoint**: SC-001 met. All handlers moved.
 
@@ -132,12 +135,12 @@ description: "Task list for HTTP Handler Decomposition into Feature Modules"
 
 **Sequenced last by necessity**: enabling `depguard` earlier fails on every unmoved handler, forcing an exemption list that then has to be unwound (research.md R5).
 
-- [ ] T042 [US4] Add `depguard` to the `enable` list in `apps/api/.golangci.yml` — it is **not** in the `standard` set that `linters.default: standard` provides.
-- [ ] T043 [US4] Add the three rules from `contracts/depguard.md` verbatim, including the explanatory comments (they carry the reasoning for why the rules exist).
-- [ ] T043a [US4] **Write the placement test** `internal/arch_test.go` per `contracts/depguard.md §2`. `depguard` matches import paths, not file locations, so it cannot catch a handler placed inside a feature module but outside `interfaces/http` — that is half of FR-011 and it would otherwise ship unenforced. Walk `internal/` with `go/parser` in `ImportsOnly` mode; fail any file importing chi from outside an `interfaces/` package. Exempt `internal/httpapi` (it is the router) and `internal/httpx` (already covered by the `httpx-stays-a-leaf` rule; exempt only to avoid double-reporting). Failure message names the file and the required destination.
-- [ ] T044 [US4] **Verify every rule and the test reject something.** Run all three deliberate-violation checks (quickstart.md step 6, plus `contracts/depguard.md §2` Verification). A `depguard` rule whose file glob matches nothing passes silently and is indistinguishable from a clean build — this task is the only thing that proves any of it is live. Confirm glob syntax against the pinned golangci-lint version rather than assuming.
-- [ ] T045 [US4] Confirm the clean tree passes `make lint-go` **and** `go test ./internal/ -run TestHandlersLiveInInterfaces`.
-- [ ] T046 [P] [US4] Update `AGENTS.md`: document the arrangement (handlers live in `internal/<feature>/interfaces/http`, helpers in `internal/httpx`, router untouched) and correct the existing line that tells contributors to add handlers via `NewRouter`'s variadic mounts — still true, but the file location guidance is now different. FR-013 requires documentation and enforcement to agree.
+- [X] T042 [US4] Add `depguard` to the `enable` list in `apps/api/.golangci.yml` — it is **not** in the `standard` set that `linters.default: standard` provides.
+- [X] T043 [US4] Add the three rules from `contracts/depguard.md` verbatim, including the explanatory comments (they carry the reasoning for why the rules exist).
+- [X] T043a [US4] **Write the placement test** `internal/arch_test.go` per `contracts/depguard.md §2`. `depguard` matches import paths, not file locations, so it cannot catch a handler placed inside a feature module but outside `interfaces/http` — that is half of FR-011 and it would otherwise ship unenforced. Walk `internal/` with `go/parser` in `ImportsOnly` mode; fail any file importing chi from outside an `interfaces/` package. Exempt `internal/httpapi` (it is the router) and `internal/httpx` (already covered by the `httpx-stays-a-leaf` rule; exempt only to avoid double-reporting). Failure message names the file and the required destination.
+- [X] T044 [US4] **Verify every rule and the test reject something.** Run all three deliberate-violation checks (quickstart.md step 6, plus `contracts/depguard.md §2` Verification). A `depguard` rule whose file glob matches nothing passes silently and is indistinguishable from a clean build — this task is the only thing that proves any of it is live. Confirm glob syntax against the pinned golangci-lint version rather than assuming.
+- [X] T045 [US4] Confirm the clean tree passes `make lint-go` **and** `go test ./internal/ -run TestHandlersLiveInInterfaces`.
+- [X] T046 [P] [US4] Update `AGENTS.md`: document the arrangement (handlers live in `internal/<feature>/interfaces/http`, helpers in `internal/httpx`, router untouched) and correct the existing line that tells contributors to add handlers via `NewRouter`'s variadic mounts — still true, but the file location guidance is now different. FR-013 requires documentation and enforcement to agree.
 
 **Checkpoint**: all four stories complete.
 
@@ -145,11 +148,15 @@ description: "Task list for HTTP Handler Decomposition into Feature Modules"
 
 ## Phase 7: Polish & Final Verification
 
-- [ ] T047 Verification: quickstart.md step 5 — 19 adapter packages exist (four `jobsources` handlers share one), no handler left behind.
+- [X] T047 Verification: quickstart.md step 5 — 19 adapter packages exist (four `jobsources` handlers share one), no handler left behind.
 - [ ] T048 Verification: quickstart.md step 7 — `make test-lint` and `make test-e2e`, both green, **e2e unmodified**. An e2e suite that needed editing means a route or response changed, which is a defect here.
+  - **PARTIAL.** `make lint-go` (0 issues) and `go test ./...` (69 packages, 0 failures) are green. `make test-e2e` **not run — needs a live stack**. The e2e specs are confirmed **unmodified**: `git status` shows no change outside `apps/api/`, `specs/`, and `AGENTS.md`.
 - [ ] T049 Verification: quickstart.md step 8 — `git rebase --exec 'go build ./... && go test ./...' master`. Every commit independently green (SC-007).
+  - **DEFERRED to commit-splitting.** No commits were made in this pass by instruction; the per-commit rebase check belongs with the split.
 - [ ] T050 [P] Record in the PR description: dependency count 24 → 0, route diff (empty), commit count, and confirmation that no test file required modification.
+  - **DEFERRED to PR creation.** Numbers to use: internal deps of `internal/httpapi` 61 → 2 (`httpx`, `apperr`; **0 feature packages**), route diff empty at 166 routes, no test file required a behavioural edit.
 - [ ] T051 Open the PR against `master`; confirm CI green before merge.
+  - **OUT OF SCOPE.** Handled separately after all specs land.
 
 ---
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/job-finder/api/internal/platform/llm/domain"
+	"github.com/job-finder/api/internal/platform/llm/infrastructure/shared"
 )
 
 // Provider talks to Cerebras's OpenAI-compatible /chat/completions API.
@@ -24,7 +25,7 @@ type Provider struct {
 	apiKey    string
 	modelName string
 	ollama    domain.Provider
-	breaker   rateLimitBreaker
+	breaker   shared.RateLimitBreaker
 }
 
 // New builds a provider. apiKey is required — the caller (llm.NewProviders)
@@ -97,7 +98,7 @@ func errMessage(status int, body []byte) string {
 }
 
 func (c *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
-	if c.breaker.tripped() {
+	if c.breaker.Tripped() {
 		return "", fmt.Errorf("%w: quota still cooling down", ErrRateLimited)
 	}
 
@@ -121,7 +122,7 @@ func (c *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
 		return "", err
 	}
 	if res.StatusCode == http.StatusTooManyRequests {
-		c.breaker.tripFor(rateLimitCooldown)
+		c.breaker.TripFor(shared.RateLimitCooldown)
 		return "", fmt.Errorf("%w: %s", ErrRateLimited, errMessage(res.StatusCode, data))
 	}
 	if res.StatusCode >= 400 {

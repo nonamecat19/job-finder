@@ -7,6 +7,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
@@ -27,9 +28,43 @@ type DB struct {
 	Queries *sqlcgen.Queries
 }
 
-// Open connects to Postgres and verifies connectivity with a ping.
-func Open(ctx context.Context, databaseURL string) (*DB, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+// PoolConfig is the explicit connection-capacity policy (026-db-pool-capacity),
+// built in cmd/server/platform.go from config.Config and validated there before
+// pgx sees any of it.
+type PoolConfig struct {
+	MaxConns        int32
+	MinConns        int32
+	MaxConnLifetime time.Duration
+	MaxConnIdleTime time.Duration
+}
+
+// Option mutates the parsed pgx pool configuration before the pool is opened.
+type Option func(*pgxpool.Config)
+
+// WithPoolConfig applies an explicit capacity policy. Fields it does not set
+// (HealthCheckPeriod, connect timeouts, anything supplied in the DSN) keep the
+// values ParseConfig produced.
+func WithPoolConfig(pc PoolConfig) Option {
+	return func(cfg *pgxpool.Config) {
+		cfg.MaxConns = pc.MaxConns
+		cfg.MinConns = pc.MinConns
+		cfg.MaxConnLifetime = pc.MaxConnLifetime
+		cfg.MaxConnIdleTime = pc.MaxConnIdleTime
+	}
+}
+
+// Open connects to Postgres and verifies connectivity with a ping. Without
+// options the pool keeps pgx's own defaults; cmd/server always passes
+// WithPoolConfig so capacity is a stated decision rather than a core count.
+func Open(ctx context.Context, databaseURL string, opts ...Option) (*DB, error) {
+	cfg, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("db: connect: %w", err)
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("db: connect: %w", err)
 	}

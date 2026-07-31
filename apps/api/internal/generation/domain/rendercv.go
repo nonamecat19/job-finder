@@ -70,19 +70,17 @@ type TailoredSkillGroup struct {
 type TailoredExperience struct {
 	Company    string   `json:"company" jsonschema_description:"company name copied EXACTLY from the master"`
 	Highlights []string `json:"highlights" jsonschema_description:"selected, reordered, rephrased highlights (top 3-5 most relevant)"`
-	Drop       bool     `json:"drop,omitempty" jsonschema_description:"true if this entire entry is irrelevant to the vacancy and should be omitted"`
 }
 
-// TailoredSections is the enhanced output of Step 2 (content selection).
-// In addition to summary/skills/experience it now carries section-drop
-// decisions and experience ordering so mergeTailored can rearrange and prune
-// the master YAML accordingly.
+// TailoredSections is the output of Step 2 (content selection). It carries
+// only the three content fields the LLM may change — summary, skill details
+// and experience highlights. Feature 028 removed SectionsToDrop,
+// ExperienceOrder and TailoredExperience.Drop: the AI may not add, remove,
+// rename or reorder resume blocks, nor reorder or drop job entries.
 type TailoredSections struct {
-	Summary         string               `json:"summary" jsonschema_description:"2-3 sentence professional summary targeting the vacancy"`
-	Skills          []TailoredSkillGroup `json:"skills" jsonschema_description:"one entry per master skill group, same indexes, vacancy-required skills first"`
-	Experience      []TailoredExperience `json:"experience" jsonschema_description:"one entry per master experience entry, keyed by company"`
-	SectionsToDrop  []string             `json:"sectionsToDrop,omitempty" jsonschema_description:"section keys to omit (e.g. patents, invited_talks, publications). Never include summary, experience, education, or skills"`
-	ExperienceOrder []string             `json:"experienceOrder,omitempty" jsonschema_description:"companies in desired display order, most relevant to the vacancy first"`
+	Summary    string               `json:"summary" jsonschema_description:"2-3 sentence professional summary targeting the vacancy"`
+	Skills     []TailoredSkillGroup `json:"skills" jsonschema_description:"one entry per master skill group, same indexes, vacancy-required skills first"`
+	Experience []TailoredExperience `json:"experience" jsonschema_description:"one entry per master experience entry, keyed by company"`
 }
 
 var LevelRules = map[GroundingLevel]string{
@@ -99,15 +97,9 @@ var LevelRules = map[GroundingLevel]string{
 		"degrees or numeric metrics that are not in the master.",
 }
 
-// protectedSections can never be dropped by the LLM — they are core to any
-// resume regardless of the target role.
-var protectedSections = map[string]bool{
-	"summary":   true,
-	"experience": true,
-	"education": true,
-	"skills":    true,
-}
-
+// Feature 028 removed the AI's section-drop capability (SectionsToDrop no
+// longer exists on TailoredSections), so no resume block can ever be dropped
+// during tailoring and no protected-sections guard is needed on the merge path.
 func CvSections(master RendercvMaster) map[string]any {
 	cv, _ := master["cv"].(map[string]any)
 	if cv == nil {
@@ -144,15 +136,6 @@ func StringSliceField(m map[string]any, key string) []string {
 		if s, ok := r.(string); ok {
 			out = append(out, s)
 		}
-	}
-	return out
-}
-
-// toAnySlice converts a slice of maps back to []any for YAML marshalling.
-func toAnySlice(maps []map[string]any) []any {
-	out := make([]any, len(maps))
-	for i, m := range maps {
-		out[i] = m
 	}
 	return out
 }
@@ -253,15 +236,18 @@ func toStringKey(k any) string {
 	}
 }
 
-// mergeTailored deep-clones the master and applies all tailoring decisions:
+// mergeTailored deep-clones the master and applies the only tailoring
+// decisions the AI is allowed to make:
 // - Overwrites summary
 // - Overwrites skill-group details (vacancy-required first)
 // - Replaces experience highlights per entry
-// - Drops experience entries marked with Drop: true
-// - Reorders experience entries per ExperienceOrder
-// - Drops non-protected sections per SectionsToDrop
-// Companies, positions, dates, education, design, templates, locale, settings
-// and header are taken verbatim from the master — the LLM never touches them.
+//
+// Feature 028: the resume's structure is immutable. No section is ever
+// added, removed, renamed or reordered (the cv.sections["_order"] key is
+// untouched), and experience entries keep the master's authored order and
+// identity — the AI may not reorder or drop jobs. Companies, positions,
+// dates, education, design, templates, locale, settings and header are taken
+// verbatim from the deep-cloned master — the LLM never touches them.
 func MergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMaster, error) {
 	merged, err := DeepCloneYAML(master)
 	if err != nil {
@@ -283,20 +269,17 @@ func MergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 		}
 	}
 
-	// 3. Apply experience changes: highlights, drops, reorder
-	experience := AsSliceOfMaps(sections["experience"])
+	// 3. Replace experience highlights only. The master's experience slice is
+	// kept in its authored order and identity; mutating each entry's map in
+	// place changes the description bullets without ever rewriting the slice.
+	// start_date/end_date/company/position/location/summary pass through
+	// verbatim from the deep-cloned master.
 	byCompany := map[string]map[string]any{}
-	for _, e := range experience {
+	for _, e := range AsSliceOfMaps(sections["experience"]) {
 		byCompany[norm(StringField(e, "company"))] = e
 	}
-
-	// Apply highlight replacements and mark drops
 	for _, pe := range payload.Experience {
 		if target, ok := byCompany[norm(pe.Company)]; ok {
-			if pe.Drop {
-				target["_drop"] = true
-				continue
-			}
 			highlights := make([]any, 0, len(pe.Highlights))
 			for _, h := range pe.Highlights {
 				if trimmed := strings.TrimSpace(h); trimmed != "" {
@@ -304,48 +287,6 @@ func MergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 				}
 			}
 			target["highlights"] = highlights
-		}
-	}
-
-	// Filter out dropped entries
-	kept := make([]map[string]any, 0, len(experience))
-	for _, e := range experience {
-		if _, drop := e["_drop"]; !drop {
-			kept = append(kept, e)
-		}
-	}
-
-	// Apply reorder
-	if len(payload.ExperienceOrder) > 0 {
-		ordered := make([]map[string]any, 0, len(kept))
-		seen := map[string]bool{}
-		for _, name := range payload.ExperienceOrder {
-			if e, ok := byCompany[norm(name)]; ok {
-				if _, drop := e["_drop"]; !drop {
-					ordered = append(ordered, e)
-					seen[norm(name)] = true
-				}
-			}
-		}
-		// Append remaining entries not in ExperienceOrder
-		for _, e := range kept {
-			if !seen[norm(StringField(e, "company"))] {
-				ordered = append(ordered, e)
-			}
-		}
-		kept = ordered
-	}
-
-	// Clean up internal marker and write back
-	for _, e := range kept {
-		delete(e, "_drop")
-	}
-	sections["experience"] = toAnySlice(kept)
-
-	// 4. Drop non-protected sections
-	for _, key := range payload.SectionsToDrop {
-		if !protectedSections[key] {
-			delete(sections, key)
 		}
 	}
 

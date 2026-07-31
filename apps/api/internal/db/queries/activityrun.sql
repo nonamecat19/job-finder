@@ -69,3 +69,24 @@ ORDER BY "createdAt" DESC;
 
 -- name: DeleteActivityRunsBefore :exec
 DELETE FROM "ActivityRun" WHERE "createdAt" < $1;
+
+-- name: BulkInsertActivities :many
+-- Batch form of the per-task activity.New insert. Without this the N+1 simply
+-- moves from the persist loop to the enqueue loop and SC-002 is not met.
+-- Returns "jobId" and "op" alongside "id" so the caller correlates by
+-- (job, op) rather than by row order, which is not guaranteed.
+-- The column set follows the actual "ActivityRun" schema (00004/00030), not
+-- the kind/status names in the contract: the table's columns are "op" and
+-- "state", "state" defaults to 'queued' and "meta" defaults to '{}'.
+-- The arrays are zipped by parallel unnest() calls in a subquery select list
+-- rather than the multi-argument unnest(a, b, ...) table form, which sqlc's
+-- analyzer cannot resolve; PostgreSQL evaluates them in lockstep either way.
+INSERT INTO "ActivityRun" ("op", "label", "jobId", "sourceKey")
+SELECT o, l, j, NULLIF(sk, '')
+FROM (
+  SELECT unnest(sqlc.arg('ops')::text[]) AS o,
+         unnest(sqlc.arg('labels')::text[]) AS l,
+         unnest(sqlc.arg('job_ids')::uuid[]) AS j,
+         unnest(sqlc.arg('source_keys')::text[]) AS sk
+) AS x
+RETURNING "id", "jobId", "op";

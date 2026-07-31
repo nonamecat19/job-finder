@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -114,4 +116,66 @@ func FindMergeCandidate(ctx context.Context, q domain.SearchRepository, j dto.No
 	}
 
 	return pgtype.UUID{}, nil
+}
+
+// FindMergeCandidates is the batch form of FindMergeCandidate: one query per
+// distinct board-vendor source key in the chunk instead of one per posting.
+// It returns the resolved targets keyed by dedupe key, plus the number of
+// statements issued.
+//
+// titlesOverlap stays in Go, applied to the batch result: it has existing unit
+// coverage and reimplementing its word-overlap heuristic in SQL would
+// duplicate tested logic in an untested place.
+//
+// Unlike the per-posting form, a lookup failure here is fatal rather than
+// logged-and-skipped — the caller runs inside a transaction, where a failed
+// statement aborts everything that follows anyway.
+func FindMergeCandidates(ctx context.Context, q domain.BatchRepository, postings []dto.NormalizedJob) (map[string]pgtype.UUID, int, error) {
+	bySource := map[string][]dto.NormalizedJob{}
+	for _, j := range postings {
+		if IsBoardVendor(j.SourceKey) {
+			bySource[j.SourceKey] = append(bySource[j.SourceKey], j)
+		}
+	}
+	if len(bySource) == 0 {
+		return nil, 0, nil
+	}
+
+	targets := map[string]pgtype.UUID{}
+	statements := 0
+	for _, sourceKey := range slices.Sorted(maps.Keys(bySource)) {
+		group := bySource[sourceKey]
+		seen := map[string]bool{}
+		var companies []string
+		for _, j := range group {
+			company := strings.ToLower(j.Company)
+			if !seen[company] {
+				seen[company] = true
+				companies = append(companies, company)
+			}
+		}
+
+		rows, err := q.FindJobsByCompanies(ctx, sqlcgen.FindJobsByCompaniesParams{
+			Companies: companies,
+			SourceKey: sourceKey,
+		})
+		if err != nil {
+			return nil, 0, fmt.Errorf("ingestion: find merge candidates: %w", err)
+		}
+		statements++
+
+		// Correlate by the lowercased company the query returns, not by
+		// position: companies with no candidate are simply absent.
+		byCompany := make(map[string]sqlcgen.FindJobsByCompaniesRow, len(rows))
+		for _, row := range rows {
+			byCompany[row.CompanyKey] = row
+		}
+		for _, j := range group {
+			row, ok := byCompany[strings.ToLower(j.Company)]
+			if ok && titlesOverlap(j.Title, row.Title) {
+				targets[DedupeKey(j.Company, j.Title, j.URL)] = row.ID
+			}
+		}
+	}
+	return targets, statements, nil
 }

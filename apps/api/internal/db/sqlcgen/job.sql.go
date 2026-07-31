@@ -12,6 +12,158 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
+const bulkInsertJobs = `-- name: BulkInsertJobs :many
+INSERT INTO "Job" (
+  "dedupeKey", "sourceKey", "externalId", "title", "company", "location",
+  "remote", "salaryRaw", "url", "description", "raw", "postedAt",
+  "subscriptionId", "seenOnSources"
+)
+SELECT
+  d, s, NULLIF(e, ''), t, c, NULLIF(l, ''), r, NULLIF(sr, ''), u, ds, rw, pa,
+  $1, ARRAY[s]
+FROM (
+  SELECT
+    unnest($2::text[]) AS d,
+    unnest($3::text[]) AS s,
+    unnest($4::text[]) AS e,
+    unnest($5::text[]) AS t,
+    unnest($6::text[]) AS c,
+    unnest($7::text[]) AS l,
+    unnest($8::bool[]) AS r,
+    unnest($9::text[]) AS sr,
+    unnest($10::text[]) AS u,
+    unnest($11::text[]) AS ds,
+    unnest($12::jsonb[]) AS rw,
+    unnest($13::timestamp[]) AS pa
+) AS x
+ON CONFLICT ("dedupeKey") DO NOTHING
+RETURNING "id", "dedupeKey"
+`
+
+type BulkInsertJobsParams struct {
+	SubscriptionID pgtype.UUID        `json:"subscription_id"`
+	DedupeKeys     []string           `json:"dedupe_keys"`
+	SourceKeys     []string           `json:"source_keys"`
+	ExternalIds    []string           `json:"external_ids"`
+	Titles         []string           `json:"titles"`
+	Companies      []string           `json:"companies"`
+	Locations      []string           `json:"locations"`
+	Remotes        []bool             `json:"remotes"`
+	SalaryRaws     []string           `json:"salary_raws"`
+	Urls           []string           `json:"urls"`
+	Descriptions   []string           `json:"descriptions"`
+	Raws           [][]byte           `json:"raws"`
+	PostedAts      []pgtype.Timestamp `json:"posted_ats"`
+}
+
+type BulkInsertJobsRow struct {
+	ID        pgtype.UUID `json:"id"`
+	DedupeKey string      `json:"dedupeKey"`
+}
+
+// One statement per chunk, replacing N InsertJob calls. ON CONFLICT DO NOTHING
+// handles both in-batch duplicates that survived Go-side dedup and genuine
+// races with a concurrent run: the loser gets no RETURNING row, so it queues
+// no downstream work and neither run fails.
+// COPY was rejected here precisely because it cannot express ON CONFLICT.
+// "postedAt" is cast to timestamp[], not timestamptz[]: the column is
+// timestamp(3) and the rest of the ingest path carries pgtype.Timestamp.
+// The arrays are zipped by parallel unnest() calls in a subquery select list
+// rather than the multi-argument unnest(a, b, ...) table form, which sqlc's
+// analyzer cannot resolve. PostgreSQL evaluates several set-returning
+// functions in one select list in lockstep (ROWS FROM semantics), so the
+// position alignment is identical.
+func (q *Queries) BulkInsertJobs(ctx context.Context, arg BulkInsertJobsParams) ([]BulkInsertJobsRow, error) {
+	rows, err := q.db.Query(ctx, bulkInsertJobs,
+		arg.SubscriptionID,
+		arg.DedupeKeys,
+		arg.SourceKeys,
+		arg.ExternalIds,
+		arg.Titles,
+		arg.Companies,
+		arg.Locations,
+		arg.Remotes,
+		arg.SalaryRaws,
+		arg.Urls,
+		arg.Descriptions,
+		arg.Raws,
+		arg.PostedAts,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BulkInsertJobsRow
+	for rows.Next() {
+		var i BulkInsertJobsRow
+		if err := rows.Scan(&i.ID, &i.DedupeKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const bulkMergeJobBoards = `-- name: BulkMergeJobBoards :execrows
+UPDATE "Job" SET
+  "url" = x.url,
+  "sourceKey" = x.source_key,
+  "seenOnSources" = array_append("seenOnSources", x.source_key)
+FROM (
+  SELECT unnest($1::uuid[]) AS id,
+         unnest($2::text[]) AS url,
+         unnest($3::text[]) AS source_key
+) AS x
+WHERE "Job"."id" = x.id
+`
+
+type BulkMergeJobBoardsParams struct {
+	Ids        []pgtype.UUID `json:"ids"`
+	Urls       []string      `json:"urls"`
+	SourceKeys []string      `json:"source_keys"`
+}
+
+// Batch form of MergeJobBoard: folds board-vendor postings into an existing
+// job from another source. Arrays are position-aligned; unnest pairs them.
+func (q *Queries) BulkMergeJobBoards(ctx context.Context, arg BulkMergeJobBoardsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkMergeJobBoards, arg.Ids, arg.Urls, arg.SourceKeys)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const bulkRecordJobReposts = `-- name: BulkRecordJobReposts :execrows
+UPDATE "Job" SET
+  "seenCount" = "seenCount" + 1,
+  "ingestedAt" = now(),
+  "subscriptionId" = COALESCE("subscriptionId", $1),
+  "lastSeenRunId" = $2
+WHERE "dedupeKey" = ANY($3::text[])
+  AND "lastSeenRunId" IS DISTINCT FROM $2
+`
+
+type BulkRecordJobRepostsParams struct {
+	SubscriptionID pgtype.UUID `json:"subscription_id"`
+	RunID          pgtype.UUID `json:"run_id"`
+	DedupeKeys     []string    `json:"dedupe_keys"`
+}
+
+// Set-based replacement for N RecordJobRepost calls, plus the retry guard.
+// "lastSeenRunId" IS DISTINCT FROM $3 (not != $3) because the column is NULL
+// for every row predating migration 00032, and NULL != $3 is NULL, which would
+// exclude every pre-existing row from ever being counted.
+func (q *Queries) BulkRecordJobReposts(ctx context.Context, arg BulkRecordJobRepostsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkRecordJobReposts, arg.SubscriptionID, arg.RunID, arg.DedupeKeys)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const clearJobDetailScrapedAt = `-- name: ClearJobDetailScrapedAt :exec
 UPDATE "Job" SET "detailScrapedAt" = NULL WHERE "id" = $1
 `
@@ -61,6 +213,57 @@ func (q *Queries) FindJobByCompany(ctx context.Context, arg FindJobByCompanyPara
 	return i, err
 }
 
+const findJobsByCompanies = `-- name: FindJobsByCompanies :many
+SELECT DISTINCT ON (LOWER("company"))
+  LOWER("company") AS company_key, "id", "sourceKey", "title"
+FROM "Job"
+WHERE LOWER("company") = ANY($1::text[])
+  AND "sourceKey" != $2
+ORDER BY LOWER("company"), "ingestedAt" DESC
+`
+
+type FindJobsByCompaniesParams struct {
+	Companies []string `json:"companies"`
+	SourceKey string   `json:"source_key"`
+}
+
+type FindJobsByCompaniesRow struct {
+	CompanyKey string      `json:"company_key"`
+	ID         pgtype.UUID `json:"id"`
+	SourceKey  string      `json:"sourceKey"`
+	Title      string      `json:"title"`
+}
+
+// Batch replacement for FindJobByCompany. One candidate per company: the most
+// recently ingested job from a DIFFERENT source, matching the per-posting
+// query's ORDER BY "ingestedAt" DESC LIMIT 1 semantics.
+// Served by "Job_lower_company_idx" (migration 00032) — the per-posting form
+// had no supporting index and scanned the whole table for every board posting.
+func (q *Queries) FindJobsByCompanies(ctx context.Context, arg FindJobsByCompaniesParams) ([]FindJobsByCompaniesRow, error) {
+	rows, err := q.db.Query(ctx, findJobsByCompanies, arg.Companies, arg.SourceKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindJobsByCompaniesRow
+	for rows.Next() {
+		var i FindJobsByCompaniesRow
+		if err := rows.Scan(
+			&i.CompanyKey,
+			&i.ID,
+			&i.SourceKey,
+			&i.Title,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getJobByDedupeKey = `-- name: GetJobByDedupeKey :one
 SELECT "id" FROM "Job" WHERE "dedupeKey" = $1
 `
@@ -73,7 +276,7 @@ func (q *Queries) GetJobByDedupeKey(ctx context.Context, dedupekey string) (pgty
 }
 
 const getJobByID = `-- name: GetJobByID :one
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency FROM "Job" WHERE "id" = $1
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId" FROM "Job" WHERE "id" = $1
 `
 
 func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
@@ -113,8 +316,41 @@ func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
 		&i.SalaryEstimateMin,
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
+		&i.LastSeenRunId,
 	)
 	return i, err
+}
+
+const getJobsByDedupeKeys = `-- name: GetJobsByDedupeKeys :many
+SELECT "id", "dedupeKey" FROM "Job" WHERE "dedupeKey" = ANY($1::text[])
+`
+
+type GetJobsByDedupeKeysRow struct {
+	ID        pgtype.UUID `json:"id"`
+	DedupeKey string      `json:"dedupeKey"`
+}
+
+// Batch replacement for the per-posting GetJobByDedupeKey in the ingest
+// persist loop. Returns only the subset of $1 that already exists, so the
+// caller classifies known vs new from one round trip.
+func (q *Queries) GetJobsByDedupeKeys(ctx context.Context, dedupeKeys []string) ([]GetJobsByDedupeKeysRow, error) {
+	rows, err := q.db.Query(ctx, getJobsByDedupeKeys, dedupeKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetJobsByDedupeKeysRow
+	for rows.Next() {
+		var i GetJobsByDedupeKeysRow
+		if err := rows.Scan(&i.ID, &i.DedupeKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertJob = `-- name: InsertJob :one
@@ -126,7 +362,7 @@ INSERT INTO "Job" (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
   ARRAY[$2]
 )
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
 `
 
 type InsertJobParams struct {
@@ -196,6 +432,7 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, erro
 		&i.SalaryEstimateMin,
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
+		&i.LastSeenRunId,
 	)
 	return i, err
 }
@@ -255,7 +492,7 @@ func (q *Queries) ListJobsMissingMatch(ctx context.Context, arg ListJobsMissingM
 }
 
 const listJobsNeedingDetail = `-- name: ListJobsNeedingDetail :many
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency FROM "Job"
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId" FROM "Job"
 WHERE "sourceKey" = $1 AND "detailScrapedAt" IS NULL
 ORDER BY "ingestedAt" ASC
 LIMIT $2
@@ -309,6 +546,7 @@ func (q *Queries) ListJobsNeedingDetail(ctx context.Context, arg ListJobsNeeding
 			&i.SalaryEstimateMin,
 			&i.SalaryEstimateMax,
 			&i.SalaryEstimateCurrency,
+			&i.LastSeenRunId,
 		); err != nil {
 			return nil, err
 		}
@@ -326,7 +564,7 @@ UPDATE "Job" SET
   "sourceKey" = $3,
   "seenOnSources" = array_append("seenOnSources", $4)
 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
 `
 
 type MergeJobBoardParams struct {
@@ -378,6 +616,7 @@ func (q *Queries) MergeJobBoard(ctx context.Context, arg MergeJobBoardParams) (J
 		&i.SalaryEstimateMin,
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
+		&i.LastSeenRunId,
 	)
 	return i, err
 }
@@ -386,7 +625,7 @@ const recordJobRepost = `-- name: RecordJobRepost :one
 UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now(),
   "subscriptionId" = COALESCE("subscriptionId", $2)
 WHERE "dedupeKey" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
 `
 
 type RecordJobRepostParams struct {
@@ -437,6 +676,7 @@ func (q *Queries) RecordJobRepost(ctx context.Context, arg RecordJobRepostParams
 		&i.SalaryEstimateMin,
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
+		&i.LastSeenRunId,
 	)
 	return i, err
 }
@@ -459,7 +699,7 @@ UPDATE "Job" SET
   "salary_estimate_max" = COALESCE($13, "salary_estimate_max"),
   "salary_estimate_currency" = COALESCE($14, "salary_estimate_currency")
 WHERE "id" = $15
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
 `
 
 type UpdateJobDetailParams struct {
@@ -533,6 +773,7 @@ func (q *Queries) UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams
 		&i.SalaryEstimateMin,
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
+		&i.LastSeenRunId,
 	)
 	return i, err
 }
@@ -570,7 +811,7 @@ func (q *Queries) UpdateJobEmbeddingWithHash(ctx context.Context, arg UpdateJobE
 
 const updateJobStatus = `-- name: UpdateJobStatus :one
 UPDATE "Job" SET "status" = $2 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
 `
 
 type UpdateJobStatusParams struct {
@@ -615,6 +856,7 @@ func (q *Queries) UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams
 		&i.SalaryEstimateMin,
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
+		&i.LastSeenRunId,
 	)
 	return i, err
 }

@@ -78,7 +78,6 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	sections := domain.CvSections(master)
 	skills := domain.AsSliceOfMaps(sections["skills"])
 	experience := domain.AsSliceOfMaps(sections["experience"])
-	sectionKeys := domain.SectionKeys(sections)
 
 	// Format vacancy analysis
 	var analysisLines []string
@@ -132,19 +131,16 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	b.WriteString("- Return skills as one entry per group, using the SAME [index] shown below.\n")
 	b.WriteString("- Return experience keyed by the EXACT company name shown below; do not add companies.\n")
 	b.WriteString("- For each experience entry, select the TOP 3-5 most relevant highlights and rephrase them to emphasize what the vacancy asks for.\n")
-	b.WriteString("- Set drop: true only for entries with score below 3 (completely irrelevant to the role).\n")
-	b.WriteString("- Reorder experience: most relevant company first.\n")
+	b.WriteString("- Keep every experience entry; never set drop to true. Do not omit any job.\n")
+	b.WriteString("- Keep experience entries in the EXACT order shown in the master; do not reorder.\n")
 	b.WriteString("- Reorder skills within each group: vacancy-required skills first.\n")
 	b.WriteString("- Keep highlights concise, one achievement each, no fabricated numbers.\n")
-	b.WriteString("- Decide which sections to drop. Section keys available: ")
-	b.WriteString(strings.Join(sectionKeys, ", "))
-	b.WriteString("\n- NEVER drop: summary, experience, education, skills.\n")
-	b.WriteString("- Drop academic sections (patents, invited_talks, publications) for non-academic roles.\n")
-	b.WriteString("- Drop projects if they are irrelevant to the vacancy.\n\n")
+	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given. Do not populate sectionsToDrop.\n\n")
 	b.WriteString("Generate a tailored summary (2-3 sentences) that:\n")
 	b.WriteString("- Opens with the candidate's seniority level and domain expertise\n")
 	b.WriteString("- References 2-3 key skills from the vacancy's required skills\n")
-	b.WriteString("- Mentions one quantified achievement from the selected experience\n\n")
+	b.WriteString("- Mentions one quantified achievement from the selected experience\n")
+	b.WriteString("- Do not state a total number of years of experience (e.g. 'over 8 years'); describe seniority descriptively without a numeric claim\n\n")
 	b.WriteString("SKILL GROUPS (master):\n")
 	b.WriteString(strings.Join(skillLines, "\n"))
 	b.WriteString("\n\nEXPERIENCE (master):\n")
@@ -164,6 +160,24 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 func selectAndTailor(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, prevViolations []string) (domain.TailoredSections, error) {
 	prompt := buildSelectPrompt(master, analysis, level, prevViolations)
 	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, prompt, &llm.CompleteOptions{
+		System: "You are an expert resume writer who never fabricates information. " +
+			"You select, reorder and rephrase existing content to match a specific vacancy.",
+		Model: model,
+	})
+}
+
+// retailorForStructure is the single targeted re-prompt for feature 028's
+// text-asserted-years invariant: the initial generation asserted a numeric
+// total years figure that contradicts the master's derivable total, so the
+// violation is fed back and the LLM asked to regenerate without it.
+func retailorForStructure(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, violations []domain.StructureViolation) (domain.TailoredSections, error) {
+	var b strings.Builder
+	b.WriteString(buildSelectPrompt(master, analysis, level, nil))
+	b.WriteString("\n\nSTRUCTURAL INTEGRITY VIOLATIONS (must fix):\n")
+	for _, v := range violations {
+		b.WriteString("- " + v.Path + ": " + v.Message + " Remove any numeric total years-of-experience claim; describe seniority descriptively instead.\n")
+	}
+	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, b.String(), &llm.CompleteOptions{
 		System: "You are an expert resume writer who never fabricates information. " +
 			"You select, reorder and rephrase existing content to match a specific vacancy.",
 		Model: model,

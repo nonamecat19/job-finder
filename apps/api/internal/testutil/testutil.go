@@ -4,11 +4,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http/httptest"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// ErrFake is the stand-in failure for handler tests that need a provider to
+// return *some* error — the ones asserting a 500, where the specific error
+// value is irrelevant. It lives here rather than in one handler's test file so
+// that splitting httpapi into per-domain packages does not strand the tests
+// that use it, or force a copy of the same three lines into every new package.
+//
+// Handlers that map a *particular* sentinel to a non-500 status must keep
+// using that sentinel (see companyintel's application.ErrNoCompany → 422);
+// this is only for the generic path.
+var ErrFake = errors.New("boom")
 
 // SetupRouter mirrors production's NewRouter (httpapi/router.go): it mounts
 // the given handlers under both /api and /api/v1, since /api/v1 is a more

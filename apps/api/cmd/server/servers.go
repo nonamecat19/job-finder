@@ -9,6 +9,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/queue"
@@ -66,6 +67,7 @@ func (p *Platform) policyFor(taskType string) queue.TaskPolicy {
 // buildServers mounts the router and constructs the six asynq worker servers.
 func buildServers(p *Platform, app *App) *Servers {
 	router := httpapi.NewRouter(
+		p.Config.DBAcquireTimeout,
 		app.Sources.Mount, app.Roster.Mount, app.Searches.Mount, app.Documents.Mount,
 		app.Profiles.Mount, app.Jobs.Mount, app.Applications.Mount,
 		app.Subs.Mount, app.Activity.Mount, app.Keyword.Mount,
@@ -125,6 +127,7 @@ func runServers(ctx context.Context, p *Platform, servers *Servers, scheduler *w
 
 	go scheduler.Run(ctx)
 	go p.Sweeper.Run(ctx)
+	go db.NewSaturationSampler(p.DB, slog.Default()).Run(ctx)
 
 	<-ctx.Done()
 	slog.Info("shutting down")

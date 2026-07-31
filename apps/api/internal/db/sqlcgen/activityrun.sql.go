@@ -11,6 +11,66 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bulkInsertActivities = `-- name: BulkInsertActivities :many
+INSERT INTO "ActivityRun" ("op", "label", "jobId", "sourceKey")
+SELECT o, l, j, NULLIF(sk, '')
+FROM (
+  SELECT unnest($1::text[]) AS o,
+         unnest($2::text[]) AS l,
+         unnest($3::uuid[]) AS j,
+         unnest($4::text[]) AS sk
+) AS x
+RETURNING "id", "jobId", "op"
+`
+
+type BulkInsertActivitiesParams struct {
+	Ops        []string      `json:"ops"`
+	Labels     []string      `json:"labels"`
+	JobIds     []pgtype.UUID `json:"job_ids"`
+	SourceKeys []string      `json:"source_keys"`
+}
+
+type BulkInsertActivitiesRow struct {
+	ID    pgtype.UUID `json:"id"`
+	JobId pgtype.UUID `json:"jobId"`
+	Op    string      `json:"op"`
+}
+
+// Batch form of the per-task activity.New insert. Without this the N+1 simply
+// moves from the persist loop to the enqueue loop and SC-002 is not met.
+// Returns "jobId" and "op" alongside "id" so the caller correlates by
+// (job, op) rather than by row order, which is not guaranteed.
+// The column set follows the actual "ActivityRun" schema (00004/00030), not
+// the kind/status names in the contract: the table's columns are "op" and
+// "state", "state" defaults to 'queued' and "meta" defaults to '{}'.
+// The arrays are zipped by parallel unnest() calls in a subquery select list
+// rather than the multi-argument unnest(a, b, ...) table form, which sqlc's
+// analyzer cannot resolve; PostgreSQL evaluates them in lockstep either way.
+func (q *Queries) BulkInsertActivities(ctx context.Context, arg BulkInsertActivitiesParams) ([]BulkInsertActivitiesRow, error) {
+	rows, err := q.db.Query(ctx, bulkInsertActivities,
+		arg.Ops,
+		arg.Labels,
+		arg.JobIds,
+		arg.SourceKeys,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BulkInsertActivitiesRow
+	for rows.Next() {
+		var i BulkInsertActivitiesRow
+		if err := rows.Scan(&i.ID, &i.JobId, &i.Op); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteActivityRunsBefore = `-- name: DeleteActivityRunsBefore :exec
 DELETE FROM "ActivityRun" WHERE "createdAt" < $1
 `

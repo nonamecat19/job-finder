@@ -15,6 +15,7 @@ type TaskProvider string
 const (
 	TaskProviderOllama   TaskProvider = "ollama"
 	TaskProviderCerebras TaskProvider = "cerebras"
+	TaskProviderGateway  TaskProvider = "gateway"
 )
 
 // TaskSetting is the resolved {provider, model} for one chat task, as read
@@ -25,10 +26,12 @@ type TaskSetting struct {
 	Model    string
 }
 
-// RouterSnapshot is the full set of per-task settings plus whether a Cerebras
+// RouterSnapshot is the full set of per-task settings plus whether a hosted
 // credential is configured. It is swapped atomically whenever settings
 // change, so in-flight Complete/CompleteJSON calls always see a consistent
-// view (research.md R4/R5).
+// view (research.md R4/R5). CredentialConfigured reflects only the Cerebras
+// key (the gateway URL is env-only, not per-task, so it is not part of the
+// snapshot — a nil gateway leg already makes such tasks fall back to Ollama).
 type RouterSnapshot struct {
 	Tasks                map[string]TaskSetting
 	CredentialConfigured bool
@@ -70,26 +73,41 @@ type Router struct {
 	holder   *SnapshotHolder
 	ollama   domain.Provider
 	cerebras domain.Provider // nil when no Cerebras credential is configured
+	gateway  domain.Provider // nil when no GATEWAY_URL is configured
 }
 
 // NewRouter builds a Router for taskKey sharing holder (use the same holder
 // across all task Routers so one settings update reaches every task).
-func NewRouter(taskKey string, holder *SnapshotHolder, ollama, cerebras domain.Provider) *Router {
-	return &Router{taskKey: taskKey, holder: holder, ollama: ollama, cerebras: cerebras}
+func NewRouter(taskKey string, holder *SnapshotHolder, ollama, cerebras, gateway domain.Provider) *Router {
+	return &Router{taskKey: taskKey, holder: holder, ollama: ollama, cerebras: cerebras, gateway: gateway}
 }
 
 // resolve returns the underlying provider and effective model for the
-// current snapshot. Cerebras selected without a configured credential falls
-// back to Ollama (FR-008) — the caller (httpapi layer) is responsible for
-// surfacing CredentialConfigured to the operator; the Router just keeps the
-// task working.
+// current snapshot. A hosted provider selected without its configuration
+// (Cerebras without a key, gateway without a URL) falls back to Ollama
+// (FR-008) — the caller (httpapi layer) is responsible for surfacing
+// CredentialConfigured to the operator; the Router just keeps the task
+// working.
 func (r *Router) resolve() (domain.Provider, string) {
 	snap := r.holder.Load()
 	setting, ok := snap.Tasks[r.taskKey]
-	if !ok || setting.Provider == TaskProviderOllama || r.cerebras == nil {
+	if !ok {
 		return r.ollama, setting.Model
 	}
-	return r.cerebras, setting.Model
+	switch setting.Provider {
+	case TaskProviderGateway:
+		if r.gateway != nil {
+			return r.gateway, setting.Model
+		}
+		return r.ollama, setting.Model // fall back when gateway unavailable
+	case TaskProviderCerebras:
+		if r.cerebras != nil {
+			return r.cerebras, setting.Model
+		}
+		return r.ollama, setting.Model
+	default:
+		return r.ollama, setting.Model
+	}
 }
 
 // ProviderClass identifies whether a resolved provider is local or hosted
@@ -101,9 +119,9 @@ const (
 	ProviderClassHosted ProviderClass = "hosted"
 )
 
-// hostedChecker is implemented by ollama.Provider; Cerebras is always hosted
-// when selected (resolve() only returns it when its credential is
-// configured).
+// hostedChecker is implemented by ollama.Provider; Cerebras and the gateway
+// are always hosted when selected (resolve() only returns them when their
+// configuration is present).
 type hostedChecker interface {
 	IsHosted() bool
 }
@@ -143,7 +161,7 @@ func (r *Router) CompleteJSON(ctx context.Context, prompt string, opts *domain.C
 }
 
 // Embed always uses Ollama regardless of the task's chat provider — Cerebras
-// has no embeddings endpoint (FR-006).
+// and the gateway offer no embeddings endpoint (FR-006).
 func (r *Router) Embed(ctx context.Context, text string) ([]float32, error) {
 	return r.ollama.Embed(ctx, text)
 }
