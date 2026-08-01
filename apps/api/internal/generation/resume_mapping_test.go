@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/generation/domain"
 )
 
 func loadFixtureMaster(t *testing.T) RendercvMaster {
@@ -116,18 +117,18 @@ func TestResumeRoundTrip_PreservesSectionOrder(t *testing.T) {
 	_ = ok // _order is consumed by PrepareMasterForMarshal; presence checked via orderedYAMLMap below
 
 	cv, _ := prepared["cv"].(map[string]any)
-	orderedMap, ok := cv["sections"].(orderedYAMLMap)
+	orderedMap, ok := cv["sections"].(domain.OrderedYAMLMap)
 	if !ok {
-		t.Fatalf("cv.sections is not an orderedYAMLMap after PrepareMasterForMarshal")
+		t.Fatalf("cv.sections is not a domain.OrderedYAMLMap after PrepareMasterForMarshal")
 	}
 
 	originalOrder := orderedSectionKeys(CvSections(master))
-	if len(orderedMap.keys) != len(originalOrder) {
-		t.Fatalf("section count = %d, want %d", len(orderedMap.keys), len(originalOrder))
+	if len(orderedMap.Keys) != len(originalOrder) {
+		t.Fatalf("section count = %d, want %d", len(orderedMap.Keys), len(originalOrder))
 	}
 	for i, k := range originalOrder {
-		if orderedMap.keys[i] != k {
-			t.Errorf("section order[%d] = %q, want %q", i, orderedMap.keys[i], k)
+		if orderedMap.Keys[i] != k {
+			t.Errorf("section order[%d] = %q, want %q", i, orderedMap.Keys[i], k)
 		}
 	}
 

@@ -30,14 +30,15 @@ type (
 )
 
 var (
-	ParseGroundingLevel = domain.ParseGroundingLevel
-	CvSections          = domain.CvSections
-	AsSliceOfMaps       = domain.AsSliceOfMaps
-	StringField         = domain.StringField
-	StringSliceField    = domain.StringSliceField
-	MasterFromProfile   = domain.MasterFromProfile
-	RendercvToText      = domain.RendercvToText
-	ParseRendercv       = domain.ParseRendercv
+	ParseGroundingLevel     = domain.ParseGroundingLevel
+	CvSections              = domain.CvSections
+	AsSliceOfMaps           = domain.AsSliceOfMaps
+	StringField             = domain.StringField
+	StringSliceField        = domain.StringSliceField
+	MasterFromProfile       = domain.MasterFromProfile
+	RendercvToText          = domain.RendercvToText
+	ParseRendercv           = domain.ParseRendercv
+	PrepareMasterForMarshal = domain.PrepareMasterForMarshal
 
 	// sectionOrderKey mirrors domain.SectionOrderKey for the in-package
 	// resume_mapping.go, which reads the order key ParseRendercv writes.
@@ -46,6 +47,10 @@ var (
 	// deepCloneYAML mirrors domain.DeepCloneYAML for the in-package
 	// resume_mapping.go.
 	deepCloneYAML = domain.DeepCloneYAML
+
+	// sortByDefaultSectionOrder mirrors domain.SortByDefaultSectionOrder for
+	// the in-package resume_mapping.go.
+	sortByDefaultSectionOrder = domain.SortByDefaultSectionOrder
 
 	NewService          = application.NewService
 	GetDefaultMasterID  = application.GetDefaultMasterID

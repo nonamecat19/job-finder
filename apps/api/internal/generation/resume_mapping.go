@@ -6,40 +6,21 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// orderedSectionKeys returns cv.sections keys in the order captured by
-// ParseRendercv (via sectionOrderKey), falling back to alpha-sorted order for
-// any section not covered — same fallback PrepareMasterForMarshal uses, but
-// non-destructive (does not consume/delete the order key).
+// orderedSectionKeys returns cv.sections keys in the fixed resume order
+// (see domain.SortByDefaultSectionOrder) — same canonical order
+// PrepareMasterForMarshal enforces, but non-destructive (does not
+// consume/delete the order key). Ignores any captured _order: the business
+// requirement is a resume structure that's always the same, not whatever
+// order the source master config's sections happen to be authored in.
 func orderedSectionKeys(sections map[string]any) []string {
-	orderRaw, _ := sections[sectionOrderKey].([]any)
-	order := make([]string, 0, len(orderRaw))
-	seen := map[string]bool{}
-	for _, k := range orderRaw {
-		s, _ := k.(string)
-		if s == "" || seen[s] {
-			continue
-		}
-		if _, ok := sections[s]; !ok {
-			continue
-		}
-		order = append(order, s)
-		seen[s] = true
-	}
-	rest := make([]string, 0, len(sections))
+	keys := make([]string, 0, len(sections))
 	for k := range sections {
-		if k == sectionOrderKey || seen[k] {
+		if k == sectionOrderKey {
 			continue
 		}
-		rest = append(rest, k)
+		keys = append(keys, k)
 	}
-	for i := 0; i < len(rest); i++ {
-		for j := i + 1; j < len(rest); j++ {
-			if rest[i] > rest[j] {
-				rest[i], rest[j] = rest[j], rest[i]
-			}
-		}
-	}
-	return append(order, rest...)
+	return sortByDefaultSectionOrder(keys)
 }
 
 func hasKey(m map[string]any, key string) bool {
