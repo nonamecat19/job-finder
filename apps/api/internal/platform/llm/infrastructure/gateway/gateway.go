@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -72,6 +73,7 @@ type chatRequest struct {
 }
 
 type chatResponse struct {
+	Model   string `json:"model"`
 	Choices []struct {
 		Message struct {
 			Content string `json:"content"`
@@ -79,7 +81,27 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
+// servedModel picks the resolved deployment model for FR-012 logging: the
+// x-litellm-model-name response header is authoritative on both the primary
+// and fallback paths (verified 2026-07-31 — the body's model field echoes
+// the *requested* group name on a primary-tier hit, only becoming the
+// resolved model once a fallback fires; see research.md R4). Falls back to
+// the body field, then "unknown". Never errors — an unparsable/absent field
+// is a logging gap, not a request failure.
+func servedModel(headers http.Header, body chatResponse) string {
+	if v := headers.Get("x-litellm-model-name"); v != "" {
+		return v
+	}
+	if body.Model != "" {
+		return body.Model
+	}
+	return "unknown"
+}
+
 func (g *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
+	requestedGroup := req.Model
+	start := time.Now()
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return "", err
@@ -92,24 +114,51 @@ func (g *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
 	httpReq.Header.Set("Authorization", "Bearer "+g.apiKey)
 	res, err := g.http.Do(httpReq)
 	if err != nil {
+		g.logServed(requestedGroup, "unknown", time.Since(start), "error", "")
 		return "", fmt.Errorf("%w: gateway: request failed: %s", shared.ErrProviderUnavailable, err)
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
+		g.logServed(requestedGroup, "unknown", time.Since(start), "error", "")
 		return "", fmt.Errorf("%w: gateway: read response: %s", shared.ErrProviderUnavailable, err)
 	}
+	modelID := res.Header.Get("x-litellm-model-id")
 	if res.StatusCode >= 400 {
+		g.logServed(requestedGroup, servedModel(res.Header, chatResponse{}), time.Since(start), "error", modelID)
 		return "", shared.ClassifyProviderError("gateway", res.StatusCode, data)
 	}
 	var parsed chatResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
+		g.logServed(requestedGroup, servedModel(res.Header, parsed), time.Since(start), "error", modelID)
 		return "", fmt.Errorf("%w: gateway: invalid response: %s", shared.ErrInvalidResponse, err)
 	}
 	if len(parsed.Choices) == 0 {
+		g.logServed(requestedGroup, servedModel(res.Header, parsed), time.Since(start), "error", modelID)
 		return "", fmt.Errorf("%w: gateway: no choices returned", shared.ErrInvalidResponse)
 	}
+	served := servedModel(res.Header, parsed)
+	g.logServed(requestedGroup, served, time.Since(start), "ok", modelID)
+	domain.ReportServedModel(ctx, served)
 	return parsed.Choices[0].Message.Content, nil
+}
+
+// logServed emits one structured line per gateway request (FR-012): task key,
+// requested group (the same value — the Router always sends the task key as
+// the model), served model, duration, outcome. Logging never changes error
+// classification or introduces a new failure mode.
+func (g *Provider) logServed(requestedGroup, served string, dur time.Duration, outcome, modelID string) {
+	attrs := []any{
+		"task", requestedGroup,
+		"requested_group", requestedGroup,
+		"served_model", served,
+		"duration_ms", dur.Milliseconds(),
+		"outcome", outcome,
+	}
+	if modelID != "" {
+		attrs = append(attrs, "litellm_model_id", modelID)
+	}
+	slog.Info("gateway request", attrs...)
 }
 
 func (g *Provider) Complete(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {

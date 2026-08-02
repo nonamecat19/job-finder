@@ -106,30 +106,3 @@ func TestRetryAfterParsing(t *testing.T) {
 		})
 	}
 }
-
-func TestBreakerHonoursLongerCooldown(t *testing.T) {
-	var b RateLimitBreaker
-	b.TripFor(time.Hour) // clamped to MaxRateLimitCooldown
-	if !b.Tripped() {
-		t.Fatal("breaker should be tripped")
-	}
-	first := b.until.Load()
-	b.TripFor(time.Second) // a shorter reset must not shorten the hold
-	if b.until.Load() != first {
-		t.Error("a shorter cooldown must not shorten an active longer one")
-	}
-	if time.Until(time.Unix(0, first)) > MaxRateLimitCooldown {
-		t.Error("cooldown should be clamped to MaxRateLimitCooldown")
-	}
-}
-
-func TestBreakerZeroDurationFallsBackToDefault(t *testing.T) {
-	var b RateLimitBreaker
-	b.TripFor(0)
-	if !b.Tripped() {
-		t.Fatal("breaker should be tripped with the default cooldown")
-	}
-	if d := time.Until(time.Unix(0, b.until.Load())); d > RateLimitCooldown || d < RateLimitCooldown-time.Second {
-		t.Errorf("cooldown = %v, want ~%v", d, RateLimitCooldown)
-	}
-}

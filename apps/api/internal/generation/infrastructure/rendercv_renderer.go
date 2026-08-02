@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ledongthuc/pdf"
 	"gopkg.in/yaml.v3"
 
 	"github.com/job-finder/api/internal/generation/domain"
@@ -50,7 +51,11 @@ func (r *RenderCvRenderer) Render(ctx context.Context, master domain.RendercvMas
 	yamlPath = filepath.Join(outDir, baseName+".yaml")
 	pdfPath = filepath.Join(outDir, baseName+".pdf")
 
-	data, err := yaml.Marshal(map[string]any(master))
+	ordered, err := domain.PrepareMasterForMarshal(master)
+	if err != nil {
+		return "", "", fmt.Errorf("rendercv: prepare sections order: %w", err)
+	}
+	data, err := yaml.Marshal(map[string]any(ordered))
 	if err != nil {
 		return "", "", err
 	}
@@ -79,4 +84,14 @@ func (r *RenderCvRenderer) Render(ctx context.Context, master domain.RendercvMas
 		}
 	}
 	return yamlPath, pdfPath, nil
+}
+
+// CountPages returns the number of pages in a PDF file.
+func CountPages(pdfPath string) (int, error) {
+	f, r, err := pdf.Open(pdfPath)
+	if err != nil {
+		return 0, fmt.Errorf("count pages: open: %w", err)
+	}
+	defer f.Close()
+	return r.NumPage(), nil
 }

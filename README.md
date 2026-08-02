@@ -35,30 +35,22 @@ Chat models are per-task: `LLM_MODEL_MATCH` (fit scoring), `LLM_MODEL_GENERATION
 `LLM_MODEL` as fallback; embeddings use `EMBED_MODEL`.
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 
-Ollama is the default, local-first provider. Two optional remote chat providers can be enabled
-alongside it:
+Ollama is the default, local-first provider and always terminates every routing chain. Optionally,
+set `GATEWAY_URL=http://litellm:4000` and `LITELLM_MASTER_KEY` to route chat tasks (matching,
+generation, rephrase, ghost-job, salary/recruiter/outreach) through the bundled LiteLLM proxy
+instead: each task key resolves to an ordered free-tier-first failover chain (Cerebras → Groq →
+Cohere → OpenRouter → Ollama) declared in `gateway/config.yaml`. Provider keys
+(`CEREBRAS_API_KEY`, `GROQ_API_KEY`, `COHERE_API_KEY`, `OPENROUTER_API_KEY`) live in the `litellm`
+compose service's environment only — the Go backend never reads them and never learns which
+upstream served a request beyond a `served_model` log line. **Changing which model serves a task
+is a `gateway/config.yaml` edit followed by `docker compose restart litellm` — no dashboard, no
+rebuild.** With `GATEWAY_URL` unset, every task talks to Ollama directly. Embeddings always stay on
+Ollama regardless of gateway configuration (no remote provider offers an embeddings API).
 
-- **Cerebras** — set `CEREBRAS_API_KEY` (get one at cloud.cerebras.ai); `CEREBRAS_BASE_URL`
-  defaults to `https://api.cerebras.ai/v1`.
-- **OpenRouter** — set `OPENROUTER_API_KEY` (get one at openrouter.ai/keys); `OPENROUTER_BASE_URL`
-  defaults to `https://openrouter.ai/api/v1`. `OPENROUTER_SITE_URL` and `OPENROUTER_APP_NAME` are
-  optional attribution headers for OpenRouter's leaderboards.
-
-With a provider's key unset, that provider is unavailable and tasks assigned to it run on Ollama
-regardless of their saved setting. Once a key is set, open the dashboard's **Settings → AI models**
-page to assign each chat task (matching, generation, rephrase, ghost-job) to Ollama, Cerebras or
-OpenRouter, or use the "Switch all to …" buttons to move every task at once — no restart needed,
-the choice is saved and applied immediately. Model lists are per-provider, so switching a task's
-provider resets its model to that provider's default. Embeddings always stay on Ollama (neither
-remote provider has an embeddings API), regardless of which provider chat tasks use.
-
-Rate limits and provider errors are classified rather than blindly retried. A `429` trips a
-per-provider circuit breaker for as long as the provider's `Retry-After` / `X-RateLimit-Reset`
-header asks (falling back to 60s, capped at 15m), and queued tasks are *cancelled* instead of
-burning requests against the exhausted quota — the Status page offers "retry all" once the limit
-resets. Terminal problems (rejected key, out of credits, unknown model) fail the task immediately
-with the reason on its activity record instead of retrying forever; transient 5xx/network failures
-stay retryable.
+Rate limits and provider errors are classified rather than blindly retried. Terminal problems
+(rejected key, out of credits, unknown model) fail the task immediately with the reason on its
+activity record instead of retrying forever; transient 5xx/network failures stay retryable. When
+the gateway chain is exhausted the failure surfaces the same way a direct-Ollama failure would.
 
 ## Dev workflow (api/dashboard on host)
 
@@ -119,6 +111,34 @@ mismatched version rather than producing a misleading diff.
 4. **Job detail**: generate tailored resume + cover letter (grounding post-check rejects any
    invented employer/date/degree), edit the letter, download PDFs, mark applied.
 5. **Tracker**: drag cards through shortlisted → applied → interview → offer.
+
+### Resume shape settings
+
+**Settings → Resume shape** controls the shape of every resume generated after you save
+(a generation already running finishes with the settings it started with). `0` means
+*unlimited / no limit*. **Reset to defaults** restores the table below.
+
+| Setting | Default | Range | What it does |
+|---------|---------|-------|--------------|
+| `summaryLines` | 4 | 1–12 | Approximate summary length, in sentences |
+| `skillsEnabled` | true | — | `false` removes the skills section entirely |
+| `skillsMaxGroups` | 0 | 0–20 | Skill groups to keep; `0` keeps all |
+| `experienceBulletsMin` | 8 | 1–20 | Target floor of bullets per job |
+| `experienceBulletsMax` | 10 | 1–20 | Hard cap of bullets per job |
+| `targetPages` | 2 | 1–3 | Page count the render loop aims for |
+| `projectsEnabled` | true | — | `false` removes the projects section entirely |
+| `projectsMin` | 0 | 0–20 | Target floor of projects; `0` = no minimum |
+| `projectsMax` | 0 | 0–20 | Hard cap on projects; `0` includes all |
+| `projectBulletsMax` | 0 | 0–10 | Hard cap of bullets per project; `0` keeps all |
+
+Minima are targets, never padding: if your master profile has fewer bullets or projects
+than the floor, the resume keeps what exists and the generation's activity trail records
+the shortfall — nothing is invented. Maxima are enforced deterministically after the
+model responds, so they always hold. When the page target and the section lengths
+conflict, the page target wins and the run records that it did.
+
+The defaults reproduce the pipeline's pre-settings behaviour exactly, so leaving this
+card alone changes nothing.
 
 ## Adding a job source
 

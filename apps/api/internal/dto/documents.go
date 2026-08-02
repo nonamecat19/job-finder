@@ -14,6 +14,13 @@ type GeneratedDocumentDto struct {
 	CreatedAt string  `json:"createdAt"`
 }
 
+type DocumentStatusDto struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Version   int    `json:"version"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type ApplicationDto struct {
 	ID        string             `json:"id"`
 	JobID     string             `json:"jobId"`

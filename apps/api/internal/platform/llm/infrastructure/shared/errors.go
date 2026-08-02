@@ -1,7 +1,8 @@
-// Package shared holds the error taxonomy and rate-limit breaker shared by
-// every remote chat provider adapter (cerebras, gateway). Extracted from
-// infrastructure/cerebras so a second OpenAI-compatible provider could reuse
-// the same classification without duplicating it (029-litellm-proxy-gateway).
+// Package shared holds the error taxonomy shared by every remote chat
+// provider adapter (the gateway, and formerly the direct Cerebras adapter).
+// Extracted from infrastructure/cerebras so a second OpenAI-compatible
+// provider could reuse the same classification without duplicating it
+// (029-litellm-proxy-gateway).
 package shared
 
 import (
@@ -10,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"sync/atomic"
 	"time"
 )
 
@@ -114,42 +114,6 @@ const RateLimitCooldown = 60 * time.Second
 // MaxRateLimitCooldown caps whatever a provider asks for, so one hostile or
 // mistaken header cannot park a task queue for hours.
 const MaxRateLimitCooldown = 15 * time.Minute
-
-// RateLimitBreaker is a tiny per-provider circuit breaker: the first 429
-// trips it, and every other in-flight/queued task sharing that provider (one
-// instance per process, shared by every task Router) immediately fails fast
-// with ErrRateLimited instead of also burning a request against the same
-// exhausted quota.
-type RateLimitBreaker struct {
-	until atomic.Int64 // unix nano; 0 or in the past = not tripped
-}
-
-// TripFor holds the breaker for d, clamped to (0, MaxRateLimitCooldown].
-// A later reset never shortens an earlier, longer one.
-func (b *RateLimitBreaker) TripFor(d time.Duration) {
-	if d <= 0 {
-		d = RateLimitCooldown
-	}
-	if d > MaxRateLimitCooldown {
-		d = MaxRateLimitCooldown
-	}
-	until := time.Now().Add(d).UnixNano()
-	for {
-		cur := b.until.Load()
-		if cur >= until {
-			return
-		}
-		if b.until.CompareAndSwap(cur, until) {
-			return
-		}
-	}
-}
-
-// Tripped reports whether the breaker is currently held open.
-func (b *RateLimitBreaker) Tripped() bool {
-	u := b.until.Load()
-	return u != 0 && time.Now().UnixNano() < u
-}
 
 // RetryAfter reads how long a provider wants us to wait before the next
 // request, from (in order) RFC 7231's Retry-After — both the delta-seconds

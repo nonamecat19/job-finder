@@ -196,6 +196,13 @@ export interface GeneratedDocumentDto {
   createdAt: string;
 }
 
+export interface DocumentStatusDto {
+  id: string;
+  type: DocumentType;
+  version: number;
+  createdAt: string;
+}
+
 export interface RendercvSummaryExperience {
   company: string;
   highlightCount: number;
@@ -816,29 +823,6 @@ export interface OutreachToneOptionDto {
   default: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Cerebras free-tier model toggle (001-cerebras-model-toggle)
-// ---------------------------------------------------------------------------
-
-/** One chat task's assigned provider/model, served by GET/PUT
- * /v1/settings/llm. taskKey is "match" | "generation" | "rephrase" | "ghost"
- * | "default"; provider is "ollama" | "cerebras" | "gateway". model is ""
- * when the provider's own default model applies, or the taskKey when provider
- * is "gateway" (the LiteLLM proxy resolves it to the upstream model). */
-export interface LlmTaskSettingDto {
-  taskKey: string;
-  provider: string;
-  model: string;
-}
-
-/** GET/PUT /v1/settings/llm response. credentialConfigured reflects whether
- * CEREBRAS_API_KEY was set at process start — never the key itself,
- * which never leaves the server. */
-export interface LlmSettingsResponseDto {
-  credentialConfigured: boolean;
-  tasks: LlmTaskSettingDto[];
-}
-
 /** One row of the GET /v1/settings/ai-features response / PUT
  * /v1/settings/ai-features/{feature} body: whether an AI feature (resume
  * generation, cover letter generation, salary inference) is auto-enqueued
@@ -853,17 +837,3 @@ export interface AiFeatureSettingDto {
 
 export const AI_FEATURE_KEYS = ['resume', 'cover_letter', 'salary_infer'] as const;
 export type AiFeatureKey = (typeof AI_FEATURE_KEYS)[number];
-
-/** One curated Cerebras free-tier model offered in the Settings model
- * selector, served by GET /v1/settings/llm/models. */
-export interface CerebrasModelDto {
-  id: string;
-  label: string;
-  isDefault: boolean;
-}
-
-/** GET /v1/settings/llm/models response: the curated model list per remote
- * provider. */
-export interface LlmModelsResponseDto {
-  cerebras: CerebrasModelDto[];
-}

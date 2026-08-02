@@ -72,15 +72,27 @@ type TailoredExperience struct {
 	Highlights []string `json:"highlights" jsonschema_description:"selected, reordered, rephrased highlights (top 3-5 most relevant)"`
 }
 
+// TailoredProject is the LLM-facing projection of a master project: its name
+// is a lookup key only (copied exactly from the master, never used as content)
+// and highlights must come from that project's own master bullets. url,
+// start_date, end_date and the stored name always come from the master clone,
+// so the model structurally cannot corrupt a project's identity.
+type TailoredProject struct {
+	Name       string   `json:"name" jsonschema_description:"project name copied EXACTLY from the master"`
+	Highlights []string `json:"highlights" jsonschema_description:"selected, rephrased highlights drawn only from THIS project's own master bullets"`
+}
+
 // TailoredSections is the output of Step 2 (content selection). It carries
-// only the three content fields the LLM may change — summary, skill details
-// and experience highlights. Feature 028 removed SectionsToDrop,
-// ExperienceOrder and TailoredExperience.Drop: the AI may not add, remove,
-// rename or reorder resume blocks, nor reorder or drop job entries.
+// only the content fields the LLM may change — summary, skill details,
+// experience highlights and (only when a project limit is configured) project
+// highlights. Feature 028 removed SectionsToDrop, ExperienceOrder and
+// TailoredExperience.Drop: the AI may not add, remove, rename or reorder
+// resume blocks, nor reorder or drop job entries.
 type TailoredSections struct {
 	Summary    string               `json:"summary" jsonschema_description:"2-3 sentence professional summary targeting the vacancy"`
 	Skills     []TailoredSkillGroup `json:"skills" jsonschema_description:"one entry per master skill group, same indexes, vacancy-required skills first"`
 	Experience []TailoredExperience `json:"experience" jsonschema_description:"one entry per master experience entry, keyed by company"`
+	Projects   []TailoredProject    `json:"projects" jsonschema_description:"the most vacancy-relevant master projects, keyed by name; empty unless a project limit is configured"`
 }
 
 var LevelRules = map[GroundingLevel]string{
@@ -156,7 +168,6 @@ func SectionKeys(sections map[string]any) []string {
 	}
 	return keys
 }
-
 
 // tokens splits a comma/slash-separated details string into skill tokens.
 func tokens(details string) []string {
@@ -280,15 +291,36 @@ func MergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 	}
 	for _, pe := range payload.Experience {
 		if target, ok := byCompany[norm(pe.Company)]; ok {
-			highlights := make([]any, 0, len(pe.Highlights))
-			for _, h := range pe.Highlights {
-				if trimmed := strings.TrimSpace(h); trimmed != "" {
-					highlights = append(highlights, trimmed)
-				}
-			}
-			target["highlights"] = highlights
+			target["highlights"] = cleanHighlights(pe.Highlights)
+		}
+	}
+
+	// 4. Replace project highlights only, the same way. name/url/start_date/
+	// end_date pass through from the clone, so a model that returns a wrong
+	// link or date cannot affect the document; an unknown project name simply
+	// finds no target here and is reported by the grounding check. An empty
+	// Projects payload — the default path — leaves the master's projects
+	// exactly as authored.
+	byProject := map[string]map[string]any{}
+	for _, p := range AsSliceOfMaps(sections["projects"]) {
+		byProject[norm(StringField(p, "name"))] = p
+	}
+	for _, pp := range payload.Projects {
+		if target, ok := byProject[norm(pp.Name)]; ok {
+			target["highlights"] = cleanHighlights(pp.Highlights)
 		}
 	}
 
 	return merged, nil
+}
+
+// cleanHighlights trims each bullet and drops the empty ones.
+func cleanHighlights(in []string) []any {
+	out := make([]any, 0, len(in))
+	for _, h := range in {
+		if trimmed := strings.TrimSpace(h); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }

@@ -1,32 +1,27 @@
 package dto
 
-type LlmTaskSettingDto struct {
-	TaskKey  string `json:"taskKey"`
-	Provider string `json:"provider"`
-	Model    string `json:"model"`
-}
-
-type LlmSettingsResponseDto struct {
-	CredentialConfigured bool                `json:"credentialConfigured"`
-	Tasks                []LlmTaskSettingDto `json:"tasks"`
-}
-
-type UpdateLlmSettingsRequestDto struct {
-	Tasks []LlmTaskSettingDto `json:"tasks"`
-}
-
 type AiFeatureSettingDto struct {
 	Feature   string `json:"feature"`
 	Enabled   bool   `json:"enabled"`
 	Threshold int    `json:"threshold"`
 }
 
-type CerebrasModelDto struct {
-	ID        string `json:"id"`
-	Label     string `json:"label"`
-	IsDefault bool   `json:"isDefault"`
-}
-
-type LlmModelsResponseDto struct {
-	Cerebras []CerebrasModelDto `json:"cerebras"`
+// ResumeShapeConfigDto is the wire form of the resume generation shape
+// settings — a field-for-field mirror of generation/domain.ShapeConfig. It is
+// both the request and the response body of /v1/settings/resume-shape; PUT
+// replaces the whole config, so every field must be present.
+//
+// 0 means "unlimited / no limit" for skillsMaxGroups, projectsMin, projectsMax
+// and projectBulletsMax.
+type ResumeShapeConfigDto struct {
+	SummaryLines         int  `json:"summaryLines"`
+	SkillsEnabled        bool `json:"skillsEnabled"`
+	SkillsMaxGroups      int  `json:"skillsMaxGroups"`
+	ExperienceBulletsMin int  `json:"experienceBulletsMin"`
+	ExperienceBulletsMax int  `json:"experienceBulletsMax"`
+	TargetPages          int  `json:"targetPages"`
+	ProjectsEnabled      bool `json:"projectsEnabled"`
+	ProjectsMin          int  `json:"projectsMin"`
+	ProjectsMax          int  `json:"projectsMax"`
+	ProjectBulletsMax    int  `json:"projectBulletsMax"`
 }

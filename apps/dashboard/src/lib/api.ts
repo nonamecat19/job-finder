@@ -4,6 +4,7 @@ import type {
   BoardCandidateDto,
   CompanyIntelDto,
   ContactImportResultDto,
+  DocumentStatusDto,
   DocumentType,
   EmployerBoardDto,
   FitGapAssessment,
@@ -18,10 +19,7 @@ import type {
   JobSignalDto,
   JobSourceDto,
   KeywordDiffResponse,
-  LlmModelsResponseDto,
-  LlmSettingsResponseDto,
   AiFeatureSettingDto,
-  LlmTaskSettingDto,
   OutreachDraftDto,
   OutreachToneOptionDto,
   PostAgeResponseDto,
@@ -29,6 +27,7 @@ import type {
   QueueBacklogResponse,
   Resume,
   ResumeDto,
+  ResumeShapeConfigDto,
   ReferralContactDto,
   ReferralPathDto,
   SavedSearchDto,
@@ -95,6 +94,7 @@ export const api = {
     generate: (id: string, type: DocumentType) =>
       request(`/jobs/${id}/generate`, { method: 'POST', body: JSON.stringify({ type }) }),
     documents: (id: string) => request<GeneratedDocumentDto[]>(`/jobs/${id}/documents`),
+    documentStatuses: (id: string) => request<DocumentStatusDto[]>(`/jobs/${id}/documents/status`),
     keywordDiff: (id: string) => request<KeywordDiffResponse>(`/jobs/${id}/keyword-diff`),
     interviewPrep: (id: string) => request<InterviewPrepPack>(`/jobs/${id}/interview-prep`),
     ghostScore: (id: string) => request<JobSignalDto>(`/jobs/${id}/ghost-score`, { method: 'POST' }),
@@ -251,23 +251,22 @@ export const api = {
     reject: (id: string) => request(`/roster/candidates/${id}/reject`, { method: 'POST' }),
     discover: () => request<{ newCandidates: number }>('/roster/discover', { method: 'POST' }),
   },
-  // Per-task chat provider/model assignment across Ollama and Cerebras.
-  // The remote API keys themselves are never part of this API —
-  // they're env-only (CEREBRAS_API_KEY) and never leave
-  // the server.
   settings: {
-    getLlm: () => request<LlmSettingsResponseDto>('/v1/settings/llm'),
-    putLlm: (tasks: LlmTaskSettingDto[]) =>
-      request<LlmSettingsResponseDto>('/v1/settings/llm', {
-        method: 'PUT',
-        body: JSON.stringify({ tasks }),
-      }),
-    llmModels: () => request<LlmModelsResponseDto>('/v1/settings/llm/models'),
     getAiFeatures: () => request<AiFeatureSettingDto[]>('/v1/settings/ai-features'),
     putAiFeature: (feature: string, body: Pick<AiFeatureSettingDto, 'enabled' | 'threshold'>) =>
       request<AiFeatureSettingDto>(`/v1/settings/ai-features/${feature}`, {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
+    // Resume shape: PUT replaces the whole config (validation is
+    // all-or-nothing), DELETE means "drop my overrides" and returns defaults.
+    getResumeShape: () => request<ResumeShapeConfigDto>('/v1/settings/resume-shape'),
+    putResumeShape: (body: ResumeShapeConfigDto) =>
+      request<ResumeShapeConfigDto>('/v1/settings/resume-shape', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    resetResumeShape: () =>
+      request<ResumeShapeConfigDto>('/v1/settings/resume-shape', { method: 'DELETE' }),
   },
 };
