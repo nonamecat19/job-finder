@@ -835,5 +835,22 @@ export interface AiFeatureSettingDto {
   threshold: number;
 }
 
+/** The GET/PUT/DELETE /v1/settings/resume-shape payload: the shape of every
+ * generated resume. `0` means "unlimited / no limit" for skillsMaxGroups,
+ * projectsMin, projectsMax and projectBulletsMax. PUT replaces the whole
+ * config — validation is all-or-nothing, so every field must be present. */
+export interface ResumeShapeConfigDto {
+  summaryLines: number;
+  skillsEnabled: boolean;
+  skillsMaxGroups: number;
+  experienceBulletsMin: number;
+  experienceBulletsMax: number;
+  targetPages: number;
+  projectsEnabled: boolean;
+  projectsMin: number;
+  projectsMax: number;
+  projectBulletsMax: number;
+}
+
 export const AI_FEATURE_KEYS = ['resume', 'cover_letter', 'salary_infer'] as const;
 export type AiFeatureKey = (typeof AI_FEATURE_KEYS)[number];

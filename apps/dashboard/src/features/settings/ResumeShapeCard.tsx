@@ -14,7 +14,7 @@ import {
 } from '../../components/ui';
 import { useResetResumeShape, useResumeShape, useUpdateResumeShape } from './hooks';
 
-type NumericKey = Exclude<keyof ResumeShapeConfigDto, 'skillsEnabled' | 'projectsEnabled'>;
+type NumericKey = Exclude<keyof ResumeShapeConfigDto & string, 'skillsEnabled' | 'projectsEnabled'>;
 
 // One row per configurable value, each carrying its allowed range and what it
 // does — this card is the single place the whole resume shape is visible.
