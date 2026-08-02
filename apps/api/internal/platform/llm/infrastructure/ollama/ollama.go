@@ -140,6 +140,7 @@ func (o *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return "", fmt.Errorf("ollama: invalid chat response: %w", err)
 	}
+	domain.ReportServedModel(ctx, req.Model)
 	return parsed.Message.Content, nil
 }
 

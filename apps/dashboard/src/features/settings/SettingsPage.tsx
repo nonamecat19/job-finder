@@ -4,7 +4,7 @@ import { DashboardGrid, Tile } from '../../components/layout';
 import { Button } from '../../components/ui';
 import { useClearJobs } from '../feed/hooks';
 import AiFeatureSettingsCard from './AiFeatureSettingsCard';
-import LlmSettingsCard from './LlmSettingsCard';
+import ResumeShapeCard from './ResumeShapeCard';
 
 export default function SettingsPage() {
   const clear = useClearJobs();
@@ -22,11 +22,11 @@ export default function SettingsPage() {
         description="Manage account-level preferences."
       />
       <DashboardGrid>
-        <Tile span="standard" title="AI models">
-          <LlmSettingsCard />
-        </Tile>
         <Tile span="standard" title="AI features">
           <AiFeatureSettingsCard />
+        </Tile>
+        <Tile span="standard" title="Resume shape">
+          <ResumeShapeCard />
         </Tile>
         <Tile span="standard" title="Danger zone">
           <p className="text-sm text-muted">

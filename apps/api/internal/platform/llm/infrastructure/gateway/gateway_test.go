@@ -191,6 +191,56 @@ func TestGatewayConnectionRefused(t *testing.T) {
 	}
 }
 
+// --- Served-model logging (030-litellm-model-routing, contracts/task-router.md §C4) ---
+
+func TestServedModelPrefersHeaderOverBody(t *testing.T) {
+	h := http.Header{}
+	h.Set("x-litellm-model-name", "cerebras/gpt-oss-120b")
+	got := servedModel(h, chatResponse{Model: "match"})
+	if got != "cerebras/gpt-oss-120b" {
+		t.Errorf("servedModel() = %q, want header value", got)
+	}
+}
+
+func TestServedModelFallsBackToBodyWhenHeaderAbsent(t *testing.T) {
+	got := servedModel(http.Header{}, chatResponse{Model: "llama-3.3-70b-versatile"})
+	if got != "llama-3.3-70b-versatile" {
+		t.Errorf("servedModel() = %q, want body model field", got)
+	}
+}
+
+func TestServedModelUnknownWhenBothAbsent(t *testing.T) {
+	got := servedModel(http.Header{}, chatResponse{})
+	if got != "unknown" {
+		t.Errorf("servedModel() = %q, want unknown", got)
+	}
+}
+
+func TestGatewayCompleteSucceedsWhenModelFieldMissing(t *testing.T) {
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		// No x-litellm-model-name header and no body "model" field.
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hi"}}]}`))
+	})
+	out, err := p.Complete(context.Background(), "hi", nil)
+	if err != nil {
+		t.Fatalf("Complete: %v (a missing served-model field must never be an error)", err)
+	}
+	if out != "hi" {
+		t.Errorf("Complete() = %q, want hi", out)
+	}
+}
+
+func TestGatewayErrorClassificationUnaffectedByServedModelLogging(t *testing.T) {
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"quota exceeded"}}`))
+	})
+	_, err := p.Complete(context.Background(), "hi", nil)
+	if !errors.Is(err, shared.ErrRateLimited) {
+		t.Errorf("error = %v, want ErrRateLimited (logging must not change classification)", err)
+	}
+}
+
 func TestGatewayEmbedDelegatesToOllama(t *testing.T) {
 	var embedHit bool
 	ollamaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

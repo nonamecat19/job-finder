@@ -247,13 +247,6 @@ type KeywordDiff struct {
 	CreatedAt        pgtype.Timestamp `json:"createdAt"`
 }
 
-type LlmTaskSetting struct {
-	TaskKey   string           `json:"taskKey"`
-	Provider  string           `json:"provider"`
-	Model     string           `json:"model"`
-	UpdatedAt pgtype.Timestamp `json:"updatedAt"`
-}
-
 type MatchResult struct {
 	ID            pgtype.UUID      `json:"id"`
 	JobId         pgtype.UUID      `json:"jobId"`
@@ -289,6 +282,21 @@ type Profile struct {
 	CreatedAt      pgtype.Timestamp `json:"createdAt"`
 	RendercvConfig []byte           `json:"rendercvConfig"`
 	RendercvYaml   *string          `json:"rendercvYaml"`
+}
+
+type ResumeShapeSetting struct {
+	ID                   string           `json:"id"`
+	SummaryLines         int32            `json:"summaryLines"`
+	SkillsEnabled        bool             `json:"skillsEnabled"`
+	SkillsMaxGroups      int32            `json:"skillsMaxGroups"`
+	ExperienceBulletsMin int32            `json:"experienceBulletsMin"`
+	ExperienceBulletsMax int32            `json:"experienceBulletsMax"`
+	TargetPages          int32            `json:"targetPages"`
+	ProjectsEnabled      bool             `json:"projectsEnabled"`
+	ProjectsMin          int32            `json:"projectsMin"`
+	ProjectsMax          int32            `json:"projectsMax"`
+	ProjectBulletsMax    int32            `json:"projectBulletsMax"`
+	UpdatedAt            pgtype.Timestamp `json:"updatedAt"`
 }
 
 type SalaryCache struct {

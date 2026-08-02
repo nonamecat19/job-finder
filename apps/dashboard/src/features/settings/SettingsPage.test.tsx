@@ -8,22 +8,33 @@ vi.mock('../../lib/api', async (importOriginal) => {
     ...actual,
     api: {
       settings: {
-        getLlm: vi
-          .fn()
-          .mockResolvedValue({ credentialConfigured: false, tasks: [] }),
-        putLlm: vi.fn(),
-        llmModels: vi.fn().mockResolvedValue({ cerebras: [] }),
         getAiFeatures: vi.fn().mockResolvedValue([]),
+        getResumeShape: vi.fn().mockResolvedValue({
+          summaryLines: 4,
+          skillsEnabled: true,
+          skillsMaxGroups: 0,
+          experienceBulletsMin: 8,
+          experienceBulletsMax: 10,
+          targetPages: 2,
+          projectsEnabled: true,
+          projectsMin: 0,
+          projectsMax: 0,
+          projectBulletsMax: 0,
+        }),
       },
     },
   }
 })
 
 describe('SettingsPage', () => {
-  it('renders the settings page', async () => {
+  it('renders the settings page without the AI models tile', async () => {
     renderWithProviders(<SettingsPage />)
     await waitFor(() => {
       expect(screen.getByText('Settings')).toBeInTheDocument()
     })
+    expect(screen.queryByText('AI models')).not.toBeInTheDocument()
+    expect(screen.getByText('AI features')).toBeInTheDocument()
+    expect(screen.getByText('Resume shape')).toBeInTheDocument()
+    expect(screen.getByText('Danger zone')).toBeInTheDocument()
   })
 })

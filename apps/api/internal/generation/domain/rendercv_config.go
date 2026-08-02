@@ -44,6 +44,30 @@ func ParseRendercv(yamlText string) (RendercvMaster, error) {
 	return RendercvMaster(m), nil
 }
 
+// RemoveSection deletes a section from cv.sections and drops its entry from
+// the synthetic _order list, so no stale order entry names a section that no
+// longer exists. It lives beside the code that builds the order, because that
+// is where the invariant is owned.
+func RemoveSection(sections map[string]any, key string) {
+	if sections == nil {
+		return
+	}
+	delete(sections, key)
+
+	order, ok := sections[SectionOrderKey].([]any)
+	if !ok {
+		return
+	}
+	filtered := make([]any, 0, len(order))
+	for _, entry := range order {
+		if s, ok := entry.(string); ok && s == key {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	sections[SectionOrderKey] = filtered
+}
+
 // sectionOrderFromYAML walks the raw YAML (before it's flattened into an
 // unordered map[string]any) to recover the original cv.sections key order,
 // which rendercv uses to decide the order sections are rendered in.

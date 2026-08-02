@@ -32,12 +32,6 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LinkedInScrapeEnabled {
 		t.Error("LinkedInScrapeEnabled should default false")
 	}
-	if cfg.CerebrasAPIKey != "" {
-		t.Errorf("CerebrasAPIKey should default empty, got %q", cfg.CerebrasAPIKey)
-	}
-	if cfg.CerebrasBaseURL != "https://api.cerebras.ai/v1" {
-		t.Errorf("CerebrasBaseURL default = %q, want https://api.cerebras.ai/v1", cfg.CerebrasBaseURL)
-	}
 	if cfg.GatewayURL != "" {
 		t.Errorf("GatewayURL should default empty, got %q", cfg.GatewayURL)
 	}
@@ -62,25 +56,6 @@ func TestLoadGatewayOverride(t *testing.T) {
 	}
 	if cfg.LiteLLMMasterKey != "sk-test" {
 		t.Errorf("LiteLLMMasterKey = %q, want sk-test", cfg.LiteLLMMasterKey)
-	}
-}
-
-func TestLoadCerebrasAPIKeyOverride(t *testing.T) {
-	if err := unsetForTest(t); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("CEREBRAS_API_KEY", "csk-test")
-	t.Setenv("CEREBRAS_BASE_URL", "http://localhost:9999/v1")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.CerebrasAPIKey != "csk-test" {
-		t.Errorf("CerebrasAPIKey = %q, want csk-test", cfg.CerebrasAPIKey)
-	}
-	if cfg.CerebrasBaseURL != "http://localhost:9999/v1" {
-		t.Errorf("CerebrasBaseURL = %q, want http://localhost:9999/v1", cfg.CerebrasBaseURL)
 	}
 }
 
@@ -145,7 +120,6 @@ func unsetForTest(t *testing.T) error {
 		"MATCH_SIMILARITY_THRESHOLD", "ADZUNA_COUNTRY", "DJINNI_DETAIL_DELAY_MS",
 		"WORKUA_DETAIL_DELAY_MS", "DOCUMENTS_DIR",
 		"RESUME_GROUNDING_LEVEL", "RENDERCV_BIN", "LINKEDIN_SCRAPE_ENABLED",
-		"CEREBRAS_BASE_URL",
 	}, optionalKeys...)
 	for _, k := range all {
 		t.Setenv(k, "")

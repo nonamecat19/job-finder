@@ -39,21 +39,14 @@ type Config struct {
 	// falls back to LLMModel via ModelOr.
 	LLMModelGhost string `mapstructure:"LLM_MODEL_GHOST"`
 
-	// Cerebras (001-cerebras-model-toggle): an optional second chat provider,
-	// selectable per task from dashboard Settings. CerebrasAPIKey is a secret
-	// with no default; when empty, Cerebras is unavailable and every task
-	// resolves to Ollama regardless of its persisted setting. CerebrasBaseURL
-	// defaults to the public Cerebras API. Cerebras has no embeddings endpoint,
-	// so EmbedURL/EmbedModel above are unaffected by this provider.
-	CerebrasAPIKey  string `mapstructure:"CEREBRAS_API_KEY"`
-	CerebrasBaseURL string `mapstructure:"CEREBRAS_BASE_URL"`
-
-	// Gateway (029-litellm-proxy-gateway): an optional LiteLLM proxy that
-	// presents one OpenAI-compatible endpoint and routes each task key to a
-	// configured provider+model. GatewayURL is the proxy root (empty = gateway
-	// unavailable and every gateway task falls back to Ollama). LiteLLMMasterKey
-	// authenticates the backend to the proxy; it must be set whenever
-	// GatewayURL is.
+	// Gateway (030-litellm-model-routing): an optional LiteLLM proxy that
+	// presents one OpenAI-compatible endpoint and routes each task key through
+	// an ordered free-tier-first failover chain (gateway/config.yaml).
+	// GatewayURL is the proxy root (empty = gateway unavailable and every task
+	// talks to Ollama directly). LiteLLMMasterKey authenticates the backend to
+	// the proxy; it must be set whenever GatewayURL is. Provider credentials
+	// (Cerebras/Groq/Cohere/OpenRouter) are consumed by the litellm container
+	// only — the Go backend never reads them.
 	GatewayURL       string `mapstructure:"GATEWAY_URL"`
 	LiteLLMMasterKey string `mapstructure:"LITELLM_MASTER_KEY"`
 

@@ -457,3 +457,120 @@ func TestRendercvToText_ExtractsExperienceHighlights(t *testing.T) {
 		t.Fatalf("RendercvToText missing expected elements. Got:\n%s", text)
 	}
 }
+
+// projectMaster builds a master whose projects carry identity fields (url,
+// dates) alongside their bullets, so a merge can be checked for corrupting
+// them.
+func projectMaster() RendercvMaster {
+	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"summary": []any{"Old summary."},
+		"projects": []any{
+			map[string]any{
+				"name":       "Orbit",
+				"url":        "https://example.com/orbit",
+				"start_date": "2021-01",
+				"end_date":   "2021-09",
+				"highlights": []any{"Built the scheduler", "Cut latency"},
+			},
+			map[string]any{
+				"name":       "Beacon",
+				"url":        "https://example.com/beacon",
+				"start_date": "2022-03",
+				"end_date":   "present",
+				"highlights": []any{"Shipped alerting"},
+			},
+		},
+	}}}
+}
+
+func projectEntry(t *testing.T, m RendercvMaster, name string) map[string]any {
+	t.Helper()
+	for _, p := range AsSliceOfMaps(CvSections(m)["projects"]) {
+		if StringField(p, "name") == name {
+			return p
+		}
+	}
+	t.Fatalf("no project named %q", name)
+	return nil
+}
+
+func TestMergeTailoredReplacesProjectHighlightsByName(t *testing.T) {
+	merged, err := MergeTailored(projectMaster(), TailoredSections{
+		Projects: []TailoredProject{{Name: "Orbit", Highlights: []string{"Rewrote the scheduler in Go"}}},
+	})
+	if err != nil {
+		t.Fatalf("MergeTailored: %v", err)
+	}
+
+	if got := StringSliceField(projectEntry(t, merged, "Orbit"), "highlights"); len(got) != 1 || got[0] != "Rewrote the scheduler in Go" {
+		t.Errorf("Orbit highlights = %v, want the tailored bullet", got)
+	}
+	// Untouched projects keep their master bullets.
+	if got := StringSliceField(projectEntry(t, merged, "Beacon"), "highlights"); len(got) != 1 || got[0] != "Shipped alerting" {
+		t.Errorf("Beacon highlights = %v, want the master's", got)
+	}
+}
+
+func TestMergeTailoredKeepsProjectIdentityFieldsFromMaster(t *testing.T) {
+	// The payload carries wrong values for every identity field; none of them
+	// may reach the merged document.
+	merged, err := MergeTailored(projectMaster(), TailoredSections{
+		Projects: []TailoredProject{{Name: "orbit", Highlights: []string{"Rewrote the scheduler"}}},
+	})
+	if err != nil {
+		t.Fatalf("MergeTailored: %v", err)
+	}
+
+	orbit := projectEntry(t, merged, "Orbit")
+	for field, want := range map[string]string{
+		"name":       "Orbit",
+		"url":        "https://example.com/orbit",
+		"start_date": "2021-01",
+		"end_date":   "2021-09",
+	} {
+		if got := StringField(orbit, field); got != want {
+			t.Errorf("%s = %q, want %q byte-identical to the master", field, got, want)
+		}
+	}
+}
+
+func TestMergeTailoredIgnoresUnknownProjectNames(t *testing.T) {
+	merged, err := MergeTailored(projectMaster(), TailoredSections{
+		Projects: []TailoredProject{{Name: "Ghost Project", Highlights: []string{"Invented"}}},
+	})
+	if err != nil {
+		t.Fatalf("MergeTailored: %v", err)
+	}
+
+	projects := AsSliceOfMaps(CvSections(merged)["projects"])
+	if len(projects) != 2 {
+		t.Fatalf("projects = %d, want the master's 2 — an unknown name adds nothing", len(projects))
+	}
+	if got := StringSliceField(projectEntry(t, merged, "Orbit"), "highlights"); len(got) != 2 {
+		t.Errorf("Orbit highlights = %v, want the master's two untouched", got)
+	}
+}
+
+// The default path: no project limit configured, so the model returns no
+// projects and the master's survive the merge exactly as authored (FR-003).
+func TestMergeTailoredEmptyProjectPayloadLeavesMasterUntouched(t *testing.T) {
+	merged, err := MergeTailored(projectMaster(), TailoredSections{Summary: "New summary."})
+	if err != nil {
+		t.Fatalf("MergeTailored: %v", err)
+	}
+
+	for name, want := range map[string][]string{
+		"Orbit":  {"Built the scheduler", "Cut latency"},
+		"Beacon": {"Shipped alerting"},
+	} {
+		got := StringSliceField(projectEntry(t, merged, name), "highlights")
+		if len(got) != len(want) {
+			t.Fatalf("%s highlights = %v, want %v", name, got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%s highlight %d = %q, want %q", name, i, got[i], want[i])
+			}
+		}
+	}
+}

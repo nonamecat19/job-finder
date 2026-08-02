@@ -46,6 +46,10 @@ func (f *fakeDocLister) ListDocuments(ctx context.Context, jobID string) ([]dto.
 	return []dto.GeneratedDocumentDto{}, nil
 }
 
+func (f *fakeDocLister) ListDocumentStatuses(ctx context.Context, jobID string) ([]dto.DocumentStatusDto, error) {
+	return []dto.DocumentStatusDto{}, nil
+}
+
 func TestJobsList(t *testing.T) {
 	fake := &fakeJobsProvider{jobs: []dto.JobDto{{ID: "1", Title: "Engineer"}}}
 	h := &jobshttp.JobsHandler{Jobs: fake, Generation: &fakeDocLister{}}

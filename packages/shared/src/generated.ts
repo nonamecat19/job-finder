@@ -166,6 +166,12 @@ export interface GeneratedDocumentDto {
   vacancy?: string;
   createdAt: string;
 }
+export interface DocumentStatusDto {
+  id: string;
+  type: string;
+  version: number /* int */;
+  createdAt: string;
+}
 export interface ApplicationDto {
   id: string;
   jobId: string;
@@ -778,28 +784,28 @@ export interface ResumeDto {
 //////////
 // source: settings.go
 
-export interface LlmTaskSettingDto {
-  taskKey: string;
-  provider: string;
-  model: string;
-}
-export interface LlmSettingsResponseDto {
-  credentialConfigured: boolean;
-  tasks: LlmTaskSettingDto[];
-}
-export interface UpdateLlmSettingsRequestDto {
-  tasks: LlmTaskSettingDto[];
-}
 export interface AiFeatureSettingDto {
   feature: string;
   enabled: boolean;
   threshold: number /* int */;
 }
-export interface CerebrasModelDto {
-  id: string;
-  label: string;
-  isDefault: boolean;
-}
-export interface LlmModelsResponseDto {
-  cerebras: CerebrasModelDto[];
+/**
+ * ResumeShapeConfigDto is the wire form of the resume generation shape
+ * settings — a field-for-field mirror of generation/domain.ShapeConfig. It is
+ * both the request and the response body of /v1/settings/resume-shape; PUT
+ * replaces the whole config, so every field must be present.
+ * 0 means "unlimited / no limit" for skillsMaxGroups, projectsMin, projectsMax
+ * and projectBulletsMax.
+ */
+export interface ResumeShapeConfigDto {
+  summaryLines: number /* int */;
+  skillsEnabled: boolean;
+  skillsMaxGroups: number /* int */;
+  experienceBulletsMin: number /* int */;
+  experienceBulletsMax: number /* int */;
+  targetPages: number /* int */;
+  projectsEnabled: boolean;
+  projectsMin: number /* int */;
+  projectsMax: number /* int */;
+  projectBulletsMax: number /* int */;
 }

@@ -25,6 +25,7 @@ type JobsProvider interface {
 // DocumentLister is the interface JobsHandler needs to list generated documents for a job.
 type DocumentLister interface {
 	ListDocuments(ctx context.Context, jobID string) ([]dto.GeneratedDocumentDto, error)
+	ListDocumentStatuses(ctx context.Context, jobID string) ([]dto.DocumentStatusDto, error)
 }
 
 // Reenricher is the interface JobsHandler needs to re-trigger detail scraping.
@@ -47,6 +48,7 @@ func (h *JobsHandler) Mount(r chi.Router) {
 	r.Post("/jobs/{id}/hide", h.hide)
 	r.Post("/jobs/{id}/generate", h.generate)
 	r.Get("/jobs/{id}/documents", h.documents)
+	r.Get("/jobs/{id}/documents/status", h.documentStatuses)
 	if h.Enrichment != nil {
 		r.Post("/jobs/{id}/re-enrich", h.reenrich)
 	}
@@ -160,6 +162,16 @@ func (h *JobsHandler) generate(w http.ResponseWriter, r *http.Request) {
 func (h *JobsHandler) documents(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Generation.ListDocuments(r.Context(), id)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *JobsHandler) documentStatuses(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	out, err := h.Generation.ListDocumentStatuses(r.Context(), id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return

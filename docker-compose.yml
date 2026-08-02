@@ -51,11 +51,14 @@ services:
       timeout: 3s
       retries: 10
 
-  # LiteLLM proxy gateway (029-litellm-proxy-gateway). The Go backend sends
+  # LiteLLM proxy gateway (030-litellm-model-routing). The Go backend sends
   # OpenAI-compatible requests with the task key as `model`; the proxy resolves
-  # it to the provider/model in gateway/config.yaml (mounted read-only). No
-  # depends_on: the proxy is independent of postgres/redis. Config contract:
-  # specs/029-litellm-proxy-gateway/contracts/gateway-config.md.
+  # it to an ordered free-tier-first failover chain in gateway/config.yaml
+  # (mounted read-only), terminating on the shared Ollama deployment. No
+  # depends_on: the proxy is independent of postgres/redis. Every provider key
+  # gets an empty default so a missing credential never aborts config load
+  # (FR-011) — it just fails that tier's auth at request time and the chain
+  # advances. Config contract: specs/030-litellm-model-routing/contracts/gateway-config.md.
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     container_name: litellm
@@ -64,7 +67,12 @@ services:
       - ./gateway/config.yaml:/app/config.yaml:ro
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_KEY: ${OLLAMA_KEY:-}
     ports:
       - "4000:4000"
     healthcheck:

@@ -1,15 +1,18 @@
 import { ArrowLeft, ExternalLink, FileDown, X, FileText } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { DashboardGrid, Tile } from '../../components/layout';
 import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 import {
   useGenerateDocument,
   useJobDetail,
   useJobDocuments,
+  useJobDocumentStatuses,
   useMarkJobApplied,
   useReenrichJob,
   useSaveDocument,
@@ -37,13 +40,22 @@ export default function JobDetailPage() {
   const [editingDoc, setEditingDoc] = useState<{ id: string; text: string } | null>(null);
   const handledMutationRef = useRef<DocumentType | null>(null);
 
+  const qc = useQueryClient();
   const { data: job, isLoading } = useJobDetail(id);
-  const { data: documents } = useJobDocuments(id, !!generating);
-  const docCountOfType = (type: DocumentType) => (documents ?? []).filter((d) => d.type === type).length;
+  const { data: documents } = useJobDocuments(id);
+  const { data: statuses } = useJobDocumentStatuses(id, !!generating);
+  const statusCountOfType = (type: DocumentType) => (statuses ?? []).filter((d) => d.type === type).length;
 
   const generate = useGenerateDocument(id, (type) => {
-    setCountAtGenerate(docCountOfType(type));
+    setCountAtGenerate(statusCountOfType(type));
   });
+
+  const generatingStatusCount = generating ? statusCountOfType(generating) : 0;
+  useEffect(() => {
+    if (generating && statuses && generatingStatusCount > countAtGenerate) {
+      qc.invalidateQueries({ queryKey: queryKeys.jobs.documents(id) });
+    }
+  }, [statuses, generating, generatingStatusCount, countAtGenerate, qc, id]);
   const resumeDoc = useMemo(() => {
     const resumes = (documents ?? []).filter((d) => d.type === 'resume' && d.pdfPath);
     return resumes.length ? resumes.reduce((a, b) => (b.version > a.version ? b : a)) : null;
@@ -59,16 +71,16 @@ export default function JobDetailPage() {
       setGenerating(generate.variables);
       return;
     }
-    if (generating && documents && docCountOfType(generating) > countAtGenerate) {
-      // Clears the "generating" flag once the query cache actually reflects
-      // the new document — genuinely reacting to an external system (the
-      // documents query) settling, not state derivable from props/state
-      // during render. Reviewed as safe (spec 023-workflow-quality-gates
-      // FR-012 lint adoption).
+    if (generating && statuses && generatingStatusCount > countAtGenerate) {
+      // Clears the "generating" flag once the lightweight status poll
+      // reflects the new document — genuinely reacting to an external
+      // system (the document-status query) settling, not state derivable
+      // from props/state during render. Reviewed as safe (spec
+      // 023-workflow-quality-gates FR-012 lint adoption).
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setGenerating(null);
     }
-  }, [generate.isSuccess, generate.variables, generating, documents, countAtGenerate]);
+  }, [generate.isSuccess, generate.variables, generating, statuses, generatingStatusCount, countAtGenerate]);
 
   if (isLoading || !job) {
     return (

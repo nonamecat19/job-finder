@@ -119,6 +119,10 @@ run-all: up
 run-backend:
 	cd apps/api && go run ./cmd/server
 
+# Hot-reload backend via air (github.com/air-verse/air). Install: go install github.com/air-verse/air@latest
+run-backend-hot:
+	cd apps/api && air -c .air.toml
+
 # --- sqlc code generation ---
 # Version is pinned in apps/api/.sqlc-version so local and CI emit identical code.
 SQLC_VERSION := $(shell tr -d '[:space:]' < apps/api/.sqlc-version)

@@ -98,7 +98,7 @@ export default function StatusPage() {
         >
           {anyCancelled ? (
             <p className="mb-3 text-xs text-muted">
-              Some of these were cancelled, not failed — an upstream provider (Cerebras)
+              Some of these were cancelled, not failed — an upstream AI provider
               hit its rate limit, so the rest of that batch was skipped instead of
               also erroring out. Retry once the limit resets.
             </p>

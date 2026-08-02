@@ -36,8 +36,6 @@ import (
 	"github.com/job-finder/api/internal/jobsources/roster"
 	"github.com/job-finder/api/internal/keyword"
 	keywordhttp "github.com/job-finder/api/internal/keyword/interfaces/http"
-	"github.com/job-finder/api/internal/llmsettings"
-	llmsettingshttp "github.com/job-finder/api/internal/llmsettings/interfaces/http"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"
 	notifierhttp "github.com/job-finder/api/internal/notifier/interfaces/http"
@@ -54,6 +52,8 @@ import (
 	recruiterhttp "github.com/job-finder/api/internal/recruiter/interfaces/http"
 	"github.com/job-finder/api/internal/referral"
 	referralhttp "github.com/job-finder/api/internal/referral/interfaces/http"
+	"github.com/job-finder/api/internal/resumeshape"
+	resumeshapehttp "github.com/job-finder/api/internal/resumeshape/interfaces/http"
 	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/subscriptions"
@@ -82,8 +82,8 @@ type App struct {
 	Contacts      *recruiterhttp.ContactsHandler
 	Referral      *referralhttp.ReferralHandler
 	Outreach      *outreachhttp.OutreachHandler
-	LlmSettings   *llmsettingshttp.LlmSettingsHandler
 	AiFeatures    *aifeaturehttp.AiFeatureHandler
+	ResumeShape   *resumeshapehttp.ResumeShapeHandler
 	InterviewPrep *interviewprephttp.InterviewPrepHandler
 	Health        *health.HealthHandler
 	Hosts         *jobsourceshttp.HostsHandler
@@ -192,42 +192,30 @@ type llmHandles struct {
 	RephraseRouter   *llm.Router
 	GhostRouter      *llm.Router
 	DefaultRouter    *llm.Router
-	Settings         *llmsettings.Service
-	SettingsHandler  *llmsettingshttp.LlmSettingsHandler
 }
 
 // composeLLM builds the shared providers and one llm.Router per named chat
-// task, all sharing a single settings snapshot so a dashboard change takes
-// effect for newly started tasks without a restart. Cerebras is nil when
-// unconfigured; the typed-nil is converted to a nil Provider interface so the
-// routers see a genuinely absent provider.
-func composeLLM(ctx context.Context, p *Platform) (*llmHandles, error) {
-	ollamaProvider, cerebrasProvider, gatewayProvider, err := llm.NewProviders(p.Config)
+// task (030-litellm-model-routing). Each Router routes to the gateway when
+// configured (sending its task key as the model) or Ollama directly with the
+// task's LLM_MODEL_* value; there is no persisted setting to read, so every
+// Router is fixed for the lifetime of the process.
+func composeLLM(p *Platform) (*llmHandles, error) {
+	ollamaProvider, gatewayProvider, err := llm.NewProviders(p.Config)
 	if err != nil {
 		return nil, err
-	}
-	var cerebrasIface llm.Provider
-	if cerebrasProvider != nil {
-		cerebrasIface = cerebrasProvider
 	}
 	var gatewayIface llm.Provider
 	if gatewayProvider != nil {
 		gatewayIface = gatewayProvider
 	}
-	llmSettingsSvc, err := llmsettings.NewService(ctx, p.DB.Queries, p.Config.CerebrasAPIKey != "")
-	if err != nil {
-		return nil, err
-	}
-	llmHolder := llmSettingsSvc.Holder()
+	cfg := p.Config
 	return &llmHandles{
 		Ollama:           ollamaProvider,
-		MatchRouter:      llm.NewRouter("match", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
-		GenerationRouter: llm.NewRouter("generation", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
-		RephraseRouter:   llm.NewRouter("rephrase", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
-		GhostRouter:      llm.NewRouter("ghost", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
-		DefaultRouter:    llm.NewRouter("default", llmHolder, ollamaProvider, cerebrasIface, gatewayIface),
-		Settings:         llmSettingsSvc,
-		SettingsHandler:  &llmsettingshttp.LlmSettingsHandler{Settings: llmSettingsSvc},
+		MatchRouter:      llm.NewRouter("match", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelMatch)),
+		GenerationRouter: llm.NewRouter("generation", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
+		RephraseRouter:   llm.NewRouter("rephrase", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelRephrase)),
+		GhostRouter:      llm.NewRouter("ghost", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGhost)),
+		DefaultRouter:    llm.NewRouter("default", gatewayIface, ollamaProvider, cfg.LLMModel),
 	}, nil
 }
 
@@ -302,13 +290,15 @@ func composeGhostJob(p *Platform, ghostRouter *llm.Router) *ghostHandles {
 }
 
 type generationHandles struct {
-	Generation *generation.Service
-	Handler    *generation.Handler
-	Documents  *generationhttp.DocumentsHandler
+	Generation  *generation.Service
+	Handler     *generation.Handler
+	Documents   *generationhttp.DocumentsHandler
+	ResumeShape *resumeshapehttp.ResumeShapeHandler
 }
 
-// composeGeneration wires the renderers (and their optional MinIO blob store)
-// and generation.Service.
+// composeGeneration wires the renderers (and their optional MinIO blob store),
+// the resume shape settings service (read once per generation run through the
+// ShapeProvider port) and generation.Service.
 func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Service, generationRouter *llm.Router) (*generationHandles, error) {
 	cfg := p.Config
 
@@ -335,11 +325,16 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	htmlRenderer.Store = blobStore
 	rendercvRenderer := generation.NewRenderCvRenderer(cfg.DocumentsDir, cfg.RendercvBin)
 	rendercvRenderer.Store = blobStore
-	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, generationRouter, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl)
+	shapeSvc, err := resumeshape.NewService(ctx, p.DB.Queries)
+	if err != nil {
+		return nil, err
+	}
+	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, generationRouter, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl, shapeSvc)
 	return &generationHandles{
-		Generation: generationSvc,
-		Handler:    generation.NewHandler(generationSvc, p.DB.Queries),
-		Documents:  &generationhttp.DocumentsHandler{Generation: generationSvc},
+		Generation:  generationSvc,
+		Handler:     generation.NewHandler(generationSvc, p.DB.Queries),
+		Documents:   &generationhttp.DocumentsHandler{Generation: generationSvc},
+		ResumeShape: &resumeshapehttp.ResumeShapeHandler{Settings: shapeSvc},
 	}, nil
 }
 
@@ -641,7 +636,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	sources := composeJobSources(p)
 	ingestionH := composeIngestion(p, sources)
 
-	llmH, err := composeLLM(ctx, p)
+	llmH, err := composeLLM(p)
 	if err != nil {
 		return nil, err
 	}
@@ -694,8 +689,8 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Contacts:      recruiterH.Handler,
 		Referral:      composeReferral(p),
 		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
-		LlmSettings:   llmH.SettingsHandler,
 		AiFeatures:    matchingH.AiFeatureHandler,
+		ResumeShape:   generationH.ResumeShape,
 		InterviewPrep: interviewPrepH,
 		Health:        composeHealth(p),
 		Hosts:         hostsH,

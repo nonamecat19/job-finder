@@ -22,13 +22,13 @@ import (
 	jobshttp "github.com/job-finder/api/internal/jobs/interfaces/http"
 	jobsourceshttp "github.com/job-finder/api/internal/jobsources/interfaces/http"
 	keywordhttp "github.com/job-finder/api/internal/keyword/interfaces/http"
-	llmsettingshttp "github.com/job-finder/api/internal/llmsettings/interfaces/http"
 	notifierhttp "github.com/job-finder/api/internal/notifier/interfaces/http"
 	outreachhttp "github.com/job-finder/api/internal/outreach/interfaces/http"
 	postagehttp "github.com/job-finder/api/internal/postage/interfaces/http"
 	profilehttp "github.com/job-finder/api/internal/profile/interfaces/http"
 	recruiterhttp "github.com/job-finder/api/internal/recruiter/interfaces/http"
 	referralhttp "github.com/job-finder/api/internal/referral/interfaces/http"
+	resumeshapehttp "github.com/job-finder/api/internal/resumeshape/interfaces/http"
 	subscriptionshttp "github.com/job-finder/api/internal/subscriptions/interfaces/http"
 	"github.com/job-finder/api/internal/testutil"
 )
@@ -68,8 +68,8 @@ func allMounts() []func(chi.Router) {
 		(&recruiterhttp.ContactsHandler{}).Mount,
 		(&referralhttp.ReferralHandler{}).Mount,
 		(&outreachhttp.OutreachHandler{}).Mount,
-		(&llmsettingshttp.LlmSettingsHandler{}).Mount,
 		(&aifeaturehttp.AiFeatureHandler{}).Mount,
+		(&resumeshapehttp.ResumeShapeHandler{}).Mount,
 		(&interviewprephttp.InterviewPrepHandler{}).Mount,
 		(&health.HealthHandler{}).Mount,
 		(&jobsourceshttp.HostsHandler{}).Mount,

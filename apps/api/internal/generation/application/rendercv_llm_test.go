@@ -85,7 +85,7 @@ func TestBuildSelectPrompt_IncludesSkillIndexesAndCompanies(t *testing.T) {
 		NiceToHaveSkills: []string{"Docker"},
 		ExperienceLevel:  "senior",
 	}
-	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil)
+	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, domain.DefaultShapeConfig())
 	if !containsAll(prompt, "[0] Backend", "[1] Frontend", "company: Acme Corp", "company: StartupX", "GROUNDING = MODERATE") {
 		t.Fatalf("prompt missing expected content:\n%s", prompt)
 	}
@@ -95,9 +95,88 @@ func TestBuildSelectPrompt_IncludesPreviousViolations(t *testing.T) {
 	master := loadSampleMaster(t)
 	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "mid"}
 	violations := []string{`skill "rust" not in master`, `company "FakeCo" not in master`}
-	prompt := buildSelectPrompt(master, analysis, domain.GroundingStrict, violations)
+	prompt := buildSelectPrompt(master, analysis, domain.GroundingStrict, violations, domain.DefaultShapeConfig())
 	if !containsAll(prompt, `skill "rust" not in master`, `company "FakeCo" not in master`) {
 		t.Fatalf("prompt should include previous violations:\n%s", prompt)
+	}
+}
+
+// The prompts must carry the run's configured numbers, not literals.
+func TestBuildSelectPromptUsesConfiguredTargets(t *testing.T) {
+	master := loadSampleMaster(t)
+	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
+	cfg := domain.DefaultShapeConfig()
+	cfg.SummaryLines = 2
+	cfg.ExperienceBulletsMin = 4
+	cfg.ExperienceBulletsMax = 5
+
+	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
+
+	if !containsAll(prompt, "TOP 4-5 most relevant highlights", "summary (1-2 sentences)") {
+		t.Errorf("prompt does not carry the configured targets:\n%s", prompt)
+	}
+	for _, stale := range []string{"3-4 sentences", "TOP 8-10"} {
+		if strings.Contains(prompt, stale) {
+			t.Errorf("prompt still contains the hardcoded %q:\n%s", stale, prompt)
+		}
+	}
+}
+
+// FR-003 regression guard: with the default config every prompt must read
+// exactly as it did before the config existed.
+func TestPromptsWithDefaultConfigReproduceOriginalWording(t *testing.T) {
+	master := loadSampleMaster(t)
+	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
+	cfg := domain.DefaultShapeConfig()
+
+	selectPrompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
+	if !containsAll(selectPrompt,
+		"select the TOP 8-10 most relevant highlights",
+		"Generate a tailored summary (3-4 sentences)",
+		"keep all relevant keywords (do not trim)",
+	) {
+		t.Errorf("default select prompt drifted from the original wording:\n%s", selectPrompt)
+	}
+
+	expandPrompt := buildExpandPrompt(master, analysis, cfg)
+	if !containsAll(expandPrompt,
+		"Expand it to fill TWO pages",
+		"expand to 4-5 sentences",
+		"aim for 10-12 per job",
+	) {
+		t.Errorf("default expand prompt drifted from the original wording:\n%s", expandPrompt)
+	}
+
+	condensePrompt := buildCondensePrompt(master, analysis, cfg)
+	if !containsAll(condensePrompt,
+		"overflows past two pages",
+		"Shorten it to fit on TWO pages",
+		"reduce to 2-3 tight sentences",
+		"keep only the TOP 5-6 most relevant per job",
+	) {
+		t.Errorf("default condense prompt drifted from the original wording:\n%s", condensePrompt)
+	}
+}
+
+func TestExpandAndCondensePromptsDeriveFromConfig(t *testing.T) {
+	master := loadSampleMaster(t)
+	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
+	cfg := domain.DefaultShapeConfig()
+	cfg.SummaryLines = 6
+	cfg.ExperienceBulletsMin = 4
+	cfg.ExperienceBulletsMax = 6
+	cfg.TargetPages = 1
+
+	expandPrompt := buildExpandPrompt(master, analysis, cfg)
+	// One step above the configured targets, aimed at the configured pages.
+	if !containsAll(expandPrompt, "fill ONE page", "expand to 6-7 sentences", "aim for 6-8 per job") {
+		t.Errorf("expand prompt does not derive from the config:\n%s", expandPrompt)
+	}
+
+	condensePrompt := buildCondensePrompt(master, analysis, cfg)
+	// One step below: the page target outranks the section lengths (FR-016).
+	if !containsAll(condensePrompt, "fit on ONE page", "reduce to 4-5 tight sentences", "TOP 2-4 most relevant per job") {
+		t.Errorf("condense prompt does not derive from the config:\n%s", condensePrompt)
 	}
 }
 
@@ -106,7 +185,7 @@ func TestBuildSelectPrompt_IncludesPreviousViolations(t *testing.T) {
 func TestBuildSelectPromptNoReorderOrDrop(t *testing.T) {
 	master := loadSampleMaster(t)
 	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
-	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil)
+	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, domain.DefaultShapeConfig())
 
 	for _, forbidden := range []string{"Reorder experience", "drop: true", "Decide which sections to drop"} {
 		if strings.Contains(prompt, forbidden) {
@@ -121,5 +200,35 @@ func TestBuildSelectPromptNoReorderOrDrop(t *testing.T) {
 		if !strings.Contains(prompt, required) {
 			t.Errorf("prompt must contain %q:\n%s", required, prompt)
 		}
+	}
+}
+
+// R7: with no project limit configured the projects block must not reach the
+// prompt at all, so the default path costs exactly the tokens it always did.
+func TestBuildSelectPromptProjectsBlockOnlyWhenLimited(t *testing.T) {
+	master := loadSampleMaster(t)
+	domain.CvSections(master)["projects"] = []any{
+		map[string]any{"name": "SideProject", "highlights": []any{"Had fun"}},
+	}
+	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
+
+	defaults := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, domain.DefaultShapeConfig())
+	if strings.Contains(defaults, "PROJECTS (master)") {
+		t.Errorf("default prompt must not carry a projects block:\n%s", defaults)
+	}
+
+	cfg := domain.DefaultShapeConfig()
+	cfg.ProjectsMax = 2
+	limited := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
+	if !containsAll(limited, "PROJECTS (master)", "name: SideProject", "Return the 2 most vacancy-relevant projects",
+		"copied EXACTLY", "that same project's own bullets") {
+		t.Errorf("limited prompt missing the projects block:\n%s", limited)
+	}
+
+	bulletsOnly := domain.DefaultShapeConfig()
+	bulletsOnly.ProjectBulletsMax = 3
+	withBulletCap := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, bulletsOnly)
+	if !containsAll(withBulletCap, "PROJECTS (master)", "keep at most 3 highlights") {
+		t.Errorf("bullet-capped prompt missing the projects block:\n%s", withBulletCap)
 	}
 }

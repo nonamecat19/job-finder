@@ -54,6 +54,27 @@ func (o *CompleteOptions) SystemPrompt() string {
 	return o.System
 }
 
+type servedModelKey struct{}
+
+// WithServedModelCapture returns a context a Provider can use to report which
+// model actually served a call (e.g. the gateway's LiteLLM fallback chain may
+// serve a different model than the requested task-routing group). Callers
+// that need to know the real served model — not just the task key they asked
+// for — pass this context in, then read *ptr after the call returns.
+func WithServedModelCapture(ctx context.Context) (context.Context, *string) {
+	ptr := new(string)
+	return context.WithValue(ctx, servedModelKey{}, ptr), ptr
+}
+
+// ReportServedModel writes model into the capture pointer stashed in ctx by
+// WithServedModelCapture, if any. Providers call this after a successful
+// request; a no-op when the caller didn't ask to capture it.
+func ReportServedModel(ctx context.Context, model string) {
+	if ptr, ok := ctx.Value(servedModelKey{}).(*string); ok {
+		*ptr = model
+	}
+}
+
 // Provider is the interface the infrastructure/ollama and
 // infrastructure/cerebras adapters implement. CompleteJSON is the low-level
 // "ask for JSON, no retry" call; the retry loop (strip fences → parse →

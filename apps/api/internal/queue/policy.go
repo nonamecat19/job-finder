@@ -18,7 +18,7 @@ type TaskPolicy struct {
 	LocalConcurrency  int
 	HostedConcurrency int
 	MaxDuration       time.Duration
-	// LLMTaskKey is the llmsettings task key ("match", "generation", "default",
+	// LLMTaskKey is the gateway task key ("match", "generation", "default",
 	// "ghost") used to resolve the live provider class. Empty for non-LLM tasks.
 	LLMTaskKey string
 }

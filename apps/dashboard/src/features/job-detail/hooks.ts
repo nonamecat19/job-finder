@@ -22,10 +22,22 @@ export function useJobKeywordDiff(id: string | undefined) {
   });
 }
 
-export function useJobDocuments(id: string | undefined, polling: boolean) {
+export function useJobDocuments(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.jobs.documents(id),
     queryFn: () => api.jobs.documents(id!),
+    enabled: !!id,
+  });
+}
+
+// Polls a lightweight status list (no document content) while generation is
+// in flight, so the browser isn't re-fetching the full resume/cover-letter
+// text every 3s. Callers refetch the full documents query only once the
+// status list actually changes.
+export function useJobDocumentStatuses(id: string | undefined, polling: boolean) {
+  return useQuery({
+    queryKey: queryKeys.jobs.documentStatuses(id),
+    queryFn: () => api.jobs.documentStatuses(id!),
     enabled: !!id,
     refetchInterval: polling ? 3000 : false,
   });

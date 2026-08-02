@@ -74,7 +74,7 @@ func buildServers(p *Platform, app *App) *Servers {
 		app.PostAge.Mount, app.Notification.Mount, app.Companies.Mount,
 		app.GhostJob.Mount, app.Coach.Mount,
 		app.Contacts.Mount, app.Referral.Mount,
-		app.Outreach.Mount, app.LlmSettings.Mount, app.AiFeatures.Mount,
+		app.Outreach.Mount, app.AiFeatures.Mount, app.ResumeShape.Mount,
 		app.InterviewPrep.Mount, app.Health.Mount,
 		app.Hosts.Mount,
 	)
@@ -87,13 +87,13 @@ func buildServers(p *Platform, app *App) *Servers {
 
 	// Each worker's pool is sized to max(local, hosted) concurrency from its
 	// TaskPolicy, with an admission gate (queue.Gate) enforcing whichever
-	// limit applies to the resolved provider class at run time — hosted
-	// providers (Cerebras, Ollama Cloud) get AI_CONCURRENCY_CLOUD
-	// (default 3), local Ollama keeps AI_CONCURRENCY_LOCAL (default 1), with
-	// no restart needed when Settings flips a task between them
-	// (019-ai-job-throughput, research.md R3). ingest/enrich have no LLM
-	// component and use a single fixed concurrency (INGEST_CONCURRENCY /
-	// ENRICH_CONCURRENCY).
+	// limit applies to the resolved provider class at run time — a
+	// gateway-routed or Ollama Cloud task gets AI_CONCURRENCY_CLOUD
+	// (default 3), local Ollama keeps AI_CONCURRENCY_LOCAL (default 1)
+	// (019-ai-job-throughput, research.md R3; 030-litellm-model-routing fixes
+	// the class at Router construction, see application.Router.ProviderClass).
+	// ingest/enrich have no LLM component and use a single fixed concurrency
+	// (INGEST_CONCURRENCY / ENRICH_CONCURRENCY).
 	workers := []namedWorker{
 		p.worker("ingest", p.policyFor(queue.TypeIngest), nil, app.Ingestion.ProcessTask),
 		p.worker("match", p.policyFor(queue.TypeMatch), app.MatchRouter, app.Matching.ProcessTask),

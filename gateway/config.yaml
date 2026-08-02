@@ -1,44 +1,140 @@
-# LiteLLM proxy configuration (029-litellm-proxy-gateway).
-# Contract: specs/029-litellm-proxy-gateway/contracts/gateway-config.md
+# LiteLLM proxy configuration (030-litellm-model-routing).
+# Contract: specs/030-litellm-model-routing/contracts/gateway-config.md
 #
-# The Go backend sends the task key as the `model` field; the proxy resolves it
-# to the provider/model below. Fallback chains (FR-005) let the proxy retry a
-# different provider/model when the primary fails.
+# The Go backend sends the task key as the `model` field and never learns
+# which upstream served the request beyond what apps/api logs from
+# x-litellm-model-name (FR-012/FR-013). This file is the single place to
+# change which model serves a task (FR-005/SC-003): edit the model id below,
+# then `docker compose restart litellm` — no application rebuild needed.
+#
+# Naming convention: <task>-<tier> for every non-primary tier; the primary
+# group is bare <task> so app requests (model=<task>) always hit tier 1
+# directly. Chain order for every task (data-model.md §2, FR-006/FR-008):
+#   <task> (free: Cerebras) → <task>-groq (free) → <task>-cohere (free)
+#   → <task>-openrouter (aggregator, may be paid) → local (terminal, shared)
+# Every model below is response_format:json_object-capable (contract C5) so
+# the chain never silently degrades a structured-output task into prose.
+#
+# Model IDs verified live against each provider's catalog 2026-07-31
+# (research.md R8): Cerebras gpt-oss-120b, Groq llama-3.3-70b-versatile,
+# Cohere command-r-08-2024, OpenRouter deepseek/deepseek-v4-pro /
+# qwen/qwen3.7-max / openai/gpt-4o-mini (unchanged from the prior config and
+# reconfirmed present). The `litellm_settings.fallbacks` shape below (a list
+# of single-key dicts under litellm_settings, not litellm_params) was
+# confirmed against the pinned `ghcr.io/berriai/litellm:main-stable` image by
+# running it locally with `--detailed_debug` (research.md R1).
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
 
 model_list:
+  # --- match ---
   - model_name: match
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: match-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+  - model_name: match-cohere
+    litellm_params:
+      model: cohere_chat/command-r-08-2024
+      api_key: os.environ/COHERE_API_KEY
+  - model_name: match-openrouter
     litellm_params:
       model: openrouter/deepseek/deepseek-v4-pro
       api_key: os.environ/OPENROUTER_API_KEY
-      fallbacks:
-        - cerebras/gpt-oss-120b
 
+  # --- generation ---
   - model_name: generation
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: generation-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+  - model_name: generation-cohere
+    litellm_params:
+      model: cohere_chat/command-r-08-2024
+      api_key: os.environ/COHERE_API_KEY
+  - model_name: generation-openrouter
     litellm_params:
       model: openrouter/qwen/qwen3.7-max
       api_key: os.environ/OPENROUTER_API_KEY
-      fallbacks:
-        - cerebras/gpt-oss-120b
 
+  # --- rephrase ---
   - model_name: rephrase
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: rephrase-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+  - model_name: rephrase-cohere
+    litellm_params:
+      model: cohere_chat/command-r-08-2024
+      api_key: os.environ/COHERE_API_KEY
+  - model_name: rephrase-openrouter
     litellm_params:
       model: openrouter/openai/gpt-4o-mini
       api_key: os.environ/OPENROUTER_API_KEY
 
+  # --- ghost ---
   - model_name: ghost
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: ghost-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+  - model_name: ghost-cohere
+    litellm_params:
+      model: cohere_chat/command-r-08-2024
+      api_key: os.environ/COHERE_API_KEY
+  - model_name: ghost-openrouter
     litellm_params:
       model: openrouter/deepseek/deepseek-v4-pro
       api_key: os.environ/OPENROUTER_API_KEY
-      fallbacks:
-        - cerebras/gpt-oss-120b
 
+  # --- default ---
   - model_name: default
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: default-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+  - model_name: default-cohere
+    litellm_params:
+      model: cohere_chat/command-r-08-2024
+      api_key: os.environ/COHERE_API_KEY
+  - model_name: default-openrouter
     litellm_params:
       model: openrouter/openai/gpt-4o-mini
       api_key: os.environ/OPENROUTER_API_KEY
 
+  # --- local (terminal tier, shared by every task, FR-008) ---
+  - model_name: local
+    litellm_params:
+      model: ollama_chat/gpt-oss:120b-cloud
+      api_base: os.environ/OLLAMA_URL
+      api_key: os.environ/OLLAMA_KEY
+
 litellm_settings:
   drop_params: true
-  set_verbose: false
+  num_retries: 1
+  # Below the Go adapter's 120s http.Client timeout (infrastructure/gateway/gateway.go)
+  # so a chain exhausting every tier still returns before the app gives up.
+  request_timeout: 110
+  allowed_fails: 3
+  cooldown_time: 60
+  fallbacks:
+    - match: [match-groq, match-cohere, match-openrouter, local]
+    - generation: [generation-groq, generation-cohere, generation-openrouter, local]
+    - rephrase: [rephrase-groq, rephrase-cohere, rephrase-openrouter, local]
+    - ghost: [ghost-groq, ghost-cohere, ghost-openrouter, local]
+    - default: [default-groq, default-cohere, default-openrouter, local]

@@ -6,6 +6,7 @@ export const queryKeys = {
     list: (filters: JobFilters) => ['jobs', 'list', filters] as const,
     detail: (id: string | undefined) => ['jobs', 'detail', id] as const,
     documents: (id: string | undefined) => ['jobs', 'documents', id] as const,
+    documentStatuses: (id: string | undefined) => ['jobs', 'documents', 'status', id] as const,
     keywordDiff: (id: string | undefined) => ['jobs', 'keyword-diff', id] as const,
     interviewPrep: (id: string | undefined) => ['jobs', 'interview-prep', id] as const,
     contacts: (id: string | undefined) => ['jobs', 'contacts', id] as const,
@@ -66,14 +67,13 @@ export const queryKeys = {
   contacts: {
     all: ['contacts'] as const,
   },
-  llmSettings: {
-    all: ['llmSettings'] as const,
-    get: ['llmSettings', 'get'] as const,
-    models: ['llmSettings', 'models'] as const,
-  },
   aiFeatures: {
     all: ['aiFeatures'] as const,
     get: ['aiFeatures', 'get'] as const,
+  },
+  resumeShape: {
+    all: ['resumeShape'] as const,
+    get: ['resumeShape', 'get'] as const,
   },
   roster: {
     all: ['roster'] as const,
