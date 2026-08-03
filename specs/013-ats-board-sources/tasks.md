@@ -116,7 +116,7 @@ attributed to that vendor with all required fields populated.
 - [X] T016 [US1] Verify existing per-host pacing (`apps/api/internal/jobsources/util.go` or
   equivalent rate limiter already used by other adapters) is applied to the 5 new board hosts —
   reuse, do not introduce a second pacing mechanism (FR-006).
-- [ ] T017 [US1] Integration test in `apps/api/internal/ingestion/` (or
+- [X] T017 [US1] Integration test in `apps/api/internal/ingestion/` (or
   `apps/api/test/integration/`, matching existing integration test location) that runs each of
   the 5 vendor sources against fixture/mock HTTP servers end-to-end and asserts `Job` rows with
   all required fields, no duplicate on re-run, and no error when a previously-seen posting
@@ -157,10 +157,13 @@ board's postings to appear on the next run.
   Depends on T018–T020.
 - [X] T022 [US2] Mount `RosterHandler` in the server's router setup (same file/pattern as
   `SourcesHandler.Mount` is wired today).
-- [ ] T023 [P] [US2] Add `useRoster`, `useCandidates`, `useAcceptCandidate`, `useRejectCandidate`,
+- [X] T023 [P] [US2] Add `useRoster`, `useCandidates`, `useAcceptCandidate`, `useRejectCandidate`,
   `useRegisterBoard`, `useDiscoverCandidates` hooks in
   `apps/dashboard/src/features/sources/roster/hooks.ts`.
-- [ ] T024 [US2] Build `RosterPanel` and `CandidatesPanel` components in
+  (Audit note: hooks actually live in `apps/dashboard/src/features/sources/hooks.ts`, not a
+  separate `roster/hooks.ts` file — functionally complete, just a different file location than
+  planned. Verified all 6 hooks exist and are exported.)
+- [X] T024 [US2] Build `RosterPanel` and `CandidatesPanel` components in
   `apps/dashboard/src/features/sources/roster/` (paste-a-URL form with inline error display,
   candidate accept/reject buttons) and mount them on
   `apps/dashboard/src/features/sources/SourcesPage.tsx`. Depends on T023.
@@ -169,6 +172,13 @@ board's postings to appear on the next run.
   and reject one → re-run discovery → assert it does not reappear (spec Acceptance Scenarios
   1–3). Also cover pasting an unsupported-vendor URL (Edge Case) and pasting an unreadable board
   URL (Acceptance Scenario 5).
+  **AUDIT FLAG (2026-08-03): NOT IMPLEMENTED.** `apps/api/internal/jobsources/roster/` has only
+  `urlmatch_test.go` — no test exercises `Discover`, `Accept`, `Reject`, or `RegisterFromURL`
+  (all in `service.go`/`candidates.go`), and no integration test exists under
+  `apps/api/internal/jobsources/interfaces/http/` for the roster HTTP endpoints. Left unchecked
+  deliberately rather than implemented in this pass — writing a correct `dbtest`-backed
+  integration test for the full discover→accept/reject→re-run flow plus the two error-path
+  scenarios is a substantial task in its own right, not a small/unambiguous fix.
 
 **Checkpoint**: Roster can be built entirely from proposed candidates or pasted URLs; User
 Stories 1 and 2 together deliver a working, self-populating source family.
@@ -186,23 +196,34 @@ employer's board, confirm one job with the board's apply URL and both origins re
 
 ### Implementation for User Story 3
 
-- [ ] T026 [US3] Extend `apps/api/internal/ingestion/dedupe.go` with a merge-candidate check per
+- [X] T026 [US3] Extend `apps/api/internal/ingestion/dedupe.go` with a merge-candidate check per
   research.md §4: given a new `NormalizedJob` whose `DedupeKey` does not already exist, find an
   existing `Job` from a different `sourceKey` with matching normalized `company` + high embedding
   similarity to the new posting's description, returning a merge candidate `Job.id` or none.
-- [ ] T027 [US3] Extend `persistIfNew` in `apps/api/internal/ingestion/handler.go`: when a merge
+  (Audit note: lives at `apps/api/internal/jobsources/interfaces/worker/dedupe.go` post-refactor —
+  `FindMergeCandidate`/`FindMergeCandidates` implemented per spec, using title-word-overlap rather
+  than embeddings since embeddings aren't available at ingestion time, per the code's own comment.)
+- [X] T027 [US3] Extend `persistIfNew` in `apps/api/internal/ingestion/handler.go`: when a merge
   candidate is found and the new source is an employer board, UPDATE the existing `Job` row —
   set `url`/`sourceKey` to the board's, append the new source to `seenOnSources` — instead of
   inserting a new row; when the new source is not a board (or no candidate found), keep existing
   insert-or-repost behavior unchanged. Depends on T026.
-- [ ] T028 [US3] Integration test: ingest an aggregator posting, save/score/move it (create
+  (Audit note: implemented as `mergeBoards`/`BulkMergeJobBoards` in
+  `apps/api/internal/jobsources/interfaces/worker/persist.go`, not `persistIfNew` in a file named
+  `handler.go` — same package, post-refactor split into `persist.go`.)
+- [X] T028 [US3] Integration test: ingest an aggregator posting, save/score/move it (create
   `Application`/`MatchResult` rows), then ingest the matching employer-board posting, assert one
   `Job` row remains with the board's `url`, `seenOnSources` containing both source keys, and the
   prior `Application`/`MatchResult` rows still pointing at the same `Job.id` untouched (FR-016,
   FR-017, spec Acceptance Scenarios 1–3).
-- [ ] T029 [US3] Integration test: ingest two postings with identical titles at different
+  (Covered by `TestMerge_AggregatorThenBoard_MergesIntoOneRow` and
+  `TestMerge_TwoBoardPostings_SecondMergesIntoFirst` in
+  `apps/api/internal/jobsources/interfaces/worker/merge_test.go`.)
+- [X] T029 [US3] Integration test: ingest two postings with identical titles at different
   companies, and two genuinely separate reqs for the same role at one employer, assert both stay
   as distinct `Job` rows (FR-018, spec Acceptance Scenario 4).
+  (Covered by `TestMerge_DifferentCompanies_StaysDistinct` and
+  `TestMerge_DifferentTitles_StaysDistinct` in the same `merge_test.go`.)
 
 **Checkpoint**: Aggregator and board copies of the same opening collapse into one job; distinct
 openings never incorrectly merge.
@@ -222,22 +243,38 @@ health check pass, read its resulting counts, disable it, confirm the next sched
 - [X] T030 [US4] Implement `HealthCheck` on each of the 5 adapters (T009–T013 follow-up if not
   already done there): a lightweight read (e.g. first roster employer, or a fixed known-good
   probe) satisfying the existing `Adapter.HealthCheck` contract used by `POST /sources/{key}/test`.
-- [ ] T031 [US4] Confirm the 5 new `JobSource` rows appear via the existing
+- [X] T031 [US4] Confirm the 5 new `JobSource` rows appear via the existing
   `GET /sources` / `PUT /sources/{key}` / `POST /sources/{key}/test` / `POST /sources/{key}/run`
   endpoints with no new endpoint code required (FR-022) — add a dashboard smoke check only if
   `SourcesPage.tsx` needs a vendor-icon/label addition for the 5 new keys.
   `apps/dashboard/src/features/sources/SourcesPage.tsx`.
-- [ ] T032 [US4] Add `lastSuccessAt`, `lastPostingCount`, and `stale` columns to the `RosterPanel`
+  (Audit note: `SourcesPanel` in `SourcesPage.tsx` renders all sources generically from
+  `GET /sources` with no per-vendor special-casing — no icon/label addition needed, condition in
+  the task text confirmed false, so no code change was required to satisfy FR-022.)
+- [X] T032 [US4] Add `lastSuccessAt`, `lastPostingCount`, and `stale` columns to the `RosterPanel`
   (T024) table view (FR-024).
+  (Verified present in `apps/dashboard/src/features/sources/roster/RosterPanel.tsx`.)
 - [ ] T033 [US4] Integration test: run a vendor source where one employer in the roster returns a
   bad/expired token and others succeed; assert the run's `employerDetail` marks that employer
   `unreadable`/`refused`/`not_found` distinctly, the run's aggregate `found`/`new` still reflect
   the successful employers, and `ok` stays true (FR-019, FR-020, spec US4 Acceptance Scenario 3).
+  **AUDIT FLAG (2026-08-03): PARTIALLY COVERED, NOT FULLY IMPLEMENTED.**
+  `TestATSBoardIntegration_EmployerReporter` in `atsboard_integration_test.go` asserts the
+  adapter's own `LastRunDetail()` reports distinct outcomes (`read`/`no_postings`/`not_found`/
+  `unreadable`) per employer, but nothing asserts that `worker.Handler.ProcessTask` actually
+  persists that into `SourceRun.employerDetail` or that `SourceRun.ok` stays true when only some
+  employers fail. Left unchecked; needs a `worker`-package integration test driving
+  `ProcessTask` end-to-end, not just the adapter layer.
 - [ ] T034 [US4] Integration test: an employer with `consecutiveEmptyRuns` at or above the stale
   threshold shows `stale=true` from `GET /api/roster`; one successful run resets the counter to 0
   (FR-014, spec Edge Cases).
+  **AUDIT FLAG (2026-08-03): NOT IMPLEMENTED.** `Stale()` and `RecordRunOutcome` exist in
+  `apps/api/internal/jobsources/roster/service.go` but have no test coverage anywhere in the repo
+  (`roster/` package only has `urlmatch_test.go`). Left unchecked.
 - [ ] T035 [US4] Integration test: a run where every employer fails (e.g. all boards unreachable)
   asserts `SourceRun.ok = false` (FR-021).
+  **AUDIT FLAG (2026-08-03): NOT IMPLEMENTED.** No test found asserting `SourceRun.ok = false`
+  when every employer in a run fails. Left unchecked.
 
 **Checkpoint**: All 4 user stories independently functional; operators can run, debug, and
 maintain the roster entirely from the Sources screen.
@@ -248,12 +285,22 @@ maintain the roster entirely from the Sources screen.
 
 - [ ] T036 Run `specs/013-ats-board-sources/quickstart.md` end-to-end against a local
   `make up` stack and confirm every step's expected result.
-- [ ] T037 [P] `make test-lint` (both `apps/api` `go test` and `apps/dashboard` `vitest` suites)
+  **AUDIT NOTE (2026-08-03)**: not exercised in this pass — requires a live `make up` stack and
+  manual walkthrough, out of scope for a static code audit. Left unchecked.
+- [X] T037 [P] `make test-lint` (both `apps/api` `go test` and `apps/dashboard` `vitest` suites)
   passes with all changes from this feature included (Constitution Principle IV).
+  (Re-verified 2026-08-03: `make lint-go` → 0 issues; `make lint-web` → 0 errors, 5 pre-existing
+  warnings unrelated to this feature; `go test ./...` all pass; `pnpm vitest run` → 217/217 pass.)
 - [ ] T038 [P] `make test-integration` passes, covering T017, T025, T028, T029, T033–T035.
-- [ ] T039 Re-check Constitution gates in `plan.md`'s Constitution Check section against the
+  **AUDIT NOTE (2026-08-03)**: not run in this pass (requires Postgres via `make up`), and T025/
+  T033/T034/T035 have no integration test to run yet (see flags above) — this task cannot pass
+  until those are written. Left unchecked.
+- [X] T039 Re-check Constitution gates in `plan.md`'s Constitution Check section against the
   final diff (Principle III: no hand-duplicated roster/candidate types slipped into
   `apps/dashboard` outside `packages/shared`).
+  (Verified 2026-08-03: `EmployerBoardDto`/`BoardCandidateDto` are defined once in
+  `packages/shared/src/generated.ts` and imported from `@job-finder/shared` in
+  `RosterPanel.tsx`/`CandidatesPanel.tsx` — no hand-duplicated shapes found.)
 
 ---
 
