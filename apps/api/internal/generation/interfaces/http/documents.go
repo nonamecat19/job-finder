@@ -46,7 +46,7 @@ type tailorBody struct {
 }
 
 // tailor is the ad-hoc RenderCV tailoring endpoint from a pasted vacancy (no
-// DB job) — the entry point the opencode `/tailor-resume` command calls.
+// DB job) — the entry point the `/tailor-resume` command calls.
 func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 	var body tailorBody
 	if err := httpx.DecodeJSON(r, &body); err != nil || body.Vacancy == "" {
