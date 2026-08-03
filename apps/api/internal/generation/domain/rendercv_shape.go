@@ -228,5 +228,23 @@ func ApplyHardLimits(merged RendercvMaster, cfg ShapeConfig) ShapeReport {
 		}
 	}
 
+	if certs, ok := sections["certifications"].([]any); ok {
+		// Keep the first N in the master's authored order, matching the
+		// projects rule: the retained subset is never reordered. Unlike
+		// projects there is no per-entry bullet loop — certifications are
+		// one_line entries with no highlights to clamp (research D2).
+		if cfg.CertificationsMax > 0 && len(certs) > cfg.CertificationsMax {
+			certs = certs[:cfg.CertificationsMax]
+			sections["certifications"] = certs
+		}
+		if cfg.CertificationsMin > 0 && len(certs) < cfg.CertificationsMin {
+			report.Shortfalls = append(report.Shortfalls, Shortfall{
+				Path:      "cv.sections.certifications",
+				Requested: cfg.CertificationsMin,
+				Available: len(certs),
+			})
+		}
+	}
+
 	return report
 }
