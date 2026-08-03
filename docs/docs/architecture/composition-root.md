@@ -100,35 +100,32 @@ The two cross-composer wires are called out in the function's doc comment:
 
 Naming a cycle-breaking assignment explicitly beats hiding it behind lazy initialisation.
 
-## Routers are constructed per task, sharing one snapshot
+## Routers are constructed per task, immutably
 
 ```mermaid
 classDiagram
-    class SnapshotHolder {
-        -atomic.Value v
-        +Load() RouterSnapshot
-        +Store(s)
-    }
     class Router {
         -taskKey string
-        -holder SnapshotHolder
-        -ollama Provider
-        -cerebras Provider
+        -gateway Provider
+        -local Provider
+        -localModel string
         +Complete(ctx, prompt, opts)
+        +ProviderClass() ProviderClass
     }
     class OllamaProvider
-    class CerebrasProvider
-    Router --> SnapshotHolder
+    class GatewayProvider
     Router --> OllamaProvider
-    Router --> CerebrasProvider
+    Router --> GatewayProvider
     OllamaProvider ..|> Provider
-    CerebrasProvider ..|> Provider
+    GatewayProvider ..|> Provider
     Router ..|> Provider
 ```
 
-`composeLLM` builds one holder and four routers — `MatchRouter`, `GenerationRouter`,
-`GhostRouter`, `DefaultRouter` — and hands each to the services that need it. Because
-`Router` itself implements `Provider`, no service knows routing exists.
+`composeLLM` builds five routers — `MatchRouter`, `GenerationRouter`, `RephraseRouter`,
+`GhostRouter`, `DefaultRouter` — and hands each to the services that need it. Each is
+fixed at construction: there is no holder, no atomic swap and no runtime reconfiguration.
+Routing state lives in `gateway/config.yaml` and environment variables. Because `Router`
+itself implements `Provider`, no service knows routing exists.
 
 The same routers are handed to the activity handler as `queue.ClassResolver`s
 (`compose.go:52-57`) so the queue view can report which provider class each queue will

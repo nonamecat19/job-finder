@@ -80,7 +80,7 @@ sequenceDiagram
 | Area | Tables |
 | --- | --- |
 | Jobs and sources | `Job`, `JobSource`, `SourceRun`, `SavedSearch`, `Subscription`, `EmployerBoard`, `BoardCandidate` |
-| Matching and AI | `MatchResult`, `LlmTaskSetting`, `AiFeatureSetting`, `AutoGenerateSetting` |
+| Matching and AI | `MatchResult`, `AiFeatureSetting`, `AutoGenerateSetting`, `ResumeShapeSetting` |
 | Documents and profile | `Profile`, `GeneratedDocument`, `StarStory` |
 | Application tracking | `Application`, `ApplicationOutcome` |
 | Signals and analysis | `JobSignal`, `KeywordDiff`, `NormalizedTerm`, `SynonymOverride`, `SalaryCache` |

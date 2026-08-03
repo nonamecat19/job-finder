@@ -1,116 +1,37 @@
 ---
-title: LLM and AI-feature settings
+title: AI settings
 sidebar_position: 3
-description: Per-task provider selection, per-feature toggles, validation, precedence, and the HTTP surface.
+description: Per-feature AI toggles and thresholds, resume shape configuration, and why provider/model selection is no longer a setting.
 ---
 
-# LLM and AI-feature settings
+# AI settings
 
-Two independent settings services:
+Three settings surfaces, each with its own service:
 
 | Service | Table | Answers |
 | --- | --- | --- |
-| `llmsettings` | `LlmTaskSetting` | *which provider and model runs this task* |
 | `aifeature` | `AiFeatureSetting` | *should this AI feature run at all, and above what score* |
+| `resumeshape` | resume shape config | *what shape should a generated resume have* |
+| — | — | *which provider and model runs a task* → **not a setting.** See below. |
 
-## `llmsettings`
+## Provider and model selection is not a setting
 
-### State and persistence
+There is no LLM settings service, no `LlmTaskSetting` table, and no dashboard control for
+choosing an AI provider or model. Feature `030-litellm-model-routing` removed all of it;
+migration `00033_drop_llm_task_setting.sql` dropped the table.
 
-```go
-var TaskKeys = []string{"match", "generation", "rephrase", "ghost", "default"}
-```
+The application requests AI work **by task name only** — `match`, `generation`, `rephrase`,
+`ghost`, `default` — and the LiteLLM gateway decides what serves it, from an ordered
+failover chain declared in `gateway/config.yaml`. Changing which model serves a task is a
+YAML edit plus `docker compose restart litellm` — no dashboard, no rebuild, no application
+restart.
 
-```sql
-CREATE TABLE "LlmTaskSetting" (
-  "taskKey"   text PRIMARY KEY,
-  "provider"  text NOT NULL DEFAULT 'ollama' CHECK ("provider" IN ('ollama', 'cerebras')),
-  "model"     text NOT NULL DEFAULT '',
-  "updatedAt" timestamp(3) NOT NULL DEFAULT now()
-);
-```
+See [LLM abstraction](./llm-abstraction.md) for the routing mechanics and
+`specs/domains/llm-routing.md` for the requirements that bind it.
 
-The provider vocabulary is enforced by a `CHECK` constraint as well as in Go — the
-database will not hold a value the router cannot resolve.
-
-### Reads never hit the database
-
-`Get()` reads the in-memory snapshot, which `Update` keeps authoritative
-(`service.go:76-90`). The Settings page is a cheap call.
-
-### Update is validate → persist → reload → publish
-
-```mermaid
-sequenceDiagram
-    participant H as PUT /api/settings/llm
-    participant S as llmsettings.Service
-    participant DB as LlmTaskSetting
-    participant HOLD as SnapshotHolder
-    participant R as Routers
-    H->>S: Update([]TaskUpdate)
-    loop validate all first
-        S->>S: known task key?
-        S->>S: provider in {ollama, cerebras}?
-        S->>S: IsSupportedCerebrasModel(model)?
-    end
-    S->>DB: UpsertLlmTaskSetting per update
-    S->>DB: ListLlmTaskSettings (reload all)
-    S->>HOLD: Store(snapshotFromRows)
-    R->>HOLD: Load() on next call
-    S-->>H: new State
-```
-
-Validation runs over **all** updates before any write (`service.go:97-112`), so a partial
-batch cannot half-apply. Errors are typed: `ErrUnknownTaskKey`, `ErrInvalidProvider`,
-`ErrInvalidModel`.
-
-A subset of `TaskKeys` is a legal payload — omitted tasks are unchanged.
-
-### Credentials are env-only
-
-```go
-// cerebrasConfigured reflects whether config.CerebrasAPIKey was set at
-// process start (a restart is required to change a credential itself, since
-// it is env-only — see spec FR-013).
-```
-
-So: **model and provider changes are hot; adding a key is a restart.** The snapshot's
-`CredentialConfigured` flag is how the dashboard explains a Cerebras selection that is
-silently running on Ollama.
-
-### Precedence
-
-```mermaid
-flowchart TD
-    A["Service calls Router for task T"] --> B["snapshot.Tasks[T]"]
-    B --> C{"provider == cerebras?"}
-    C -->|yes| D{"cerebras provider non-nil?"}
-    D -->|yes| E["Cerebras with snapshot model, or DefaultCerebrasModel if empty"]
-    D -->|no| F["Ollama with empty model → provider default"]
-    C -->|no| G["Ollama with snapshot model"]
-    G --> H{"model empty?"}
-    H -->|yes| I["env default: LLM_MODEL_<TASK>, else LLM_MODEL"]
-    H -->|no| J["snapshot model"]
-```
-
-| Layer | Source | Wins when |
-| --- | --- | --- |
-| Per-call override | `CompleteOptions.Model` | always, when non-empty |
-| Persisted setting | `LlmTaskSetting.model` | no per-call override |
-| Env default | `LLM_MODEL_MATCH`, `_GENERATION`, `_REPHRASE`, `_GHOST` | setting empty |
-| Global fallback | `LLM_MODEL` | task-specific env unset |
-| Provider default | adapter's built-in | everything else empty |
-
-### HTTP surface
-
-| Method | Path | Returns |
-| --- | --- | --- |
-| GET | `/api/settings/llm` | current per-task settings + `credentialConfigured` |
-| PUT | `/api/settings/llm` | validated, persisted, published state |
-| GET | `/api/settings/llm/models` | the curated model list per provider |
-
-`GET /settings/llm/models` serves `llm.CerebrasModels` from code, so rendering Settings
-never depends on reaching Cerebras.
+Provider credentials (`CEREBRAS_API_KEY`, `GROQ_API_KEY`, `COHERE_API_KEY`,
+`OPENROUTER_API_KEY`) live in the `litellm` compose service's environment only. The Go
+backend never reads them and cannot expose them.
 
 ## `aifeature`
 
@@ -136,13 +57,17 @@ CREATE TABLE "AiFeatureSetting" (
 ```
 
 Each feature is **off by default** with a threshold of 90. The threshold is a match score:
-"auto-generate a resume only for jobs scoring at least 90".
+"auto-generate a resume only for jobs scoring at least 90". Below the threshold, or when
+disabled, the feature still runs on demand — the setting governs *auto-enqueue*, not
+availability.
+
+Match scoring itself has no entry here. It always runs unconditionally.
 
 ### Cached for the hot path
 
 The service caches settings in memory behind an `RWMutex`, with the reason stated in the
-type comment (`aifeature/service.go:38-40`): *"so the per-match hook
-(matching/handler.go) never needs a DB round trip on the hot path."*
+type comment (`aifeature/service.go`): *"so the per-match hook (matching/handler.go) never
+needs a DB round trip on the hot path."*
 
 ```mermaid
 sequenceDiagram
@@ -165,6 +90,61 @@ sequenceDiagram
 | --- | --- | --- |
 | GET | `/api/settings/ai-features` | all features in display order |
 | PUT | `/api/settings/ai-features/{feature}` | update `enabled` and `threshold`, refresh the cache |
+
+## `resumeshape`
+
+Controls the shape of every resume generated **after** the config is saved. A generation
+already in flight finishes with the settings it started with.
+
+`0` means *unlimited / no limit* for `skillsMaxGroups`, `projectsMin`, `projectsMax`,
+`projectBulletsMax`, `certificationsMin` and `certificationsMax`.
+
+| Field | Default | Range | Effect |
+| --- | --- | --- | --- |
+| `summaryLines` | 4 | 1–12 | Approximate summary length, in sentences |
+| `skillsEnabled` | true | — | `false` removes the skills section entirely |
+| `skillsMaxGroups` | 0 | 0–20 | Skill groups to keep; `0` keeps all |
+| `experienceBulletsMin` | 8 | 1–20 | Target floor of bullets per job |
+| `experienceBulletsMax` | 10 | 1–20 | Hard cap of bullets per job |
+| `targetPages` | 2 | 1–3 | Page count the render loop aims for |
+| `projectsEnabled` | true | — | `false` removes the projects section entirely |
+| `projectsMin` | 0 | 0–20 | Target floor of projects; `0` = no minimum |
+| `projectsMax` | 0 | 0–20 | Hard cap on projects; `0` includes all |
+| `projectBulletsMax` | 0 | 0–10 | Hard cap of bullets per project; `0` keeps all |
+| `certificationsEnabled` | true | — | `false` removes the certifications section entirely |
+| `certificationsMin` | 0 | 0–20 | Target floor of certifications; `0` = no minimum |
+| `certificationsMax` | 0 | 0–20 | Hard cap on certifications; `0` includes all |
+
+The wire form is `dto.ResumeShapeConfigDto` (`apps/api/internal/dto/settings.go`), a
+field-for-field mirror of `generation/domain.ShapeConfig`.
+
+### Semantics that matter
+
+- **Minima are targets; maxima are guarantees.** The model is *steered* toward a minimum;
+  maxima are enforced deterministically after the model responds, so they always hold.
+- **A minimum never causes fabrication.** When the master profile holds fewer bullets,
+  projects or certifications than the floor asks for, generation keeps what exists and the
+  run's activity trail records the shortfall.
+- **The page target wins.** When `targetPages` conflicts with the configured section
+  lengths, the page target is prioritised and the run records that it did. When the
+  adjustment attempts are exhausted, the best result achieved is returned rather than a
+  failure, with the final page count and reason reported.
+- **Disabling a section is not a violation.** It is not reported as a structural or
+  grounding failure; every other structure and grounding check still applies.
+- **Section positions are fixed.** Projects, certifications, publications and links keep
+  their established position in the enforced order regardless of configuration.
+
+### HTTP surface
+
+| Method | Path | Effect |
+| --- | --- | --- |
+| GET | `/api/settings/resume-shape` | current config |
+| PUT | `/api/settings/resume-shape` | **replaces the whole config** — every field must be present |
+
+Validation is all-or-nothing: any out-of-range value, or a minimum greater than its
+corresponding maximum, rejects the entire update and stores none of it. The dashboard's
+**Reset to defaults** restores the table above in one action, and the defaults reproduce
+pre-settings generation behaviour exactly.
 
 ## Related singleton
 

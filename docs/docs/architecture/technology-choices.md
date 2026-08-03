@@ -49,10 +49,10 @@ The evidence is still in the tree: `00001_init.sql:1-5` states it reuses Drizzle
 migration SQL verbatim so `goose up` produces a byte-identical schema, and `queue.go`
 describes its queue layout as mirroring "the BullMQ setup's separate queues".
 
-:::warning The README is partly stale
-The root `README.md` still describes the NestJS stack and an OpenRouter provider that the
-current tree no longer contains. These docs describe the code as it is: Go backend,
-Ollama + optional Cerebras.
+:::note What the current tree actually runs
+Go backend, sqlc + goose, asynq on Redis, and Ollama as the local-first LLM provider.
+Hosted inference, when enabled, goes through the LiteLLM gateway rather than through a
+provider adapter in Go.
 :::
 
 ## Why sqlc rather than an ORM

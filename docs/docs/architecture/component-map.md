@@ -33,7 +33,7 @@ flowchart TB
     end
     subgraph Intelligence["Intelligence"]
         LLM["llm"]
-        LSET["llmsettings"]
+        RSHAPE["resumeshape"]
         AIF["aifeature"]
         MATCH["matching"]
         ENR["enrichment"]
@@ -94,9 +94,9 @@ flowchart TB
 
 | Package | Owns |
 | --- | --- |
-| `llm` | `Provider` interface, Ollama and Cerebras adapters, `Router`, error taxonomy, structured-output retry |
-| `llmsettings` | persisted per-task provider/model settings, snapshot publication |
-| `aifeature` | per-feature enable/disable settings |
+| `llm` | `Provider` interface, Ollama and LiteLLM-gateway adapters, task-bound `Router`, error taxonomy, structured-output retry |
+| `resumeshape` | persisted resume generation shape config, validated as a whole |
+| `aifeature` | per-feature enable/disable settings and score thresholds |
 | `matching` | similarity + LLM fit scoring, `MatchResult` persistence, ranking |
 | `enrichment` | full job-detail fetch after ingest |
 | `generation` | tailored resume and cover-letter generation, PDF rendering |
@@ -128,7 +128,7 @@ flowchart LR
     D["/api/profiles"] --> profile
     E["/api/documents"] --> generation & storage
     F["/api/activity"] --> activity & queue
-    G["/api/settings/llm, /api/settings/ai-features"] --> llmsettings & aifeature
+    G["/api/settings/ai-features, /api/settings/resume-shape"] --> aifeature & resumeshape
     H["/api/contacts, /api/jobs/id/referral-paths"] --> recruiter & referral
     I["/api/companies"] --> companyintel
     J["/api/hosts"] --> retrieval

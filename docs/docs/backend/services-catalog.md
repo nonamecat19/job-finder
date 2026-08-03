@@ -25,7 +25,7 @@ flowchart LR
         notifier
         subscriptions
         aifeature
-        llmsettings
+        resumeshape
     end
     subgraph Async["Driven by a queue"]
         ingestion
@@ -79,14 +79,18 @@ Ghost-posting detection. Queue: `ghost:score`, LLM task key `ghost`. HTTP:
 ## Intelligence
 
 ### `llm`
-`Provider` interface, `OllamaProvider`, `CerebrasProvider`, `Router`, `SnapshotHolder`,
+`Provider` interface, the Ollama and LiteLLM-gateway adapters, the task-bound `Router`,
 error taxonomy, structured-output retry loop. Detail:
 [LLM abstraction](/ai/llm-abstraction).
 
-### `llmsettings`
-Persists per-task `{provider, model}` in `LlmTaskSetting` and publishes a new
-`llm.RouterSnapshot` on change — no restart required. HTTP: `/settings/llm`,
-`/settings/llm/models`.
+Provider and model selection is **not** a service — it lives in `gateway/config.yaml`.
+There is no `llmsettings` package and no `LlmTaskSetting` table; migration
+`00033_drop_llm_task_setting.sql` removed them.
+
+### `resumeshape`
+Persists the resume generation shape config — summary length, section toggles, bullet and
+page targets — validated as a whole before any field is stored. HTTP:
+`/settings/resume-shape`.
 
 ### `aifeature`
 Per-feature enable/disable settings backed by `AiFeatureSetting`. HTTP:
