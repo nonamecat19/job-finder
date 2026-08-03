@@ -1,5 +1,7 @@
 packages:
   - path: "github.com/job-finder/api/internal/dto"
     output_path: "../../packages/shared/src/generated.ts"
+    # Emits Go string-const groups as TS literal unions instead of `type X = string`.
+    enum_style: union
     type_mappings:
       "time.Time": "string"

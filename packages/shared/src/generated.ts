@@ -205,10 +205,10 @@ export interface StatsDto {
 //////////
 // source: dto.go
 
-export type SourceKind = string;
-export const SourceKindAPI: SourceKind = "api";
-export const SourceKindScrape: SourceKind = "scrape";
-export const SourceKindSidecar: SourceKind = "sidecar";
+export const SourceKindAPI = "api";
+export const SourceKindScrape = "scrape";
+export const SourceKindSidecar = "sidecar";
+export type SourceKind = typeof SourceKindAPI | typeof SourceKindScrape | typeof SourceKindSidecar;
 export type ApplicationStatus = string;
 export const StatusFound: ApplicationStatus = "found";
 export const StatusShortlisted: ApplicationStatus = "shortlisted";
@@ -223,9 +223,9 @@ export const OutcomeViewed: OutcomeEventType = "viewed";
 export const OutcomeScreen: OutcomeEventType = "screen";
 export const OutcomeOffer: OutcomeEventType = "offer";
 export const OutcomeRejected: OutcomeEventType = "rejected";
-export type DocumentType = string;
-export const DocumentTypeResume: DocumentType = "resume";
-export const DocumentTypeCoverLetter: DocumentType = "cover_letter";
+export const DocumentTypeResume = "resume";
+export const DocumentTypeCoverLetter = "cover_letter";
+export type DocumentType = typeof DocumentTypeResume | typeof DocumentTypeCoverLetter;
 
 //////////
 // source: intel.go
