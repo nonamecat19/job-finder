@@ -16,15 +16,16 @@ resume/
 /apps/api/seed
 /apps/api/tmp
 .aider*
-.opencode
 apps/api/data/
 apps/dashboard/test-results/
 apps/dashboard/playwright-report/
 
 # .claude/ is excluded by a global gitignore (~/.gitignore_global). Re-include
-# the committed hook registry so every clone/worktree gets it (FR-028);
-# settings.local.json (permission allowlist, may contain secrets) stays local.
+# the committed hook registry and speckit skills so every clone/worktree gets
+# them (FR-028, 024-agent-context-consolidation); settings.local.json
+# (permission allowlist, may contain secrets) and worktrees/ stay local.
 !.claude/
 .claude/*
 !.claude/settings.json
+!.claude/skills/
 .playwright-mcp/
