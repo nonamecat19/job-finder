@@ -94,6 +94,22 @@ func TestGetReturnsDefaults(t *testing.T) {
 	}
 }
 
+func TestGetReturnsCertificationsFields(t *testing.T) {
+	r, _ := newTestRouter()
+
+	rec := do(t, r, http.MethodGet, "/settings/resume-shape", nil)
+	got := decodeConfig(t, rec)
+	if !got.CertificationsEnabled {
+		t.Errorf("CertificationsEnabled = %v, want true", got.CertificationsEnabled)
+	}
+	if got.CertificationsMin != 0 {
+		t.Errorf("CertificationsMin = %d, want 0", got.CertificationsMin)
+	}
+	if got.CertificationsMax != 0 {
+		t.Errorf("CertificationsMax = %d, want 0", got.CertificationsMax)
+	}
+}
+
 func TestPutValidConfigRoundTrips(t *testing.T) {
 	r, _ := newTestRouter()
 
@@ -101,6 +117,7 @@ func TestPutValidConfigRoundTrips(t *testing.T) {
 		SummaryLines: 2, SkillsEnabled: true, SkillsMaxGroups: 3,
 		ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
 		ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 2, ProjectBulletsMax: 3,
+		CertificationsEnabled: true, CertificationsMin: 1, CertificationsMax: 5,
 	}
 	rec := do(t, r, http.MethodPut, "/settings/resume-shape", want)
 	if rec.Code != http.StatusOK {
@@ -124,6 +141,7 @@ func TestPutFullNonDefaultRoundTrip(t *testing.T) {
 		SummaryLines: 12, SkillsEnabled: false, SkillsMaxGroups: 20,
 		ExperienceBulletsMin: 1, ExperienceBulletsMax: 20, TargetPages: 3,
 		ProjectsEnabled: true, ProjectsMin: 2, ProjectsMax: 4, ProjectBulletsMax: 10,
+		CertificationsEnabled: true, CertificationsMin: 2, CertificationsMax: 20,
 	}
 	if rec := do(t, r, http.MethodPut, "/settings/resume-shape", want); rec.Code != http.StatusOK {
 		t.Fatalf("PUT status = %d (%s), want 200", rec.Code, rec.Body.String())
@@ -160,6 +178,19 @@ func TestPutRejectsInvalidConfigs(t *testing.T) {
 				d.ProjectsMin = 2
 			},
 			wantMsgs: []string{"projectsMin", "projectsEnabled"},
+		},
+		{
+			name:     "certificationsMax out of range",
+			mutate:   func(d *dto.ResumeShapeConfigDto) { d.CertificationsMax = 21 },
+			wantMsgs: []string{"certificationsMax", "0 and 20"},
+		},
+		{
+			name: "certifications minimum without certifications enabled",
+			mutate: func(d *dto.ResumeShapeConfigDto) {
+				d.CertificationsEnabled = false
+				d.CertificationsMin = 2
+			},
+			wantMsgs: []string{"certificationsMin", "certificationsEnabled"},
 		},
 	}
 

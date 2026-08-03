@@ -124,6 +124,7 @@ func TestUpdateRefreshesCache(t *testing.T) {
 		SummaryLines: 2, SkillsEnabled: false, SkillsMaxGroups: 3,
 		ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
 		ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 2, ProjectBulletsMax: 3,
+		CertificationsEnabled: true, CertificationsMin: 1, CertificationsMax: 5,
 	}
 	got, err := s.Update(context.Background(), want)
 	if err != nil {
@@ -156,6 +157,8 @@ func TestResetRestoresDefaults(t *testing.T) {
 	changed := domain.DefaultShapeConfig()
 	changed.TargetPages = 1
 	changed.SkillsEnabled = false
+	changed.CertificationsEnabled = false
+	changed.CertificationsMax = 3
 	if _, err := s.Update(context.Background(), changed); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -166,6 +169,10 @@ func TestResetRestoresDefaults(t *testing.T) {
 	}
 	if got != domain.DefaultShapeConfig() {
 		t.Errorf("Reset returned %+v, want the defaults", got)
+	}
+	if !got.CertificationsEnabled || got.CertificationsMin != 0 || got.CertificationsMax != 0 {
+		t.Errorf("Reset certifications fields = enabled=%v min=%d max=%d, want true/0/0",
+			got.CertificationsEnabled, got.CertificationsMin, got.CertificationsMax)
 	}
 	if cached := s.Get(); cached != domain.DefaultShapeConfig() {
 		t.Errorf("cached config = %+v, want the defaults", cached)

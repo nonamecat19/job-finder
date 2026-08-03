@@ -35,6 +35,7 @@ func TestResumeShapeSettingPersistsAcrossServiceRestart(t *testing.T) {
 		SummaryLines: 6, SkillsEnabled: false, SkillsMaxGroups: 4,
 		ExperienceBulletsMin: 3, ExperienceBulletsMax: 7, TargetPages: 1,
 		ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 3, ProjectBulletsMax: 2,
+		CertificationsEnabled: false, CertificationsMin: 0, CertificationsMax: 5,
 	}
 	if _, err := svc.Update(ctx, want); err != nil {
 		t.Fatalf("Update: %v", err)
