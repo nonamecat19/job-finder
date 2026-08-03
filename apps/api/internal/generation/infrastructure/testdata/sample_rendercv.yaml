@@ -118,6 +118,23 @@ cv:
         highlights:
           - Reduced model size by 90% with less than 1% accuracy degradation on ImageNet
           - Featured in PyTorch ecosystem tools, 4,200+ GitHub stars
+    certifications:
+      - label: AWS Certified Solutions Architect – Professional
+        details: Amazon Web Services, 2024
+      - label: Google Cloud Professional Machine Learning Engineer
+        details: Google Cloud, 2023
+      - label: Certified Kubernetes Administrator (CKA)
+        details: Cloud Native Computing Foundation, 2023
+      - label: TensorFlow Developer Certificate
+        details: Google, 2022
+      - label: Deep Learning Specialization
+        details: DeepLearning.AI, 2021
+      - label: Certified Scrum Master (CSM)
+        details: Scrum Alliance, 2021
+      - label: 'Microsoft Certified: Azure AI Engineer Associate'
+        details: Microsoft, 2020
+      - label: NVIDIA Deep Learning Institute Certificate
+        details: NVIDIA, 2020
     publications:
       - title: 'Sparse Mixture-of-Experts at Scale: Efficient Routing for Trillion-Parameter Models'
         authors:

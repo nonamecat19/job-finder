@@ -794,8 +794,8 @@ export interface AiFeatureSettingDto {
  * settings — a field-for-field mirror of generation/domain.ShapeConfig. It is
  * both the request and the response body of /v1/settings/resume-shape; PUT
  * replaces the whole config, so every field must be present.
- * 0 means "unlimited / no limit" for skillsMaxGroups, projectsMin, projectsMax
- * and projectBulletsMax.
+ * 0 means "unlimited / no limit" for skillsMaxGroups, projectsMin, projectsMax,
+ * projectBulletsMax, certificationsMin and certificationsMax.
  */
 export interface ResumeShapeConfigDto {
   summaryLines: number /* int */;
@@ -808,4 +808,7 @@ export interface ResumeShapeConfigDto {
   projectsMin: number /* int */;
   projectsMax: number /* int */;
   projectBulletsMax: number /* int */;
+  certificationsEnabled: boolean;
+  certificationsMin: number /* int */;
+  certificationsMax: number /* int */;
 }

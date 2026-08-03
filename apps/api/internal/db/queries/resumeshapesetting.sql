@@ -13,6 +13,9 @@ SET "summaryLines" = $1,
     "projectsMin" = $8,
     "projectsMax" = $9,
     "projectBulletsMax" = $10,
+    "certificationsEnabled" = $11,
+    "certificationsMin" = $12,
+    "certificationsMax" = $13,
     "updatedAt" = now()
 WHERE "id" = 'default'
 RETURNING *;

@@ -36,31 +36,37 @@ func (h *ResumeShapeHandler) Mount(r chi.Router) {
 
 func configToDto(c domain.ShapeConfig) dto.ResumeShapeConfigDto {
 	return dto.ResumeShapeConfigDto{
-		SummaryLines:         c.SummaryLines,
-		SkillsEnabled:        c.SkillsEnabled,
-		SkillsMaxGroups:      c.SkillsMaxGroups,
-		ExperienceBulletsMin: c.ExperienceBulletsMin,
-		ExperienceBulletsMax: c.ExperienceBulletsMax,
-		TargetPages:          c.TargetPages,
-		ProjectsEnabled:      c.ProjectsEnabled,
-		ProjectsMin:          c.ProjectsMin,
-		ProjectsMax:          c.ProjectsMax,
-		ProjectBulletsMax:    c.ProjectBulletsMax,
+		SummaryLines:          c.SummaryLines,
+		SkillsEnabled:         c.SkillsEnabled,
+		SkillsMaxGroups:       c.SkillsMaxGroups,
+		ExperienceBulletsMin:  c.ExperienceBulletsMin,
+		ExperienceBulletsMax:  c.ExperienceBulletsMax,
+		TargetPages:           c.TargetPages,
+		ProjectsEnabled:       c.ProjectsEnabled,
+		ProjectsMin:           c.ProjectsMin,
+		ProjectsMax:           c.ProjectsMax,
+		ProjectBulletsMax:     c.ProjectBulletsMax,
+		CertificationsEnabled: c.CertificationsEnabled,
+		CertificationsMin:     c.CertificationsMin,
+		CertificationsMax:     c.CertificationsMax,
 	}
 }
 
 func dtoToConfig(d dto.ResumeShapeConfigDto) domain.ShapeConfig {
 	return domain.ShapeConfig{
-		SummaryLines:         d.SummaryLines,
-		SkillsEnabled:        d.SkillsEnabled,
-		SkillsMaxGroups:      d.SkillsMaxGroups,
-		ExperienceBulletsMin: d.ExperienceBulletsMin,
-		ExperienceBulletsMax: d.ExperienceBulletsMax,
-		TargetPages:          d.TargetPages,
-		ProjectsEnabled:      d.ProjectsEnabled,
-		ProjectsMin:          d.ProjectsMin,
-		ProjectsMax:          d.ProjectsMax,
-		ProjectBulletsMax:    d.ProjectBulletsMax,
+		SummaryLines:          d.SummaryLines,
+		SkillsEnabled:         d.SkillsEnabled,
+		SkillsMaxGroups:       d.SkillsMaxGroups,
+		ExperienceBulletsMin:  d.ExperienceBulletsMin,
+		ExperienceBulletsMax:  d.ExperienceBulletsMax,
+		TargetPages:           d.TargetPages,
+		ProjectsEnabled:       d.ProjectsEnabled,
+		ProjectsMin:           d.ProjectsMin,
+		ProjectsMax:           d.ProjectsMax,
+		ProjectBulletsMax:     d.ProjectBulletsMax,
+		CertificationsEnabled: d.CertificationsEnabled,
+		CertificationsMin:     d.CertificationsMin,
+		CertificationsMax:     d.CertificationsMax,
 	}
 }
 

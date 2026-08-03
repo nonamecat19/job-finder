@@ -11,17 +11,20 @@ type AiFeatureSettingDto struct {
 // both the request and the response body of /v1/settings/resume-shape; PUT
 // replaces the whole config, so every field must be present.
 //
-// 0 means "unlimited / no limit" for skillsMaxGroups, projectsMin, projectsMax
-// and projectBulletsMax.
+// 0 means "unlimited / no limit" for skillsMaxGroups, projectsMin, projectsMax,
+// projectBulletsMax, certificationsMin and certificationsMax.
 type ResumeShapeConfigDto struct {
-	SummaryLines         int  `json:"summaryLines"`
-	SkillsEnabled        bool `json:"skillsEnabled"`
-	SkillsMaxGroups      int  `json:"skillsMaxGroups"`
-	ExperienceBulletsMin int  `json:"experienceBulletsMin"`
-	ExperienceBulletsMax int  `json:"experienceBulletsMax"`
-	TargetPages          int  `json:"targetPages"`
-	ProjectsEnabled      bool `json:"projectsEnabled"`
-	ProjectsMin          int  `json:"projectsMin"`
-	ProjectsMax          int  `json:"projectsMax"`
-	ProjectBulletsMax    int  `json:"projectBulletsMax"`
+	SummaryLines          int  `json:"summaryLines"`
+	SkillsEnabled         bool `json:"skillsEnabled"`
+	SkillsMaxGroups       int  `json:"skillsMaxGroups"`
+	ExperienceBulletsMin  int  `json:"experienceBulletsMin"`
+	ExperienceBulletsMax  int  `json:"experienceBulletsMax"`
+	TargetPages           int  `json:"targetPages"`
+	ProjectsEnabled       bool `json:"projectsEnabled"`
+	ProjectsMin           int  `json:"projectsMin"`
+	ProjectsMax           int  `json:"projectsMax"`
+	ProjectBulletsMax     int  `json:"projectBulletsMax"`
+	CertificationsEnabled bool `json:"certificationsEnabled"`
+	CertificationsMin     int  `json:"certificationsMin"`
+	CertificationsMax     int  `json:"certificationsMax"`
 }
