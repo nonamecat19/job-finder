@@ -37,7 +37,7 @@ Filter definitions live in the `filters:` block of each workflow's `changes` job
 - `tygo` watches **both** `apps/api/**` and `packages/shared/src/generated.ts`, because `scripts/tygo-check.sh` reads Go DTOs and writes that TypeScript file.
 - `web` does **not** need to watch `apps/api/internal/dto`. The tygo output is committed under `packages/shared/`, so a regenerated DTO change already matches `web`; an *un*regenerated one is exactly what `tygo generate is up to date` exists to fail on.
 
-Every filter includes `.github/workflows/**` and `Makefile`, since a change to either can alter any job's verdict.
+Every filter used to include `.github/workflows/**` and `Makefile`, since a change to either can alter any job's verdict. **That is no longer true** — both were removed, because a documentation change that adjusted a Makefile comment spent ~20 runner-minutes rebuilding Go and Node. They are still exercised by rule 2 above: `on: push: branches: [master]` bypasses the filters entirely and runs the full set on the merge commit, so the coverage moves one merge later rather than disappearing. See `specs/domains/platform-operations.md` § 2.
 
 ## `lint (go)`
 

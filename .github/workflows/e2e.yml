@@ -35,10 +35,12 @@ jobs:
           # Wider than api-ci.yml's `web` filter: the specs mock the API with
           # page.route, but they still exercise the dashboard against types
           # generated from the Go DTOs, so any apps/api change counts.
+          #
+          # This file and the Makefile are deliberately absent, matching
+          # api-ci.yml: a docs- or workflow-only pull request skips the suite,
+          # and the nightly schedule plus pushes to master run it unfiltered.
           filters: |
             e2e:
-              - '.github/workflows/e2e.yml'
-              - 'Makefile'
               - 'apps/api/**'
               - 'apps/dashboard/**'
               - 'packages/shared/**'

@@ -34,18 +34,26 @@ jobs:
         id: filter
         with:
           filters: |
-            # Touching CI itself, the check scripts or the Makefile can change
-            # any verdict, so those force the whole set to run.
-            ci: &ci
-              - '.github/workflows/**'
-              - 'Makefile'
+            # Each filter lists only what can actually change its own verdict.
+            #
+            # Documentation and repo-workflow paths deliberately appear in NO
+            # filter, so a change confined to them skips every job:
+            #   specs/**, docs/**, .specify/**, .githooks/**, scripts/hooks/**,
+            #   AGENTS.md, README.md, Makefile, .github/workflows/**
+            #
+            # Makefile and the workflow files used to force the whole set on the
+            # grounds that they can change any verdict. True, but it meant a
+            # docs-only pull request that adjusted a Makefile comment spent ~20
+            # runner-minutes rebuilding Go and Node. They are covered instead by
+            # `on: push: branches: [master]`, which ignores these filters
+            # entirely (see the outputs above) and runs the full set on the
+            # merge commit — so a Makefile or workflow edit is still exercised,
+            # one merge later rather than one pull request earlier.
             go: &go
-              - *ci
               - 'apps/api/**'
               - 'scripts/sqlc-check.sh'
               - 'scripts/tygo-check.sh'
             sqlc:
-              - *ci
               - 'scripts/sqlc-check.sh'
               - 'apps/api/sqlc.yaml'
               - 'apps/api/.sqlc-version'
@@ -59,7 +67,6 @@ jobs:
               - 'packages/shared/src/generated.ts'
               - 'scripts/compare-shared-types.py'
             web:
-              - *ci
               - 'apps/dashboard/**'
               - 'packages/shared/**'
               - 'eslint.config.js'
