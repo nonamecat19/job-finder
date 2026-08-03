@@ -79,16 +79,21 @@ Rules:
 2. Commit the regenerated output in the same commit as its source.
 3. Tool versions are pinned in `apps/api/.sqlc-version` and `apps/api/.tygo-version` so
    local and CI emit byte-identical code.
-4. `packages/shared/src/index.ts` is **hand-maintained** and must be updated alongside —
-   it does not re-export `generated.ts` (`AGENTS.md`).
+4. `packages/shared/src/index.ts` **re-exports and narrows** `generated.ts`; it never
+   restates a shape. Only a nullability change touches it. Hand-written types with no Go
+   counterpart live in `consumer-only.ts`. Reintroducing a hand-maintained duplicate of a
+   generated shape is caught by the `shared-types-no-duplicates` CI job.
 
 ## Adding an HTTP handler
 
-Handlers expose a `Mount(r chi.Router)` method and are registered as variadic mounts in
-`buildServers` (`cmd/server/servers.go:66-73`) — never by editing `router.go`.
+Handlers live in their own feature's `interfaces/http/` package and expose a
+`Mount(r chi.Router)` method, registered as variadic mounts in `buildServers`
+(`cmd/server/servers.go`) — never by editing `router.go`. `internal/httpapi` holds the
+router and its middleware only, and depends on zero feature modules; the `depguard` rules
+in `.golangci.yml` and `internal/arch_test.go` enforce both halves.
 
 ```go
-// internal/httpapi/hosts.go
+// internal/jobsources/interfaces/http/hosts.go
 func (h *HostsHandler) Mount(r chi.Router) {
     r.Get("/hosts/{host}/retrieval-status", h.retrievalStatus)
     r.Post("/hosts/{host}/clear-cookies", h.clearCookies)
