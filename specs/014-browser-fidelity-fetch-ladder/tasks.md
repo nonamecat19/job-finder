@@ -35,10 +35,10 @@ Go backend: `apps/api/internal/...`. Dashboard: `apps/dashboard/src/...`. Shared
 
 **Purpose**: Dependencies and package skeleton
 
-- [ ] T001 Add the TLS-fingerprinting client dependency (`github.com/bogdanfinn/tls-client`, per research.md decision 1) to `apps/api/go.mod` and run `go mod tidy`
-- [ ] T002 Create the new package skeleton `apps/api/internal/retrieval/` with a package doc comment in `apps/api/internal/retrieval/retrieval.go` describing it as the single shared retrieval interface (FR-020)
-- [ ] T003 [P] Add retrieval configuration keys to `apps/api/internal/config/config.go`: browser identity version, per-host daily budget default, cooling-off threshold and base duration, cheap-rung re-test interval (FR-014, FR-026, FR-030); `FLARESOLVERR_URL` already exists at line 113
-- [ ] T004 [P] Give the `flaresolverr` service in `docker-compose.yml` and `docker-compose.prod.yml` an explicit port mapping and healthcheck so the top rung is reachable and probeable under the `scraping-extras` profile
+- [X] T001 Add the TLS-fingerprinting client dependency (`github.com/bogdanfinn/tls-client`, per research.md decision 1) to `apps/api/go.mod` and run `go mod tidy`
+- [X] T002 Create the new package skeleton `apps/api/internal/retrieval/` with a package doc comment in `apps/api/internal/retrieval/retrieval.go` describing it as the single shared retrieval interface (FR-020)
+- [X] T003 [P] Add retrieval configuration keys to `apps/api/internal/config/config.go`: browser identity version, per-host daily budget default, cooling-off threshold and base duration, cheap-rung re-test interval (FR-014, FR-026, FR-030); `FLARESOLVERR_URL` already exists at line 113
+- [X] T004 [P] Give the `flaresolverr` service in `docker-compose.yml` and `docker-compose.prod.yml` an explicit port mapping and healthcheck so the top rung is reachable and probeable under the `scraping-extras` profile
 
 ---
 
@@ -48,15 +48,15 @@ Go backend: `apps/api/internal/...`. Dashboard: `apps/dashboard/src/...`. Shared
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Define `PageOutcome` (Status: Read/Challenged/Refused/Unparseable/Deferred, Method, Reason, URL) and `RunVerdict` (success/partial/blocked) types in `apps/api/internal/retrieval/outcome.go` per data-model.md
-- [ ] T006 Define `RetrievalMethod` rung keys (`direct`, `browser`, `flaresolverr`) with their fixed cost ordering and an `Available()` probe in `apps/api/internal/retrieval/ladder.go`
-- [ ] T007 Write the goose migration `apps/api/internal/db/migrations/00025_host_retrieval_state.sql` creating `host_retrieval_state` with the columns in data-model.md (host unique, identityVersion, currentRung, rungLastVerifiedAt, cookies jsonb, consecutiveBlocks, coolingOffUntil, lastBlockAt, lastBlockReason, crawlDelaySeconds, budgetPeriodStart, budgetUsed, budgetLimit, updatedAt) — next unused goose version after 00024, never reuse a number
-- [ ] T008 Add the `verdict`, `blockedCount`, and `blockReason` columns to `SourceRun` in the same migration `apps/api/internal/db/migrations/00025_host_retrieval_state.sql`, defaulting existing rows so current dashboard reads of `ok`/`found` keep working
-- [ ] T009 Write sqlc queries for host retrieval state in `apps/api/internal/db/queries/hostretrievalstate.sql` (get by host, upsert, clear-cookies, clear-rung, increment-budget, record-block, record-success) and regenerate with sqlc
-- [ ] T010 Extend `apps/api/internal/db/queries/sourcerun.sql` to read and write the new verdict columns and regenerate with sqlc
-- [ ] T011 Implement the `HostRetrievalState` repository in `apps/api/internal/retrieval/state.go` over the generated sqlc queries, encrypting the `cookies` column with the existing `internal/crypto` helpers used for `JobSource.config` secrets (research.md decision 5)
-- [ ] T012 [P] Write repository tests in `apps/api/internal/retrieval/state_test.go` covering upsert-by-host, cookie encryption round-trip, and budget-window rollover, using the existing `internal/dbtest` Postgres harness
-- [ ] T013 Define the `retrieval.Service` interface and `FetchRequest`/`FetchResult` structs in `apps/api/internal/retrieval/service.go` exactly as specified in `contracts/retrieval-service.md`, including the doc comment that a block is a `PageOutcome` and never a Go `error`
+- [X] T005 Define `PageOutcome` (Status: Read/Challenged/Refused/Unparseable/Deferred, Method, Reason, URL) and `RunVerdict` (success/partial/blocked) types in `apps/api/internal/retrieval/outcome.go` per data-model.md
+- [X] T006 Define `RetrievalMethod` rung keys (`direct`, `browser`, `flaresolverr`) with their fixed cost ordering and an `Available()` probe in `apps/api/internal/retrieval/ladder.go`
+- [X] T007 Write the goose migration `apps/api/internal/db/migrations/00025_host_retrieval_state.sql` creating `host_retrieval_state` with the columns in data-model.md (host unique, identityVersion, currentRung, rungLastVerifiedAt, cookies jsonb, consecutiveBlocks, coolingOffUntil, lastBlockAt, lastBlockReason, crawlDelaySeconds, budgetPeriodStart, budgetUsed, budgetLimit, updatedAt) — next unused goose version after 00024, never reuse a number
+- [X] T008 Add the `verdict`, `blockedCount`, and `blockReason` columns to `SourceRun` in the same migration `apps/api/internal/db/migrations/00025_host_retrieval_state.sql`, defaulting existing rows so current dashboard reads of `ok`/`found` keep working
+- [X] T009 Write sqlc queries for host retrieval state in `apps/api/internal/db/queries/hostretrievalstate.sql` (get by host, upsert, clear-cookies, clear-rung, increment-budget, record-block, record-success) and regenerate with sqlc
+- [X] T010 Extend `apps/api/internal/db/queries/sourcerun.sql` to read and write the new verdict columns and regenerate with sqlc
+- [X] T011 Implement the `HostRetrievalState` repository in `apps/api/internal/retrieval/state.go` over the generated sqlc queries, encrypting the `cookies` column with the existing `internal/crypto` helpers used for `JobSource.config` secrets (research.md decision 5)
+- [X] T012 [P] Write repository tests in `apps/api/internal/retrieval/state_test.go` covering upsert-by-host, cookie encryption round-trip, and budget-window rollover, using the existing `internal/dbtest` Postgres harness
+- [X] T013 Define the `retrieval.Service` interface and `FetchRequest`/`FetchResult` structs in `apps/api/internal/retrieval/service.go` exactly as specified in `contracts/retrieval-service.md`, including the doc comment that a block is a `PageOutcome` and never a Go `error`
 
 **Checkpoint**: Types, schema, and per-host storage exist — user stories can begin
 
@@ -79,15 +79,15 @@ across several days, and confirm real listings come back rather than a refusal o
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Implement `BrowserIdentity` in `apps/api/internal/retrieval/identity.go` — Version, UserAgent, Platform, ordered Headers, TLSProfileID — as a single process-wide configured value with startup validation (FR-002, FR-004)
-- [ ] T018 [US1] Implement the `direct` rung in `apps/api/internal/retrieval/direct.go` using the tls-client transport with the identity's fingerprint profile and ordered headers, wrapped by the existing `ratelimit.Transport` as its base so per-host pacing is preserved unchanged (FR-001, FR-003)
-- [ ] T019 [US1] Implement per-host cookie jar load/save in `apps/api/internal/retrieval/state.go`, keyed by host and tagged with `identityVersion`, discarding state whose identity version no longer matches (FR-005, FR-006)
-- [ ] T020 [US1] Keep visitor state for a credentialed source separate from anonymous state on the same host in `apps/api/internal/retrieval/state.go` (FR-007)
-- [ ] T021 [US1] Populate a plausible same-site navigation context (`Referer`, `Sec-Fetch-*`) from `FetchRequest.RefererPage` in `apps/api/internal/retrieval/direct.go` (FR-008)
-- [ ] T022 [US1] Add bounded random jitter to the inter-request interval in `apps/api/internal/ratelimit/transport.go` so intervals to a host are never a fixed value, keeping the existing `DefaultRPS` as the mean (FR-009, acceptance 5)
+- [X] T017 [US1] Implement `BrowserIdentity` in `apps/api/internal/retrieval/identity.go` — Version, UserAgent, Platform, ordered Headers, TLSProfileID — as a single process-wide configured value with startup validation (FR-002, FR-004)
+- [X] T018 [US1] Implement the `direct` rung in `apps/api/internal/retrieval/direct.go` using the tls-client transport with the identity's fingerprint profile and ordered headers, wrapped by the existing `ratelimit.Transport` as its base so per-host pacing is preserved unchanged (FR-001, FR-003)
+- [X] T019 [US1] Implement per-host cookie jar load/save in `apps/api/internal/retrieval/state.go`, keyed by host and tagged with `identityVersion`, discarding state whose identity version no longer matches (FR-005, FR-006)
+- [X] T020 [US1] Keep visitor state for a credentialed source separate from anonymous state on the same host in `apps/api/internal/retrieval/state.go` (FR-007)
+- [X] T021 [US1] Populate a plausible same-site navigation context (`Referer`, `Sec-Fetch-*`) from `FetchRequest.RefererPage` in `apps/api/internal/retrieval/direct.go` (FR-008)
+- [X] T022 [US1] Add bounded random jitter to the inter-request interval in `apps/api/internal/ratelimit/transport.go` so intervals to a host are never a fixed value, keeping the existing `DefaultRPS` as the mean (FR-009, acceptance 5)
 - [ ] T023 [P] [US1] Write `apps/api/internal/ratelimit/transport_test.go` additions asserting successive intervals to one host vary rather than repeating a fixed value (FR-009)
-- [ ] T024 [US1] Route `scraping.Service.FetchHTML` and `HTTPClient()` in `apps/api/internal/scraping/scraping.go` through the `retrieval` direct rung, deleting the hardcoded Chrome/126 `userAgent` constant at line 20 so no path disagrees about identity (FR-004)
-- [ ] T025 [US1] Replace the per-adapter `User-Agent` constants in `apps/api/internal/jobsources/adapters/djinni_session.go` and `jobleads_session.go` with the shared identity, and point `apps/api/internal/jobsources/httpjson.go`'s `defaultClient` at the same transport (FR-004)
+- [X] T024 [US1] Route `scraping.Service.FetchHTML` and `HTTPClient()` in `apps/api/internal/scraping/scraping.go` through the `retrieval` direct rung, deleting the hardcoded Chrome/126 `userAgent` constant at line 20 so no path disagrees about identity (FR-004)
+- [X] T025 [US1] Replace the per-adapter `User-Agent` constants in `apps/api/internal/jobsources/adapters/djinni_session.go` and `jobleads_session.go` with the shared identity, and point `apps/api/internal/jobsources/httpjson.go`'s `defaultClient` at the same transport (FR-004)
 
 **Checkpoint**: Requests are browser-faithful and remember hosts; previously-refused sources should start answering
 
@@ -112,16 +112,16 @@ escalates.
 
 ### Implementation for User Story 2
 
-- [ ] T031 [US2] Implement centralized challenge and refusal detection in `apps/api/internal/retrieval/challenge.go` — provider markup fingerprints plus structural signals (near-empty body, size far below the host's historical page size), judged on body and shape, never on status code alone (FR-012)
-- [ ] T032 [US2] Implement the `browser` rung in `apps/api/internal/retrieval/browser.go` as a **second, isolated** chromedp ExecAllocator with its own user-data-dir and lifecycle, separate from `scraping.Service.BrowserContext()` (FR-019, research.md decision 2)
-- [ ] T033 [US2] Add crash/hang/leak cleanup to `apps/api/internal/retrieval/browser.go`: a launch timeout, per-page context deadline, and teardown that reports the rung unavailable without holding up other sources (edge case)
-- [ ] T034 [US2] Implement the `flaresolverr` rung in `apps/api/internal/retrieval/flaresolverr.go` — request/response client against `cfg.FlaresolverrURL` (config.go:113, currently referenced by nothing) plus an availability health check (FR-010, FR-017)
-- [ ] T035 [US2] Implement ladder walking in `apps/api/internal/retrieval/ladder.go`: start at `HostRetrievalState.currentRung`, escalate only on a detected challenge or refusal, retry the same URL at the next rung within one `Fetch` call, stop at the top and return a blocked `Outcome` (FR-011, FR-016)
-- [ ] T036 [US2] Persist the succeeding rung as `currentRung` and reset `consecutiveBlocks` on any successful read in `apps/api/internal/retrieval/ladder.go` (FR-013)
-- [ ] T037 [US2] Implement periodic cheap-rung re-testing in `apps/api/internal/retrieval/ladder.go` driven by `rungLastVerifiedAt` and the configured interval, so no host is permanently pinned to an expensive rung (FR-014, acceptance 4)
-- [ ] T038 [US2] Suppress all escalation when `FetchRequest.UsesUserAccount` is set and report the block for manual resolution in `apps/api/internal/retrieval/ladder.go` (FR-018)
-- [ ] T039 [US2] Set `UsesUserAccount: true` on the account-credentialed adapters `apps/api/internal/jobsources/adapters/djinni_session.go` and `jobleads_session.go` (FR-018)
-- [ ] T040 [US2] Migrate every scraped adapter in `apps/api/internal/jobsources/adapters/` to fetch through `retrieval.Service`, and delete the ad hoc challenge string-matching currently in `wellfound.go:85-92`, `glassdoor.go:127`, and `jobgether.go:127` so no source implements its own retrieval or challenge handling (FR-020, SC-011)
+- [X] T031 [US2] Implement centralized challenge and refusal detection in `apps/api/internal/retrieval/challenge.go` — provider markup fingerprints plus structural signals (near-empty body, size far below the host's historical page size), judged on body and shape, never on status code alone (FR-012)
+- [X] T032 [US2] Implement the `browser` rung in `apps/api/internal/retrieval/browser.go` as a **second, isolated** chromedp ExecAllocator with its own user-data-dir and lifecycle, separate from `scraping.Service.BrowserContext()` (FR-019, research.md decision 2)
+- [X] T033 [US2] Add crash/hang/leak cleanup to `apps/api/internal/retrieval/browser.go`: a launch timeout, per-page context deadline, and teardown that reports the rung unavailable without holding up other sources (edge case)
+- [X] T034 [US2] Implement the `flaresolverr` rung in `apps/api/internal/retrieval/flaresolverr.go` — request/response client against `cfg.FlaresolverrURL` (config.go:113, currently referenced by nothing) plus an availability health check (FR-010, FR-017)
+- [X] T035 [US2] Implement ladder walking in `apps/api/internal/retrieval/ladder.go`: start at `HostRetrievalState.currentRung`, escalate only on a detected challenge or refusal, retry the same URL at the next rung within one `Fetch` call, stop at the top and return a blocked `Outcome` (FR-011, FR-016)
+- [X] T036 [US2] Persist the succeeding rung as `currentRung` and reset `consecutiveBlocks` on any successful read in `apps/api/internal/retrieval/ladder.go` (FR-013)
+- [X] T037 [US2] Implement periodic cheap-rung re-testing in `apps/api/internal/retrieval/ladder.go` driven by `rungLastVerifiedAt` and the configured interval, so no host is permanently pinned to an expensive rung (FR-014, acceptance 4)
+- [X] T038 [US2] Suppress all escalation when `FetchRequest.UsesUserAccount` is set and report the block for manual resolution in `apps/api/internal/retrieval/ladder.go` (FR-018)
+- [X] T039 [US2] Set `UsesUserAccount: true` on the account-credentialed adapters `apps/api/internal/jobsources/adapters/djinni_session.go` and `jobleads_session.go` (FR-018)
+- [X] T040 [US2] Migrate every scraped adapter in `apps/api/internal/jobsources/adapters/` to fetch through `retrieval.Service`, and delete the ad hoc challenge string-matching currently in `wellfound.go:85-92`, `glassdoor.go:127`, and `jobgether.go:127` so no source implements its own retrieval or challenge handling (FR-020, SC-011)
 
 **Checkpoint**: The ladder escalates only when challenged, remembers the rung, and hard-stops for account-credentialed sources
 
@@ -144,13 +144,13 @@ confirm each run is reported as blocked with a reason — never as a successful 
 
 ### Implementation for User Story 3
 
-- [ ] T045 [US3] Classify every retrieval into a `PageOutcome` in `apps/api/internal/retrieval/ladder.go`, including distinguishing `Unparseable` (read successfully but the parser found nothing) from `Challenged`/`Refused` (FR-022, edge case)
-- [ ] T046 [US3] Thread `PageOutcome` values from adapters up through the ingestion run in `apps/api/internal/ingestion/service.go` and `handler.go` so page-level outcomes survive to run aggregation
-- [ ] T047 [US3] Compute the `RunVerdict` (success / partial+blockedCount / blocked+reason) and write it to `SourceRun` in `apps/api/internal/ingestion/service.go`, so a blocked run can never be recorded as `ok` with zero listings (FR-021, FR-023)
+- [X] T045 [US3] Classify every retrieval into a `PageOutcome` in `apps/api/internal/retrieval/ladder.go`, including distinguishing `Unparseable` (read successfully but the parser found nothing) from `Challenged`/`Refused` (FR-022, edge case)
+- [X] T046 [US3] Thread `PageOutcome` values from adapters up through the ingestion run in `apps/api/internal/ingestion/service.go` and `handler.go` so page-level outcomes survive to run aggregation
+- [X] T047 [US3] Compute the `RunVerdict` (success / partial+blockedCount / blocked+reason) and write it to `SourceRun` in `apps/api/internal/ingestion/service.go`, so a blocked run can never be recorded as `ok` with zero listings (FR-021, FR-023)
 - [ ] T048 [US3] Implement the zero-listings-after-recent-listings degradation flag in `apps/api/internal/ingestion/service.go`, derived from the last N `SourceRun.found` values compared against `verdict` (FR-024, data-model.md)
-- [ ] T049 [US3] Record `lastBlockAt` and `lastBlockReason` per host on every blocked outcome in `apps/api/internal/retrieval/state.go` (FR-025)
-- [ ] T050 [US3] Implement cooling-off in `apps/api/internal/retrieval/state.go`: increment `consecutiveBlocks`, set and lengthen `coolingOffUntil` past the configured threshold, and gate `Fetch` on it with a `Deferred` outcome before any network request (FR-026)
-- [ ] T051 [US3] Implement `OverrideCoolingOff` in `apps/api/internal/retrieval/service.go` returning the remaining duration for the caller to surface as risk, and leaving `coolingOffUntil` unchanged (FR-027, acceptance 5, edge case)
+- [X] T049 [US3] Record `lastBlockAt` and `lastBlockReason` per host on every blocked outcome in `apps/api/internal/retrieval/state.go` (FR-025)
+- [X] T050 [US3] Implement cooling-off in `apps/api/internal/retrieval/state.go`: increment `consecutiveBlocks`, set and lengthen `coolingOffUntil` past the configured threshold, and gate `Fetch` on it with a `Deferred` outcome before any network request (FR-026)
+- [X] T051 [US3] Implement `OverrideCoolingOff` in `apps/api/internal/retrieval/service.go` returning the remaining duration for the caller to surface as risk, and leaving `coolingOffUntil` unchanged (FR-027, acceptance 5, edge case)
 - [ ] T052 [US3] Honor a host's explicit wait instruction (`Retry-After`) as a floor on the next contact time in `apps/api/internal/retrieval/ladder.go` and `state.go` (FR-028)
 
 **Checkpoint**: No run can report success while its pages were blocked; repeatedly-blocking hosts back off
@@ -172,12 +172,12 @@ method, last block reason and time, and any cooling-off period — without readi
 
 ### Implementation for User Story 4
 
-- [ ] T055 [P] [US4] Add `HostRetrievalStatusDto`, `PageOutcomeDto`, and `RunVerdictDto` Go DTOs in `apps/api/internal/dto/` matching `contracts/sources-api.md`, then run `make tygo-generate` so `packages/shared/src/generated.ts` picks them up — never hand-edit the generated TS (Constitution III)
-- [ ] T056 [US4] Implement `GET /api/hosts/:host/retrieval-status` in `apps/api/internal/httpapi/hosts.go` returning `HostRetrievalStatusDto`, 404 when the host has no state row (FR-033)
-- [ ] T057 [US4] Implement `POST /api/hosts/:host/clear-rung-preference` and `POST /api/hosts/:host/clear-cookies` in `apps/api/internal/httpapi/hosts.go`, both idempotent, returning 204 (FR-015)
-- [ ] T058 [US4] Implement `POST /api/hosts/:host/override-cooling-off` in `apps/api/internal/httpapi/hosts.go` returning `{remainingSeconds}` without mutating the stored expiry (FR-027)
-- [ ] T059 [US4] Register the new host routes in `apps/api/internal/httpapi/router.go`
-- [ ] T060 [US4] Include the new `verdict` / `blockedCount` / `blockReason` fields in the existing recent-runs response in `apps/api/internal/httpapi/sources.go` (contracts/sources-api.md)
+- [X] T055 [P] [US4] Add `HostRetrievalStatusDto`, `PageOutcomeDto`, and `RunVerdictDto` Go DTOs in `apps/api/internal/dto/` matching `contracts/sources-api.md`, then run `make tygo-generate` so `packages/shared/src/generated.ts` picks them up — never hand-edit the generated TS (Constitution III)
+- [X] T056 [US4] Implement `GET /api/hosts/:host/retrieval-status` in `apps/api/internal/httpapi/hosts.go` returning `HostRetrievalStatusDto`, 404 when the host has no state row (FR-033)
+- [X] T057 [US4] Implement `POST /api/hosts/:host/clear-rung-preference` and `POST /api/hosts/:host/clear-cookies` in `apps/api/internal/httpapi/hosts.go`, both idempotent, returning 204 (FR-015)
+- [X] T058 [US4] Implement `POST /api/hosts/:host/override-cooling-off` in `apps/api/internal/httpapi/hosts.go` returning `{remainingSeconds}` without mutating the stored expiry (FR-027)
+- [X] T059 [US4] Register the new host routes in `apps/api/internal/httpapi/router.go`
+- [X] T060 [US4] Include the new `verdict` / `blockedCount` / `blockReason` fields in the existing recent-runs response in `apps/api/internal/httpapi/sources.go` (contracts/sources-api.md)
 - [ ] T061 [P] [US4] Add `useHostRetrievalStatus`, `useClearRungPreference`, `useClearCookies`, and `useOverrideCoolingOff` hooks in `apps/dashboard/src/features/sources/hooks.ts`
 - [ ] T062 [US4] Add a per-host retrieval panel to `apps/dashboard/src/features/sources/SourcesPage.tsx` showing current rung, last block time and reason, cooling-off state, and the clear-rung / clear-cookies controls (FR-033, User Story 4 acceptance 1–4)
 - [ ] T063 [US4] Show run verdict (success / partial with blocked count / blocked with reason) instead of a bare `ok` flag in `RecentRunsPanel` in `apps/dashboard/src/features/sources/SourcesPage.tsx` (FR-021, SC-004)
@@ -197,13 +197,13 @@ budget and per-host pacing holds regardless of how many sources target it.
 ### Tests for User Story 5
 
 - [ ] T064 [P] [US5] Write `apps/api/internal/retrieval/budget_test.go` asserting a host's daily budget is shared across concurrently-running sources and that requests beyond it return `Deferred` outcomes, not failures (FR-030, FR-031, SC-007)
-- [ ] T065 [P] [US5] Add a case to `apps/api/internal/retrieval/budget_test.go` asserting a published crawl delay slower than the system's own pacing is honored (FR-029)
+- [X] T065 [P] [US5] Add a case to `apps/api/internal/retrieval/budget_test.go` asserting a published crawl delay slower than the system's own pacing is honored (FR-029)
 
 ### Implementation for User Story 5
 
-- [ ] T066 [US5] Implement the per-host daily budget gate in `apps/api/internal/retrieval/state.go` — `budgetPeriodStart`/`budgetUsed`/`budgetLimit` with window rollover — checked before any rung runs, yielding a `Deferred` outcome when exhausted (FR-030)
-- [ ] T067 [US5] Enforce the budget process-wide across concurrent ingest tasks in `apps/api/internal/retrieval/state.go` (single row per host, atomic increment) so several sources targeting one host cannot multiply its load (FR-031)
-- [ ] T068 [US5] Fetch and honor each host's published `robots.txt` crawl delay in `apps/api/internal/retrieval/ladder.go`, caching it in `HostRetrievalState.crawlDelaySeconds` and applying it whenever it is slower than the system's own pacing (FR-029)
+- [~] T066 [US5] Implement the per-host daily budget gate — **SUPERSEDED**: migration 00029 dropped budget columns per spec 017
+- [~] T067 [US5] Enforce the budget process-wide across concurrent ingest tasks — **SUPERSEDED**: migration 00029 dropped budget columns per spec 017
+- [X] T068 [US5] Fetch and honor each host's published `robots.txt` crawl delay in `apps/api/internal/retrieval/ladder.go`, caching it in `HostRetrievalState.crawlDelaySeconds` and applying it whenever it is slower than the system's own pacing (FR-029)
 - [ ] T069 [US5] Surface budget exhaustion and reset time on the Sources screen: add `budgetUsed`/`budgetLimit`/`budgetResetsAt` display to the host panel in `apps/dashboard/src/features/sources/SourcesPage.tsx` (FR-034)
 
 **Checkpoint**: Volume per host is bounded and observable regardless of how many sources are added
@@ -214,7 +214,7 @@ budget and per-host pacing holds regardless of how many sources target it.
 
 - [ ] T070 Add a guard test in `apps/api/internal/retrieval/` asserting no retrieval path is configurable to route through a third-party proxy, scraping service, or anonymizing relay (FR-032, SC-008)
 - [ ] T071 [P] Run `make test-lint` across `apps/api` and `apps/dashboard` — required by Constitution IV for a change spanning both apps
-- [ ] T072 [P] Add an integration test under `apps/api/internal/db/` or `internal/retrieval/` exercising the full ladder against a Compose-started `flaresolverr` with real Postgres, per Constitution IV's no-mocks rule for cross-service behavior
+- [X] T072 [P] Add an integration test under `apps/api/internal/db/` or `internal/retrieval/` exercising the full ladder against a Compose-started `flaresolverr` with real Postgres, per Constitution IV's no-mocks rule for cross-service behavior
 - [ ] T073 [P] Verify the already-working adapters (arbeitnow, remotive, adzuna, jooble, remoteok) still return listings unchanged after the retrieval migration — any behavior change is a regression per spec Assumptions
 - [ ] T074 [P] Document the retrieval ladder, browser identity upgrade procedure, and the `scraping-extras` profile requirement in the repo docs
 - [ ] T075 Run every scenario in `specs/014-browser-fidelity-fetch-ladder/quickstart.md` end to end
