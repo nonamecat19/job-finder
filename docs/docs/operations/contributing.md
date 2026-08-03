@@ -20,20 +20,29 @@ flowchart LR
     TASKS --> IMPL["implementation"]
     IMPL --> CHK["checklists/"]
     CHK --> PR["pull request"]
+    PR --> FOLD["fold requirements into specs/domains/"]
+    FOLD --> ARCH["archive spec.md + contracts/, delete the rest"]
 ```
 
-A mature feature directory (`specs/019-ai-job-throughput`) contains:
+An **in-flight** feature directory carries the full speckit set:
 
-| File | Contents |
-| --- | --- |
-| `spec.md` | requirements as numbered `FR-NNN` items |
-| `plan.md` | implementation plan |
-| `research.md` | investigated options, numbered `R1`, `R2`, … |
-| `data-model.md` | schema and type changes |
-| `contracts/` | API contracts |
-| `tasks.md` | dependency-ordered tasks |
-| `checklists/` | verification |
-| `quickstart.md` | how to exercise the feature |
+| File | Contents | Survives the merge? |
+| --- | --- | --- |
+| `spec.md` | requirements as numbered `FR-NNN` / `SC-NNN` items | archived |
+| `contracts/` | API contracts | archived |
+| `plan.md` | implementation plan | deleted |
+| `research.md` | investigated options | deleted |
+| `data-model.md` | schema and type changes | deleted |
+| `tasks.md` | dependency-ordered tasks | deleted |
+| `checklists/` | verification | deleted |
+| `quickstart.md` | how to exercise the feature | deleted |
+
+Once the feature ships, its durable requirements are folded into the matching
+`specs/domains/*.md`, its `spec.md` and `contracts/` move to
+`specs/archive/<nnn>-<slug>/`, and the build-time artifacts are deleted — they describe
+how a thing was *going to be* built, and the code answers that better. Git history keeps
+them. The registry in `specs/README.md` records every feature and where its requirements
+now live.
 
 Templates live in `.specify/templates/`; the project constitution is
 `.specify/memory/constitution.md`.
