@@ -147,15 +147,19 @@ parameters as readable text.
 
 ## `settings`
 
-`SettingsPage.tsx`, `LlmSettingsCard.tsx`, `AiFeatureSettingsCard.tsx`, `hooks.ts`.
+`SettingsPage.tsx`, `AiFeatureSettingsCard.tsx`, `ResumeShapeCard.tsx`, `hooks.ts`.
 
 | Card | Endpoint |
 | --- | --- |
-| `LlmSettingsCard` | `GET`/`PUT /api/settings/llm`, `GET /api/settings/llm/models` |
 | `AiFeatureSettingsCard` | `GET /api/settings/ai-features`, `PUT .../{feature}` |
+| `ResumeShapeCard` | `GET`/`PUT /api/settings/resume-shape` |
 
-`LlmSettingsCard` is where per-task provider and model selection happens, including the
-"credential not configured" state the backend reports.
+`ResumeShapeCard` submits the **whole** config on save — the endpoint replaces rather than
+patches — and offers a one-action reset to defaults. Validation is all-or-nothing, so a
+single out-of-range field rejects the entire update.
+
+There is no LLM settings card. Provider and model selection was removed from the dashboard
+by feature 030; routing lives in `gateway/config.yaml`.
 
 ## `profile`
 

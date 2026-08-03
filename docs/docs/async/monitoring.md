@@ -89,9 +89,10 @@ Open the task in asynqmon and read the error.
 
 ### Everything is stuck on one provider
 
-`GET /api/activity/queues` reports the resolved provider class per queue. If `match` shows
-hosted while `CEREBRAS_API_KEY` is unset, the router is silently on Ollama and the
-`credentialConfigured` flag on `/api/settings/llm` says so.
+`GET /api/activity/queues` reports the resolved provider class per queue. A queue reports
+`hosted` whenever `GATEWAY_URL` is set — every hop from the gateway is remote, including
+its own Ollama tier. To find which upstream actually served a request, read the
+`served_model` log line, or `docker compose logs litellm`.
 
 ### Runs stuck in `running`
 

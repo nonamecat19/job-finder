@@ -89,14 +89,16 @@ flowchart TD
 | --- | --- | --- |
 | `llm: provider credential rejected` | bad key | fix the key, **restart** (credentials are env-only) |
 | `llm: provider account out of credits` | quota | top up, or switch the task to Ollama |
-| `llm: model unavailable` | unknown model id | pick a supported one in Settings |
+| `llm: model unavailable` | unknown model id | fix the entry in `gateway/config.yaml`, then `docker compose restart litellm` |
 | `llm: provider unavailable` | 5xx / transport | transient; check the provider |
 | `llm: rate limited` | 429 | breaker holds up to 15 minutes; retry from the Status page |
-| `queue: task exceeded its deadline` | slow model | raise `AI_TASK_TIMEOUT_MATCH` or use a smaller model |
+| `queue: task exceeded its deadline` | slow model | raise `AI_TASK_TIMEOUT_MATCH` or route the task to a faster model |
 
-:::note Cerebras selected but running on Ollama
-`GET /api/settings/llm` returns `credentialConfigured`. If it is false, the router is
-falling back by design — set `CEREBRAS_API_KEY` and restart.
+:::note Work is running on Ollama when you expected a hosted provider
+Every task chain terminates at Ollama by design, and entries whose credential is absent
+are skipped silently. Check `docker compose logs litellm` for which upstream answered, and
+confirm the provider key is present in the **`litellm` service's** environment — the Go
+backend never reads provider keys. With `GATEWAY_URL` unset, everything runs on Ollama.
 :::
 
 ## Queue backlog

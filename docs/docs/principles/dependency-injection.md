@@ -112,36 +112,30 @@ Services never close what they did not open. The rule is stated in the doc comme
 
 ## Rule: shared mutable state is explicit and atomic
 
-Two deliberate exceptions to "no shared state" exist, and both are typed and documented:
+The one deliberate exception to "no shared state" is typed and documented:
 
-- **`llm.SnapshotHolder`** (`internal/llm/router.go:33-58`) holds the per-task provider
-  settings in an `atomic.Value`. One `Store` from the settings service updates what every
-  `Router` resolves on its next call, so in-flight requests always see a consistent
-  snapshot.
 - **`adapters.JobLeadsSession`** is shared *by pointer* between the adapter registry and
-  the enrichment handler (`cmd/server/platform.go:47-50`), because a login session is
-  genuinely one shared thing.
+  the enrichment handler (`cmd/server/platform.go`), because a login session is genuinely
+  one shared thing.
+
+The LLM router used to be a second exception: an `llm.SnapshotHolder` wrapping an
+`atomic.Value`, restored on every `Router.resolve()` so a Settings change took effect
+without a restart. Feature `030-litellm-model-routing` deleted it. `application.Router` is
+now **static and fixed at construction** — the task key, the gateway provider, the local
+provider and the local model are all set once in `cmd/server/compose.go` and never change
+for the process's lifetime.
 
 ```mermaid
-sequenceDiagram
-    participant UI as Settings page
-    participant H as llm_settings handler
-    participant S as llmsettings.Service
-    participant DB as LlmTaskSetting
-    participant HOLD as SnapshotHolder
-    participant R as Router (match)
-    UI->>H: PUT /api/settings/llm
-    H->>S: Update(setting)
-    S->>DB: persist
-    S->>HOLD: Store(new snapshot)
-    Note over R: next task call
-    R->>HOLD: Load()
-    HOLD-->>R: {provider, model}
-    R->>R: dispatch to Cerebras or Ollama
+flowchart LR
+    C["compose.go"] -->|"NewRouter(task, gateway, ollama, model)"| R["Router — immutable"]
+    R -->|"gateway != nil"| G["LiteLLM gateway, model = task key"]
+    R -->|"gateway == nil"| O["Ollama, model = LLM_MODEL_*"]
+    Y["gateway/config.yaml"] -.->|"docker compose restart litellm"| G
 ```
 
-No restart is needed for a settings change — that is the whole point of the atomic
-snapshot.
+Routing is reconfigured by editing `gateway/config.yaml` and restarting one container —
+not by mutating process state. The atomic snapshot is gone because there is no longer any
+runtime-mutable routing state to hold.
 
 ## Rule: runtime policy is validated at startup
 

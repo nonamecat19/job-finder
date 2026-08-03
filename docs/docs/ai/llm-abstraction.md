@@ -1,15 +1,25 @@
 ---
 title: LLM abstraction
 sidebar_position: 2
-description: The Provider interface, Ollama and Cerebras adapters, the task Router, the error taxonomy and the rate-limit breaker.
+description: The Provider interface, the Ollama and gateway adapters, the task Router, the error taxonomy and the rate-limit breaker.
 ---
 
 # LLM abstraction
 
+Package layout (`apps/api/internal/platform/llm/`):
+
+| Path | Holds |
+| --- | --- |
+| `domain/port.go` | the `Provider` interface and `CompleteOptions` |
+| `application/router.go` | the task-bound `Router` |
+| `infrastructure/ollama/` | the local/cloud Ollama adapter — the only one that embeds |
+| `infrastructure/gateway/` | the OpenAI-compatible LiteLLM gateway adapter |
+| `infrastructure/shared/errors.go` | the error taxonomy and the rate-limit breaker |
+
 ## The interface
 
 ```go
-// internal/llm/types.go
+// internal/platform/llm/domain/port.go
 type Provider interface {
     ModelName() string
     Complete(ctx context.Context, prompt string, opts *CompleteOptions) (string, error)
@@ -48,46 +58,42 @@ classDiagram
         -http *http.Client
         -keepAlive string
     }
-    class CerebrasProvider {
+    class GatewayProvider {
         -http *http.Client
         -fallback Provider
     }
     class Router {
         -taskKey string
-        -holder *SnapshotHolder
-        -ollama Provider
-        -cerebras Provider
+        -gateway Provider
+        -local Provider
+        -localModel string
     }
     OllamaProvider ..|> Provider
-    CerebrasProvider ..|> Provider
+    GatewayProvider ..|> Provider
     Router ..|> Provider
     Router --> OllamaProvider
-    Router --> CerebrasProvider
+    Router --> GatewayProvider
 ```
 
 | Provider | Chat | Embeddings | Notes |
 | --- | --- | --- | --- |
-| Ollama | yes | **yes** | local or Ollama Cloud via `OLLAMA_KEY`; `OLLAMA_KEEP_ALIVE` holds the model resident |
-| Cerebras | yes | no | optional; constructed only when `CEREBRAS_API_KEY` is set, and given Ollama as a fallback (`factory.go:44-51`) |
+| Ollama | yes | **yes** | local or Ollama Cloud via `OLLAMA_KEY`; `OLLAMA_KEEP_ALIVE` holds the model resident. Never nil. |
+| Gateway | yes | **no** | OpenAI-compatible client for the LiteLLM proxy. Constructed only when `GATEWAY_URL` is set, and given Ollama as a fallback. |
+
+There is no Cerebras adapter in the application any more. Cerebras is one entry in the
+gateway's failover chains (`gateway/config.yaml`); the Go backend never holds a Cerebras
+credential and never learns which upstream served a request.
 
 `EMBED_URL` exists because Ollama Cloud serves no embedding models — point it at a local
 Ollama when `OLLAMA_URL` is the cloud.
 
-## The factory
+## Embeddings never leave Ollama
 
-```go
-func NewProviders(cfg *config.Config) (ollama *OllamaProvider, cerebras *CerebrasProvider, err error) {
-    transport := tunedTransport(cfg.LLMMaxIdleConnsPerHost)
-    ollama = NewOllama(cfg.OllamaURL, cfg.OllamaKey, cfg.LLMModel, cfg.EmbedModel, cfg.EmbedURL)
-    ollama.http.Transport = transport
-    ollama.keepAlive = cfg.OllamaKeepAlive
-    if cfg.CerebrasAPIKey != "" {
-        cerebras, err = NewCerebras(cfg.CerebrasBaseURL, cfg.CerebrasAPIKey, "", ollama)
-        // ...
-    }
-    return ollama, cerebras, nil
-}
-```
+`gateway.Provider` does not implement embeddings. Every embedding call goes to Ollama
+directly, whatever the gateway configuration — no remote provider in the chain offers an
+embeddings API.
+
+## Transport tuning
 
 `tunedTransport` raises `MaxIdleConnsPerHost` so hosted concurrency does not force a fresh
 TLS handshake on the third simultaneous request. Its doc comment is explicit that it is
@@ -96,43 +102,58 @@ never pick up the scraper's request pacing."*
 
 ## The Router
 
+The Router is **static, fixed at construction**. There is no holder, no atomic swap, no
+runtime reconfiguration — routing state lives entirely in `gateway/config.yaml` and
+environment variables.
+
 ```go
-func (r *Router) resolve() (Provider, string) {
-    snap := r.holder.Load()
-    setting := snap.Tasks[r.taskKey]
-    switch setting.Provider {
-    case TaskProviderCerebras:
-        if r.cerebras != nil {
-            return r.cerebras, setting.Model
-        }
-        return r.ollama, ""
+func (r *Router) resolve() (domain.Provider, string) {
+    if r.gateway != nil {
+        return r.gateway, r.taskKey
     }
-    return r.ollama, setting.Model
+    return r.local, r.localModel
 }
 ```
 
 Three behaviours to note:
 
-1. Resolution happens **per call**, so a settings change takes effect on the next request.
-2. A Cerebras selection with a nil provider falls back to Ollama **with an empty model**,
-   because a Cerebras model id is meaningless to Ollama.
+1. When a gateway is configured, the **task key is sent as the model** — `match`,
+   `generation`, `rephrase`, `ghost`, `default` — and the proxy resolves it through that
+   task's failover chain. The application carries no provider or model identity.
+2. With `GATEWAY_URL` unset, `gateway` is nil and every task talks to Ollama directly with
+   its per-task `LLM_MODEL_*`, falling back to `LLM_MODEL`, then the provider default.
 3. `Router` implements `Provider`, so services never learn that routing exists.
+
+`ProviderClass()` reports `hosted` whenever a gateway is configured — every hop from there
+is remote, including the chain's own Ollama tier — otherwise it defers to the local Ollama
+provider's loopback/private-host + API-key heuristic. The admission gate uses this to size
+concurrency: hosted tasks run several at once, local Ollama stays at one.
+
+One Router is constructed per task in `cmd/server/compose.go`:
+
+```go
+MatchRouter:      llm.NewRouter("match", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelMatch)),
+GenerationRouter: llm.NewRouter("generation", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
+RephraseRouter:   llm.NewRouter("rephrase", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelRephrase)),
+GhostRouter:      llm.NewRouter("ghost", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGhost)),
+DefaultRouter:    llm.NewRouter("default", gatewayIface, ollamaProvider, cfg.LLMModel),
+```
 
 ```mermaid
 sequenceDiagram
     participant S as Service
     participant R as Router(task)
-    participant H as SnapshotHolder
-    participant C as Cerebras
-    participant O as Ollama
+    participant G as LiteLLM gateway
+    participant P as Cerebras → Groq → Cohere → OpenRouter → Ollama
+    participant O as Ollama (direct)
     S->>R: CompleteJSON(prompt, opts)
-    R->>H: Load()
-    H-->>R: {provider, model} for this task
-    alt provider=cerebras and configured
-        R->>C: request with model
-        C-->>R: response or classified error
-    else otherwise
-        R->>O: request with model or default
+    alt GATEWAY_URL set
+        R->>G: request with model = task key
+        G->>P: walk the task's chain until one answers
+        P-->>G: response
+        G-->>R: response or classified error
+    else gateway nil
+        R->>O: request with per-task model or default
         O-->>R: response
     end
     R-->>S: result
@@ -204,21 +225,22 @@ flowchart TD
 Schemas are derived from the Go type via `invopop/jsonschema`, so the prompt's contract
 and the parse target cannot drift apart.
 
-## Curated model list
+## Model selection lives in the gateway
 
-```go
-const DefaultCerebrasModel = "gpt-oss-120b"
+There is no curated model list in Go. `gateway/config.yaml` declares, per task key, an
+ordered chain that tries free-tier hosted providers before the OpenRouter aggregator and
+always terminates at Ollama:
 
-var CerebrasModels = []CerebrasModel{
-    {ID: "gpt-oss-120b", Label: "GPT-OSS 120B", IsDefault: true},
-    {ID: "llama-3.3-70b", Label: "Llama 3.3 70B"},
-    {ID: "llama3.1-8b",  Label: "Llama 3.1 8B"},
-    {ID: "qwen-3-32b",   Label: "Qwen 3 32B"},
-}
+```yaml
+- model_name: match           # → cerebras/gpt-oss-120b
+- model_name: match-groq      # → groq/llama-3.3-70b-versatile
+- model_name: match-cohere    # → cohere_chat/command-r-08-2024
+- model_name: match-openrouter # → openrouter/deepseek/deepseek-v4-pro
 ```
 
-`IsSupportedCerebrasModel("")` returns true — empty means "use the default". Exactly one
-entry must carry `IsDefault`.
+Changing which model serves a task is a YAML edit plus `docker compose restart litellm` —
+no application restart, no rebuild, no code change. Chain entries whose credential is
+absent are skipped rather than failing the request.
 
 ## Gateway cost tracking
 

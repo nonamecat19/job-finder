@@ -177,10 +177,21 @@ status changes travels with the row rather than in a side table.
 
 ```mermaid
 erDiagram
-    LlmTaskSetting {
-        text taskKey PK
-        text provider
-        text model
+    ResumeShapeSetting {
+        text id PK
+        int summaryLines
+        bool skillsEnabled
+        int skillsMaxGroups
+        int experienceBulletsMin
+        int experienceBulletsMax
+        int targetPages
+        bool projectsEnabled
+        int projectsMin
+        int projectsMax
+        int projectBulletsMax
+        bool certificationsEnabled
+        int certificationsMin
+        int certificationsMax
         timestamp updatedAt
     }
     AiFeatureSetting {
@@ -199,12 +210,16 @@ erDiagram
 
 | Table | Constraint of note |
 | --- | --- |
-| `LlmTaskSetting` | `CHECK (provider IN ('ollama','cerebras'))` — the provider vocabulary is enforced in the database |
+| `ResumeShapeSetting` | singleton: `CHECK (id = 'default')`. Every numeric column carries its own range `CHECK`, so an out-of-range shape cannot be stored even if application validation is bypassed. |
 | `AiFeatureSetting` | keyed by feature, `threshold` defaults to 90 |
 | `AutoGenerateSetting` | singleton: `CHECK (id = 'default')` |
 
-`taskKey` values are the four routed tasks: `match`, `generation`, `default`, `ghost`
-(see `internal/queue/policy.go:40-95`).
+`ResumeShapeSetting`'s defaults reproduce the shape the pipeline hardcoded before the
+table existed (`00034_resume_shape_setting.sql`), so a fresh install and an upgraded
+install generate identical documents. `0` means *unlimited* for the `max`/`min` columns.
+
+**`LlmTaskSetting` no longer exists.** It held per-task `{provider, model}` until
+`00033_drop_llm_task_setting.sql` dropped it; routing moved into `gateway/config.yaml`.
 
 ## Signals, analysis, salary
 

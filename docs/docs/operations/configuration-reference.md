@@ -61,18 +61,36 @@ a local Ollama, e.g. `http://localhost:11434`.
 | `LLM_MODEL_REPHRASE` | `rephrase` | `gpt-oss:120b-cloud` |
 | `LLM_MODEL_GHOST` | `ghost` | `gpt-oss:120b-cloud` |
 
-Empty falls back to `LLM_MODEL`. Persisted settings override these; see
-[precedence](/ai/llm-settings).
+Empty falls back to `LLM_MODEL`. These apply on the **direct-Ollama path only** — when
+`GATEWAY_URL` is set, the Router sends the task key as the model and the gateway resolves
+it from `gateway/config.yaml`.
 
-## Cerebras
+## LiteLLM gateway
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `CEREBRAS_API_KEY` | enables the provider | empty = unavailable, every task resolves to Ollama |
-| `CEREBRAS_BASE_URL` | endpoint | `https://api.cerebras.ai/v1` |
+| `GATEWAY_URL` | proxy endpoint, e.g. `http://litellm:4000` | empty = no gateway; every task talks to Ollama directly |
+| `LITELLM_MASTER_KEY` | authenticates the app to the proxy | required whenever `GATEWAY_URL` is set |
 
-Changing the key requires a restart (it is env-only); changing provider or model per task
-does not.
+### Provider keys
+
+These are consumed **inside the `litellm` container only**. The Go backend never reads
+them, and none of them may be set in the api service's environment.
+
+| Variable | Provider |
+| --- | --- |
+| `CEREBRAS_API_KEY` | Cerebras |
+| `GROQ_API_KEY` | Groq |
+| `COHERE_API_KEY` | Cohere |
+| `OPENROUTER_API_KEY` | OpenRouter |
+
+An absent key does not prevent startup and does not cause a request-time error — that
+entry is skipped and the chain advances. Every chain terminates at Ollama, so AI work
+completes even with none of these set.
+
+Changing which model serves a task is an edit to `gateway/config.yaml` followed by
+`docker compose restart litellm` — no application restart. Adding or changing a key is
+also a `litellm` restart.
 
 ## Matching and notifications
 

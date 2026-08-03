@@ -126,8 +126,6 @@ All paths exist under both `/api` and `/api/v1`.
 
 | Method | Path | Handler |
 | --- | --- | --- |
-| GET/PUT | `/settings/llm` | `llm_settings.go:30-31` |
-| GET | `/settings/llm/models` | `llm_settings.go:32` |
 | GET | `/settings/ai-features` | `aifeature.go:30` |
 | PUT | `/settings/ai-features/{feature}` | `aifeature.go:31` |
 | GET | `/activity`, `/activity/queues` | `activity.go:79-80` |

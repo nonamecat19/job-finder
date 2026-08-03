@@ -67,7 +67,7 @@ flowchart LR
     end
     subgraph I["Intelligence"]
         llm
-        llmsettings
+        resumeshape
         aifeature
         matching
         enrichment
