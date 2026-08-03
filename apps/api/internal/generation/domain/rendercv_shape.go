@@ -120,6 +120,8 @@ func (c ShapeConfig) Validate() error {
 		{"projectsMin", c.ProjectsMin, 0, 20},
 		{"projectsMax", c.ProjectsMax, 0, 20},
 		{"projectBulletsMax", c.ProjectBulletsMax, 0, 10},
+		{"certificationsMin", c.CertificationsMin, 0, 20},
+		{"certificationsMax", c.CertificationsMax, 0, 20},
 	}
 	for _, r := range ranges {
 		if r.value < r.min || r.value > r.max {
@@ -135,6 +137,12 @@ func (c ShapeConfig) Validate() error {
 	}
 	if c.ProjectsMin > 0 && !c.ProjectsEnabled {
 		return fmt.Errorf("projectsMin > 0 requires projectsEnabled")
+	}
+	if c.CertificationsMax > 0 && c.CertificationsMin > c.CertificationsMax {
+		return fmt.Errorf("certificationsMin must be <= certificationsMax")
+	}
+	if c.CertificationsMin > 0 && !c.CertificationsEnabled {
+		return fmt.Errorf("certificationsMin > 0 requires certificationsEnabled")
 	}
 	return nil
 }

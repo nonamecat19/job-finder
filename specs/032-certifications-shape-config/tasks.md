@@ -134,21 +134,21 @@ out-of-range value and confirm rejection with no stored change.
 
 ### Tests for User Story 3
 
-- [ ] T026 [P] [US3] Add unit tests for `ShapeConfig.Validate()` in `apps/api/internal/generation/domain/rendercv_shape_test.go` covering each new bound: `certificationsMin`/`certificationsMax` below 0 and above 20 rejected with `"certificationsMin must be between 0 and 20"` / `"certificationsMax must be between 0 and 20"`
-- [ ] T027 [P] [US3] Add unit tests for both new cross-field rules: `certificationsMin > certificationsMax` (when max > 0) → `"certificationsMin must be <= certificationsMax"`; `certificationsMin > 0` with `certificationsEnabled: false` → `"certificationsMin > 0 requires certificationsEnabled"`. Also assert that `certificationsMax: 0` (unlimited) never triggers the ordering rule
-- [ ] T028 [P] [US3] Add HTTP handler tests in `apps/api/internal/resumeshape/interfaces/http/resume_shape_test.go`: GET returns the three new fields; an invalid PUT returns 400 with the exact message and a follow-up GET shows **unchanged** stored values (FR-008 atomicity); DELETE returns the new defaults
-- [ ] T029 [P] [US3] Extend the service test in `apps/api/internal/resumeshape/service_test.go` and the DB-backed `service_integration_test.go` so the new fields survive `Update` → cache → `Get`, and `Reset` restores their defaults (FR-011)
-- [ ] T030 [P] [US3] Add a vitest case in `apps/dashboard/src/features/settings/ResumeShapeCard.test.tsx` asserting the save button enables when **only** `certificationsEnabled` is toggled. **This is the one change TypeScript cannot catch** — the `dirty` computation enumerates booleans by hand, so omitting the new term silently breaks toggle-only saves
-- [ ] T031 [P] [US3] Update the fixture configs in `apps/dashboard/src/features/settings/ResumeShapeCard.test.tsx` and `SettingsPage.test.tsx` to include the three new fields, since `ResumeShapeConfigDto` now requires them
+- [X] T026 [P] [US3] Add unit tests for `ShapeConfig.Validate()` in `apps/api/internal/generation/domain/rendercv_shape_test.go` covering each new bound: `certificationsMin`/`certificationsMax` below 0 and above 20 rejected with `"certificationsMin must be between 0 and 20"` / `"certificationsMax must be between 0 and 20"`
+- [X] T027 [P] [US3] Add unit tests for both new cross-field rules: `certificationsMin > certificationsMax` (when max > 0) → `"certificationsMin must be <= certificationsMax"`; `certificationsMin > 0` with `certificationsEnabled: false` → `"certificationsMin > 0 requires certificationsEnabled"`. Also assert that `certificationsMax: 0` (unlimited) never triggers the ordering rule
+- [X] T028 [P] [US3] Add HTTP handler tests in `apps/api/internal/resumeshape/interfaces/http/resume_shape_test.go`: GET returns the three new fields; an invalid PUT returns 400 with the exact message and a follow-up GET shows **unchanged** stored values (FR-008 atomicity); DELETE returns the new defaults
+- [X] T029 [P] [US3] Extend the service test in `apps/api/internal/resumeshape/service_test.go` and the DB-backed `service_integration_test.go` so the new fields survive `Update` → cache → `Get`, and `Reset` restores their defaults (FR-011)
+- [X] T030 [P] [US3] Add a vitest case in `apps/dashboard/src/features/settings/ResumeShapeCard.test.tsx` asserting the save button enables when **only** `certificationsEnabled` is toggled. **This is the one change TypeScript cannot catch** — the `dirty` computation enumerates booleans by hand, so omitting the new term silently breaks toggle-only saves
+- [X] T031 [P] [US3] Update the fixture configs in `apps/dashboard/src/features/settings/ResumeShapeCard.test.tsx` and `SettingsPage.test.tsx` to include the three new fields, since `ResumeShapeConfigDto` now requires them
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Add the two range entries (`certificationsMin` 0-20, `certificationsMax` 0-20) to the data-driven `ranges` table in `ShapeConfig.Validate()` in `apps/api/internal/generation/domain/rendercv_shape.go`
-- [ ] T033 [US3] Add the two cross-field rules to the same function, mirroring the projects rules verbatim including the `CertificationsMax > 0` guard on the ordering check
-- [ ] T034 [US3] Add `'certificationsEnabled'` to the `NumericKey` exclusion union in `apps/dashboard/src/features/settings/ResumeShapeCard.tsx` — once T010 lands, the compiler will demand this before `NUMERIC_FIELDS` typechecks
-- [ ] T035 [US3] Add the "Include certifications section" checkbox to the toggle row in the same file, alongside the skills and projects checkboxes
-- [ ] T036 [US3] Add `certificationsMin` (0-20) and `certificationsMax` (0-20) entries to `NUMERIC_FIELDS` in the same file, with descriptions matching the projects rows' phrasing — including "kept in the order they appear in your master resume", which is now literally accurate given research D3
-- [ ] T037 [US3] Add `|| draft.certificationsEnabled !== config.certificationsEnabled` to the `dirty` computation in the same file, making T030 pass
+- [X] T032 [US3] Add the two range entries (`certificationsMin` 0-20, `certificationsMax` 0-20) to the data-driven `ranges` table in `ShapeConfig.Validate()` in `apps/api/internal/generation/domain/rendercv_shape.go`
+- [X] T033 [US3] Add the two cross-field rules to the same function, mirroring the projects rules verbatim including the `CertificationsMax > 0` guard on the ordering check
+- [X] T034 [US3] Add `'certificationsEnabled'` to the `NumericKey` exclusion union in `apps/dashboard/src/features/settings/ResumeShapeCard.tsx` — once T010 lands, the compiler will demand this before `NUMERIC_FIELDS` typechecks
+- [X] T035 [US3] Add the "Include certifications section" checkbox to the toggle row in the same file, alongside the skills and projects checkboxes
+- [X] T036 [US3] Add `certificationsMin` (0-20) and `certificationsMax` (0-20) entries to `NUMERIC_FIELDS` in the same file, with descriptions matching the projects rows' phrasing — including "kept in the order they appear in your master resume", which is now literally accurate given research D3
+- [X] T037 [US3] Add `|| draft.certificationsEnabled !== config.certificationsEnabled` to the `dirty` computation in the same file, making T030 pass
 
 **Checkpoint**: All three user stories independently functional. Feature is complete.
 

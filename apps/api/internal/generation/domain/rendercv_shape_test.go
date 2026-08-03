@@ -202,10 +202,28 @@ func TestShapeConfigValidate(t *testing.T) {
 			c.ProjectsEnabled = false
 		}), "projectsMin > 0 requires projectsEnabled"},
 		{"projects disabled with no minimum is fine", with(func(c *ShapeConfig) { c.ProjectsEnabled = false }), ""},
+		{"certificationsMin too low", with(func(c *ShapeConfig) { c.CertificationsMin = -1 }), "certificationsMin must be between 0 and 20"},
+		{"certificationsMin too high", with(func(c *ShapeConfig) { c.CertificationsMin = 21 }), "certificationsMin must be between 0 and 20"},
+		{"certificationsMax too low", with(func(c *ShapeConfig) { c.CertificationsMax = -1 }), "certificationsMax must be between 0 and 20"},
+		{"certificationsMax too high", with(func(c *ShapeConfig) { c.CertificationsMax = 21 }), "certificationsMax must be between 0 and 20"},
+		{"certifications min above max", with(func(c *ShapeConfig) {
+			c.CertificationsMin = 5
+			c.CertificationsMax = 3
+		}), "certificationsMin must be <= certificationsMax"},
+		{"certifications min with unlimited max is fine", with(func(c *ShapeConfig) {
+			c.CertificationsMin = 5
+			c.CertificationsMax = 0
+		}), ""},
+		{"certifications min without certifications enabled", with(func(c *ShapeConfig) {
+			c.CertificationsMin = 2
+			c.CertificationsEnabled = false
+		}), "certificationsMin > 0 requires certificationsEnabled"},
+		{"certifications disabled with no minimum is fine", with(func(c *ShapeConfig) { c.CertificationsEnabled = false }), ""},
 		{"in-range non-defaults", ShapeConfig{
 			SummaryLines: 2, SkillsEnabled: false, SkillsMaxGroups: 3,
 			ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
 			ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 2, ProjectBulletsMax: 3,
+			CertificationsEnabled: true, CertificationsMin: 1, CertificationsMax: 2,
 		}, ""},
 	}
 

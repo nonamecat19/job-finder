@@ -14,7 +14,10 @@ import {
 } from '../../components/ui';
 import { useResetResumeShape, useResumeShape, useUpdateResumeShape } from './hooks';
 
-type NumericKey = Exclude<keyof ResumeShapeConfigDto & string, 'skillsEnabled' | 'projectsEnabled'>;
+type NumericKey = Exclude<
+  keyof ResumeShapeConfigDto & string,
+  'skillsEnabled' | 'projectsEnabled' | 'certificationsEnabled'
+>;
 
 // One row per configurable value, each carrying its allowed range and what it
 // does — this card is the single place the whole resume shape is visible.
@@ -75,6 +78,20 @@ const NUMERIC_FIELDS: { key: NumericKey; label: string; min: number; max: number
     max: 10,
     description: 'Hard cap per project. 0 keeps every bullet.',
   },
+  {
+    key: 'certificationsMin',
+    label: 'Min certifications',
+    min: 0,
+    max: 20,
+    description: 'Target floor for the certifications section. 0 means no minimum; requires certifications to be enabled.',
+  },
+  {
+    key: 'certificationsMax',
+    label: 'Max certifications',
+    min: 0,
+    max: 20,
+    description: 'Hard cap on certifications, kept in the order they appear in your master resume. 0 includes all of them.',
+  },
 ];
 
 function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
@@ -92,7 +109,8 @@ function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
 
   const dirty = NUMERIC_FIELDS.some((f) => draft[f.key] !== config[f.key])
     || draft.skillsEnabled !== config.skillsEnabled
-    || draft.projectsEnabled !== config.projectsEnabled;
+    || draft.projectsEnabled !== config.projectsEnabled
+    || draft.certificationsEnabled !== config.certificationsEnabled;
 
   const pending = update.isPending || reset.isPending;
 
@@ -117,6 +135,13 @@ function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
             onChange={(e) => setDraft({ ...draft, projectsEnabled: e.target.checked })}
           />
           Include projects section
+        </label>
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Checkbox
+            checked={draft.certificationsEnabled}
+            onChange={(e) => setDraft({ ...draft, certificationsEnabled: e.target.checked })}
+          />
+          Include certifications section
         </label>
       </div>
 

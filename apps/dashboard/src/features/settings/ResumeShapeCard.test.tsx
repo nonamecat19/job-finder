@@ -14,6 +14,9 @@ const defaults = {
   projectsMin: 0,
   projectsMax: 0,
   projectBulletsMax: 0,
+  certificationsEnabled: true,
+  certificationsMin: 0,
+  certificationsMax: 0,
 }
 
 const getResumeShape = vi.fn()
@@ -57,11 +60,26 @@ describe('ResumeShapeCard', () => {
     expect(screen.getByText('Min projects (0-20)')).toBeInTheDocument()
     expect(screen.getByText('Max projects (0-20)')).toBeInTheDocument()
     expect(screen.getByText('Max bullets per project (0-10)')).toBeInTheDocument()
+    expect(screen.getByText('Min certifications (0-20)')).toBeInTheDocument()
+    expect(screen.getByText('Max certifications (0-20)')).toBeInTheDocument()
 
     expect(screen.getByLabelText('Max bullets per job')).toHaveValue(10)
     expect(screen.getByLabelText('Target pages')).toHaveValue(2)
     expect(screen.getByLabelText('Include skills section')).toBeChecked()
     expect(screen.getByLabelText('Include projects section')).toBeChecked()
+    expect(screen.getByLabelText('Include certifications section')).toBeChecked()
+  })
+
+  it('enables the save button when only certificationsEnabled is toggled', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<ResumeShapeCard />)
+
+    await waitFor(() => expect(screen.getByLabelText('Include certifications section')).toBeChecked())
+    expect(screen.getByRole('button', { name: 'save' })).toBeDisabled()
+
+    await user.click(screen.getByLabelText('Include certifications section'))
+
+    expect(screen.getByRole('button', { name: 'save' })).toBeEnabled()
   })
 
   it('surfaces the API rejection message without corrupting the displayed values', async () => {
