@@ -3,12 +3,17 @@
 Self-hosted, modular AI job-search platform. Discovers jobs across multiple sources, scores
 them against your master profile with Ollama (local or Ollama Cloud), generates grounded tailored
 resumes + cover letters as PDFs, and tracks applications on a kanban. You apply manually —
-no auto-apply, ever. Design docs live in [`plan/`](plan/00-overview.md).
+no auto-apply, ever.
+
+Requirement records live in [`specs/`](specs/README.md) (start at
+[`specs/domains/`](specs/domains/)); the implementation guide is the Docusaurus site
+under [`docs/`](docs/); agent workflow rules are in [`AGENTS.md`](AGENTS.md).
 
 ## Layout
 
 ```
-apps/api              NestJS backend (Drizzle + pgvector, BullMQ, Ollama, Playwright)
+apps/api              Go backend (chi HTTP API, sqlc + goose on Postgres/pgvector,
+                      asynq workers on Redis, Ollama, scraping/retrieval ladder)
 apps/dashboard        React dashboard (Vite, Tailwind, TanStack Query, dnd-kit)
 packages/shared       Shared TS types (NormalizedJob, DTOs, JSON Resume subset)
 ```
@@ -31,8 +36,9 @@ history.
 GPU strongly recommended for local Ollama (uncomment the `deploy` block in docker-compose.yml).
 To use **Ollama Cloud** instead, set `OLLAMA_URL=https://ollama.com` + `OLLAMA_KEY=<key>` and
 `-cloud` model tags. Cloud has no embedding models, so point `EMBED_URL` at a local Ollama.
-Chat models are per-task: `LLM_MODEL_MATCH` (fit scoring), `LLM_MODEL_GENERATION` (resume/cover),
-`LLM_MODEL` as fallback; embeddings use `EMBED_MODEL`.
+Chat models on the direct-Ollama path are per-task: `LLM_MODEL_MATCH` (fit scoring),
+`LLM_MODEL_GENERATION` (resume/cover), `LLM_MODEL` as fallback; embeddings use
+`EMBED_MODEL`. With `GATEWAY_URL` set, the gateway chooses the model instead — see below.
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 
 Ollama is the default, local-first provider and always terminates every routing chain. Optionally,
@@ -55,18 +61,22 @@ the gateway chain is exhausted the failure surfaces the same way a direct-Ollama
 ## Dev workflow (api/dashboard on host)
 
 ```bash
-docker compose up postgres redis ollama
+make up                    # postgres, redis, ollama, minio
 pnpm install
 pnpm --filter @job-finder/shared build
-cd apps/api && pnpm db:migrate && cd ../..
-pnpm dev                   # api :3000 + dashboard :5173 (proxies /api)
+make run-backend           # api :3000 — runs embedded goose migrations on startup
+make run-frontend          # dashboard :5173 (proxies /api)
 make setup-hooks           # once per clone — activates the branch-protection git hooks
 ```
+
+`make run-all` starts both. Migrations are embedded in the binary and applied by
+`cmd/server` at startup — there is no separate migrate command.
 
 `make setup-hooks` (`git config core.hooksPath .githooks`) is a repository-level config
 value, so one run covers every worktree sharing this clone — but it does not happen
 automatically, and an unactivated hook is an absent gate. See
-`specs/023-workflow-quality-gates/` for what it enforces.
+[`specs/domains/platform-operations.md`](specs/domains/platform-operations.md) for what it
+enforces.
 
 Useful:
 
@@ -130,9 +140,12 @@ mismatched version rather than producing a misleading diff.
 | `projectsMin` | 0 | 0–20 | Target floor of projects; `0` = no minimum |
 | `projectsMax` | 0 | 0–20 | Hard cap on projects; `0` includes all |
 | `projectBulletsMax` | 0 | 0–10 | Hard cap of bullets per project; `0` keeps all |
+| `certificationsEnabled` | true | — | `false` removes the certifications section entirely |
+| `certificationsMin` | 0 | 0–20 | Target floor of certifications; `0` = no minimum |
+| `certificationsMax` | 0 | 0–20 | Hard cap on certifications; `0` includes all |
 
-Minima are targets, never padding: if your master profile has fewer bullets or projects
-than the floor, the resume keeps what exists and the generation's activity trail records
+Minima are targets, never padding: if your master profile has fewer bullets, projects or
+certifications than the floor, the resume keeps what exists and the generation's activity trail records
 the shortfall — nothing is invented. Maxima are enforced deterministically after the
 model responds, so they always hold. When the page target and the section lengths
 conflict, the page target wins and the run records that it did.
@@ -142,9 +155,15 @@ card alone changes nothing.
 
 ## Adding a job source
 
-One class implementing `JobSourceAdapter`
-(`apps/api/src/modules/job-sources/adapter.interface.ts`) + one entry in the `ADAPTERS`
-array in `job-sources.module.ts`. Nothing downstream changes.
+One type implementing `domain.Adapter`
+(`apps/api/internal/jobsources/domain/adapter.go`) in
+`apps/api/internal/jobsources/infrastructure/adapters/`, plus one entry in the
+`domain.NewRegistry(...)` call in `apps/api/cmd/server/compose.go`. Nothing downstream
+changes — retrieval, pacing, challenge handling and persistence are all shared.
+
+The requirements every source must meet are in
+[`specs/domains/job-sources.md`](specs/domains/job-sources.md), which also records which
+adapters are currently registered.
 
 ## Notes
 
