@@ -114,6 +114,21 @@ type DjinniLegacySubAudit struct {
 	DeletedAt      pgtype.Timestamptz `json:"deletedAt"`
 }
 
+type EditProposal struct {
+	ID            pgtype.UUID        `json:"id"`
+	DraftID       pgtype.UUID        `json:"draft_id"`
+	FieldType     string             `json:"field_type"`
+	FieldKey      string             `json:"field_key"`
+	BeforeValue   string             `json:"before_value"`
+	AfterValue    string             `json:"after_value"`
+	Traceability  []byte             `json:"traceability"`
+	Status        string             `json:"status"`
+	DroppedReason *string            `json:"dropped_reason"`
+	AcceptedAt    pgtype.Timestamptz `json:"accepted_at"`
+	RejectedAt    pgtype.Timestamptz `json:"rejected_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type EmployerBoard struct {
 	ID                   pgtype.UUID      `json:"id"`
 	Vendor               string           `json:"vendor"`
@@ -368,4 +383,24 @@ type SynonymOverride struct {
 	Alias     string           `json:"alias"`
 	Canonical string           `json:"canonical"`
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
+}
+
+type TailoredDraft struct {
+	ID                  pgtype.UUID        `json:"id"`
+	ProfileID           pgtype.UUID        `json:"profile_id"`
+	JobID               pgtype.UUID        `json:"job_id"`
+	VacancyCompany      *string            `json:"vacancy_company"`
+	VacancyTitle        *string            `json:"vacancy_title"`
+	VacancyText         *string            `json:"vacancy_text"`
+	Baseline            []byte             `json:"baseline"`
+	BaselineContentHash string             `json:"baseline_content_hash"`
+	State               string             `json:"state"`
+	ParentDraftID       pgtype.UUID        `json:"parent_draft_id"`
+	Model               string             `json:"model"`
+	ActivityID          pgtype.UUID        `json:"activity_id"`
+	ExportDocumentID    pgtype.UUID        `json:"export_document_id"`
+	ExportStatus        *string            `json:"export_status"`
+	ExportFeedback      []byte             `json:"export_feedback"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
