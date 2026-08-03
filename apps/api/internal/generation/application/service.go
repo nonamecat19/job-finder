@@ -274,16 +274,19 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 // document can be explained by the settings the run actually used (FR-006).
 func shapeConfigMeta(cfg domain.ShapeConfig) map[string]any {
 	return map[string]any{
-		"summaryLines":         cfg.SummaryLines,
-		"skillsEnabled":        cfg.SkillsEnabled,
-		"skillsMaxGroups":      cfg.SkillsMaxGroups,
-		"experienceBulletsMin": cfg.ExperienceBulletsMin,
-		"experienceBulletsMax": cfg.ExperienceBulletsMax,
-		"targetPages":          cfg.TargetPages,
-		"projectsEnabled":      cfg.ProjectsEnabled,
-		"projectsMin":          cfg.ProjectsMin,
-		"projectsMax":          cfg.ProjectsMax,
-		"projectBulletsMax":    cfg.ProjectBulletsMax,
+		"summaryLines":          cfg.SummaryLines,
+		"skillsEnabled":         cfg.SkillsEnabled,
+		"skillsMaxGroups":       cfg.SkillsMaxGroups,
+		"experienceBulletsMin":  cfg.ExperienceBulletsMin,
+		"experienceBulletsMax":  cfg.ExperienceBulletsMax,
+		"targetPages":           cfg.TargetPages,
+		"projectsEnabled":       cfg.ProjectsEnabled,
+		"projectsMin":           cfg.ProjectsMin,
+		"projectsMax":           cfg.ProjectsMax,
+		"projectBulletsMax":     cfg.ProjectBulletsMax,
+		"certificationsEnabled": cfg.CertificationsEnabled,
+		"certificationsMin":     cfg.CertificationsMin,
+		"certificationsMax":     cfg.CertificationsMax,
 	}
 }
 

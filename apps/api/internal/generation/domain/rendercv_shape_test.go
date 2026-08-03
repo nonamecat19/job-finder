@@ -138,6 +138,15 @@ func TestDefaultShapeConfig(t *testing.T) {
 	if c.ProjectBulletsMax != 0 {
 		t.Errorf("ProjectBulletsMax = %d, want 0", c.ProjectBulletsMax)
 	}
+	if !c.CertificationsEnabled {
+		t.Error("CertificationsEnabled = false, want true")
+	}
+	if c.CertificationsMin != 0 {
+		t.Errorf("CertificationsMin = %d, want 0", c.CertificationsMin)
+	}
+	if c.CertificationsMax != 0 {
+		t.Errorf("CertificationsMax = %d, want 0", c.CertificationsMax)
+	}
 }
 
 func TestShapeConfigValidate(t *testing.T) {
@@ -261,6 +270,100 @@ func projectNames(m RendercvMaster) []string {
 		out = append(out, StringField(p, "name"))
 	}
 	return out
+}
+
+func masterWithSkillGroups(labels ...string) RendercvMaster {
+	skills := make([]any, 0, len(labels))
+	for _, label := range labels {
+		skills = append(skills, map[string]any{"label": label, "details": label + " details"})
+	}
+	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{"skills": skills}}}
+}
+
+// masterWithCertifications builds a certifications section with the given
+// labels, in the given order — the certifications analogue of
+// masterWithSkillGroups. Certifications are one_line entries with no bullet
+// list (research D2: no per-certification detail cap), so there is no
+// per-entry count to vary the way masterWithBullets varies highlights.
+func masterWithCertifications(labels ...string) RendercvMaster {
+	certifications := make([]any, 0, len(labels))
+	for _, label := range labels {
+		certifications = append(certifications, map[string]any{"label": label, "details": label + " details"})
+	}
+	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{"certifications": certifications}}}
+}
+
+func certificationLabels(m RendercvMaster) []string {
+	var out []string
+	for _, c := range AsSliceOfMaps(CvSections(m)["certifications"]) {
+		out = append(out, StringField(c, "label"))
+	}
+	return out
+}
+
+// certificationsFixtureMaster is the shared 8-entry fixture referenced by
+// tasks.md T013: enough entries for truncation tests (e.g. CertificationsMax
+// below the available count) without every test hand-rolling its own labels.
+func certificationsFixtureMaster() RendercvMaster {
+	return masterWithCertifications(
+		"AWS Certified Solutions Architect",
+		"Google Cloud Professional ML Engineer",
+		"Certified Kubernetes Administrator",
+		"TensorFlow Developer Certificate",
+		"Deep Learning Specialization",
+		"Certified Scrum Master",
+		"Azure AI Engineer Associate",
+		"NVIDIA Deep Learning Institute Certificate",
+	)
+}
+
+// TestCertificationsFixtureMasterHasEightEntries guards the T013 fixture
+// itself: US1/US2/US3 truncation and toggle tests all lean on
+// certificationsFixtureMaster() having at least 8 entries in a known,
+// stable order, so a regression here would silently weaken every test built
+// on top of it.
+func TestCertificationsFixtureMasterHasEightEntries(t *testing.T) {
+	labels := certificationLabels(certificationsFixtureMaster())
+	if len(labels) < 8 {
+		t.Fatalf("certificationsFixtureMaster entries = %d, want at least 8", len(labels))
+	}
+	if labels[0] != "AWS Certified Solutions Architect" {
+		t.Errorf("first entry = %q, want authored order preserved", labels[0])
+	}
+}
+
+func skillLabels(m RendercvMaster) []string {
+	var out []string
+	for _, s := range AsSliceOfMaps(CvSections(m)["skills"]) {
+		out = append(out, StringField(s, "label"))
+	}
+	return out
+}
+
+// The prompt asks the model for fewer groups, but only this clamp makes the
+// configured cap binding — a model that returns every group anyway must not
+// be able to overshoot it (FR-008).
+func TestApplyHardLimitsClampsSkillGroupsInMasterOrder(t *testing.T) {
+	m := masterWithSkillGroups("Languages", "Backend", "Frontend", "Databases")
+	cfg := DefaultShapeConfig()
+	cfg.SkillsMaxGroups = 2
+
+	ApplyHardLimits(m, cfg)
+
+	got := skillLabels(m)
+	if len(got) != 2 || got[0] != "Languages" || got[1] != "Backend" {
+		t.Errorf("skill groups = %v, want the first two in master order [Languages Backend]", got)
+	}
+}
+
+func TestApplyHardLimitsUnlimitedSkillGroupsKeepsAll(t *testing.T) {
+	m := masterWithSkillGroups("Languages", "Backend", "Frontend")
+
+	ApplyHardLimits(m, DefaultShapeConfig()) // SkillsMaxGroups 0 = unlimited
+
+	if got := skillLabels(m); len(got) != 3 {
+		t.Errorf("skill groups = %v, want all three kept", got)
+	}
 }
 
 func TestApplyHardLimitsTruncatesProjectsInMasterOrder(t *testing.T) {

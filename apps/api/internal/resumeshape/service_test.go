@@ -31,17 +31,20 @@ func (f *fakeRepo) UpdateResumeShapeSetting(_ context.Context, arg sqlcgen.Updat
 		return sqlcgen.ResumeShapeSetting{}, f.updErr
 	}
 	f.row = sqlcgen.ResumeShapeSetting{
-		ID:                   "default",
-		SummaryLines:         arg.SummaryLines,
-		SkillsEnabled:        arg.SkillsEnabled,
-		SkillsMaxGroups:      arg.SkillsMaxGroups,
-		ExperienceBulletsMin: arg.ExperienceBulletsMin,
-		ExperienceBulletsMax: arg.ExperienceBulletsMax,
-		TargetPages:          arg.TargetPages,
-		ProjectsEnabled:      arg.ProjectsEnabled,
-		ProjectsMin:          arg.ProjectsMin,
-		ProjectsMax:          arg.ProjectsMax,
-		ProjectBulletsMax:    arg.ProjectBulletsMax,
+		ID:                    "default",
+		SummaryLines:          arg.SummaryLines,
+		SkillsEnabled:         arg.SkillsEnabled,
+		SkillsMaxGroups:       arg.SkillsMaxGroups,
+		ExperienceBulletsMin:  arg.ExperienceBulletsMin,
+		ExperienceBulletsMax:  arg.ExperienceBulletsMax,
+		TargetPages:           arg.TargetPages,
+		ProjectsEnabled:       arg.ProjectsEnabled,
+		ProjectsMin:           arg.ProjectsMin,
+		ProjectsMax:           arg.ProjectsMax,
+		ProjectBulletsMax:     arg.ProjectBulletsMax,
+		CertificationsEnabled: arg.CertificationsEnabled,
+		CertificationsMin:     arg.CertificationsMin,
+		CertificationsMax:     arg.CertificationsMax,
 	}
 	return f.row, nil
 }
@@ -51,6 +54,7 @@ func defaultRow() sqlcgen.ResumeShapeSetting {
 		ID: "default", SummaryLines: 4, SkillsEnabled: true, SkillsMaxGroups: 0,
 		ExperienceBulletsMin: 8, ExperienceBulletsMax: 10, TargetPages: 2,
 		ProjectsEnabled: true, ProjectsMin: 0, ProjectsMax: 0, ProjectBulletsMax: 0,
+		CertificationsEnabled: true, CertificationsMin: 0, CertificationsMax: 0,
 	}
 }
 

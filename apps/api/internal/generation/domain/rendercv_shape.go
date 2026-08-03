@@ -60,6 +60,15 @@ type ShapeConfig struct {
 	ProjectsMax int
 	// ProjectBulletsMax is the hard cap on bullets per project. 0 = unlimited.
 	ProjectBulletsMax int
+	// CertificationsEnabled renders the certifications section; false removes
+	// it entirely.
+	CertificationsEnabled bool
+	// CertificationsMin is the target floor for how many certifications are
+	// kept. 0 = no minimum. Never satisfied by inventing certifications.
+	CertificationsMin int
+	// CertificationsMax is the hard cap on how many certifications are kept.
+	// 0 = unlimited.
+	CertificationsMax int
 }
 
 // DefaultShapeConfig is the single source of truth for the defaults, matching
@@ -69,16 +78,19 @@ type ShapeConfig struct {
 // projects passing through verbatim.
 func DefaultShapeConfig() ShapeConfig {
 	return ShapeConfig{
-		SummaryLines:         4,
-		SkillsEnabled:        true,
-		SkillsMaxGroups:      0,
-		ExperienceBulletsMin: 8,
-		ExperienceBulletsMax: 10,
-		TargetPages:          2,
-		ProjectsEnabled:      true,
-		ProjectsMin:          0,
-		ProjectsMax:          0,
-		ProjectBulletsMax:    0,
+		SummaryLines:          4,
+		SkillsEnabled:         true,
+		SkillsMaxGroups:       0,
+		ExperienceBulletsMin:  8,
+		ExperienceBulletsMax:  10,
+		TargetPages:           2,
+		ProjectsEnabled:       true,
+		ProjectsMin:           0,
+		ProjectsMax:           0,
+		ProjectBulletsMax:     0,
+		CertificationsEnabled: true,
+		CertificationsMin:     0,
+		CertificationsMax:     0,
 	}
 }
 
@@ -150,7 +162,9 @@ func ApplySectionToggles(master RendercvMaster, cfg ShapeConfig) {
 
 // ApplyHardLimits enforces the count limits the model cannot be trusted with,
 // on the already-merged document: bullets per experience entry are clamped to
-// ExperienceBulletsMax. It only ever truncates — a configured minimum the
+// ExperienceBulletsMax, skill groups to SkillsMaxGroups, projects to
+// ProjectsMax and their bullets to ProjectBulletsMax. It only ever truncates —
+// a configured minimum the
 // master cannot satisfy is reported as a Shortfall, never padded (a padded
 // bullet would be an invented one).
 //
@@ -174,6 +188,16 @@ func ApplyHardLimits(merged RendercvMaster, cfg ShapeConfig) ShapeReport {
 				Requested: cfg.ExperienceBulletsMin,
 				Available: available,
 			})
+		}
+	}
+
+	// Skill groups are clamped the same way: the model is asked for a shorter
+	// list, but only this truncation makes the configured cap binding. Keeps
+	// the first N in the master's authored order, which is its own priority
+	// order.
+	if cfg.SkillsMaxGroups > 0 {
+		if skills, ok := sections["skills"].([]any); ok && len(skills) > cfg.SkillsMaxGroups {
+			sections["skills"] = skills[:cfg.SkillsMaxGroups]
 		}
 	}
 

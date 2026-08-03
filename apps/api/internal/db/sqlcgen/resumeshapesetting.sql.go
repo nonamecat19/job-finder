@@ -10,7 +10,7 @@ import (
 )
 
 const getResumeShapeSetting = `-- name: GetResumeShapeSetting :one
-SELECT id, "summaryLines", "skillsEnabled", "skillsMaxGroups", "experienceBulletsMin", "experienceBulletsMax", "targetPages", "projectsEnabled", "projectsMin", "projectsMax", "projectBulletsMax", "updatedAt" FROM "ResumeShapeSetting" WHERE "id" = 'default'
+SELECT id, "summaryLines", "skillsEnabled", "skillsMaxGroups", "experienceBulletsMin", "experienceBulletsMax", "targetPages", "projectsEnabled", "projectsMin", "projectsMax", "projectBulletsMax", "updatedAt", "certificationsEnabled", "certificationsMin", "certificationsMax" FROM "ResumeShapeSetting" WHERE "id" = 'default'
 `
 
 func (q *Queries) GetResumeShapeSetting(ctx context.Context) (ResumeShapeSetting, error) {
@@ -29,6 +29,9 @@ func (q *Queries) GetResumeShapeSetting(ctx context.Context) (ResumeShapeSetting
 		&i.ProjectsMax,
 		&i.ProjectBulletsMax,
 		&i.UpdatedAt,
+		&i.CertificationsEnabled,
+		&i.CertificationsMin,
+		&i.CertificationsMax,
 	)
 	return i, err
 }
@@ -45,22 +48,28 @@ SET "summaryLines" = $1,
     "projectsMin" = $8,
     "projectsMax" = $9,
     "projectBulletsMax" = $10,
+    "certificationsEnabled" = $11,
+    "certificationsMin" = $12,
+    "certificationsMax" = $13,
     "updatedAt" = now()
 WHERE "id" = 'default'
-RETURNING id, "summaryLines", "skillsEnabled", "skillsMaxGroups", "experienceBulletsMin", "experienceBulletsMax", "targetPages", "projectsEnabled", "projectsMin", "projectsMax", "projectBulletsMax", "updatedAt"
+RETURNING id, "summaryLines", "skillsEnabled", "skillsMaxGroups", "experienceBulletsMin", "experienceBulletsMax", "targetPages", "projectsEnabled", "projectsMin", "projectsMax", "projectBulletsMax", "updatedAt", "certificationsEnabled", "certificationsMin", "certificationsMax"
 `
 
 type UpdateResumeShapeSettingParams struct {
-	SummaryLines         int32 `json:"summaryLines"`
-	SkillsEnabled        bool  `json:"skillsEnabled"`
-	SkillsMaxGroups      int32 `json:"skillsMaxGroups"`
-	ExperienceBulletsMin int32 `json:"experienceBulletsMin"`
-	ExperienceBulletsMax int32 `json:"experienceBulletsMax"`
-	TargetPages          int32 `json:"targetPages"`
-	ProjectsEnabled      bool  `json:"projectsEnabled"`
-	ProjectsMin          int32 `json:"projectsMin"`
-	ProjectsMax          int32 `json:"projectsMax"`
-	ProjectBulletsMax    int32 `json:"projectBulletsMax"`
+	SummaryLines          int32 `json:"summaryLines"`
+	SkillsEnabled         bool  `json:"skillsEnabled"`
+	SkillsMaxGroups       int32 `json:"skillsMaxGroups"`
+	ExperienceBulletsMin  int32 `json:"experienceBulletsMin"`
+	ExperienceBulletsMax  int32 `json:"experienceBulletsMax"`
+	TargetPages           int32 `json:"targetPages"`
+	ProjectsEnabled       bool  `json:"projectsEnabled"`
+	ProjectsMin           int32 `json:"projectsMin"`
+	ProjectsMax           int32 `json:"projectsMax"`
+	ProjectBulletsMax     int32 `json:"projectBulletsMax"`
+	CertificationsEnabled bool  `json:"certificationsEnabled"`
+	CertificationsMin     int32 `json:"certificationsMin"`
+	CertificationsMax     int32 `json:"certificationsMax"`
 }
 
 func (q *Queries) UpdateResumeShapeSetting(ctx context.Context, arg UpdateResumeShapeSettingParams) (ResumeShapeSetting, error) {
@@ -75,6 +84,9 @@ func (q *Queries) UpdateResumeShapeSetting(ctx context.Context, arg UpdateResume
 		arg.ProjectsMin,
 		arg.ProjectsMax,
 		arg.ProjectBulletsMax,
+		arg.CertificationsEnabled,
+		arg.CertificationsMin,
+		arg.CertificationsMax,
 	)
 	var i ResumeShapeSetting
 	err := row.Scan(
@@ -90,6 +102,9 @@ func (q *Queries) UpdateResumeShapeSetting(ctx context.Context, arg UpdateResume
 		&i.ProjectsMax,
 		&i.ProjectBulletsMax,
 		&i.UpdatedAt,
+		&i.CertificationsEnabled,
+		&i.CertificationsMin,
+		&i.CertificationsMax,
 	)
 	return i, err
 }

@@ -84,30 +84,36 @@ func (s *Service) Reset(ctx context.Context) (domain.ShapeConfig, error) {
 
 func rowToConfig(r sqlcgen.ResumeShapeSetting) domain.ShapeConfig {
 	return domain.ShapeConfig{
-		SummaryLines:         int(r.SummaryLines),
-		SkillsEnabled:        r.SkillsEnabled,
-		SkillsMaxGroups:      int(r.SkillsMaxGroups),
-		ExperienceBulletsMin: int(r.ExperienceBulletsMin),
-		ExperienceBulletsMax: int(r.ExperienceBulletsMax),
-		TargetPages:          int(r.TargetPages),
-		ProjectsEnabled:      r.ProjectsEnabled,
-		ProjectsMin:          int(r.ProjectsMin),
-		ProjectsMax:          int(r.ProjectsMax),
-		ProjectBulletsMax:    int(r.ProjectBulletsMax),
+		SummaryLines:          int(r.SummaryLines),
+		SkillsEnabled:         r.SkillsEnabled,
+		SkillsMaxGroups:       int(r.SkillsMaxGroups),
+		ExperienceBulletsMin:  int(r.ExperienceBulletsMin),
+		ExperienceBulletsMax:  int(r.ExperienceBulletsMax),
+		TargetPages:           int(r.TargetPages),
+		ProjectsEnabled:       r.ProjectsEnabled,
+		ProjectsMin:           int(r.ProjectsMin),
+		ProjectsMax:           int(r.ProjectsMax),
+		ProjectBulletsMax:     int(r.ProjectBulletsMax),
+		CertificationsEnabled: r.CertificationsEnabled,
+		CertificationsMin:     int(r.CertificationsMin),
+		CertificationsMax:     int(r.CertificationsMax),
 	}
 }
 
 func configToParams(c domain.ShapeConfig) sqlcgen.UpdateResumeShapeSettingParams {
 	return sqlcgen.UpdateResumeShapeSettingParams{
-		SummaryLines:         int32(c.SummaryLines),
-		SkillsEnabled:        c.SkillsEnabled,
-		SkillsMaxGroups:      int32(c.SkillsMaxGroups),
-		ExperienceBulletsMin: int32(c.ExperienceBulletsMin),
-		ExperienceBulletsMax: int32(c.ExperienceBulletsMax),
-		TargetPages:          int32(c.TargetPages),
-		ProjectsEnabled:      c.ProjectsEnabled,
-		ProjectsMin:          int32(c.ProjectsMin),
-		ProjectsMax:          int32(c.ProjectsMax),
-		ProjectBulletsMax:    int32(c.ProjectBulletsMax),
+		SummaryLines:          int32(c.SummaryLines),
+		SkillsEnabled:         c.SkillsEnabled,
+		SkillsMaxGroups:       int32(c.SkillsMaxGroups),
+		ExperienceBulletsMin:  int32(c.ExperienceBulletsMin),
+		ExperienceBulletsMax:  int32(c.ExperienceBulletsMax),
+		TargetPages:           int32(c.TargetPages),
+		ProjectsEnabled:       c.ProjectsEnabled,
+		ProjectsMin:           int32(c.ProjectsMin),
+		ProjectsMax:           int32(c.ProjectsMax),
+		ProjectBulletsMax:     int32(c.ProjectBulletsMax),
+		CertificationsEnabled: c.CertificationsEnabled,
+		CertificationsMin:     int32(c.CertificationsMin),
+		CertificationsMax:     int32(c.CertificationsMax),
 	}
 }
