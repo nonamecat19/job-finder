@@ -107,15 +107,15 @@ generate, confirm exactly 3 appear and that they are the first 3 in authored ord
 
 ### Tests for User Story 2
 
-- [ ] T020 [P] [US2] Add unit tests in `apps/api/internal/generation/domain/rendercv_shape_test.go` for `ApplyHardLimits` certifications truncation: 8 entries with `CertificationsMax: 3` keeps exactly the first 3 in authored order; `CertificationsMax: 0` keeps all; a cap larger than the available count keeps all and invents nothing
-- [ ] T021 [P] [US2] Add a unit test in the same file asserting that `CertificationsMin: 4` against 2 available appends exactly one `Shortfall{Path: "cv.sections.certifications", Requested: 4, Available: 2}` and that the section content is left untouched — nothing padded (FR-006, Constitution II)
-- [ ] T022 [P] [US2] Add an integration test asserting a run with an unmeetable `certificationsMin` still succeeds, renders the available certifications, and records the shortfall in the activity record (SC-007)
+- [X] T020 [P] [US2] Add unit tests in `apps/api/internal/generation/domain/rendercv_shape_test.go` for `ApplyHardLimits` certifications truncation: 8 entries with `CertificationsMax: 3` keeps exactly the first 3 in authored order; `CertificationsMax: 0` keeps all; a cap larger than the available count keeps all and invents nothing
+- [X] T021 [P] [US2] Add a unit test in the same file asserting that `CertificationsMin: 4` against 2 available appends exactly one `Shortfall{Path: "cv.sections.certifications", Requested: 4, Available: 2}` and that the section content is left untouched — nothing padded (FR-006, Constitution II)
+- [X] T022 [P] [US2] Add an integration test asserting a run with an unmeetable `certificationsMin` still succeeds, renders the available certifications, and records the shortfall in the activity record (SC-007)
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Add the certifications block to `ApplyHardLimits` in `apps/api/internal/generation/domain/rendercv_shape.go`, modelled on the existing projects block but **without** a per-entry bullet loop (research D2): when `CertificationsMax > 0` and more are present, assign `sections["certifications"] = certs[:cfg.CertificationsMax]`; when `CertificationsMin > 0` and fewer are present, append a `Shortfall` with path `cv.sections.certifications`
-- [ ] T024 [US2] Confirm the retained subset is never re-sorted — truncation preserves authored order, matching the existing projects comment "the retained subset is never reordered" (FR-015)
-- [ ] T025 [US2] Confirm no changes were made to `buildSelectPrompt` in `apps/api/internal/generation/application/rendercv_llm.go`, to the merge in `apps/api/internal/generation/domain/rendercv.go`, or to `apps/api/internal/generation/domain/rendercv_grounding.go`. Certifications must never reach the tailoring model (research D3) — this task is a deliberate negative check, not a no-op
+- [X] T023 [US2] Add the certifications block to `ApplyHardLimits` in `apps/api/internal/generation/domain/rendercv_shape.go`, modelled on the existing projects block but **without** a per-entry bullet loop (research D2): when `CertificationsMax > 0` and more are present, assign `sections["certifications"] = certs[:cfg.CertificationsMax]`; when `CertificationsMin > 0` and fewer are present, append a `Shortfall` with path `cv.sections.certifications`
+- [X] T024 [US2] Confirm the retained subset is never re-sorted — truncation preserves authored order, matching the existing projects comment "the retained subset is never reordered" (FR-015)
+- [X] T025 [US2] Confirm no changes were made to `buildSelectPrompt` in `apps/api/internal/generation/application/rendercv_llm.go`, to the merge in `apps/api/internal/generation/domain/rendercv.go`, or to `apps/api/internal/generation/domain/rendercv_grounding.go`. Certifications must never reach the tailoring model (research D3) — this task is a deliberate negative check, not a no-op
 
 **Checkpoint**: US1 and US2 both work independently. Capping and disabling are both live.
 

@@ -428,6 +428,72 @@ func TestApplyHardLimitsReportsProjectShortfallWithoutInventing(t *testing.T) {
 	}
 }
 
+func TestApplyHardLimitsTruncatesCertificationsInMasterOrder(t *testing.T) {
+	m := certificationsFixtureMaster()
+	cfg := DefaultShapeConfig()
+	cfg.CertificationsMax = 3
+
+	ApplyHardLimits(m, cfg)
+
+	got := certificationLabels(m)
+	want := []string{
+		"AWS Certified Solutions Architect",
+		"Google Cloud Professional ML Engineer",
+		"Certified Kubernetes Administrator",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("certifications = %v, want exactly the first 3 in authored order %v", got, want)
+	}
+	for i, label := range want {
+		if got[i] != label {
+			t.Errorf("certifications[%d] = %q, want %q (authored order preserved)", i, got[i], label)
+		}
+	}
+}
+
+func TestApplyHardLimitsUnlimitedCertificationsKeepsAll(t *testing.T) {
+	m := certificationsFixtureMaster()
+	want := len(certificationLabels(m))
+
+	ApplyHardLimits(m, DefaultShapeConfig()) // CertificationsMax 0 = unlimited
+
+	if got := certificationLabels(m); len(got) != want {
+		t.Errorf("certifications = %v, want all %d kept", got, want)
+	}
+}
+
+func TestApplyHardLimitsCertificationsCapAboveAvailableKeepsAllInventsNothing(t *testing.T) {
+	m := certificationsFixtureMaster()
+	available := len(certificationLabels(m))
+	cfg := DefaultShapeConfig()
+	cfg.CertificationsMax = available + 5 // cap larger than what exists
+
+	ApplyHardLimits(m, cfg)
+
+	if got := certificationLabels(m); len(got) != available {
+		t.Errorf("certifications = %v, want all %d kept, nothing invented", got, available)
+	}
+}
+
+func TestApplyHardLimitsReportsCertificationsShortfallWithoutPadding(t *testing.T) {
+	m := masterWithCertifications("AWS Certified Solutions Architect", "Certified Kubernetes Administrator")
+	cfg := DefaultShapeConfig()
+	cfg.CertificationsMin = 4
+
+	report := ApplyHardLimits(m, cfg)
+
+	if got := certificationLabels(m); len(got) != 2 {
+		t.Errorf("certifications = %v, want the two that exist — nothing is invented to meet a minimum", got)
+	}
+	if len(report.Shortfalls) != 1 {
+		t.Fatalf("shortfalls = %+v, want exactly one", report.Shortfalls)
+	}
+	sf := report.Shortfalls[0]
+	if sf.Path != "cv.sections.certifications" || sf.Requested != 4 || sf.Available != 2 {
+		t.Errorf("shortfall = %+v, want cv.sections.certifications requested 4 / available 2", sf)
+	}
+}
+
 // toggleMaster carries both optional sections plus an authored order.
 func toggleMaster() RendercvMaster {
 	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{
