@@ -19,7 +19,7 @@ targeting `master`, and a Claude Code `PreToolUse` hook
 (`scripts/hooks/guard-master.sh`) stops the agent before it even reaches
 git. Server-side branch protection is not available on the current GitHub
 plan (private repo, Free tier) — see
-`specs/023-workflow-quality-gates/contracts/required-checks.md` for the
+`specs/archive/023-workflow-quality-gates/contracts/required-checks.md` for the
 ruleset recorded to apply the moment that changes.
 
 **Emergency override**: if the trunk itself is broken and the normal branch
@@ -63,9 +63,16 @@ is ever committed.
 - `apps/api` — Go backend (HTTP API, asynq workers, ingestion scheduler)
 - `apps/dashboard` — React/Vite dashboard
 - `packages/shared` — shared TS types, generated from Go DTOs via tygo
-- `specs/` — per-feature specs (numbered); each feature's plan lives at
-  `specs/<nnn>-<slug>/plan.md` alongside its `spec.md` and `tasks.md` — there
-  is no separate top-level `plans/` directory
+- `specs/` — requirement records. `specs/domains/*.md` hold the rules that
+  currently bind, consolidated per capability area; `specs/archive/<nnn>-<slug>/`
+  holds shipped features' original `spec.md` + `contracts/`. Start at
+  `specs/README.md`. An **in-flight** feature scaffolds `specs/<nnn>-<slug>/`
+  with `spec.md`, `plan.md` and `tasks.md`; those build-time files are deleted
+  and the feature is archived once it ships. There is no top-level `plans/`
+  directory.
+- `docs/` — the Docusaurus implementation guide (architecture, data, ingestion,
+  AI, async, frontend, operations). `specs/` says what must be true; `docs/`
+  says how it works. Do not duplicate one in the other.
 
 ## Commands
 
@@ -90,12 +97,12 @@ never applied invisibly); editing Go source runs `gofmt` and `go vet` on
 the affected package. Ending a session runs `lint-go`/`test-go` and/or
 `lint-web`/`test-react` — whichever this session actually touched — and
 blocks completion if any of them fail (see
-specs/023-workflow-quality-gates).
+specs/domains/platform-operations.md).
 
 ## Conventions
 
 - Shared types are generated. Add the field to the Go DTO in `apps/api/internal/dto/`, run `make tygo-generate`, done. `packages/shared/src/index.ts` re-exports and narrows; it never restates a shape. Hand-written types with no backend counterpart live in `consumer-only.ts`.
-- HTTP handlers live in `apps/api/internal/<feature>/interfaces/http/` (package `http`) — one adapter package per feature, alongside that feature's `application`/`domain`/`infrastructure` layers. Do not add handlers to `internal/httpapi`; it holds the router and its middleware only. Shared JSON helpers (`WriteJSON`, `WriteError`, `WriteAppError`, `DecodeJSON`) are in `internal/httpx`. Enforced by the `depguard` rules in `apps/api/.golangci.yml` and by `apps/api/internal/arch_test.go` (see specs/027-http-handler-decomposition).
+- HTTP handlers live in `apps/api/internal/<feature>/interfaces/http/` (package `http`) — one adapter package per feature, alongside that feature's `application`/`domain`/`infrastructure` layers. Do not add handlers to `internal/httpapi`; it holds the router and its middleware only. Shared JSON helpers (`WriteJSON`, `WriteError`, `WriteAppError`, `DecodeJSON`) are in `internal/httpx`. Enforced by the `depguard` rules in `apps/api/.golangci.yml` and by `apps/api/internal/arch_test.go` (see specs/domains/codebase-structure.md).
 - New HTTP handlers are still wired in `apps/api/cmd/server/` via `httpapi.NewRouter(...)`'s variadic mounts, not by editing `router.go` directly.
 - sqlc queries live in `apps/api/internal/db/queries/*.sql`; regenerate after changes.
 

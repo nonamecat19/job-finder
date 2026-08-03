@@ -46,8 +46,11 @@ The prevailing style is a doc comment that records the decision, not the mechani
 > concurrency ceiling, so each task type still needs its own server.
 
 Comments frequently cite the spec that produced the behaviour — `019-ai-job-throughput`,
-`001-cerebras-model-toggle`, `FR-008`, `research.md R3`. Keep that habit: it is how the
-`specs/` tree stays connected to the code.
+`030-litellm-model-routing`, `FR-008`. Keep that habit: it is how the `specs/` tree stays
+connected to the code. A cited feature number resolves through the registry in
+`specs/README.md` to the domain doc that owns that rule today; note that a few cited
+specs are **superseded** (`001-cerebras-model-toggle` by 030, `007-ci-test-gate` by 023),
+so check the registry before treating a citation as current.
 
 ## Naming
 
@@ -106,11 +109,14 @@ flowchart LR
     TASKS --> CODE["Implementation"]
     CODE --> CHECK["checklists/"]
     CHECK --> PR["PR with FR citations in comments"]
+    PR --> DOM["specs/domains/*.md"]
+    PR --> ARCH["specs/archive/NNN-name/"]
 ```
 
-Feature directories are numbered (`specs/001-cerebras-model-toggle` …
-`specs/019-ai-job-throughput`) and carry `spec.md`, `plan.md`, `tasks.md`, plus
-`checklists/` and `contracts/` where relevant. Tooling lives in `.specify/`.
+In-flight feature directories are numbered (`specs/<nnn>-<slug>/`) and carry `spec.md`,
+`plan.md`, `tasks.md`, plus `checklists/` and `contracts/` where relevant. On merge the
+requirements fold into `specs/domains/` and the spec is archived under `specs/archive/`.
+Tooling lives in `.specify/`; the registry is `specs/README.md`.
 
 ## Commits
 
