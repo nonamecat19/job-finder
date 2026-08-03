@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Reject pushes to master. See
-# specs/023-workflow-quality-gates/contracts/hooks.md — Layer 1 — Git hooks.
+# specs/archive/023-workflow-quality-gates/contracts/hooks.md — Layer 1 — Git hooks.
 #
 # Git invokes this with the remote name/URL as $1/$2 and feeds it lines of
 # "<local ref> <local sha> <remote ref> <remote sha>" on stdin — one line per

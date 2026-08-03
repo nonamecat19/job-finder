@@ -2,7 +2,7 @@
 #
 # Claude Code PostToolUse hook: after an Edit/Write to a Go file under
 # apps/api, run gofmt on that file and go vet on its package (FR-024).
-# See specs/023-workflow-quality-gates/contracts/hooks.md.
+# See specs/archive/023-workflow-quality-gates/contracts/hooks.md.
 #
 # Scope is the edited file and its own package ONLY — never
 # repository-wide (FR-029). PostToolUse cannot block; this hook repairs

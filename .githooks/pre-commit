@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Reject commits made directly on master. See
-# specs/023-workflow-quality-gates/contracts/hooks.md — Layer 1 — Git hooks.
+# specs/archive/023-workflow-quality-gates/contracts/hooks.md — Layer 1 — Git hooks.
 #
 # Activated via `make setup-hooks` (git config core.hooksPath .githooks),
 # which is a repository-level config value shared by every worktree.

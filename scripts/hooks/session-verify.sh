@@ -2,7 +2,7 @@
 #
 # Claude Code Stop hook: run a scoped `test-lint` and block the session
 # from ending if it fails (FR-025). See
-# specs/023-workflow-quality-gates/contracts/hooks.md — Stop ->
+# specs/archive/023-workflow-quality-gates/contracts/hooks.md — Stop ->
 # session-verify.sh.
 #
 # Stop is the one event that CAN block: exit 2 (or {"decision":"block"} on
