@@ -81,14 +81,14 @@ while the master profile still lists them. Toggle back on, confirm the section r
 
 ### Tests for User Story 1
 
-- [ ] T015 [P] [US1] Add unit tests in `apps/api/internal/generation/domain/rendercv_shape_test.go` for `ApplySectionToggles`: certifications removed from **both** `cv.sections` and the `_order` list when disabled; left untouched when enabled; no panic or error when the master has no certifications section at all
-- [ ] T016 [P] [US1] Add an integration test (build tag `integration`) asserting that with `certificationsEnabled: false` the rendered resume contains no certifications section, the remaining sections keep their relative order, and the source master profile is unmodified (FR-004)
+- [X] T015 [P] [US1] Add unit tests in `apps/api/internal/generation/domain/rendercv_shape_test.go` for `ApplySectionToggles`: certifications removed from **both** `cv.sections` and the `_order` list when disabled; left untouched when enabled; no panic or error when the master has no certifications section at all
+- [X] T016 [P] [US1] Add an integration test (build tag `integration`) asserting that with `certificationsEnabled: false` the rendered resume contains no certifications section, the remaining sections keep their relative order, and the source master profile is unmodified (FR-004)
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Add `if !cfg.CertificationsEnabled { RemoveSection(sections, "certifications") }` to `ApplySectionToggles` in `apps/api/internal/generation/domain/rendercv_shape.go`. `RemoveSection` already drops the key from `_order` as well, which is what satisfies FR-004's section-order clause
-- [ ] T018 [US1] Update the `ApplySectionToggles` doc comment in the same file — it currently reads "Only skills and projects can be disabled", which this task makes false
-- [ ] T019 [US1] Verify via integration run that a profile with **no** certifications section generates successfully under both toggle states and renders no empty certifications heading
+- [X] T017 [US1] Add `if !cfg.CertificationsEnabled { RemoveSection(sections, "certifications") }` to `ApplySectionToggles` in `apps/api/internal/generation/domain/rendercv_shape.go`. `RemoveSection` already drops the key from `_order` as well, which is what satisfies FR-004's section-order clause
+- [X] T018 [US1] Update the `ApplySectionToggles` doc comment in the same file — it currently reads "Only skills and projects can be disabled", which this task makes false
+- [X] T019 [US1] Verify via integration run that a profile with **no** certifications section generates successfully under both toggle states and renders no empty certifications heading
 
 **Checkpoint**: US1 fully functional and independently testable. This is a shippable MVP —
 the toggle alone reclaims page space on a length-constrained resume.

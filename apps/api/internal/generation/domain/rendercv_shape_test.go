@@ -513,6 +513,70 @@ func TestApplySectionTogglesKeepsMasterOrderForRemainingSections(t *testing.T) {
 	}
 }
 
+// toggleMasterWithCertifications is toggleMaster plus a certifications
+// section, for US1 toggle tests that need it alongside the other optional
+// sections without perturbing toggleMaster's existing callers' expected
+// _order slices.
+func toggleMasterWithCertifications() RendercvMaster {
+	m := toggleMaster()
+	sections := CvSections(m)
+	sections["certifications"] = []any{map[string]any{"label": "AWS Certified Solutions Architect", "details": "AWS details"}}
+	order, _ := sections[SectionOrderKey].([]any)
+	sections[SectionOrderKey] = append(order, "certifications")
+	return m
+}
+
+func TestApplySectionTogglesRemovesDisabledCertifications(t *testing.T) {
+	m := toggleMasterWithCertifications()
+	cfg := DefaultShapeConfig()
+	cfg.CertificationsEnabled = false
+
+	ApplySectionToggles(m, cfg)
+
+	if _, present := CvSections(m)["certifications"]; present {
+		t.Error("certifications section still present, want it removed")
+	}
+	want := []string{"summary", "skills", "experience", "projects", "education"}
+	if got := sectionOrder(m); !equalStringSlices(got, want) {
+		t.Errorf("_order = %v, want %v — no stale entry may name a removed section", got, want)
+	}
+}
+
+func TestApplySectionTogglesCertificationsEnabledIsANoOp(t *testing.T) {
+	m := toggleMasterWithCertifications()
+
+	ApplySectionToggles(m, DefaultShapeConfig())
+
+	if _, present := CvSections(m)["certifications"]; !present {
+		t.Error("certifications section missing, want it kept when enabled")
+	}
+	want := []string{"summary", "skills", "experience", "projects", "education", "certifications"}
+	if got := sectionOrder(m); !equalStringSlices(got, want) {
+		t.Errorf("_order = %v, want %v unchanged", got, want)
+	}
+}
+
+// TestApplySectionTogglesDisablingCertificationsWithoutSectionIsNoop guards
+// FR-004's "no panic or error" clause: a master that never had a
+// certifications section (e.g. authored before this feature) must disable
+// cleanly, not because the code special-cases absence but because
+// RemoveSection is naturally a no-op on a missing key.
+func TestApplySectionTogglesDisablingCertificationsWithoutSectionIsNoop(t *testing.T) {
+	m := toggleMaster() // no certifications section at all
+	cfg := DefaultShapeConfig()
+	cfg.CertificationsEnabled = false
+
+	ApplySectionToggles(m, cfg)
+
+	if _, present := CvSections(m)["certifications"]; present {
+		t.Error("certifications section present, want it absent as it always was")
+	}
+	want := []string{"summary", "skills", "experience", "projects", "education"}
+	if got := sectionOrder(m); !equalStringSlices(got, want) {
+		t.Errorf("_order = %v, want %v unaffected by disabling an absent section", got, want)
+	}
+}
+
 func equalStringSlices(got, want []string) bool {
 	if len(got) != len(want) {
 		return false
