@@ -40,6 +40,7 @@ import { JobDto, NormalizedJob, ApplicationStatus } from '@job-finder/shared';
 3. **Adding a Go DTO field requires zero edits here.** Regenerate; it flows through. Only a change in *nullability* touches `index.ts`.
 4. **Consumer-only types carry a reason.** A new entry in `consumer-only.ts` needs a comment explaining why it has no backend counterpart.
 5. **Strictness may increase, never decrease.** `T | null` must not become `T?`; a literal union must not become `string`.
+6. **Source of truth.** Go DTO structs are the source of truth; tygo (configured in `apps/api/tygo.yaml`) emits `generated.ts`. `index.ts` only re-exports and narrows (`Nullable` / `Omit`+intersection) and never restates a shape; `consumer-only.ts` holds hand-written types with no Go counterpart, by design.
 
 ## Enforcement
 
