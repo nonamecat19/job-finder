@@ -4,7 +4,7 @@
 # apps/api/internal/dto/*.go, regenerate the tygo-generated shared TS types
 # so packages/shared/src/generated.ts never goes stale relative to the DTO
 # that was just edited (FR-023). See
-# specs/023-workflow-quality-gates/contracts/hooks.md.
+# specs/archive/023-workflow-quality-gates/contracts/hooks.md.
 #
 # PostToolUse CANNOT block — this hook repairs, it does not reject.
 # Regeneration lands in the working tree for review (FR-026), never staged

@@ -20,7 +20,7 @@ export POSTGRES_HOST_PORT := $(shell echo "$$(( 5432 + ( $(WORKTREE_HASH) % 100 
 install:
 	pnpm install
 
-# --- workflow quality gates (specs/023-workflow-quality-gates) ---
+# --- workflow quality gates (specs/domains/platform-operations.md) ---
 # One-time per clone; core.hooksPath is a repository-level git config value,
 # so this single call covers the main working tree and every worktree.
 setup-hooks:
@@ -95,7 +95,7 @@ test-e2e: test-db-setup
 		REDIS_URL=redis://localhost:6379/1 \
 		npx playwright test
 
-# --- lint (specs/023-workflow-quality-gates) ---
+# --- lint (specs/domains/platform-operations.md) ---
 # `make lint`/`test-lint` are the only sanctioned way to invoke either
 # linter — CI and the Stop hook call these same targets, never the binaries
 # directly, so local, automated and hook-triggered runs cannot drift apart.

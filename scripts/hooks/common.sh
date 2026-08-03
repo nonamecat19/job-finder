@@ -4,7 +4,7 @@
 # Every hook script (guard-master.sh, go-postedit.sh, regen-sqlc.sh,
 # regen-tygo.sh, session-verify.sh) sources this file instead of duplicating
 # the same stdin-parsing and tool-guard boilerplate five times over. See
-# specs/023-workflow-quality-gates/contracts/hooks.md for the full contract.
+# specs/archive/023-workflow-quality-gates/contracts/hooks.md for the full contract.
 #
 # Conventions enforced here (contracts/hooks.md "Shared rules"):
 #   - set -euo pipefail in every script that sources this file
