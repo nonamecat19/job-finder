@@ -35,6 +35,38 @@ Templates requiring updates:
   - .specify/templates/tasks-template.md ✅ re-checked, no change needed
   - .claude/skills/speckit-*/SKILL.md ✅ re-checked, no `plan/`-directory reference found, no change needed
 Follow-up TODOs: none
+
+--------------------------------------------------------------------------
+
+Version change: 1.0.1 → 1.0.2 (PATCH — factual corrections, no principle
+  added, removed, or redefined)
+Modified principles: none.
+  - Technology & Architecture Constraints, data layer: "Redis/BullMQ-class
+    queueing" → asynq on Redis, named directly. BullMQ was the pre-Go stack;
+    the Go port uses hibiken/asynq with one queue per task type
+    (internal/queue/queue.go). The old wording described a stack that is not
+    in the tree.
+  - Principle V, external-inference wording: clarified that hosted inference
+    reached through the LiteLLM gateway is permitted so long as every task
+    chain terminates at local Ollama, matching what
+    030-litellm-model-routing shipped (FR-008/FR-009). The guarantee being
+    protected — the system stays fully operational with no third-party AI
+    call — is unchanged; only the description of how it is enforced.
+  - Development Workflow & Quality Gates: `specs/<nnn>-<slug>/plan.md`
+    remains where a plan is written during a feature, with a note that the
+    plan is removed once the feature ships and its durable requirements are
+    folded into specs/domains/. See specs/README.md.
+Added sections: none
+Removed sections: none
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ re-checked, no queue-technology or
+    provider reference, no change needed
+  - .specify/templates/spec-template.md ✅ re-checked, no change needed
+  - .specify/templates/tasks-template.md ✅ re-checked, no change needed
+  - .specify/templates/checklist-template.md ✅ re-checked, no change needed
+  - .claude/skills/speckit-*/SKILL.md ✅ re-checked, no queue-technology or
+    provider reference found, no change needed
+Follow-up TODOs: none
 -->
 
 # job-finder Constitution
@@ -79,10 +111,14 @@ feedback fast, while Docker-backed integration tests catch the cross-service bug
 tests can't.
 
 ### V. Local-First, Self-Hosted by Default
-Core scoring and generation MUST run against the local Ollama instance and self-hosted
-Postgres/Redis; the system must remain fully operational with no calls to third-party
-paid AI APIs for its primary matching/generation flow. External sources (Adzuna, Jooble,
-Indeed, Glassdoor, ...) are for job discovery only, not core inference.
+Core scoring and generation MUST remain fully operational against the local Ollama
+instance and self-hosted Postgres/Redis, with no calls to third-party AI APIs. Hosted
+inference reached through the LiteLLM gateway is permitted as an optimisation, but every
+task's routing chain MUST terminate at the local model, and the system MUST serve AI tasks
+locally when the gateway is unconfigured or unreachable. Provider credentials MUST stay in
+the gateway container's environment and MUST NOT be readable through the application.
+External job sources (Adzuna, Jooble, Indeed, Glassdoor, ...) are for job discovery only,
+never core inference.
 Rationale: stated project goal is a self-hosted platform the user fully controls; a
 hidden dependency on an external LLM API would silently break that guarantee and add
 cost/privacy exposure users didn't opt into.
@@ -97,8 +133,8 @@ cost/privacy exposure users didn't opt into.
 - `packages/shared`: shared TypeScript types (NormalizedJob, DTOs, JSON Resume subset) —
   the only place cross-app TS types are defined by hand; everything else generates from it
   or from Go via tygo.
-- Data layer: Postgres with pgvector for embeddings, Redis/BullMQ-class queueing for async
-  work (enrichment, generation jobs).
+- Data layer: Postgres with pgvector for embeddings; asynq on Redis for async work, with
+  one dedicated queue per task type (ingest, match, generate, enrich, salary, ghost).
 - Full stack ships via Docker Compose (`docker-compose.yml` dev, `docker-compose.prod.yml`
   prod); GPU is recommended, not required, for the Ollama model runtime.
 
@@ -112,9 +148,11 @@ cost/privacy exposure users didn't opt into.
   `make seed`) rather than ad hoc docker/pnpm invocations, so CI and local runs stay
   aligned.
 - Design/plan docs for non-trivial features are written at
-  `specs/<nnn>-<slug>/plan.md` before implementation begins, per existing repo
-  convention (see prior `docs(plan): ...` commits); trivial fixes and
-  refactors do not require a plan doc.
+  `specs/<nnn>-<slug>/plan.md` before implementation begins; trivial fixes and
+  refactors do not require a plan doc. Once a feature ships, its plan and the other
+  build-time artifacts are removed, its durable requirements are folded into
+  `specs/domains/`, and its `spec.md` is archived under `specs/archive/` — see
+  `specs/README.md`.
 - A change is not "done" until its own language's test suite passes locally; changes
   crossing app boundaries additionally require `make test-lint` before merge.
 
@@ -133,4 +171,4 @@ should be checked against the five Core Principles above before being marked rea
 review; deviations must be justified in the plan's Complexity Tracking section (or PR
 description) rather than silently introduced.
 
-**Version**: 1.0.1 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-03
+**Version**: 1.0.2 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-03
