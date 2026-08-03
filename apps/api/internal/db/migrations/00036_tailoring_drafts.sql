@@ -34,9 +34,21 @@ CREATE TABLE tailored_drafts (
         CHECK (export_status IS NULL OR export_status IN ('pending', 'fitting', 'fit', 'blocked', 'error')),
     export_feedback      jsonb NULL,
     created_at           timestamptz NOT NULL DEFAULT now(),
-    updated_at           timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (profile_id, (COALESCE(job_id, '00000000-0000-0000-0000-000000000000'::uuid)))
+    updated_at           timestamptz NOT NULL DEFAULT now()
 );
+
+-- One draft per (profile, job), with a NULL job_id — the ad-hoc pasted-vacancy
+-- case — collapsing to a single slot per profile.
+--
+-- This is a unique *index*, not the table-level `UNIQUE (profile_id,
+-- (COALESCE(job_id, ...)))` constraint this migration originally carried.
+-- Postgres permits expressions only in index definitions; as a table
+-- constraint it is a syntax error (SQLSTATE 42601), so the migration failed
+-- for everyone who ran it and no database ever got past 00035. Editing it in
+-- place rather than issuing a follow-up migration is therefore safe: there is
+-- no deployment holding the broken version.
+CREATE UNIQUE INDEX tailored_drafts_profile_job_key
+    ON tailored_drafts (profile_id, COALESCE(job_id, '00000000-0000-0000-0000-000000000000'::uuid));
 
 CREATE TABLE edit_proposals (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
