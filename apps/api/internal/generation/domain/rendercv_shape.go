@@ -145,8 +145,9 @@ func (c ShapeConfig) Validate() error {
 // document that will be rendered. Deleting a section is already legal under
 // the grounding subset check, so no carve-out is needed there.
 //
-// Only skills and projects can be disabled; summary and experience are never
-// offered, which keeps the structure verifier's coverage intact.
+// Skills, projects and certifications can be disabled; summary and
+// experience are never offered, which keeps the structure verifier's
+// coverage intact.
 func ApplySectionToggles(master RendercvMaster, cfg ShapeConfig) {
 	sections := CvSections(master)
 	if sections == nil {
@@ -157,6 +158,9 @@ func ApplySectionToggles(master RendercvMaster, cfg ShapeConfig) {
 	}
 	if !cfg.ProjectsEnabled {
 		RemoveSection(sections, "projects")
+	}
+	if !cfg.CertificationsEnabled {
+		RemoveSection(sections, "certifications")
 	}
 }
 
