@@ -62,6 +62,13 @@ export function mockJob(overrides: Partial<JobDto> = {}): JobDto {
     salarySource: null,
     salaryBelowFloor: false,
     salaryIsEstimated: false,
+    experienceLevel: null,
+    experienceMinYears: null,
+    englishLevel: null,
+    salaryEstimateRaw: null,
+    salaryEstimateMin: null,
+    salaryEstimateMax: null,
+    salaryEstimateCurrency: null,
     ...overrides,
   }
 }
