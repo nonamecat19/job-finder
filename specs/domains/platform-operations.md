@@ -61,6 +61,26 @@ Current jobs — `.github/workflows/api-ci.yml`:
 `.github/workflows/e2e.yml` runs the Playwright suite on a schedule and on demand
 (023-FR-019); failures are surfaced without polling (023-FR-020).
 
+**Path filtering.** Every job carries `needs: changes` and an `if:` on a
+`dorny/paths-filter` output, so a change touching only documentation or repo workflow —
+`specs/**`, `docs/**`, `.specify/**`, `.githooks/**`, `scripts/hooks/**`, `AGENTS.md`,
+`README.md`, `Makefile`, `.github/workflows/**` — matches no filter and skips the entire
+set. Two rules keep this from weakening the gate:
+
+- **Never a top-level `on: paths:`.** A workflow skipped that way reports no checks at all,
+  so every required check would sit at "Expected" forever and block the merge. A job
+  skipped by `if:` reports `skipped`, which GitHub counts as passing. That distinction is
+  the only reason the `changes` job exists.
+- **Filters are pull-request-only.** Each output is
+  `github.event_name != 'pull_request' || ...`, so pushes to master, the nightly e2e
+  schedule and `workflow_dispatch` always run everything unfiltered.
+
+`Makefile` and `.github/workflows/**` were originally in every filter, on the correct
+observation that either can change any job's verdict. They were removed because the cost
+was disproportionate — a docs-only change adjusting a Makefile comment rebuilt Go and Node
+for ~20 runner-minutes. The second rule is what makes that safe: such a change is still
+fully exercised, on the merge commit rather than on the pull request.
+
 - 023-FR-017: the integration check creates any database the suite needs and waits for
   readiness, so it never fails on a cold start.
 - 023-FR-021: any check is re-runnable without modifying the change under test.
