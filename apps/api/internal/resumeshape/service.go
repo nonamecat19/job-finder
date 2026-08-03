@@ -1,7 +1,8 @@
 // Package resumeshape holds the resume generation shape settings: the single
 // persisted row describing how long a generated resume's summary is, how many
 // bullets each experience entry keeps, whether the optional sections render,
-// how many projects survive and how many pages the render loop targets.
+// how many projects and certifications survive, and how many pages the
+// render loop targets.
 //
 // It mirrors internal/aifeature: settings CRUD with an in-memory cache, so the
 // generation pipeline reads the config without a DB round trip. The shape
