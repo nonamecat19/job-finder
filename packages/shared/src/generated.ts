@@ -812,3 +812,109 @@ export interface ResumeShapeConfigDto {
   certificationsMin: number /* int */;
   certificationsMax: number /* int */;
 }
+
+//////////
+// source: tailoring.go
+
+/**
+ * EditProposalDto is one atomic, reviewable change produced by the
+ * tailoring proposal generator (specs/020-ai-resume-tailoring,
+ * data-model.md). FieldType partitions the review UI: "summary" |
+ * "experience_highlights" | "skill_change" | "skill_group_add" |
+ * "skill_group_remove". Status is "pending" | "accepted" | "rejected" |
+ * "dropped" ("dropped" = suppressed by grounding, never surfaced to the
+ * user).
+ */
+export interface EditProposalDto {
+  id: string;
+  draftId: string;
+  fieldType: string;
+  fieldKey: string;
+  beforeValue: string;
+  afterValue: string;
+  traceability: TraceabilityDto;
+  status: string;
+  droppedReason?: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
+}
+/**
+ * TraceabilityDto records where a proposed value came from: Source is
+ * "master" | "job_posting"; Path is a locator like
+ * "cv.sections.experience[Acme].highlights[2]" or "job.required_skills".
+ * Required on every proposal per FR-003/SC-005.
+ */
+export interface TraceabilityDto {
+  source: string;
+  path: string;
+}
+/**
+ * TailoredDraftDto is a single review-lifecycle unit for tailoring a
+ * profile's resume against one job (or one ad-hoc vacancy). State is
+ * "drafting" | "proposing" | "review" | "finalized" | "expounded" |
+ * "abandoned". BaselineSummary is a projection of the full baseline (not
+ * the full RendercvMaster blob) to avoid shipping the master config to the
+ * client on every poll.
+ */
+export interface TailoredDraftDto {
+  id: string;
+  profileId: string;
+  jobId?: string;
+  vacancyCompany?: string;
+  vacancyTitle?: string;
+  state: string;
+  parentDraftId?: string;
+  model: string;
+  activityId?: string;
+  exportStatus?: string;
+  exportFeedback?: ExportBlockDto[];
+  exportDocumentId?: string;
+  baselineSummary: BaselineSummaryDto;
+  proposals: EditProposalDto[];
+  createdAt: string;
+  updatedAt: string;
+}
+/**
+ * BaselineSummaryDto is a lightweight projection of a draft's baseline:
+ * profile name, skill-group labels, and company list — enough for the
+ * review UI without shipping the full master config.
+ */
+export interface BaselineSummaryDto {
+  profileName: string;
+  skillGroups: string[];
+  companies: string[];
+}
+/**
+ * ExportBlockDto is one actionable reason a single-page export was
+ * blocked, e.g. Field="experience:Acme:3",
+ * Suggestion="shorten or drop this bullet to fit on one page".
+ */
+export interface ExportBlockDto {
+  field: string;
+  suggestion: string;
+}
+/**
+ * TailorResumeRequestDto is the POST /api/tailoring request body: either
+ * JobID (existing job posting) or Vacancy (ad-hoc, pasted vacancy text) is
+ * set, not both.
+ */
+export interface TailorResumeRequestDto {
+  profileId: string;
+  jobId?: string;
+  vacancy?: AdhocVacancyDto;
+}
+/**
+ * AdhocVacancyDto is a pasted job vacancy not tracked as a Job row.
+ */
+export interface AdhocVacancyDto {
+  company: string;
+  title: string;
+  text: string;
+}
+/**
+ * ExportPdfRequestDto is the POST /api/tailoring/{draftId}/export-pdf
+ * request body.
+ */
+export interface ExportPdfRequestDto {
+  draftId: string;
+}
