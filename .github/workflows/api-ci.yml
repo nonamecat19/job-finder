@@ -57,6 +57,7 @@ jobs:
             tygo:
               - *go
               - 'packages/shared/src/generated.ts'
+              - 'scripts/compare-shared-types.py'
             web:
               - *ci
               - 'apps/dashboard/**'
@@ -108,6 +109,23 @@ jobs:
 
       - name: Check generated TypeScript matches Go DTOs
         run: ./scripts/tygo-check.sh
+
+  shared-types-no-duplicates:
+    name: shared types — no duplicates / no weakened fields / complete nullability
+    needs: changes
+    if: needs.changes.outputs.tygo == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check no duplicated shapes between index.ts and generated.ts
+        run: python3 scripts/compare-shared-types.py --check-duplicates
+
+      - name: Check no weakened fields
+        run: python3 scripts/compare-shared-types.py --check-strictness
+
+      - name: Check nullability list stays complete
+        run: python3 scripts/compare-shared-types.py --check-go-nullability
 
   lint-go:
     name: lint (go)
