@@ -17,6 +17,24 @@ Templates requiring updates:
 Follow-up TODOs: none
 Notes:
   - 2026-07-23: constitution scaffolding installed at repo root (.specify/ previously existed only in agent worktrees). RATIFICATION_DATE resolved to the initial-authoring date of v1.0.0 (matches Last Amended for the first version).
+
+--------------------------------------------------------------------------
+
+Version change: 1.0.0 → 1.0.1 (PATCH — wording correction, no principle
+  added, removed, or redefined)
+Modified principles: none. Development Workflow & Quality Gates corrected:
+  "Design/plan docs ... are written under `plan/`" → written at
+  `specs/<nnn>-<slug>/plan.md`. That directory never existed in this
+  repository; the correction brings the document into line with actual
+  practice (feature 024-agent-context-consolidation, FR-015/FR-017).
+Added sections: none
+Removed sections: none
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ re-checked, no `plan/`-directory reference, no change needed
+  - .specify/templates/spec-template.md ✅ re-checked, no change needed
+  - .specify/templates/tasks-template.md ✅ re-checked, no change needed
+  - .claude/skills/speckit-*/SKILL.md ✅ re-checked, no `plan/`-directory reference found, no change needed
+Follow-up TODOs: none
 -->
 
 # job-finder Constitution
@@ -93,9 +111,10 @@ cost/privacy exposure users didn't opt into.
   (`make up`, `make dev`, `make test`, `make test-integration`, `make test-e2e`,
   `make seed`) rather than ad hoc docker/pnpm invocations, so CI and local runs stay
   aligned.
-- Design/plan docs for non-trivial features are written under `plan/` before
-  implementation begins, per existing repo convention (see prior `docs(plan): ...`
-  commits); trivial fixes and refactors do not require a plan doc.
+- Design/plan docs for non-trivial features are written at
+  `specs/<nnn>-<slug>/plan.md` before implementation begins, per existing repo
+  convention (see prior `docs(plan): ...` commits); trivial fixes and
+  refactors do not require a plan doc.
 - A change is not "done" until its own language's test suite passes locally; changes
   crossing app boundaries additionally require `make test-lint` before merge.
 
@@ -114,4 +133,4 @@ should be checked against the five Core Principles above before being marked rea
 review; deviations must be justified in the plan's Complexity Tracking section (or PR
 description) rather than silently introduced.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-07-16
+**Version**: 1.0.1 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-03

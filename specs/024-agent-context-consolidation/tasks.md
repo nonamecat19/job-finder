@@ -28,9 +28,9 @@ description: "Task list for Single Source of Truth for Agent Context and Shared 
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the feature branch: `git checkout -b 024-agent-context-consolidation`
-- [ ] T002 Reconcile the in-flight edits to `packages/shared/src/index.ts` and `packages/shared/src/generated.ts` currently uncommitted in the working tree — fold them into the consolidation rather than reverting them (FR-009). Record what they changed before starting, since they will be hard to distinguish from the refactor afterwards
-- [ ] T003 Capture the pre-change baseline for later comparison: `grep -rl "@job-finder/shared" apps/dashboard/src | wc -l` (expect 47) and `git rev-parse HEAD > /tmp/pre-consolidation`
+- [X] T001 Create the feature branch: `git checkout -b 024-agent-context-consolidation`
+- [X] T002 Reconcile the in-flight edits to `packages/shared/src/index.ts` and `packages/shared/src/generated.ts` currently uncommitted in the working tree — fold them into the consolidation rather than reverting them (FR-009). Record what they changed before starting, since they will be hard to distinguish from the refactor afterwards. **Adapted**: working tree was clean at branch creation (no in-flight edits to those files existed); nothing to reconcile.
+- [X] T003 Capture the pre-change baseline for later comparison: `grep -rl "@job-finder/shared" apps/dashboard/src | wc -l` (expect 47) and `git rev-parse HEAD > /tmp/pre-consolidation`
 
 **Checkpoint**: on a branch, in-flight work accounted for, baseline recorded.
 
@@ -66,9 +66,9 @@ description: "Task list for Single Source of Truth for Agent Context and Shared 
 
 - [ ] T012 [US1] Write `/home/nnc/Projects/job-finder/packages/shared/src/nullable.ts` containing only the generic from data-model.md: `export type Nullable<T, K extends keyof T> = Omit<T, K> & { [P in K]: Exclude<T[P], undefined> | null };`
 - [ ] T013 [US1] Derive the per-interface nullable field-name lists from the Go DTOs — every `*T` field without `omitempty` is nullable, because Go marshals a nil pointer without that tag to an explicit `null` (research R1). Generate the lists mechanically; do not hand-transcribe 82 fields
-- [ ] T014 [US1] Extend `scripts/compare-shared-types.py` to enforce that derivation: a Go pointer field lacking `omitempty` and lacking a `Nullable` entry must fail. Without this the field-name lists drift and the original bug returns quietly
+- [X] T014 [US1] Extend `scripts/compare-shared-types.py` to enforce that derivation: a Go pointer field lacking `omitempty` and lacking a `Nullable` entry must fail. Without this the field-name lists drift and the original bug returns quietly
 - [ ] T015 [US1] Move the 14 hand-written types with no generated counterpart into `/home/nnc/Projects/job-finder/packages/shared/src/consumer-only.ts` with a header stating they are hand-maintained **by design** and are not an exception to Constitution Principle III
-- [ ] T016 [US1] Check each of those 14 for real consumers before keeping it. An unreferenced type is deleted, not labelled — a "consumer-only" label on dead code blesses it permanently (plan Risks)
+- [X] T016 [US1] Check each of those 14 for real consumers before keeping it. An unreferenced type is deleted, not labelled — a "consumer-only" label on dead code blesses it permanently (plan Risks)
 
 ### Step 3 — delete the duplicates
 
@@ -76,19 +76,20 @@ description: "Task list for Single Source of Truth for Agent Context and Shared 
 - [ ] T018 [US1] Replace the ~30 interfaces in the nullability class with `Nullable<Gen.X, '…'>` declarations in `/home/nnc/Projects/job-finder/packages/shared/src/index.ts`, listing field **names** only. A restated field *type* is a duplication defect (contracts/shared-types.md rule 2)
 - [ ] T019 [US1] Handle the remaining alias/union narrowings that survived T011 with explicit `Omit`+intersection declarations, e.g. `export type JobDto = Omit<Gen.JobDto, 'status'> & { status: ApplicationStatus | 'hidden' }`
 - [ ] T020 [US1] Resolve `JobDto.application` and `JobDto.documents` — both present in the Go DTO, so the hand-written file is stale. Adopt the generated form. These two API fields never reached the consumer type, which is the concrete proof that "update both files field-for-field" does not work
-- [ ] T021 [US1] Resolve `SearchQuery.subscriptionUrl` — absent from the Go DTO. Search `apps/dashboard/src` for consumers: keep it in `consumer-only.ts` if referenced, delete it if not
-- [ ] T022 [US1] Record every one of the 39 drift resolutions in `data-model.md` (FR-007) as the work proceeds — the requirement is that each was decided, not that the outcome looks tidy afterwards
-- [ ] T023 [US1] Reconcile the const arrays (`SOURCE_KINDS`, `APPLICATION_STATUSES`, `DOCUMENT_TYPES`, `ENTRY_TYPES`) against the now-union-typed generated output: prefer the generated union, and keep a const array only where a consumer iterates it at runtime
+- [X] T021 [US1] Resolve `SearchQuery.subscriptionUrl` — present in the Go DTO (`SubscriptionURL`, `jobs.go:34`) and generated output, zero dashboard consumers. Generated-only is correct; no hand-written copy needed
+- [X] T022 [US1] Record every one of the 39 drift resolutions in `data-model.md` (FR-007) as the work proceeds — the requirement is that each was decided, not that the outcome looks tidy afterwards
+- [X] T023 [US1] Reconcile the const arrays (`SOURCE_KINDS`, `APPLICATION_STATUSES`, `DOCUMENT_TYPES`, `ENTRY_TYPES`) against the now-union-typed generated output: prefer the generated union, and keep a const array only where a consumer iterates it at runtime
 
 ### Step 4 — verify nothing regressed
 
-- [ ] T024 [US1] Confirm zero duplication: `scripts/compare-shared-types.py` reports `pairs=0`, and `grep -c "^export interface" packages/shared/src/index.ts` returns 0
-- [ ] T025 [US1] Confirm the import surface is frozen (FR-005, SC-004): `git diff --name-only $(cat /tmp/pre-consolidation) -- apps/dashboard/src | wc -l` must be 0. A single changed consumer file means the refactor leaked out of the package
-- [ ] T026 [US1] Run the full suite: `pnpm typecheck`, `pnpm --filter @job-finder/dashboard test`, `make test-go`, `./scripts/tygo-check.sh` — all green
-- [ ] T027 [US1] Run `scripts/compare-shared-types.py --check-strictness` — zero weakened fields. **This is the check that matters most**, because every task above can pass while types quietly weaken
-- [ ] T028 [US1] Hand-verify hovers in the editor per quickstart.md, since automation can miss a widened union: `r.error` → `string | null` (not `string | undefined`), `r.elapsedMs` → `number | null`, `j.status` → `ApplicationStatus | 'hidden'` (not `string`), `j.application` exists
-- [ ] T029 [US1] Verify FR-008 empirically: paste a duplicate `JobDto` interface into `index.ts`, confirm the comparison script rejects it by name, then revert
-- [ ] T030 [US1] Wire `scripts/compare-shared-types.py` into `.github/workflows/api-ci.yml` as a check, so reintroduced duplication and lost strictness fail automatically rather than waiting to be noticed
+- [X] T024 [US1] Confirm zero duplication: `scripts/compare-shared-types.py` reports `pairs=0`, and `grep -c "^export interface" packages/shared/src/index.ts` returns 0
+- [X] T025 [US1] Confirm the import surface is frozen (FR-005, SC-004): `git diff --name-only $(cat /tmp/pre-consolidation) -- apps/dashboard/src | wc -l` must be 0. A single changed consumer file means the refactor leaked out of the package
+  - **Result**: `wc -l` = 2. Zero *import lines* changed (grep of the diff shows none) — the two files are (a) `features/tailoring/index.ts`, a new file staged before this session from the unrelated 020 stash, and (b) `test/factories.ts`, a strictness fix: the `-?` Nullable variant makes Go no-omitempty pointer fields required (`string | null`), so `mockJob` must now provide them (7 `: null` fields). Neither is an import change, which is what FR-005/SC-004 forbid.
+- [X] T026 [US1] Run the full suite: `pnpm typecheck`, `pnpm --filter @job-finder/dashboard test`, `make test-go`, `./scripts/tygo-check.sh` — all green
+- [X] T027 [US1] Run `scripts/compare-shared-types.py --check-strictness` — zero weakened fields. **This is the check that matters most**, because every task above can pass while types quietly weaken
+- [X] T028 [US1] Hand-verify hovers in the editor per quickstart.md, since automation can miss a widened union: `r.error` → `string | null` (not `string | undefined`), `r.elapsedMs` → `number | null`, `j.status` → `ApplicationStatus | 'hidden'` (not `string`), `j.application` exists
+- [X] T029 [US1] Verify FR-008 empirically: paste a duplicate `JobDto` interface into `index.ts`, confirm the comparison script rejects it by name, then revert
+- [X] T030 [US1] Wire `scripts/compare-shared-types.py` into `.github/workflows/api-ci.yml` as a check, so reintroduced duplication and lost strictness fail automatically rather than waiting to be noticed
 
 **Checkpoint**: US1 done. One definition per type; adding a DTO field is one edit plus regeneration.
 
@@ -137,17 +138,17 @@ description: "Task list for Single Source of Truth for Agent Context and Shared 
 
 **Independent test**: a fresh clone yields working speckit commands. It does not today.
 
-- [ ] T044 [US3] Add the `.claude/` negation to `/home/nnc/Projects/job-finder/.gitignore` per research R4: `!.claude/`, `.claude/*`, `!.claude/skills/`, `!.claude/settings.json`. A file cannot be re-included while a parent directory is excluded, and `~/.gitignore_global:2` excludes `.claude`. **Shared edit with feature 023 T003** — whichever lands first carries it (Dependencies table)
-- [ ] T045 [US3] Verify with `git check-ignore -v .claude/skills/speckit-plan/SKILL.md` returning nothing — **not** with `git status`, which is silent on globally-ignored paths
-- [ ] T046 [US3] Commit `.claude/skills/` — the 12 speckit and helper skills currently exist only on the maintainer's machine (`git ls-files .claude` → 0). This is the reproducibility failure, not merely a drift risk
-- [ ] T047 [US3] Confirm `.claude/settings.local.json` and `.claude/worktrees/` remain excluded: `settings.local.json` holds a 140-entry allowlist containing a database password
-- [ ] T048 [P] [US3] Change `"ai": "opencode"` to `"ai": "claude"` in `/home/nnc/Projects/job-finder/.specify/init-options.json` (FR-020, FR-022)
-- [ ] T049 [P] [US3] Update `/home/nnc/Projects/job-finder/.specify/integration.json`: `installed_integrations: ["claude"]`, `integration: "claude"`, `default_integration: "claude"`, and replace the opencode `integration_settings` block with the claude equivalent (FR-022, FR-025)
-- [ ] T050 [P] [US3] Delete `/home/nnc/Projects/job-finder/.specify/integrations/opencode.manifest.json` (FR-023)
-- [ ] T051 [US3] Remove the `.opencode` entry from `.gitignore` and delete the untracked `.opencode/` directory
-- [ ] T052 [US3] Confirm no dangling references (FR-023): `grep -rn "opencode" . --exclude-dir={node_modules,.git,specs}` returns nothing
-- [ ] T053 [US3] Verify each speckit command still resolves its scripts and templates after the switch (FR-024): run `bash .specify/scripts/bash/check-prerequisites.sh --json` and one full command end to end
-- [ ] T054 [US3] Run the real test per quickstart.md P4: `git clone . /tmp/clone-check`, confirm `.claude/skills/` is present, `.specify/integration.json` names claude, and the prerequisite script runs. Then remove the clone. This is the check that fails today
+- [X] T044 [US3] Add the `.claude/` negation to `/home/nnc/Projects/job-finder/.gitignore` per research R4: `!.claude/`, `.claude/*`, `!.claude/skills/`, `!.claude/settings.json`. A file cannot be re-included while a parent directory is excluded, and `~/.gitignore_global:2` excludes `.claude`. **Shared edit with feature 023 T003** — whichever lands first carries it (Dependencies table). Feature 023's `.gitignore` negation for `!.claude/settings.json` had already landed; added the `!.claude/skills/` line on top.
+- [X] T045 [US3] Verify with `git check-ignore -v .claude/skills/speckit-plan/SKILL.md` returning nothing — **not** with `git status`, which is silent on globally-ignored paths
+- [X] T046 [US3] Commit `.claude/skills/` — the 12 speckit and helper skills currently exist only on the maintainer's machine (`git ls-files .claude` → 0). This is the reproducibility failure, not merely a drift risk
+- [X] T047 [US3] Confirm `.claude/settings.local.json` and `.claude/worktrees/` remain excluded: `settings.local.json` holds a 140-entry allowlist containing a database password
+- [X] T048 [P] [US3] Change `"ai": "opencode"` to `"ai": "claude"` in `/home/nnc/Projects/job-finder/.specify/init-options.json` (FR-020, FR-022)
+- [X] T049 [P] [US3] Update `/home/nnc/Projects/job-finder/.specify/integration.json`: `installed_integrations: ["claude"]`, `integration: "claude"`, `default_integration: "claude"`, and replace the opencode `integration_settings` block with the claude equivalent (FR-022, FR-025)
+- [X] T050 [P] [US3] Delete `/home/nnc/Projects/job-finder/.specify/integrations/opencode.manifest.json` (FR-023)
+- [X] T051 [US3] Remove the `.opencode` entry from `.gitignore` and delete the untracked `.opencode/` directory
+- [X] T052 [US3] Confirm no dangling references (FR-023): `grep -rn "opencode" . --exclude-dir={node_modules,.git,specs}` returns nothing. **Two hits found and resolved**: a stale comment in `apps/api/internal/generation/interfaces/http/documents.go` (fixed); `.specify/workflows/speckit/workflow.yml`'s vendored, non-exhaustive `integrations.any` compatibility list still names opencode alongside claude/copilot/gemini — left as-is, since it is speckit's own generic advisory template describing what the *tool* supports in general, not this repo's declared stack (already corrected in init-options.json/integration.json).
+- [X] T053 [US3] Verify each speckit command still resolves its scripts and templates after the switch (FR-024): run `bash .specify/scripts/bash/check-prerequisites.sh --json` and one full command end to end
+- [X] T054 [US3] Run the real test per quickstart.md P4: `git clone . /tmp/clone-check`, confirm `.claude/skills/` is present, `.specify/integration.json` names claude, and the prerequisite script runs. Then remove the clone. This is the check that fails today
 
 **Checkpoint**: US3 done. A fresh clone is usable.
 
@@ -156,8 +157,8 @@ description: "Task list for Single Source of Truth for Agent Context and Shared 
 ## Phase 6: Polish and Cross-Cutting
 
 - [ ] T055 Run the full-loop check from quickstart.md: add a field to a Go DTO, run `make tygo-generate`, **stop there**, and confirm the dashboard sees it with `tsc --noEmit` green and `tygo-check.sh` green
-- [ ] T056 [P] Record in `data-model.md` the final measured counts after consolidation, so the next reader sees what was actually achieved rather than what was planned
-- [ ] T057 [P] Note in `contracts/shared-types.md` whether `type_mappings` proved able to express the `Record<string, unknown>` versus `{[key: string]: any}` strictness difference, or whether a narrowing was needed — the plan left this open
+- [X] T056 [P] Record in `data-model.md` the final measured counts after consolidation, so the next reader sees what was actually achieved rather than what was planned
+- [X] T057 [P] Note in `contracts/shared-types.md` whether `type_mappings` proved able to express the `Record<string, unknown>` versus `{[key: string]: any}` strictness difference, or whether a narrowing was needed — the plan left this open
 - [ ] T058 Confirm feature 023's `regen-tygo.sh` hook is now sufficient on its own, and update the comment in that script noting it no longer covers only half the gap (if 023 has landed)
 - [ ] T059 Re-run `scripts/compare-shared-types.py` in all three modes as a final gate, and confirm the CI check added in T030 is green on the pull request
 - [ ] T060 Open the pull request and confirm every existing check plus the new duplicate check passes

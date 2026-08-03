@@ -47,8 +47,15 @@ Cause: Go declares `Error *string \`json:"error"\`` — a pointer with no `omite
 ```ts
 // packages/shared/src/nullable.ts
 export type Nullable<T, K extends keyof T> =
-  Omit<T, K> & { [P in K]: Exclude<T[P], undefined> | null };
+  Omit<T, K> & { [P in K]-?: Exclude<T[P], undefined> | null };
 ```
+
+The `-?` (removed optionality) on the mapped side is deliberate: it makes a
+wrapped key read as exactly `T | null` — matching the wire, where a Go
+pointer without `omitempty` is always present (explicit `null` when nil).
+Without `-?` the mapping is homomorphic and preserves the generated `?`,
+widening every wrapped field to `T | null | undefined`, which fails the T027
+strictness check and the T028 hover expectations.
 
 ```ts
 // packages/shared/src/index.ts
@@ -79,19 +86,32 @@ export type ActivityRunDto = Nullable<Gen.ActivityRunDto,
    This **does** restate one field's type, and FR-003 permits it: the constraint is not expressible by generation, and only the narrowed field is written. What FR-003 forbids is copying the whole field list, or restating a field the narrowing does not change. Expect a handful of these, not thirty — if the count grows, the constraint probably belongs in the Go DTO instead.
 3. `Record<string, unknown>` versus `{[key: string]: any}` is a strictness difference, not a shape difference; prefer the stricter hand-written form via `type_mappings` if expressible, otherwise a narrowing.
 
-### Class C — genuinely divergent fields (3)
+### Class C — genuinely divergent fields (2)
 
 | Field | State | Resolution |
 |---|---|---|
 | `JobDto.application` | generated only | Go DTO has it ⇒ hand file is stale. Adopt generated. |
 | `JobDto.documents` | generated only | Same. |
-| `SearchQuery.subscriptionUrl` | hand only | Absent from the Go DTO. Check consumers: keep as Consumer-only if referenced, delete if not. |
+| `SearchQuery.subscriptionUrl` | generated only | Not divergent — present in the Go DTO (`SubscriptionURL`, `apps/api/internal/dto/jobs.go:34`) and emitted as `subscriptionUrl?: string` in `generated.ts:330`. Zero consumers in `apps/dashboard/src`. Keep generated-only; no hand-written copy needed. |
 
-These three are the proof that "update both files field-for-field" does not work — two API fields never reached the consumer type.
+These two are the proof that "update both files field-for-field" does not work — API fields never reached the consumer type. (`subscriptionUrl` was initially misattributed as a divergence; it is present in both the Go DTO and generated output, so it flows through automatically.)
 
 ### Class D — identical (17)
 
 Delete from `index.ts`, re-export from `generated.ts`. No decision needed.
+
+### Class E — SC-005-restored narrowings (4 fields)
+
+The strictness audit verified four narrowings that must survive consolidation — generation alone would widen each to `string` or lose the constraint:
+
+- `KeywordDiffTerm.polarity` → `'required' | 'preferred'` — restored this session via `Omit`+intersection in `index.ts` (a `Nullable` name-list cannot express it: the generated type's `polarity: string` is not optional).
+- `SourceKind` → `'api' | 'scrape' | 'sidecar'`
+- `ApplicationStatus` → the 7-member const union
+- `OutcomeEventType` → `'applied' | 'viewed' | 'screen' | 'offer' | 'rejected'`
+
+The last three are the const-union enum recoveries via `enum_style: union` in `apps/api/tygo.yaml` (data-model Class B, resolution step 1). The remaining 82 nullability fields ride the `Nullable` field-list mechanism generally (Class A) — names only, no restated types.
+
+**Post-consolidation baseline**: 47 dashboard files import `@job-finder/shared`; zero duplicated shapes; `--check-go-nullability`, `--check-strictness` and `--check-duplicates` all exit 0.
 
 ---
 

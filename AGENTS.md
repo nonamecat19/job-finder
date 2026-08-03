@@ -38,13 +38,34 @@ automatic, and an unactivated hook is an absent gate. It sets
 main working tree covers every worktree that shares this clone; a fresh
 `git clone` elsewhere needs its own run.
 
+## Worktrees
+
+The checkout at the repository root is the authoritative working copy.
+Isolated working copies live under `.claude/worktrees/<name>/` — created by
+requesting worktree isolation on an agent task (e.g. `isolation: "worktree"`
+on the Agent tool), which runs `git worktree add` under that directory on a
+dedicated branch. They are not registered anywhere else.
+
+**Retirement is manual, not automatic.** When the task using a worktree
+finishes: if its branch merged, remove the worktree (`git worktree remove
+.claude/worktrees/<name>`) and delete the merged branch; if the branch is
+abandoned, remove the worktree the same way and leave the branch for later
+reference. A directory under `.claude/worktrees/` that no longer appears in
+`git worktree list` is stale — its git metadata was already pruned or it was
+never a registered worktree — and can be deleted directly with `rm -rf`;
+run `git worktree prune` first to clear any dangling registrations before
+trusting `git worktree list` as the source of truth for what is live.
+`.claude/worktrees/` itself stays untracked (`.gitignore`); nothing under it
+is ever committed.
+
 ## Project layout
 
 - `apps/api` — Go backend (HTTP API, asynq workers, ingestion scheduler)
 - `apps/dashboard` — React/Vite dashboard
 - `packages/shared` — shared TS types, generated from Go DTOs via tygo
-- `specs/` — per-feature specs (numbered)
-- `plans/` — implementation plans derived from specs
+- `specs/` — per-feature specs (numbered); each feature's plan lives at
+  `specs/<nnn>-<slug>/plan.md` alongside its `spec.md` and `tasks.md` — there
+  is no separate top-level `plans/` directory
 
 ## Commands
 
@@ -73,7 +94,7 @@ specs/023-workflow-quality-gates).
 
 ## Conventions
 
-- Go DTO field names/JSON tags in `apps/api/internal/dto/*.go` must match `packages/shared/src/index.ts` field-for-field — `index.ts` is hand-maintained (not auto-imported from the tygo-generated `generated.ts`), so update both when adding a DTO field. Editing a DTO file regenerates `generated.ts` automatically (see "While you work" above); `index.ts` still needs a matching hand edit until feature 024 removes the duplicate.
+- Shared types are generated. Add the field to the Go DTO in `apps/api/internal/dto/`, run `make tygo-generate`, done. `packages/shared/src/index.ts` re-exports and narrows; it never restates a shape. Hand-written types with no backend counterpart live in `consumer-only.ts`.
 - HTTP handlers live in `apps/api/internal/<feature>/interfaces/http/` (package `http`) — one adapter package per feature, alongside that feature's `application`/`domain`/`infrastructure` layers. Do not add handlers to `internal/httpapi`; it holds the router and its middleware only. Shared JSON helpers (`WriteJSON`, `WriteError`, `WriteAppError`, `DecodeJSON`) are in `internal/httpx`. Enforced by the `depguard` rules in `apps/api/.golangci.yml` and by `apps/api/internal/arch_test.go` (see specs/027-http-handler-decomposition).
 - New HTTP handlers are still wired in `apps/api/cmd/server/` via `httpapi.NewRouter(...)`'s variadic mounts, not by editing `router.go` directly.
 - sqlc queries live in `apps/api/internal/db/queries/*.sql`; regenerate after changes.

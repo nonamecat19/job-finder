@@ -91,7 +91,7 @@ tygo documents `enum_style` with values `const`, `enum`, `union`. Setting `union
 |---|---|---|
 | `JobDto.application` | in `generated.ts`, absent from `index.ts` | Present in the Go DTO ⇒ the hand-written file is stale. Adopt the generated form. |
 | `JobDto.documents` | in `generated.ts`, absent from `index.ts` | Same. |
-| `SearchQuery.subscriptionUrl` | in `index.ts`, absent from `generated.ts` | Absent from the Go DTO ⇒ either a consumer-only addition or dead. Check consumers; keep as consumer-only if used, delete if not. |
+| `SearchQuery.subscriptionUrl` | in `generated.ts`, absent from `index.ts` | Present in the Go DTO (`SubscriptionURL`, `apps/api/internal/dto/jobs.go:34`) ⇒ generated-only is correct. Zero consumers in `apps/dashboard/src`; no hand-written copy needed. |
 
 These are the concrete proof that the "update both files field-for-field" practice does not work: two fields have been in the API for some time and never reached the consumer-facing type.
 

@@ -49,7 +49,7 @@ Every number below was computed against the working tree, not estimated. The imp
 | `T \| null` (hand) vs `T?` (generated) | 82 fields | the dominant class; hand-written form is correct |
 | Named alias flattened to `string` | 67 fields | e.g. `ActivityOp`, `ActivityState`, `Record<string, unknown>` → `{[key: string]: any}` |
 | Literal union flattened to `string` | 2 fields | `JobDto.status`, `QueueBacklogDto.providerClass` |
-| Fields present on one side only | 3 | `JobDto.application`, `JobDto.documents`, `SearchQuery.subscriptionUrl` |
+| Fields present on one side only | 2 | `JobDto.application`, `JobDto.documents` — `SearchQuery.subscriptionUrl` is present in the Go DTO and generated output (not a divergence) |
 | Hand-maintained types with no generated counterpart | 14 | genuinely consumer-only |
 | Consumer files importing the shared package | 47 | import surface must stay frozen |
 
@@ -88,7 +88,7 @@ Deleting the hand-written copy would therefore satisfy the letter of FR-001 whil
    type Nullable<T, K extends keyof T> = Omit<T, K> & { [P in K]: Exclude<T[P], undefined> | null };
    ```
    `index.ts` then declares `export type ActivityRunDto = Nullable<Gen.ActivityRunDto, 'step' | 'jobId' | 'error' | …>`. Field *names* appear once; no field *type* is ever restated. This is exactly the layering FR-003 permits, and it keeps `tygo-check.sh` as sufficient enforcement — a new DTO field flows through automatically, and only a change in *nullability* needs a touch.
-3. **Resolve the 3 real divergences explicitly** (FR-007). `JobDto.application` and `JobDto.documents` exist in the generated file but not the hand-written one; `SearchQuery.subscriptionUrl` the reverse. Each is a decision, recorded in `data-model.md`, not an overwrite.
+3. **Resolve the 2 real divergences explicitly** (FR-007). `JobDto.application` and `JobDto.documents` exist in the generated file but not the hand-written one. `SearchQuery.subscriptionUrl` was misattributed as one-sided: it is in the Go DTO (`SubscriptionURL`, `jobs.go:34`) and generated output, with zero dashboard consumers — so no decision is needed, the generated form is correct. Each is a decision, recorded in `data-model.md`, not an overwrite.
 
 **Deliberately not chosen**: editing 82 Go DTO fields to add `omitempty`. That would make the generated output self-consistent, but it changes the wire format — an absent key instead of an explicit null — which the constraints forbid. Recorded in `research.md` as the correct long-term fix if the API contract is ever revisited.
 
