@@ -156,12 +156,12 @@ out-of-range value and confirm rejection with no stored change.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T038 Verify the migration's down path by rolling back and forward once, confirming the singleton row backfills to `true, 0, 0` (quickstart step 2)
-- [ ] T039 [P] Run the full quickstart manual API sequence in [quickstart.md](quickstart.md) step 4 — GET, two rejected PUTs with atomicity re-checks, DELETE
-- [ ] T040 [P] Run the manual UI check in [quickstart.md](quickstart.md) step 7 against `make dev`
-- [ ] T041 [P] Update the `ResumeShapeSetting` table's header comment in the migration directory, or the `resumeshape` package doc in `apps/api/internal/resumeshape/service.go`, if either enumerates the configurable categories and now reads as incomplete
-- [ ] T042 Run `make test-integration` and confirm every case in the [quickstart.md](quickstart.md) step 5 table passes
-- [ ] T043 Run `make test-lint` — the constitution's done bar for a change crossing `apps/api`, `apps/dashboard` and `packages/shared`
+- [X] T038 Verify the migration's down path by rolling back and forward once, confirming the singleton row backfills to `true, 0, 0` (quickstart step 2)
+- [X] T039 [P] Run the full quickstart manual API sequence in [quickstart.md](quickstart.md) step 4 — GET, two rejected PUTs with atomicity re-checks, DELETE
+- [X] T040 [P] Run the manual UI check in [quickstart.md](quickstart.md) step 7 against `make dev`
+- [X] T041 [P] Update the `ResumeShapeSetting` table's header comment in the migration directory, or the `resumeshape` package doc in `apps/api/internal/resumeshape/service.go`, if either enumerates the configurable categories and now reads as incomplete
+- [X] T042 Run `make test-integration` and confirm every case in the [quickstart.md](quickstart.md) step 5 table passes
+- [X] T043 Run `make test-lint` — the constitution's done bar for a change crossing `apps/api`, `apps/dashboard` and `packages/shared`
 
 ---
 
