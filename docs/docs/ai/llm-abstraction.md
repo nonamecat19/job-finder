@@ -144,7 +144,7 @@ sequenceDiagram
     participant S as Service
     participant R as Router(task)
     participant G as LiteLLM gateway
-    participant P as Cerebras → Groq → Cohere → OpenRouter → Ollama
+    participant P as Cerebras → Groq → Cohere → OpenRouter → Ollama (generation: OpenRouter first)
     participant O as Ollama (direct)
     S->>R: CompleteJSON(prompt, opts)
     alt GATEWAY_URL set

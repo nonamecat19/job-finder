@@ -12,6 +12,8 @@
 # directly. Chain order for every task (data-model.md §2, FR-006/FR-008):
 #   <task> (free: Cerebras) → <task>-groq (free) → <task>-cohere (free)
 #   → <task>-openrouter (aggregator, may be paid) → local (terminal, shared)
+# `generation` is the deliberate exception: OpenRouter is its tier 1 and
+# Cerebras drops to <task>-cerebras behind it. See the generation block.
 # Every model below is response_format:json_object-capable (contract C5) so
 # the chain never silently degrades a structured-output task into prose.
 #
@@ -46,7 +48,15 @@ model_list:
       api_key: os.environ/OPENROUTER_API_KEY
 
   # --- generation ---
+  # Resume generation is the one task whose tier 1 is OpenRouter, not Cerebras:
+  # the tailoring passes are long structured-output calls where output quality
+  # decides whether the document is usable, so the aggregator (which may be
+  # paid) leads and the free tiers become the fallbacks behind it.
   - model_name: generation
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-pro
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-cerebras
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
@@ -58,10 +68,6 @@ model_list:
     litellm_params:
       model: cohere_chat/command-r-08-2024
       api_key: os.environ/COHERE_API_KEY
-  - model_name: generation-openrouter
-    litellm_params:
-      model: openrouter/qwen/qwen3.7-max
-      api_key: os.environ/OPENROUTER_API_KEY
 
   # --- rephrase ---
   - model_name: rephrase
@@ -155,7 +161,7 @@ litellm_settings:
   # breaking the worst-case arithmetic above.
   fallbacks:
     - match: [match-groq, match-cohere, match-openrouter, local]
-    - generation: [generation-groq, generation-cohere, generation-openrouter, local]
+    - generation: [generation-cerebras, generation-groq, generation-cohere, local]
     - rephrase: [rephrase-groq, rephrase-cohere, rephrase-openrouter, local]
     - ghost: [ghost-groq, ghost-cohere, ghost-openrouter, local]
     - default: [default-groq, default-cohere, default-openrouter, local]
