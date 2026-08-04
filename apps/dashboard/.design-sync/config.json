@@ -1,0 +1,65 @@
+{
+  "projectId": "908a2f6c-5697-482e-bca2-f471fe2594d7",
+  "shape": "package",
+  "pkg": "@job-finder/dashboard",
+  "globalName": "JobFinderUI",
+  "srcDir": "src",
+  "tsconfig": "tsconfig.json",
+  "buildCmd": "pnpm build && sed \"s#url('/fonts/#url('#g; s#url(/fonts/#url(#g\" dist/assets/index-*.css > .design-sync/.cache/tailwind.css",
+  "cssEntry": ".design-sync/.cache/tailwind.css",
+  "extraFonts": [
+    "public/fonts/UcCm3FwrK3iLTcvnUwAT9nA2.woff2",
+    "public/fonts/UcCm3FwrK3iLTcvnUwQT9g.woff2",
+    "public/fonts/UcCm3FwrK3iLTcvnUwcT9nA2.woff2",
+    "public/fonts/UcCm3FwrK3iLTcvnUwgT9nA2.woff2",
+    "public/fonts/UcCm3FwrK3iLTcvnUwkT9nA2.woff2",
+    "public/fonts/UcCm3FwrK3iLTcvnUwoT9nA2.woff2",
+    "public/fonts/UcCm3FwrK3iLTcvnUwsT9nA2.woff2",
+    "public/fonts/UcCo3FwrK3iLTcvhYwYL8g.woff2",
+    "public/fonts/UcCo3FwrK3iLTcviYwY.woff2",
+    "public/fonts/UcCo3FwrK3iLTcvmYwYL8g.woff2",
+    "public/fonts/UcCo3FwrK3iLTcvsYwYL8g.woff2",
+    "public/fonts/UcCo3FwrK3iLTcvtYwYL8g.woff2",
+    "public/fonts/UcCo3FwrK3iLTcvuYwYL8g.woff2",
+    "public/fonts/UcCo3FwrK3iLTcvvYwYL8g.woff2"
+  ],
+  "componentSrcMap": {
+    "Button": "src/components/ui.tsx",
+    "Chip": "src/components/ui.tsx",
+    "Spinner": "src/components/ui.tsx",
+    "SkeletonLine": "src/components/ui.tsx",
+    "SkeletonBlock": "src/components/ui.tsx",
+    "SkeletonCircle": "src/components/ui.tsx",
+    "LoadingRegion": "src/components/ui.tsx",
+    "Field": "src/components/ui.tsx",
+    "Input": "src/components/ui.tsx",
+    "Textarea": "src/components/ui.tsx",
+    "Select": "src/components/ui.tsx",
+    "Stepper": "src/components/ui.tsx",
+    "RangeSlider": "src/components/ui.tsx",
+    "Checkbox": "src/components/ui.tsx",
+    "Surface": "src/components/ui.tsx",
+    "EmptyState": "src/components/ui.tsx",
+    "ErrorState": "src/components/ui.tsx",
+    "ScoreBadge": "src/components/badges.tsx",
+    "GhostBadge": "src/components/badges.tsx",
+    "HealthDot": "src/components/badges.tsx",
+    "ToastProvider": "src/components/toast.tsx",
+    "ThemeRoot": ".design-sync/root.tsx"
+  },
+  "provider": {
+    "component": "ThemeRoot",
+    "props": {
+      "style": {
+        "padding": "16px",
+        "borderRadius": "12px"
+      }
+    }
+  },
+  "overrides": {
+    "Checkbox": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
