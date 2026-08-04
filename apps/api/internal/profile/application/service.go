@@ -78,7 +78,15 @@ func (s *Service) Create(ctx context.Context, name string, rendercvYaml string, 
 		return dto.ProfileDto{}, fmt.Errorf("name is required")
 	}
 	if rendercvYaml == "" {
-		return dto.ProfileDto{}, fmt.Errorf("rendercv yaml is required")
+		// A blank profile is a valid starting point: the dashboard creates one
+		// silently so the user lands on the editable resume form instead of a
+		// "name it first" gate (spec 009 FR-001/FR-012). Seed the minimal
+		// rendercv document so downstream parsing/rendering stays uniform.
+		seed, err := yaml.Marshal(map[string]any{"cv": map[string]any{"name": name}})
+		if err != nil {
+			return dto.ProfileDto{}, err
+		}
+		rendercvYaml = string(seed)
 	}
 	master, err := generation.ParseRendercv(rendercvYaml)
 	if err != nil {
