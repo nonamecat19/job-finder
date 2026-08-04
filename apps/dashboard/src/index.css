@@ -113,6 +113,11 @@
 
 @import '@heroui/styles';
 
+/* design-sync: preview sources live in a dot-dir, which Tailwind's automatic
+   source detection skips — declare them so preview-only utilities are emitted. */
+@source '../.design-sync/previews';
+@source '../.design-sync/root.tsx';
+
 @theme {
   --breakpoint-3xl: 120rem;
   --breakpoint-4xl: 160rem;
