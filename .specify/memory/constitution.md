@@ -67,6 +67,32 @@ Templates requiring updates:
   - .claude/skills/speckit-*/SKILL.md ✅ re-checked, no queue-technology or
     provider reference found, no change needed
 Follow-up TODOs: none
+
+--------------------------------------------------------------------------
+
+Version change: 1.0.2 → 1.0.3 (PATCH — factual correction, no principle
+  added, removed, or redefined)
+Modified principles: none.
+  - Development Workflow & Quality Gates: removed the claim that a shipped
+    feature's spec.md is "archived under specs/archive/". specs/archive/ was
+    deleted; every archived spec's durable requirements and interface
+    contracts were folded into specs/domains/*.md and the feature directory
+    is now removed outright on ship. Keeping a second copy of a still-binding
+    rule is the drift this repository already fixed once for shared types
+    (024) and for context documents (024-FR-010) — the same reasoning applies
+    to specs. Originals remain recoverable from git history. See
+    specs/README.md.
+Added sections: none
+Removed sections: none
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ re-checked, no specs/archive
+    reference, no change needed
+  - .specify/templates/spec-template.md ✅ re-checked, no change needed
+  - .specify/templates/tasks-template.md ✅ re-checked, no change needed
+  - .specify/templates/checklist-template.md ✅ re-checked, no change needed
+  - .claude/skills/speckit-*/SKILL.md ✅ re-checked, no specs/archive
+    reference found, no change needed
+Follow-up TODOs: none
 -->
 
 # job-finder Constitution
@@ -149,10 +175,11 @@ cost/privacy exposure users didn't opt into.
   aligned.
 - Design/plan docs for non-trivial features are written at
   `specs/<nnn>-<slug>/plan.md` before implementation begins; trivial fixes and
-  refactors do not require a plan doc. Once a feature ships, its plan and the other
-  build-time artifacts are removed, its durable requirements are folded into
-  `specs/domains/`, and its `spec.md` is archived under `specs/archive/` — see
-  `specs/README.md`.
+  refactors do not require a plan doc. Once a feature ships, its durable requirements
+  and interface contracts are folded into `specs/domains/` and the whole
+  `specs/<nnn>-<slug>/` directory is removed — there is no archive, so exactly one
+  copy of every binding rule exists. Originals stay recoverable from git history.
+  See `specs/README.md`.
 - A change is not "done" until its own language's test suite passes locally; changes
   crossing app boundaries additionally require `make test-lint` before merge.
 
@@ -171,4 +198,4 @@ should be checked against the five Core Principles above before being marked rea
 review; deviations must be justified in the plan's Complexity Tracking section (or PR
 description) rather than silently introduced.
 
-**Version**: 1.0.2 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-03
+**Version**: 1.0.3 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-04

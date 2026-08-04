@@ -35,7 +35,7 @@ var exemptDirs = map[string]bool{
 // structurally cannot: depguard matches import paths, not file locations, so a
 // handler placed inside its feature module but outside interfaces/http passes
 // every import rule while still recreating the arrangement this feature
-// removed (contracts/depguard.md §2).
+// removed (specs/domains/codebase-structure.md § 1.1).
 //
 // Limitation: keyed on the chi import, so a handler written against net/http
 // alone would not be caught. Accepted — a handler that never touches the
