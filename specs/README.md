@@ -4,8 +4,12 @@ Requirement records for job-finder. **What must be true, and why** — not how i
 
 | Directory | Holds | Read it when |
 |---|---|---|
-| `domains/` | Living requirement docs, one per capability area. Consolidated from the shipped features and reconciled against the code. | You are changing behaviour and need to know the rules that already bind it. |
-| `archive/<nnn>-<slug>/` | The original per-feature `spec.md` (+ `contracts/`) as written at the time, unedited. Historical record only. | You need the original framing, acceptance scenarios, or dated rationale for one feature. |
+| `domains/` | Living requirement docs, one per capability area. Consolidated from every shipped feature and reconciled against the code. | You are changing behaviour and need to know the rules that already bind it. |
+
+`domains/` is the **only** requirement record. There is no per-feature archive: every shipped
+feature's durable requirements, interface contracts and dated rationale were folded into the
+matching domain document, and the original `spec.md` / `contracts/` files were deleted. They
+remain in git history — see [Recovering an original spec](#recovering-an-original-spec).
 
 **How it works is documented elsewhere** — the Docusaurus site under `docs/` covers
 architecture, data model, HTTP API, workers, and operations. Do not restate implementation
@@ -88,16 +92,36 @@ That is unchanged. Use the next free number from the registry above.
    prefixed with the feature number (e.g. `020-FR-001`) so the rule stays traceable.
 2. Mark anything it supersedes in the older domain text, in place. Do not silently drop a
    revoked rule; a revoked rule with a pointer is worth more than a missing one.
-3. `git mv specs/<nnn>-<slug> specs/archive/<nnn>-<slug>` and delete `plan.md`,
-   `research.md`, `quickstart.md`, `tasks.md`, `data-model.md`, `checklists/`. Keep
-   `spec.md` and `contracts/`.
-4. Add the row to the registry table above.
+3. Fold the durable parts of `contracts/` into the same domain doc — endpoint shapes, error
+   strings, config keys, invariants and their enforcement. **A contract detail nobody can
+   find is a contract nobody keeps.**
+4. `git rm -r specs/<nnn>-<slug>`. Nothing from the feature directory survives on disk.
+5. Add the row to the registry table above.
 
-### Why the process artifacts are deleted
+### Why nothing is kept on disk
 
-`plan.md`, `research.md`, `quickstart.md`, `tasks.md`, `data-model.md` and
-`checklists/` describe how a feature was *going to be* built and how its rollout was
-*going to be* validated. Once it is on `master`, the code is the answer to all of those,
-and a stale plan is worse than no plan — it makes agents implement things that were
-already revised during the build. They remain in git history; `git log --diff-filter=D
---name-only -- 'specs/*'` finds them.
+Two different kinds of file get deleted, for two different reasons.
+
+`plan.md`, `research.md`, `quickstart.md`, `tasks.md`, `data-model.md` and `checklists/`
+describe how a feature was *going to be* built and how its rollout was *going to be*
+validated. Once it is on `master`, the code answers all of that, and a stale plan is worse
+than no plan — it makes agents implement things that were already revised during the build.
+
+`spec.md` and `contracts/` are deleted for the opposite reason: their durable content is
+**still binding**, and two copies of a binding rule is the failure mode 024 exists to
+prevent (see [`domains/codebase-structure.md`](domains/codebase-structure.md) § 3). A rule
+that lives both in a domain doc and in an archived spec will drift, and the reader has no way
+to tell which copy is current. Folding and deleting leaves exactly one answer.
+
+What is genuinely lost is the *narrative* — user stories, priorities, "independent test"
+notes, and the assumption lists. That framing mattered while the feature was being built and
+does not bind anything now.
+
+### Recovering an original spec
+
+Everything is in git history:
+
+```sh
+git log --diff-filter=D --name-only -- 'specs/*'   # find the deleting commit
+git show <commit>^:specs/<nnn>-<slug>/spec.md      # read the file as it was
+```

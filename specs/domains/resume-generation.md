@@ -71,6 +71,63 @@ baseline. See § 4.
 section-order preservation. Section order for projects, certifications, publications and
 links is pinned.
 
+### 3.1 How the invariants are enforced
+
+**The design principle: make violations unrepresentable rather than detectable.** For the
+structural invariants, 028 did not add a checker — it deleted the fields through which the
+model could have expressed a violation, and the merge code paths that would have applied one.
+
+| Removed | Was used for |
+|---|---|
+| `TailoredSections.SectionsToDrop` | Deleting section keys during merge |
+| `TailoredSections.ExperienceOrder` | Reordering experience entries |
+| `TailoredExperience.Drop` | Dropping individual jobs |
+
+`MergeTailored` now mutates section *contents* only — summary text, skill `details`,
+experience `highlights` — and never writes or removes a section key or the
+`cv.sections["_order"]` key. `sections["experience"]` is rewritten from the master-order
+slice with only per-entry `highlights` changed; `company`, `position`, `start_date`,
+`end_date`, `date`, `location` and `summary` pass through verbatim from the deep-cloned
+master. **Invariants 1 and 2 are therefore impossible to violate after merge**: no field
+expresses the mutation and no code path applies it.
+
+Because dates were already outside the allow-list and pass through untouched, the *derivable*
+total years of experience is unchanged by construction. The one genuinely new check is the
+**text-asserted years** case: `VerifyStructureIntegrity` scans the merged summary and every
+experience highlight for numeric years-of-experience assertions ("over N years", "N+ years",
+"N years of experience") via a bounded regex set, parses N, and compares it against the
+master's derivable total — the sum of per-entry `endYear − startYear`, with "Present"
+resolving to the current year and an unparseable date conservatively contributing 0.
+
+Escalation on a contradiction:
+
+1. **First detection** — one targeted re-prompt feeding the violation back in ("the summary
+   asserts '12 years' but the master's experience spans 5 years; remove any numeric years
+   claim"). This is a single extra LLM call, distinct from the two-attempt grounding loop.
+2. **Recurrence after the re-prompt** — strip the offending sentence or clause and log the
+   intervention on the activity row. **A resume with a contradicting figure is never emitted.**
+3. **No figure asserted** — no violation. The check flags a *contradiction*, never the
+   absence of a claim; "senior backend engineer" with no number is fine.
+
+**The LLM payload after 028.** `TailoredSections` carries exactly three fields: `summary` (2–3
+sentences, **must not assert a numeric total-years figure** — describe seniority
+descriptively); `skills` (one entry per master skill group at the same `[index]`, with
+vacancy-required skills first within each group, group set and order matching master); and
+`experience` (one entry per master entry, keyed by exact `company` name, with only
+`highlights` — the top 3–5 most relevant, rephrased — changeable). The prompt's hard rules in
+`buildSelectPrompt` say so explicitly: keep every experience entry, keep them in the exact
+master order, and do not drop, add, rename or reorder any section.
+
+**Surfacing — how 028-FR-011 is actually satisfied.** Structural enforcements are *not*
+surfaced as accept/reject proposals, because offering a non-negotiable invariant as a choice
+would contradict 028-FR-005. Block-sequence, experience-order and job-drop enforcement is
+silent — nothing is "dropped" because nothing the merge would honour was ever attempted.
+Text-asserted-years interventions are logged on the activity row for audit, not shown as
+choices. FR-011 is met by the **diff view reflecting the result** — blocks in master order,
+no dropped jobs, no inflated years — rather than by emitting rows the user must act on. A
+visible "we kept your original order" annotation, if ever wanted, is a separate lightweight
+mechanism and must not overload the proposal accept/reject lifecycle.
+
 ## 4. Review and acceptance (020-FR-004..006, 010, 011)
 
 - **No AI edit is applied without explicit user accept/reject** (020-FR-004). Nothing is
@@ -87,6 +144,60 @@ links is pinned.
 
 020-FR-009 restates Constitution I in this context: a tailoring run updates a local draft and
 nothing else. It never submits an application or contacts an employer.
+
+### 4.1 The tailoring REST surface
+
+`internal/tailoring/`, mounted under `/api`. Auth, CORS and requestId middleware are inherited
+from `httpapi.NewRouter`; errors use the standard `{error, path?, message?}` shape; dates are
+ISO-8601 UTC.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/tailoring` | Enqueue a run — creates the draft, enqueues the `generate` job, returns `202 {draftId, activityId}` |
+| `GET` | `/api/tailoring/{draftId}` | The draft: state, baseline summary, all proposals (the UI groups by status). **`dropped` proposals are not included in this list.** |
+| `POST` | `/api/tailoring/{draftId}/proposals/{proposalId}` | `{action: "accept" \| "reject"}` |
+| `POST` | `/api/tailoring/{draftId}/finalize` | `200 {state: "finalized"}`; **precondition: zero `pending` proposals.** The handler never auto-finalizes — the user must click. |
+| `POST` | `/api/tailoring/{draftId}/export-pdf` | Starts the page fitter |
+| `GET` | `/api/tailoring/{draftId}/export-status` | Idempotent short-poll |
+| `POST` | `/api/tailoring/{draftId}/rerun` | `202` with a new draft seeded from the current baseline |
+| `DELETE` | `/api/tailoring/{draftId}` | `204`, draft `abandoned` |
+
+The request body carries either a `jobId` or an ad-hoc `vacancy` (`{company, title, text}`)
+alongside `profileId`.
+
+Status codes that encode real rules:
+
+- `POST /api/tailoring` → **400** when the profile has no master content, or when a draft is
+  already `review`/`finalized` for the same `(profile, job)` — **the caller must use `/rerun`
+  instead of starting a second draft.** → **409** when the master's `rendercv_config` checksum
+  no longer matches the existing draft's, meaning the master was edited mid-review; the caller
+  abandons and starts fresh.
+- Accept/reject → **409** when the proposal is already terminal or the draft is
+  `finalized`/`abandoned`; → **422** when the proposal is `dropped` (grounding- or
+  structure-suppressed). **A dropped proposal can never be accepted.**
+- `/export-pdf` → **409** when the draft is not `finalized`, still has pending proposals, or
+  already produced a `fit` (the caller fetches the existing `documentId`).
+
+**Accepting mutates the baseline in the same transaction**, so a subsequent poll already
+reflects it. Rejecting restores the baseline value for that field and changes no baseline.
+Every write endpoint takes a row-level `SELECT … FOR UPDATE` on the draft first
+(`GetDraftForUpdate`), and accept/reject is idempotent on terminal rows — a client may retry
+after a network flake without double-applying.
+
+`/rerun` leaves the prior draft `finalized` and seeds the new draft's baseline from the
+prior's *current* baseline, so **already-accepted edits are not re-surfaced as fresh
+proposals.**
+
+**Worker wiring, reused rather than new.** `POST /api/tailoring` enqueues the existing asynq
+`TypeGenerate` task with a `tailoringDraftID` field added to `GeneratePayload` — wire-nullable,
+so old callers leave it nil and the merged-resume path is unchanged.
+`generation.Handler.ProcessTask` sees the field and dispatches to
+`tailoring.Service.RunProposals`. The existing `GET /api/activity` routes already carry the
+queued/running state the dashboard polls for 020-FR-013's progress indicator, so no new
+endpoint was needed. `generated_documents` rows from `/export-pdf` are indistinguishable from
+legacy-path rows, so `GET /api/documents` and the PDF download work unchanged. **The legacy
+`POST /api/documents/tailor` merge-and-render endpoint was not removed** — 020's flow is
+additive, and two export paths coexist by design.
 
 ## 5. Configurable shape (031, 032)
 
@@ -155,6 +266,63 @@ in the enforced order regardless of configuration.
 
 **Explicitly not in scope** (032-FR-016): no per-certification detail-line cap.
 
+### 5.1 The endpoint
+
+Mounted by `internal/resumeshape/interfaces/http/resume_shape.go` beside the existing
+`/v1/settings/ai-features` routes. `ResumeShapeConfigDto` is the body for **both** request and
+response on every method, tygo-generated into `packages/shared/src/generated.ts` and never
+hand-edited (Constitution III).
+
+| Method | Behaviour |
+|---|---|
+| `GET /v1/settings/resume-shape` | `200` with the current config, served from the in-memory cache. **Never 404s** — the singleton row is seeded by migration `00034`, and the service falls back to `DefaultShapeConfig()` if the row is somehow absent. |
+| `PUT /v1/settings/resume-shape` | Replaces the **whole** config — a full-payload replacement, not a patch, because 031-FR-004's all-or-nothing validation requires every field to be present. `200` with the persisted values; `400` naming the offending field and its range; `500` on a persistence failure. |
+| `DELETE /v1/settings/resume-shape` | `200` with the documented defaults. Idempotent — deleting an already-default config returns the same body. |
+
+**Ordering guarantee**: validation runs before any write. On a `400`, nothing is stored *and
+the in-memory cache is untouched*, so a following `GET` returns the pre-request values. The
+new config applies to every generation **started after** the response; a generation already in
+flight completes with the config it resolved at its start.
+
+Validation runs twice by design — in the handler, so a bad body produces a `400` rather than a
+`500`, and in the service, so the write is atomic. Both call the same
+`domain.ShapeConfig.Validate()`, so a new rule takes effect in both places from one edit.
+
+Error messages are the contract, since clients surface `error` verbatim:
+
+| Condition | Message |
+|---|---|
+| `targetPages` outside 1–3 | `targetPages must be between 1 and 3` |
+| `experienceBulletsMin > experienceBulletsMax` | `experienceBulletsMin must be <= experienceBulletsMax` |
+| `projectsMin > 0` with `projectsEnabled: false` | `projectsMin > 0 requires projectsEnabled` |
+| `certificationsMin` / `certificationsMax` outside 0–20 | `certificationsMin must be between 0 and 20` (likewise `certificationsMax`) |
+| `certificationsMin > certificationsMax` (when max > 0) | `certificationsMin must be <= certificationsMax` |
+| `certificationsMin > 0` with `certificationsEnabled: false` | `certificationsMin > 0 requires certificationsEnabled` |
+
+The certifications messages mirror the projects forms exactly, so 032 needed no client change.
+
+Dashboard client: `settings.getResumeShape()`, `settings.putResumeShape(body)`,
+`settings.resetResumeShape()` in `lib/api.ts`; query keys `resumeShape.all = ['resumeShape']`
+and `resumeShape.get = ['resumeShape', 'get']`, with mutations invalidating `resumeShape.all`,
+matching the `aiFeatures` pattern.
+
+> ### ⚠ The whole-config PUT hazard
+>
+> Go decodes a missing boolean as `false`. An external or scripted client that PUTs a
+> hand-written body omitting `certificationsEnabled` therefore **silently disables the
+> certifications section** — and the same is true of `skillsEnabled` and `projectsEnabled`.
+>
+> This was considered and accepted during 032: the dashboard always round-trips the full
+> config it received from `GET`, so it is unaffected, and making certifications behave
+> differently from the other two toggles on the same endpoint would be worse than the hazard.
+> The alternative — decoding into a pointer-field struct and treating an absent boolean as
+> "keep current" — remains available if a scripted client ever gets burned, but it must then
+> be applied to all three toggles at once.
+
+Changing the DTO is a four-step sequence: edit `internal/dto/settings.go` → `make
+tygo-generate` → `pnpm --filter @job-finder/shared build` → dashboard typechecks. `make
+tygo-check` fails CI if the committed generated file drifts.
+
 ## 6. Projects section (031-FR-018)
 
 With projects enabled, each project reproduces its name, link and dates from the master
@@ -175,3 +343,95 @@ range, or all available projects when fewer exist.
   (020-SC-007: ≥90% of runs), with an indeterminate progress indicator meanwhile.
 - 020-FR-014: an unreachable local model, a timeout, or malformed model output surfaces a
   clear error — never a partial or corrupted resume.
+
+### 7.1 The page fitter
+
+`internal/generation/singlepage`. Takes a finalized `dto.Resume` (the 009 structured shape),
+a draft id for artifact naming and audit, an output directory (default `/data/documents`) and
+an optional `storage.Store` for MinIO upload. Returns a `FitResult` whose `Status` is `fit`,
+`blocked` or `error`, carrying the document id and file path on a fit, ranked `feedback` when
+blocked, and — for telemetry — the measured content height and the density step that won.
+
+**The density ladder is deterministic and searched cheapest-first**, largest settings to
+smallest; the first step that fits wins:
+
+| Step | Body pt | Margin mm | Line height | Bullet gap px |
+|---|---|---|---|---|
+| 1 | 11.0 | 14 | 1.4 | 4 |
+| 2 | 11.0 | 14 | 1.3 | 4 |
+| 3 | 11.0 | 14 | 1.3 | 2 |
+| 4 | 10.5 | 12 | 1.3 | 2 |
+| 5 | 10.5 | 10 | 1.2 | 2 |
+| 6 | 10.0 | 10 | 1.2 | 1 |
+| 7 | 10.0 | 8 | 1.2 | 1 |
+| 8 | 9.5 | 8 | 1.1 | 0 |
+| 9 | 9.0 | 8 | 1.1 | 0 — **minimum bound** |
+
+Page size is A4 (210 × 297 mm), fixed; a configurable page size is out of scope. **Anything
+below the minimum bound is rejected as `blocked` rather than rendered**, because tighter than
+that stops being ATS-readable.
+
+Measurement per step, via chromedp: render the template with the density knobs exposed as CSS
+custom properties on `:root`, `SetDocumentContent`, evaluate
+`document.documentElement.scrollHeight`/`scrollWidth`, convert px to mm at 96 dpi
+(1 px = 0.2645 mm), and fit when the measured height is within `297 − 2×margin` **and** the
+width does not overflow. Exhausting the ladder produces `blocked` with computed feedback.
+
+There is a **5 s synchronous budget** per export. Beyond it the remaining steps run as a
+background task and `POST /export-pdf` returns `200 {status: "pending"}` for the dashboard to
+poll through `/export-status`.
+
+**Blocked feedback is ranked by space saved**, not listed arbitrarily: longest bullets first
+(identified as `experience:Acme:3`), then skill-group removals (`skill_group:Cloud`), then the
+summary. Each candidate's gain is measured at the minimum density step by removing it and
+re-measuring, and the returned array is the **shortest set whose removal achieves fit**.
+
+**The text-PDF guarantee** (020-FR-007) is structural, not incidental: `PrintToPDF` with
+`WithPrintBackground(true)`; no `<canvas>`, no image-of-text, no `user-select: none`; real
+`<p>` and `<ul>` elements throughout. An integration test opens the produced PDF and asserts
+the page count plus successful text extraction of the name, summary and first bullet.
+
+The template renders from `dto.Resume` alone and **does not import the legacy JSON-Resume
+`resume_view` struct**. It is ATS-clean by construction: single document flow, no columns, no
+flexbox a paper print cannot reproduce, with margins and skill order stable across every
+density step. It renders a header, then each `Section` in declared order by `entryType`
+(`experience`/`education`/`publication` structured entries; `normal`/`text`/`bullet`/
+`numbered`/`reversed_numbered`/`one_line` content entries; and `unrecognized` entries rendered
+from their raw fields per the 009 data model), with skill groups as label plus
+comma-separated details, one row per group and never stripping tokens.
+
+Three deliberate non-goals: it does **not** render the user's RenderCV Typst theme — the point
+of a tailored resume is to deviate from the master theme; it does **not** fall back to
+`RenderCvRenderer`; and it does **not** accept the master's opaque `RendercvMaster` map, only
+the structured `dto.Resume`.
+
+## 8. Measurable bars
+
+**Structure preservation (028)** — all four structural criteria are 100% bars, because the
+enforcement is mechanical rather than statistical:
+
+- 028-SC-001: 100% of tailored resumes present blocks in master order — zero additions,
+  removals, renames or reorders across all runs.
+- 028-SC-002: 100% list experience entries in master order — zero additions, removals or
+  reorders.
+- 028-SC-003: 100% carry the same total years as their master — zero changes to an explicit
+  figure and zero changes to date ranges that would alter a computed total.
+- 028-SC-005: zero accepted edits introduce or imply a total-years figure that exceeds or
+  contradicts the master's, auditable through the same grounding trail as 020-SC-005.
+- 028-SC-006 is the human-facing counterpart: a user can confirm **by eye, within 30 seconds**,
+  that block order, job order and total experience match their master. The invariants must be
+  *visibly* preserved, not only silently enforced.
+
+**Configurable shape (031, 032)**
+
+- 032-SC-001: disabling certifications removes them from the next generated resume **with no
+  other section's content or order changed.**
+- 032-SC-002: with a maximum of N configured and more than N in the profile, 100% of generated
+  resumes contain exactly N.
+- 032-SC-004: with default settings, generated resumes are identical to those produced before
+  the feature, for the same profile, vacancy and model output.
+- 032-SC-005: any setting can be changed, saved and confirmed persisted in under a minute.
+- 032-SC-006: 100% of out-of-range or contradictory updates are rejected **without altering any
+  stored setting.**
+- 032-SC-007: a minimum the profile cannot meet produces a resume **plus a recorded shortfall**
+  in 100% of such runs — never a failed generation, and never an invented certification.
