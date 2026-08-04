@@ -39,7 +39,7 @@ func TestApplyHardLimitsClampsExperienceBullets(t *testing.T) {
 	m := masterWithBullets(map[string]int{"Acme": 12}, "Acme")
 	cfg := DefaultShapeConfig() // max 10
 
-	report := ApplyHardLimits(m, cfg)
+	report := ApplyHardLimits(m, m, cfg)
 
 	got := highlightsOf(t, m, "Acme")
 	if len(got) != 10 {
@@ -63,7 +63,7 @@ func TestApplyHardLimitsUnlimitedMaxLeavesContentUntouched(t *testing.T) {
 	cfg.ExperienceBulletsMax = 0 // unlimited
 	cfg.ExperienceBulletsMin = 1
 
-	ApplyHardLimits(m, cfg)
+	ApplyHardLimits(m, m, cfg)
 
 	if got := highlightsOf(t, m, "Acme"); len(got) != 15 {
 		t.Errorf("kept %d bullets, want all 15 (max 0 = unlimited)", len(got))
@@ -74,7 +74,7 @@ func TestApplyHardLimitsReportsShortfallWithoutPadding(t *testing.T) {
 	m := masterWithBullets(map[string]int{"Acme": 3, "StartupX": 9}, "Acme", "StartupX")
 	cfg := DefaultShapeConfig() // min 8, max 10
 
-	report := ApplyHardLimits(m, cfg)
+	report := ApplyHardLimits(m, m, cfg)
 
 	if got := highlightsOf(t, m, "Acme"); len(got) != 3 {
 		t.Errorf("Acme kept %d bullets, want the 3 that exist — a minimum is never padded", len(got))
@@ -91,12 +91,59 @@ func TestApplyHardLimitsReportsShortfallWithoutPadding(t *testing.T) {
 	}
 }
 
+func TestApplyHardLimitsPadsFromMasterWhenModelUnderselected(t *testing.T) {
+	master := masterWithBullets(map[string]int{"Acme": 9}, "Acme")
+	cfg := DefaultShapeConfig() // min 8, max 10
+
+	// The model only selected 3 of the master's 9 available bullets.
+	merged := masterWithBullets(map[string]int{"Acme": 3}, "Acme")
+
+	report := ApplyHardLimits(master, merged, cfg)
+
+	got := highlightsOf(t, merged, "Acme")
+	if len(got) != 8 {
+		t.Fatalf("kept %d bullets, want 8 (padded up to the configured min)", len(got))
+	}
+	for i, h := range got {
+		if want := fmt.Sprintf("Acme bullet %d", i); h != want {
+			t.Errorf("bullet %d = %q, want %q (master order)", i, h, want)
+		}
+	}
+	if len(report.Shortfalls) != 0 {
+		t.Errorf("shortfalls = %+v, want none — the master had enough", report.Shortfalls)
+	}
+}
+
+func TestApplyHardLimitsPadDoesNotDuplicateAlreadySelectedBullets(t *testing.T) {
+	master := masterWithBullets(map[string]int{"Acme": 9}, "Acme")
+	cfg := DefaultShapeConfig() // min 8, max 10
+
+	// The model kept 3 bullets, but reordered/repeated one already in the pool.
+	merged := RendercvMaster{"cv": map[string]any{"sections": map[string]any{"experience": []any{
+		map[string]any{"company": "Acme", "highlights": []any{"Acme bullet 2", "Acme bullet 0", "Acme bullet 5"}},
+	}}}}
+
+	ApplyHardLimits(master, merged, cfg)
+
+	got := highlightsOf(t, merged, "Acme")
+	if len(got) != 8 {
+		t.Fatalf("kept %d bullets, want 8", len(got))
+	}
+	seen := map[string]bool{}
+	for _, h := range got {
+		if seen[h] {
+			t.Fatalf("bullet %q duplicated in %v", h, got)
+		}
+		seen[h] = true
+	}
+}
+
 func TestApplyHardLimitsCarriesConfigAndPageTarget(t *testing.T) {
 	m := masterWithBullets(map[string]int{"Acme": 9}, "Acme")
 	cfg := DefaultShapeConfig()
 	cfg.TargetPages = 3
 
-	report := ApplyHardLimits(m, cfg)
+	report := ApplyHardLimits(m, m, cfg)
 
 	if report.Config != cfg {
 		t.Errorf("report.Config = %+v, want the config the run used", report.Config)
@@ -167,16 +214,16 @@ func TestShapeConfigValidate(t *testing.T) {
 		{"summaryLines too high", with(func(c *ShapeConfig) { c.SummaryLines = 13 }), "summaryLines must be between 1 and 12"},
 		{"skillsMaxGroups too low", with(func(c *ShapeConfig) { c.SkillsMaxGroups = -1 }), "skillsMaxGroups must be between 0 and 20"},
 		{"skillsMaxGroups too high", with(func(c *ShapeConfig) { c.SkillsMaxGroups = 21 }), "skillsMaxGroups must be between 0 and 20"},
-		{"experienceBulletsMin too low", with(func(c *ShapeConfig) { c.ExperienceBulletsMin = 0 }), "experienceBulletsMin must be between 1 and 20"},
+		{"experienceBulletsMin too low", with(func(c *ShapeConfig) { c.ExperienceBulletsMin = 0 }), "experienceBulletsMin must be between 1 and 10"},
 		{"experienceBulletsMin too high", with(func(c *ShapeConfig) {
-			c.ExperienceBulletsMin = 21
-			c.ExperienceBulletsMax = 20
-		}), "experienceBulletsMin must be between 1 and 20"},
+			c.ExperienceBulletsMin = 11
+			c.ExperienceBulletsMax = 10
+		}), "experienceBulletsMin must be between 1 and 10"},
 		{"experienceBulletsMax too low", with(func(c *ShapeConfig) {
 			c.ExperienceBulletsMin = 1
 			c.ExperienceBulletsMax = 0
-		}), "experienceBulletsMax must be between 1 and 20"},
-		{"experienceBulletsMax too high", with(func(c *ShapeConfig) { c.ExperienceBulletsMax = 21 }), "experienceBulletsMax must be between 1 and 20"},
+		}), "experienceBulletsMax must be between 1 and 10"},
+		{"experienceBulletsMax too high", with(func(c *ShapeConfig) { c.ExperienceBulletsMax = 11 }), "experienceBulletsMax must be between 1 and 10"},
 		{"targetPages too low", with(func(c *ShapeConfig) { c.TargetPages = 0 }), "targetPages must be between 1 and 3"},
 		{"targetPages too high", with(func(c *ShapeConfig) { c.TargetPages = 4 }), "targetPages must be between 1 and 3"},
 		{"projectsMin too low", with(func(c *ShapeConfig) { c.ProjectsMin = -1 }), "projectsMin must be between 0 and 20"},
@@ -186,8 +233,8 @@ func TestShapeConfigValidate(t *testing.T) {
 		{"projectBulletsMax too low", with(func(c *ShapeConfig) { c.ProjectBulletsMax = -1 }), "projectBulletsMax must be between 0 and 10"},
 		{"projectBulletsMax too high", with(func(c *ShapeConfig) { c.ProjectBulletsMax = 11 }), "projectBulletsMax must be between 0 and 10"},
 		{"bullets min above max", with(func(c *ShapeConfig) {
-			c.ExperienceBulletsMin = 12
-			c.ExperienceBulletsMax = 8
+			c.ExperienceBulletsMin = 8
+			c.ExperienceBulletsMax = 5
 		}), "experienceBulletsMin must be <= experienceBulletsMax"},
 		{"projects min above max", with(func(c *ShapeConfig) {
 			c.ProjectsMin = 5
@@ -366,7 +413,7 @@ func TestApplyHardLimitsClampsSkillGroupsInMasterOrder(t *testing.T) {
 	cfg := DefaultShapeConfig()
 	cfg.SkillsMaxGroups = 2
 
-	ApplyHardLimits(m, cfg)
+	ApplyHardLimits(m, m, cfg)
 
 	got := skillLabels(m)
 	if len(got) != 2 || got[0] != "Languages" || got[1] != "Backend" {
@@ -374,10 +421,25 @@ func TestApplyHardLimitsClampsSkillGroupsInMasterOrder(t *testing.T) {
 	}
 }
 
+// The spoken-languages group is pinned: the cap may drop other groups around
+// it, but never it, and the surviving groups keep the master's order.
+func TestApplyHardLimitsKeepsSpokenLanguagesGroupUnderCap(t *testing.T) {
+	m := masterWithSkillGroups("Backend", "Frontend", "Databases", "Spoken Languages")
+	cfg := DefaultShapeConfig()
+	cfg.SkillsMaxGroups = 2
+
+	ApplyHardLimits(m, m, cfg)
+
+	got := skillLabels(m)
+	if len(got) != 2 || got[0] != "Backend" || got[1] != "Spoken Languages" {
+		t.Errorf("skill groups = %v, want [Backend Spoken Languages]", got)
+	}
+}
+
 func TestApplyHardLimitsUnlimitedSkillGroupsKeepsAll(t *testing.T) {
 	m := masterWithSkillGroups("Languages", "Backend", "Frontend")
 
-	ApplyHardLimits(m, DefaultShapeConfig()) // SkillsMaxGroups 0 = unlimited
+	ApplyHardLimits(m, m, DefaultShapeConfig()) // SkillsMaxGroups 0 = unlimited
 
 	if got := skillLabels(m); len(got) != 3 {
 		t.Errorf("skill groups = %v, want all three kept", got)
@@ -389,7 +451,7 @@ func TestApplyHardLimitsTruncatesProjectsInMasterOrder(t *testing.T) {
 	cfg := DefaultShapeConfig()
 	cfg.ProjectsMax = 2
 
-	ApplyHardLimits(m, cfg)
+	ApplyHardLimits(m, m, cfg)
 
 	got := projectNames(m)
 	if len(got) != 2 || got[0] != "Orbit" || got[1] != "Beacon" {
@@ -400,7 +462,7 @@ func TestApplyHardLimitsTruncatesProjectsInMasterOrder(t *testing.T) {
 func TestApplyHardLimitsUnlimitedProjectsKeepsAll(t *testing.T) {
 	m := masterWithProjects(map[string]int{"Orbit": 2, "Beacon": 2, "Comet": 2}, "Orbit", "Beacon", "Comet")
 
-	ApplyHardLimits(m, DefaultShapeConfig()) // ProjectsMax 0 = unlimited
+	ApplyHardLimits(m, m, DefaultShapeConfig()) // ProjectsMax 0 = unlimited
 
 	if got := projectNames(m); len(got) != 3 {
 		t.Errorf("projects = %v, want all three kept", got)
@@ -412,7 +474,7 @@ func TestApplyHardLimitsTruncatesProjectBullets(t *testing.T) {
 	cfg := DefaultShapeConfig()
 	cfg.ProjectBulletsMax = 2
 
-	ApplyHardLimits(m, cfg)
+	ApplyHardLimits(m, m, cfg)
 
 	orbit := StringSliceField(AsSliceOfMaps(CvSections(m)["projects"])[0], "highlights")
 	if len(orbit) != 2 {
@@ -432,7 +494,7 @@ func TestApplyHardLimitsReportsProjectShortfallWithoutInventing(t *testing.T) {
 	cfg := DefaultShapeConfig()
 	cfg.ProjectsMin = 3
 
-	report := ApplyHardLimits(m, cfg)
+	report := ApplyHardLimits(m, m, cfg)
 
 	if got := projectNames(m); len(got) != 1 {
 		t.Errorf("projects = %v, want the one that exists — nothing is invented to meet a minimum", got)
@@ -451,7 +513,7 @@ func TestApplyHardLimitsTruncatesCertificationsInMasterOrder(t *testing.T) {
 	cfg := DefaultShapeConfig()
 	cfg.CertificationsMax = 3
 
-	ApplyHardLimits(m, cfg)
+	ApplyHardLimits(m, m, cfg)
 
 	got := certificationLabels(m)
 	want := []string{
@@ -473,7 +535,7 @@ func TestApplyHardLimitsUnlimitedCertificationsKeepsAll(t *testing.T) {
 	m := certificationsFixtureMaster()
 	want := len(certificationLabels(m))
 
-	ApplyHardLimits(m, DefaultShapeConfig()) // CertificationsMax 0 = unlimited
+	ApplyHardLimits(m, m, DefaultShapeConfig()) // CertificationsMax 0 = unlimited
 
 	if got := certificationLabels(m); len(got) != want {
 		t.Errorf("certifications = %v, want all %d kept", got, want)
@@ -486,7 +548,7 @@ func TestApplyHardLimitsCertificationsCapAboveAvailableKeepsAllInventsNothing(t 
 	cfg := DefaultShapeConfig()
 	cfg.CertificationsMax = available + 5 // cap larger than what exists
 
-	ApplyHardLimits(m, cfg)
+	ApplyHardLimits(m, m, cfg)
 
 	if got := certificationLabels(m); len(got) != available {
 		t.Errorf("certifications = %v, want all %d kept, nothing invented", got, available)
@@ -498,7 +560,7 @@ func TestApplyHardLimitsReportsCertificationsShortfallWithoutPadding(t *testing.
 	cfg := DefaultShapeConfig()
 	cfg.CertificationsMin = 4
 
-	report := ApplyHardLimits(m, cfg)
+	report := ApplyHardLimits(m, m, cfg)
 
 	if got := certificationLabels(m); len(got) != 2 {
 		t.Errorf("certifications = %v, want the two that exist — nothing is invented to meet a minimum", got)

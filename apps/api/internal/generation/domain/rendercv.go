@@ -152,6 +152,15 @@ func AsSliceOfMaps(v any) []map[string]any {
 	return out
 }
 
+// IsPinnedSkillGroup reports whether a skill group is exempt from tailoring.
+// The spoken-languages group states a fact about the candidate (which human
+// languages they speak, at what level) that no vacancy can change, so it is
+// carried over from the master verbatim: never rewritten by the merge and
+// never dropped by the group cap.
+func IsPinnedSkillGroup(label string) bool {
+	return strings.Contains(norm(label), "spoken language")
+}
+
 func StringField(m map[string]any, key string) string {
 	if v, ok := m[key]; ok {
 		if s, ok := v.(string); ok {
@@ -292,10 +301,12 @@ func MergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 	// 1. Replace summary
 	sections["summary"] = []any{strings.TrimSpace(payload.Summary)}
 
-	// 2. Replace skill details (preserve group order, only change content)
+	// 2. Replace skill details (preserve group order, only change content).
+	// Pinned groups — the spoken languages — keep the master's details even
+	// when the model returns a rewrite for that index.
 	skills := AsSliceOfMaps(sections["skills"])
 	for _, s := range payload.Skills {
-		if s.Index >= 0 && s.Index < len(skills) {
+		if s.Index >= 0 && s.Index < len(skills) && !IsPinnedSkillGroup(StringField(skills[s.Index], "label")) {
 			skills[s.Index]["details"] = strings.TrimSpace(s.Details)
 		}
 	}

@@ -104,8 +104,8 @@ already in flight finishes with the settings it started with.
 | `summaryLines` | 4 | 1–12 | Approximate summary length, in sentences |
 | `skillsEnabled` | true | — | `false` removes the skills section entirely |
 | `skillsMaxGroups` | 0 | 0–20 | Skill groups to keep; `0` keeps all |
-| `experienceBulletsMin` | 8 | 1–20 | Target floor of bullets per job |
-| `experienceBulletsMax` | 10 | 1–20 | Hard cap of bullets per job |
+| `experienceBulletsMin` | 8 | 1–10 | Target floor of bullets per job |
+| `experienceBulletsMax` | 10 | 1–10 | Hard cap of bullets per job |
 | `targetPages` | 2 | 1–3 | Page count the render loop aims for |
 | `projectsEnabled` | true | — | `false` removes the projects section entirely |
 | `projectsMin` | 0 | 0–20 | Target floor of projects; `0` = no minimum |

@@ -175,7 +175,7 @@ func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, 
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
 	}
-	resumePdfPath, err := s.renderResume(ctx, merged, analysis, level, cfg, baseName+"-resume-"+strconv.FormatInt(time.Now().UnixMilli(), 10), nil)
+	resumePdfPath, err := s.renderResume(ctx, master, merged, analysis, level, cfg, baseName+"-resume-"+strconv.FormatInt(time.Now().UnixMilli(), 10), nil)
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
 	}
@@ -258,7 +258,7 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		// verification, so grounding and structure checks see exactly what
 		// will be rendered.
 		domain.ApplySectionToggles(merged, cfg)
-		report := domain.ApplyHardLimits(merged, cfg)
+		report := domain.ApplyHardLimits(master, merged, cfg)
 		recordShortfalls(ctx, rec, report)
 		if rec != nil {
 			rec.Step(ctx, fmt.Sprintf("grounding check (attempt %d/%d)", attempt+1, groundingAttempts), nil)
@@ -348,8 +348,8 @@ type renderOutcome struct {
 // and it applies the compact design then condenses. Every failure along the
 // way degrades gracefully — the best result reached is returned rather than
 // erroring, so an unreachable target never fails a generation (FR-021).
-func (s *Service) renderResume(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, baseName string, rec *activity.Recorder) (string, error) {
-	outcome, err := s.renderToPageTarget(ctx, s.defaultRenderDeps(), merged, analysis, level, cfg, baseName, rec)
+func (s *Service) renderResume(ctx context.Context, master, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, baseName string, rec *activity.Recorder) (string, error) {
+	outcome, err := s.renderToPageTarget(ctx, s.defaultRenderDeps(), master, merged, analysis, level, cfg, baseName, rec)
 	if err != nil {
 		return "", err
 	}
@@ -370,7 +370,7 @@ func (s *Service) renderResume(ctx context.Context, merged domain.RendercvMaster
 	return outcome.pdfPath, nil
 }
 
-func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, baseName string, rec *activity.Recorder) (renderOutcome, error) {
+func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, master, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, baseName string, rec *activity.Recorder) (renderOutcome, error) {
 	pdfPath, err := deps.render(ctx, merged, baseName)
 	if err != nil {
 		return renderOutcome{}, err
@@ -399,7 +399,7 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, merge
 			slog.Warn("merge after expand failed, returning short version", "err", err)
 			return renderOutcome{pdfPath: pdfPath, pages: pages}, nil
 		}
-		domain.ApplyHardLimits(reMerged, cfg)
+		domain.ApplyHardLimits(master, reMerged, cfg)
 		expandedPath, err := deps.render(ctx, reMerged, baseName+"-expanded")
 		if err != nil {
 			return renderOutcome{}, err
@@ -441,7 +441,7 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, merge
 				slog.Warn("merge after condense failed, returning compact version", "err", err)
 				break
 			}
-			domain.ApplyHardLimits(reMerged, cfg)
+			domain.ApplyHardLimits(master, reMerged, cfg)
 			domain.CompactDesign(reMerged)
 			// The condense prompt asked for shorter sections than configured.
 			out.conflict = true
@@ -486,7 +486,7 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 		return nil, err
 	}
 	domain.ApplySectionToggles(reMerged, cfg)
-	domain.ApplyHardLimits(reMerged, cfg)
+	domain.ApplyHardLimits(master, reMerged, cfg)
 	reViolations := domain.VerifyStructureIntegrity(master, reMerged)
 	if len(reViolations) == 0 {
 		return reMerged, nil
@@ -557,7 +557,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		if rec != nil {
 			rec.Step(ctx, "rendering PDF", nil)
 		}
-		p, err := s.renderResume(ctx, tailored, analysis, s.defaultLevel, cfg, fmt.Sprintf("%s-resume-v%d", baseName, version), rec)
+		p, err := s.renderResume(ctx, master, tailored, analysis, s.defaultLevel, cfg, fmt.Sprintf("%s-resume-v%d", baseName, version), rec)
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}

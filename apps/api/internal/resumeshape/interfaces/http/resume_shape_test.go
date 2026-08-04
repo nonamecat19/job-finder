@@ -139,7 +139,7 @@ func TestPutFullNonDefaultRoundTrip(t *testing.T) {
 	// Every field set to an in-range value different from its default.
 	want := dto.ResumeShapeConfigDto{
 		SummaryLines: 12, SkillsEnabled: false, SkillsMaxGroups: 20,
-		ExperienceBulletsMin: 1, ExperienceBulletsMax: 20, TargetPages: 3,
+		ExperienceBulletsMin: 1, ExperienceBulletsMax: 10, TargetPages: 3,
 		ProjectsEnabled: true, ProjectsMin: 2, ProjectsMax: 4, ProjectBulletsMax: 10,
 		CertificationsEnabled: true, CertificationsMin: 2, CertificationsMax: 20,
 	}
@@ -166,8 +166,8 @@ func TestPutRejectsInvalidConfigs(t *testing.T) {
 		{
 			name: "experience bullets min above max",
 			mutate: func(d *dto.ResumeShapeConfigDto) {
-				d.ExperienceBulletsMin = 12
-				d.ExperienceBulletsMax = 8
+				d.ExperienceBulletsMin = 8
+				d.ExperienceBulletsMax = 5
 			},
 			wantMsgs: []string{"experienceBulletsMin", "experienceBulletsMax"},
 		},
