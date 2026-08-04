@@ -217,10 +217,10 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given. Do not populate sectionsToDrop.\n\n")
 	summaryMin, summaryMax := summarySelectRange(cfg)
 	fmt.Fprintf(&b, "Generate a tailored summary (%d-%d sentences) that:\n", summaryMin, summaryMax)
-	b.WriteString("- Opens with the candidate's seniority level and domain expertise\n")
+	fmt.Fprintf(&b, "- Opens with \"%d+ years of experience\" (this figure is derived from the master's dates; use it verbatim) and domain expertise\n", domain.DeriveTotalExperienceYears(master))
 	b.WriteString("- References 2-3 key skills from the vacancy's required skills\n")
 	b.WriteString("- Mentions one quantified achievement from the selected experience\n")
-	b.WriteString("- Do not state a total number of years of experience (e.g. 'over 8 years'); describe seniority descriptively without a numeric claim\n\n")
+	b.WriteString("- Never use a descriptive seniority label (e.g. 'mid-level', 'senior') in place of the years figure\n\n")
 	// A disabled skills section is removed from the document after the merge,
 	// so there is no reason to spend tokens tailoring it.
 	if cfg.SkillsEnabled {
@@ -286,7 +286,7 @@ func retailorForStructure(ctx context.Context, lc llm.Provider, model string, ma
 	b.WriteString(buildSelectPrompt(master, analysis, level, nil, cfg))
 	b.WriteString("\n\nSTRUCTURAL INTEGRITY VIOLATIONS (must fix):\n")
 	for _, v := range violations {
-		b.WriteString("- " + v.Path + ": " + v.Message + " Remove any numeric total years-of-experience claim; describe seniority descriptively instead.\n")
+		fmt.Fprintf(&b, "- %s: %s Use exactly %d+ years; never substitute a seniority label.\n", v.Path, v.Message, domain.DeriveTotalExperienceYears(master))
 	}
 	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, b.String(), &llm.CompleteOptions{
 		System: "You are an expert resume writer who never fabricates information. " +
