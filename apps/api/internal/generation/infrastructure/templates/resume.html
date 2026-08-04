@@ -4,22 +4,23 @@
 <meta charset="utf-8" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; line-height: 1.45; }
-  h1 { font-size: 20pt; letter-spacing: 0.5px; }
-  h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 1.5px; color: #2c5777; border-bottom: 1.5px solid #2c5777; padding-bottom: 3px; margin: 14px 0 8px; }
-  .label { font-size: 12pt; color: #444; margin-top: 2px; }
-  .contact { margin-top: 6px; font-size: 9.5pt; color: #555; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 13pt; color: #1a1a1a; line-height: 1.45; }
+  h1 { font-size: 25pt; letter-spacing: 0.5px; }
+  h2 { font-size: 13.5pt; text-transform: uppercase; letter-spacing: 1.5px; color: #2c5777; border-bottom: 1.5px solid #2c5777; padding-bottom: 3px; margin: 14px 0 8px; }
+  .label { font-size: 14.5pt; color: #444; margin-top: 2px; }
+  .contact { margin-top: 6px; font-size: 12pt; color: #555; }
   .contact span + span::before { content: "  ·  "; }
   .summary { margin-top: 10px; }
   .entry { margin-bottom: 9px; page-break-inside: avoid; }
   .entry-head { display: flex; justify-content: space-between; align-items: baseline; }
   .entry-title { font-weight: 600; }
-  .entry-dates { font-size: 9pt; color: #666; white-space: nowrap; }
-  .entry-sub { font-style: italic; color: #444; font-size: 9.5pt; }
+  .entry-dates { font-size: 11.5pt; color: #666; white-space: nowrap; }
+  .entry-sub { font-style: italic; color: #444; font-size: 12pt; }
   ul { margin: 3px 0 0 16px; }
   li { margin-bottom: 2px; }
   .skills-row { margin-bottom: 3px; }
   .skills-row b { color: #2c5777; }
+  a { color: #2c5777; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -62,12 +63,25 @@
   <div class="entry">
     <div class="entry-head">
       <span class="entry-title">{{.Name}}</span>
-      {{if .URL}}<span class="entry-dates">{{.URL}}</span>{{end}}
+      {{if .URL}}<span class="entry-dates"><a href="{{.URL}}">{{.URL}}</a></span>{{end}}
     </div>
     {{if .Description}}<div>{{.Description}}</div>{{end}}
     {{if .Highlights}}
     <ul>{{range .Highlights}}<li>{{.}}</li>{{end}}</ul>
     {{end}}
+  </div>
+  {{end}}
+  {{end}}
+
+  {{if .Certificates}}
+  <h2>Certifications</h2>
+  {{range .Certificates}}
+  <div class="entry">
+    <div class="entry-head">
+      <span class="entry-title">{{if .URL}}<a href="{{.URL}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</span>
+      <span class="entry-dates">{{.Date}}</span>
+    </div>
+    {{if .Issuer}}<div class="entry-sub">{{.Issuer}}</div>{{end}}
   </div>
   {{end}}
   {{end}}

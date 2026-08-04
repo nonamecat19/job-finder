@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"strings"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -87,6 +89,8 @@ func PrepareMasterForMarshal(master RendercvMaster) (RendercvMaster, error) {
 	}
 
 	delete(sections, SectionOrderKey)
+	embedEntryLinks(sections, "projects")
+	embedEntryLinks(sections, "certifications")
 
 	keys := make([]string, 0, len(sections))
 	for k := range sections {
@@ -97,5 +101,49 @@ func PrepareMasterForMarshal(master RendercvMaster) (RendercvMaster, error) {
 	if cv, ok := cloned["cv"].(map[string]any); ok {
 		cv["sections"] = OrderedYAMLMap{Keys: order, Values: sections}
 	}
+
+	hideFooter(cloned)
+
 	return cloned, nil
+}
+
+// embedEntryLinks makes each entry's "url" clickable in the rendered PDF, for
+// sections (projects, certifications) the dashboard authors as rendercv's
+// NormalEntry (name/url/dates). NormalEntry has no dedicated url field —
+// extra keys like "url" are accepted but silently ignored by the Typst
+// templates. The only way to get a link is Markdown syntax inside "name"
+// itself, which rendercv does render as a hyperlink. So an entry authored
+// with a separate url field is folded into "[name](url)" here, once, right
+// before the YAML is written — the stored master config keeps its own
+// name/url fields untouched for editing.
+func embedEntryLinks(sections map[string]any, sectionKey string) {
+	for _, e := range AsSliceOfMaps(sections[sectionKey]) {
+		url := StringField(e, "url")
+		if url == "" {
+			continue
+		}
+		name := StringField(e, "name")
+		if name == "" || strings.Contains(name, "](") {
+			continue
+		}
+		e["name"] = "[" + name + "](" + url + ")"
+		delete(e, "url")
+	}
+}
+
+// hideFooter turns off rendercv's default page footer (name and page number,
+// e.g. "Shumskyi Oleksandr -- 1/2") unless the user's own design block
+// already opted into a value.
+func hideFooter(master RendercvMaster) {
+	design, _ := master["design"].(map[string]any)
+	if design == nil {
+		design = map[string]any{}
+		master["design"] = design
+	}
+	page, _ := design["page"].(map[string]any)
+	if page == nil {
+		page = map[string]any{}
+		design["page"] = page
+	}
+	setDefault(page, "show_footer", false)
 }

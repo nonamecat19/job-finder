@@ -64,6 +64,7 @@ type ResumeCertificate struct {
 	Name   *string `json:"name,omitempty"`
 	Issuer *string `json:"issuer,omitempty"`
 	Date   *string `json:"date,omitempty"`
+	URL    *string `json:"url,omitempty"`
 }
 
 type JsonResume struct {
