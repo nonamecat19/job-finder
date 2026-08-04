@@ -86,4 +86,20 @@ describe('FeedPage loading state', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).not.toBeInTheDocument();
   });
+
+  it('renders empty state when no jobs match', () => {
+    setupCommonMocks();
+    mockedUseJobs.mockReturnValue({
+      data: { pages: [{ items: [], total: 0, page: 1, pageSize: 50 }], pageParams: [1] },
+      isLoading: false,
+      error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+    } as any);
+
+    renderFeedPage();
+
+    expect(screen.getByText(/no jobs yet/i)).toBeInTheDocument();
+  });
 });
