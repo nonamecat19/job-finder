@@ -57,8 +57,22 @@ Current jobs — `.github/workflows/api-ci.yml`:
 | `frontend-test` | Vitest |
 | `frontend-typecheck` | `pnpm typecheck` |
 
-`.github/workflows/e2e.yml` runs the Playwright suite on a schedule and on demand
-(023-FR-019); failures are surfaced without polling (023-FR-020).
+> ### ⚠ 023-FR-019/020 are revoked — the e2e suite no longer runs in CI
+>
+> `.github/workflows/e2e.yml` ran the Playwright suite on a nightly schedule, on pull
+> requests, on pushes to master and on demand. **It was deleted.** The suite itself is
+> intact and runs locally through `make test-e2e`.
+>
+> Revoked with it: **023-FR-019** (the end-to-end suite runs at least daily and on demand),
+> **023-FR-020** (failures surfaced without polling) and **023-SC-009**. The `e2e
+> (playwright)` job leaves the gating set in § 2.1 — it must not be listed in the Phase 2
+> ruleset (§ 2.2), because a required check that no workflow reports would sit at "Expected"
+> forever and block every merge.
+>
+> **Nothing now exercises the dashboard end to end automatically.** `frontend-test` (Vitest)
+> and `frontend-typecheck` remain, so component and type regressions are still caught; a
+> break in routing, navigation or page rendering is not. That gap is accepted, not covered
+> elsewhere.
 
 **Path filtering.** Every job carries `needs: changes` and an `if:` on a
 `dorny/paths-filter` output, so a change touching only documentation or repo workflow —
@@ -71,8 +85,8 @@ set. Two rules keep this from weakening the gate:
   skipped by `if:` reports `skipped`, which GitHub counts as passing. That distinction is
   the only reason the `changes` job exists.
 - **Filters are pull-request-only.** Each output is
-  `github.event_name != 'pull_request' || ...`, so pushes to master, the nightly e2e
-  schedule and `workflow_dispatch` always run everything unfiltered.
+  `github.event_name != 'pull_request' || ...`, so pushes to master and
+  `workflow_dispatch` always run everything unfiltered.
 
 `Makefile` and `.github/workflows/**` were originally in every filter, on the correct
 observation that either can change any job's verdict. They were removed because the cost
@@ -112,9 +126,11 @@ stops gating. Any rename must update this section in the same change (023-FR-003
 | `lint (go)` | PR, push master | `go` | ~2 min |
 | `lint (web)` | PR, push master | `web` | ~1 min |
 | `integration test` | PR, push master | `go` | ~5 min |
-| `e2e (playwright)` | PR, push master, nightly, manual | `e2e` | ~4 min |
 
-The whole set runs in parallel against a ≤10 minute wall-clock target. **`detect changed
+`e2e (playwright)` **was the tenth entry and is gone** — see the notice in § 2. Nine jobs
+gate today.
+
+The set runs in parallel against a ≤10 minute wall-clock target. **`detect changed
 areas` — the `changes` job — is deliberately not in the gating set** and must never be
 listed in a ruleset: it is scaffolding, and requiring it would defeat the point, since the
 filtered jobs already depend on it.
@@ -147,11 +163,11 @@ between suites but does nothing for schema ordering. CI needs no
 `COMPOSE_PROJECT_NAME`/`POSTGRES_HOST_PORT` handling — those exist to stop local worktrees
 colliding on one host, and a runner is a fresh container.
 
-`e2e (playwright)` needs **no** database, Redis or Go backend: the specs mock every API call
-through `page.route('**/api/…')` or assert headings and URLs only, and `playwright.config.ts`
-already starts the dev server via `webServer` with `reuseExistingServer: !process.env.CI`.
-Failure surfacing (023-FR-020) is GitHub's default email on a failed scheduled run — adequate
-for a solo maintainer and genuinely "without polling".
+The deleted `e2e (playwright)` job needed **no** database, Redis or Go backend: the specs
+mock every API call through `page.route('**/api/…')` or assert headings and URLs only, and
+`playwright.config.ts` starts the dev server via `webServer` with
+`reuseExistingServer: !process.env.CI`. Recorded because it makes the job cheap to restore —
+reinstating it is a workflow file, not infrastructure.
 
 Re-runnability (023-FR-021) holds because no job depends on mutable external state: service
 containers are fresh per run and no job contacts a live job board.
@@ -171,7 +187,8 @@ gh api -X POST repos/nonamecat19/job-finder/rulesets \
   -f 'rules[][type]=required_status_checks'
 ```
 
-with `required_status_checks` listing exactly the ten job names in § 2.1 and
+with `required_status_checks` listing exactly the nine job names in § 2.1 — **not** `e2e
+(playwright)`, which no workflow reports any more — and
 `pull_request.required_approving_review_count: 0` (023-FR-004 — one maintainer, so requiring
 approval would deadlock the repository). Self-merge after green checks is the intended flow.
 
@@ -222,7 +239,7 @@ as the canonical entry point precisely so the four callers cannot drift:
 | Author, by hand | `make test-lint` before opening a PR |
 | `Stop` hook | `lint-go`/`test-go` and/or `lint-web`/`test-react`, scoped to changed paths |
 | `PostToolUse` hooks | `make sqlc-generate`, `make tygo-generate` |
-| CI | `make lint-go`, `make lint-web`, the two-step integration sequence, `pnpm … test:e2e` |
+| CI | `make lint-go`, `make lint-web`, the two-step integration sequence |
 
 023 also removed `package.json`'s `"test:python": "make test-python"` — the target did not
 exist, so the script failed on invocation — along with the matching false claim in
@@ -503,6 +520,5 @@ exists for operators who disagree. An existing `.env` keeps working unchanged.
   **without being told to**, in 100% of such edits.
 - 023-SC-008: cross-service behaviour is exercised against real infrastructure on every change
   request — against zero automated runs before 023.
-- 023-SC-009: the end-to-end suite runs at least once per day with no human initiation.
 - 023-SC-012: the trunk can be restored from a broken state within an hour using the override,
   so the gate never makes the repository unrecoverable.
