@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -14,6 +15,13 @@ import (
 	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/httpx"
 )
+
+// tailorTimeout bounds one ad-hoc tailoring request. It has to cover the whole
+// pipeline — analyze, select, optional expand/condense re-passes, each walking
+// the gateway's fallback chain (worst case 5 tiers x 2 attempts x
+// request_timeout 60s), plus the RenderCV PDF render — so it is well above the
+// single-call budget the ghost-score route uses.
+const tailorTimeout = 14 * time.Minute
 
 // DocumentGenerator is the interface DocumentsHandler needs from the generation service.
 type DocumentGenerator interface {
@@ -70,7 +78,17 @@ func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 			hints.ExperienceLevel = *body.ExperienceLevel
 		}
 	}
-	resume, coverLetter, err := h.Generation.GenerateAdHoc(r.Context(), generation.AdHocInput{
+	// acquireDeadline (httpapi) caps every route's context at
+	// DB_ACQUIRE_TIMEOUT (default 5s) for DB-pool-capacity reasons
+	// (026-db-pool-capacity). Ad-hoc tailoring is a multi-pass LLM pipeline
+	// plus a PDF render, so under that cap it could never finish — every call
+	// died at 5s with "context deadline exceeded". Detach from the inherited
+	// deadline and apply this handler's own bound, the same way the ghost-score
+	// route does.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), tailorTimeout)
+	defer cancel()
+
+	resume, coverLetter, err := h.Generation.GenerateAdHoc(ctx, generation.AdHocInput{
 		Vacancy: body.Vacancy, Company: body.Company, Title: body.Title, GroundingLevel: level, Hints: hints,
 	})
 	if err != nil {
