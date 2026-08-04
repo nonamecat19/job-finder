@@ -403,6 +403,7 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 			slog.Warn("merge after expand failed, returning short version", "err", err)
 			return renderOutcome{pdfPath: pdfPath, pages: pages}, nil
 		}
+		domain.DropUngroundedSkillTokens(merged, reMerged)
 		domain.ApplyHardLimits(master, reMerged, cfg)
 		expandedPath, err := deps.render(ctx, reMerged, baseName+"-expanded")
 		if err != nil {
@@ -445,6 +446,7 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 				slog.Warn("merge after condense failed, returning compact version", "err", err)
 				break
 			}
+			domain.DropUngroundedSkillTokens(merged, reMerged)
 			domain.ApplyHardLimits(master, reMerged, cfg)
 			domain.CompactDesign(reMerged)
 			// The condense prompt asked for shorter sections than configured.
