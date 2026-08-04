@@ -31,7 +31,9 @@ design, and 030 exists to make it the *only* design.
 
 - 029-FR-004/005 + 030-FR-006: each task key resolves to an **ordered** chain. Free-tier
   hosted providers (Cerebras → Groq → Cohere) are attempted before the OpenRouter
-  aggregator.
+  aggregator. Exception: the `generation` chain puts OpenRouter first — resume tailoring
+  is quality-critical, so it pays for the aggregator up front and keeps the free tiers as
+  its fallbacks.
 - 030-FR-008: the **final** entry of every chain is the locally hosted Ollama model. Ollama
   always terminates the chain — this is Constitution V made mechanical.
 - 030-FR-007: the chain advances automatically on a missing credential, an authentication

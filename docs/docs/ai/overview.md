@@ -77,6 +77,11 @@ sequenceDiagram
     G-->>R: response
 ```
 
+`generation` (resume tailoring) inverts the head of that order: OpenRouter is its first
+entry, then Cerebras → Groq → Cohere → Ollama. Its calls are long structured-output
+passes whose quality decides whether the document is usable, so it leads with the
+aggregator instead of the free tiers.
+
 ### Degrade to Ollama, always
 
 Every task's chain terminates at the local Ollama model, so AI work keeps completing when
