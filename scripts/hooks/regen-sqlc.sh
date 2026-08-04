@@ -3,7 +3,7 @@
 # Claude Code PostToolUse hook: after an Edit/Write to a query file under
 # apps/api/internal/db/queries/*.sql, regenerate the sqlc-generated Go layer
 # so it never goes stale relative to the query that was just edited
-# (FR-022). See specs/archive/023-workflow-quality-gates/contracts/hooks.md.
+# (FR-022). See specs/domains/platform-operations.md § 4.1.
 #
 # PostToolUse CANNOT block (exit 2 is non-blocking for this event) — this
 # hook repairs, it does not reject. Regeneration lands in the working tree
