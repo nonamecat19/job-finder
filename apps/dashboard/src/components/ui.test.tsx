@@ -76,9 +76,6 @@ describe('GhostBadge', () => {
     expect(screen.getByText(/80/).className).toContain('danger')
   })
 
-  // SC-008: an unscored card must render identically to today — verified
-  // here as "GhostBadge renders nothing", so it contributes zero DOM/markup
-  // next to ScoreBadge for a job with no ghost signal.
   it('an unscored job renders the same DOM as ScoreBadge alone (no ghost markup added)', () => {
     const { container: withGhost } = render(
       <>

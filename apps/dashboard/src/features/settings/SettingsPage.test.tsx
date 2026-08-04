@@ -40,4 +40,20 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Resume shape')).toBeInTheDocument()
     expect(screen.getByText('Danger zone')).toBeInTheDocument()
   })
+
+  it('renders all three setting tiles', async () => {
+    renderWithProviders(<SettingsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('AI models')).toBeInTheDocument()
+      expect(screen.getByText('AI features')).toBeInTheDocument()
+      expect(screen.getByText('Danger zone')).toBeInTheDocument()
+    })
+  })
+
+  it('renders clear all jobs button in danger zone', async () => {
+    renderWithProviders(<SettingsPage />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /clear all jobs/i })).toBeInTheDocument()
+    })
+  })
 })
