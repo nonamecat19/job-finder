@@ -171,3 +171,12 @@ adapters are currently registered.
 - Scraped sources (Indeed, Glassdoor, dou, work.ua, ...) are best-effort: upstream markup
   breakage degrades those sources only (3 consecutive failures flag a source unhealthy).
 - Source credentials are encrypted at rest (aes-256-gcm) when `CONFIG_ENCRYPTION_KEY` is set.
+
+## License
+
+Source-available, **not open source**. Copyright (c) 2026 Oleksandr Shumskyi,
+all rights reserved. The code is public so it can be read and audited; running,
+copying, modifying, forking, or redistributing it is not permitted. See
+[`LICENSE`](LICENSE). Commercial licensing: shumsky.alexander.work@gmail.com
+
+External contributions are not accepted.
