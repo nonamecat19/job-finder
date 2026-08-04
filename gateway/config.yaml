@@ -127,11 +127,32 @@ model_list:
 litellm_settings:
   drop_params: true
   num_retries: 1
-  # Below the Go adapter's 120s http.Client timeout (infrastructure/gateway/gateway.go)
-  # so a chain exhausting every tier still returns before the app gives up.
-  request_timeout: 110
+  # request_timeout is PER ATTEMPT, not per chain. The worst case is
+  # tiers x (1 + num_retries) x request_timeout = 5 x 2 x 60 = 600s, which is
+  # the number that must stay under the Go adapter's safetyNetTimeout
+  # (15m, infrastructure/gateway/gateway.go) so the proxy is always what
+  # times out first and the app receives a real upstream error rather than a
+  # local deadline. Raising request_timeout, num_retries or the tier count
+  # without redoing that arithmetic is what reintroduces the silent hang.
+  #
+  # This was previously 110 under the comment "below the Go adapter's 120s
+  # timeout so a chain exhausting every tier still returns" — false, since a
+  # single tier could already consume 2 x 110s.
+  request_timeout: 60
   allowed_fails: 3
   cooldown_time: 60
+  # Keyed on the PRIMARY group only, deliberately. LiteLLM walks this list in
+  # order for the whole request, so tiers 3-5 are reached even though only
+  # tier 1 is keyed — verified 2026-08-04 by running this image with
+  # generation and generation-groq pointed at a dead endpoint: the call was
+  # served by generation-cohere in 5.3s.
+  #
+  # The "No fallback model group found for original model_group=<task>-groq"
+  # line this produces is a nested-lookup diagnostic, not a chain stop; the
+  # outer walk continues past it. Do NOT "fix" it by giving each tier its own
+  # fallback list: that makes a failed tier traverse its own successors AND
+  # then get retried by the outer walk, roughly doubling the attempt count and
+  # breaking the worst-case arithmetic above.
   fallbacks:
     - match: [match-groq, match-cohere, match-openrouter, local]
     - generation: [generation-groq, generation-cohere, generation-openrouter, local]
