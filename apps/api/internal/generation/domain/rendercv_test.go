@@ -65,6 +65,34 @@ func loadSampleMaster(t *testing.T) RendercvMaster {
 // MergeTailored basic tests
 // ---------------------------------------------------------------------------
 
+// The spoken-languages group states a fact about the candidate, so a rewrite
+// returned for its index is ignored and the master's details survive.
+func TestMergeTailored_KeepsSpokenLanguagesGroupVerbatim(t *testing.T) {
+	master := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"skills": []any{
+			map[string]any{"label": "Backend", "details": "Go, Postgres"},
+			map[string]any{"label": "Spoken Languages", "details": "Ukrainian (native), English (B2)"},
+		},
+	}}}
+	payload := TailoredSections{Skills: []TailoredSkillGroup{
+		{Index: 0, Details: "Go, Kubernetes"},
+		{Index: 1, Details: "English (fluent), German (basic)"},
+	}}
+
+	merged, err := MergeTailored(master, payload)
+	if err != nil {
+		t.Fatalf("MergeTailored: %v", err)
+	}
+
+	skills := AsSliceOfMaps(CvSections(merged)["skills"])
+	if got := StringField(skills[0], "details"); got != "Go, Kubernetes" {
+		t.Errorf("skill[0].details = %q, want the tailored value", got)
+	}
+	if got := StringField(skills[1], "details"); got != "Ukrainian (native), English (B2)" {
+		t.Errorf("spoken languages rewritten to %q, want the master's details", got)
+	}
+}
+
 func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 	master := loadSampleMaster(t)
 	payload := TailoredSections{
@@ -572,5 +600,38 @@ func TestMergeTailoredEmptyProjectPayloadLeavesMasterUntouched(t *testing.T) {
 				t.Errorf("%s highlight %d = %q, want %q", name, i, got[i], want[i])
 			}
 		}
+	}
+}
+
+func TestDropUngroundedSkillTokens(t *testing.T) {
+	pool := RendercvMaster{
+		"cv": map[string]any{
+			"sections": map[string]any{
+				"skills": []any{
+					map[string]any{"label": "Languages", "details": "Go, TypeScript, Python"},
+					map[string]any{"label": "Frontend", "details": "React, SSR/SSG"},
+				},
+			},
+		},
+	}
+	doc := RendercvMaster{
+		"cv": map[string]any{
+			"sections": map[string]any{
+				"skills": []any{
+					map[string]any{"label": "Languages", "details": "Go, Claude Code, TypeScript"},
+					map[string]any{"label": "Frontend", "details": "SSR/SSG, React, Bolt"},
+				},
+			},
+		},
+	}
+
+	DropUngroundedSkillTokens(pool, doc)
+
+	groups := AsSliceOfMaps(CvSections(doc)["skills"])
+	if got := StringField(groups[0], "details"); got != "Go, TypeScript" {
+		t.Fatalf("group 0 details = %q, want %q", got, "Go, TypeScript")
+	}
+	if got := StringField(groups[1], "details"); got != "SSR/SSG, React" {
+		t.Fatalf("group 1 details = %q, want %q", got, "SSR/SSG, React")
 	}
 }

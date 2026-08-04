@@ -222,6 +222,40 @@ func MasterSkillTokens(master RendercvMaster) map[string]bool {
 	return set
 }
 
+// DropUngroundedSkillTokens removes from doc every skill token that does not
+// appear anywhere in pool's skill groups. The expand/condense passes rewrite
+// skill details from a prompt that only ever showed them the summary and the
+// experience bullets, so an unconstrained model happily invents tokens (or
+// echoes back words it read in a bullet) into a group. Filtering the merged
+// result against the pool the pass was derived from keeps those inventions out
+// of the document while leaving legitimate reordering alone.
+//
+// A comma-separated entry is kept only when all of its slash-separated parts
+// are grounded, so "SSR/SSG" survives whenever both halves are in the pool.
+func DropUngroundedSkillTokens(pool RendercvMaster, doc RendercvMaster) {
+	allowed := MasterSkillTokens(pool)
+	for _, g := range AsSliceOfMaps(CvSections(doc)["skills"]) {
+		var kept []string
+		for _, entry := range strings.Split(StringField(g, "details"), ",") {
+			parts := tokens(entry)
+			if len(parts) == 0 {
+				continue
+			}
+			grounded := true
+			for _, p := range parts {
+				if !allowed[p] {
+					grounded = false
+					break
+				}
+			}
+			if grounded {
+				kept = append(kept, strings.TrimSpace(entry))
+			}
+		}
+		g["details"] = strings.Join(kept, ", ")
+	}
+}
+
 // deepCloneYAML round-trips through YAML to deep-copy a generic map — the Go
 // equivalent of `structuredClone(master)`.
 func DeepCloneYAML(master RendercvMaster) (RendercvMaster, error) {

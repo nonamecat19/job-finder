@@ -212,6 +212,7 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	} else {
 		b.WriteString("- Reorder skills within each group: vacancy-required skills first, keep all relevant keywords (do not trim).\n")
 	}
+	b.WriteString("- Return the \"Spoken Languages\" group exactly as given: same details, same order, no rewording. It is a fact about the candidate, not a tailoring target.\n")
 	b.WriteString("- Keep highlights concise, one achievement each, no fabricated numbers.\n")
 	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given. Do not populate sectionsToDrop.\n\n")
 	summaryMin, summaryMax := summarySelectRange(cfg)
@@ -306,6 +307,35 @@ func expandContent(ctx context.Context, lc llm.Provider, model string, master do
 	})
 }
 
+// skillGroupLines renders the current skill groups the way the select prompt
+// does — "[index] label: details" — so the expand/condense passes, which are
+// asked to return one entry per group by index, can see what each group
+// actually holds instead of guessing from the summary and the bullets.
+func skillGroupLines(sections map[string]any) []string {
+	groups := domain.AsSliceOfMaps(sections["skills"])
+	lines := make([]string, 0, len(groups))
+	for i, s := range groups {
+		lines = append(lines, fmt.Sprintf("  [%d] %s: %s", i, domain.StringField(s, "label"), domain.StringField(s, "details")))
+	}
+	return lines
+}
+
+// writeSkillGroups appends the current skill groups plus the rules that keep a
+// group's contents matching its label. Without them the model returns details
+// by index that have nothing to do with the group's category — a "Languages"
+// group coming back full of tools and frameworks.
+func writeSkillGroups(b *strings.Builder, sections map[string]any) {
+	lines := skillGroupLines(sections)
+	if len(lines) == 0 {
+		return
+	}
+	b.WriteString("\n\nSKILL GROUPS (current):\n")
+	b.WriteString(strings.Join(lines, "\n"))
+	b.WriteString("\n- Return one entry per group using the SAME [index], and keep each group's label and category: every token must belong under that label (only programming/spoken languages under a Languages group, only databases under a Databases group, and so on).\n")
+	b.WriteString("- Never move a token from one group into another, and never add a token that is not already somewhere in the groups above.\n")
+	b.WriteString("- Return the \"Spoken Languages\" group exactly as given: same details, same order, no rewording.\n")
+}
+
 func buildExpandPrompt(master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig) string {
 	sections := domain.CvSections(master)
 	experience := domain.AsSliceOfMaps(sections["experience"])
@@ -329,7 +359,7 @@ func buildExpandPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	b.WriteString("RULES:\n")
 	fmt.Fprintf(&b, "- Summary: expand to %d-%d sentences with more domain context and achievements.\n", summaryMin, summaryMax)
 	fmt.Fprintf(&b, "- Experience highlights: add 2-3 more relevant bullets per job (aim for %d-%d per job) from the master's available highlights.\n", bulletsMin, bulletsMax)
-	b.WriteString("- Skill details: add more relevant keywords from the master; don't fabricate.\n")
+	b.WriteString("- Skill details: keep every keyword already in the group and reorder the vacancy-relevant ones first; don't fabricate.\n")
 	b.WriteString("- Do NOT drop any job entry or skill group.\n")
 	b.WriteString("- Do NOT invent new content or change company names — only use what's in the master.\n")
 	b.WriteString("- Keep the same structure: same skill group indexes, same company keys.\n\n")
@@ -344,6 +374,9 @@ func buildExpandPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	}
 	b.WriteString("\n\nExperience:\n")
 	b.WriteString(strings.Join(expLines, "\n"))
+	if cfg.SkillsEnabled {
+		writeSkillGroups(&b, sections)
+	}
 	b.WriteString("\n\nVACANCY ANALYSIS:\n")
 	b.WriteString("Required: " + strings.Join(analysis.RequiredSkills, ", ") + "\n")
 	b.WriteString("Level: " + analysis.ExperienceLevel + "\n")
@@ -404,6 +437,9 @@ func buildCondensePrompt(master domain.RendercvMaster, analysis domain.VacancyAn
 	}
 	b.WriteString("\n\nExperience:\n")
 	b.WriteString(strings.Join(expLines, "\n"))
+	if cfg.SkillsEnabled {
+		writeSkillGroups(&b, sections)
+	}
 	b.WriteString("\n\nVACANCY ANALYSIS:\n")
 	b.WriteString("Required: " + strings.Join(analysis.RequiredSkills, ", ") + "\n")
 	b.WriteString("Level: " + analysis.ExperienceLevel + "\n")
