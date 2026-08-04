@@ -50,12 +50,12 @@ func parseExperienceYear(s string) (int, bool) {
 	return y, true
 }
 
-// deriveTotalExperienceYears computes the master's total years of experience
+// DeriveTotalExperienceYears computes the master's total years of experience
 // the way any reader would: the sum of (endYear - startYear) per experience
 // entry, clamped to >= 0, with an empty or "Present" end date treated as the
 // current year. Entries with no parseable dates contribute 0 — the derivation
 // is conservative and only ever flags a contradiction, never an absence.
-func deriveTotalExperienceYears(master RendercvMaster) int {
+func DeriveTotalExperienceYears(master RendercvMaster) int {
 	sections := CvSections(master)
 	now := time.Now().Year()
 	total := 0
@@ -120,7 +120,7 @@ func findYearsAssertions(s string) []yearsAssertion {
 // violate here.
 func VerifyStructureIntegrity(master, merged RendercvMaster) []StructureViolation {
 	var violations []StructureViolation
-	total := deriveTotalExperienceYears(master)
+	total := DeriveTotalExperienceYears(master)
 	sections := CvSections(merged)
 	if sections == nil {
 		return violations
