@@ -34,6 +34,40 @@ The Profile tab is a full structured editor, not an import viewer.
 Bar: a complete multi-section resume can be built entirely by hand in under 15 minutes
 (009-SC-001), and controls are discoverable without instructions (009-SC-003).
 
+### 1.1 The resume API
+
+Extends `ProfilesHandler` (`internal/httpapi/profiles.go`). The pre-existing routes —
+`GET`/`POST /profiles`, `GET`/`PUT`/`DELETE /profiles/{id}`, `POST /profiles/config`,
+`GET /profiles/config/status` — are unchanged, and config upload remains a supported optional
+pre-fill path (009-FR-002).
+
+| Method | Path | Behaviour |
+|---|---|---|
+| `GET` | `/profiles/{id}/resume` | `200 {resume}` — the structured `Resume` derived from the profile's current `rendercvConfig`/`rendercvYaml`, with unrecognised data included under each `unrecognized` field rather than dropped. `404` if the profile does not exist. |
+| `PUT` | `/profiles/{id}/resume` | `200 {resume}` with the **re-read persisted state**, so the client always shows the authoritative value. `400` on validation failure. `404` if the profile does not exist. |
+
+**An empty `Resume` is a `200`, not an error.** A profile with no config yet returns
+`sections: []` with only `name` populated — or even empty. That is 009-FR-012's
+"start from scratch" state.
+
+**A `400` carries a machine-readable field path**, e.g. `sections[2].entries[0].endDate`, so
+the client can point at the offending field instead of showing a generic message
+(009-FR-007).
+
+**There is exactly one write path.** `PUT` replaces the whole document; there is no
+partial-field PATCH and there are no per-entry or per-section mutation endpoints. Adding,
+editing, deleting and reordering all happen client-side against the in-memory `Resume`, then
+save in one `PUT`. This matches the existing whole-blob persistence model and keeps the
+mapping layer the single place where order and round-trip correctness are enforced. The write
+path is `Resume` → `RendercvMaster` map (`resume_mapping.go`) → YAML via
+`PrepareMasterForMarshal`, which is what preserves section order (009-FR-006), then the
+existing `rendercvYaml`/`rendercvConfig` update.
+
+**The overwrite warning is the client's job** (009-FR-010). The server has no UI layer and
+does not prompt; `GET /profiles/config/status` may carry a `hasExistingContent: true`
+advisory flag so the client knows to show the confirmation dialog before calling
+`POST /profiles/config`.
+
 ## 2. Tile grid and design system (021)
 
 021 replaced the earlier grid (001-global-dashboard-grid) with a tile system covering every
@@ -91,6 +125,138 @@ the fold.
   adopts the new language while preserving its behaviour.
 - 021-FR-019: **one** component foundation. No two overlay/focus-management systems may
   coexist after the rewrite. Adding a second UI kit reopens this requirement.
+
+### 2.1 The layout primitives
+
+`apps/dashboard/src/components/layout/`. **These are the only layout APIs a page author may
+use.** A page that needs layout CSS beyond these props means the contract is wrong — fix the
+primitive, not the page (021-FR-018).
+
+**`DashboardGrid`** takes a `variant` of `'flow'` (default) or `'fit'`, inherited from the
+route's layout mode rather than passed by the page.
+
+| Aspect | Value |
+|---|---|
+| Columns | 1 (<640) · 2 (640–1023) · 3 (1024–1919) · 4 (1920–2559) · 5 (≥2560) |
+| Gap | `0.75rem` <640 · `1rem` 640–1023 · `1.25rem` ≥1024 |
+| Max width | `140rem`, centred |
+| Alignment | `items-start` in `flow`, `items-stretch` in `fit` |
+| Rows | `fit` sets explicit row tracks so tiles divide the viewport height; `flow` uses implicit rows |
+
+The `3xl`/`4xl` breakpoints come from the token contract — never hardcode pixel media queries
+in the component. `fit` is gated on `@media (min-width: 1024px) and (min-height: 45rem)`;
+below **either** threshold it degrades to `flow`, which is how the short-viewport case is
+handled. The grid must not set `overflow` — page-level scrolling is the shell's concern.
+
+**`Tile`** replaces both `GridCard` (spacing) and `Surface` (chrome) — one component, not two.
+Its props: `title`, `action`, `footer`, `span`, `tone` (`default | inverse | quiet`), `scroll`
++ `scrollLabel`, `state` (`ready | loading | empty | error`), `emptyMessage`, `error`,
+`onRetry`, `children`.
+
+Four guarantees carry the design:
+
+- **The grid footprint is state-independent.** `loading`, `empty` and `error` occupy exactly
+  the cells `span` allocates. **Never conditionally render a `Tile` away — pass a state
+  instead.** This is 021-FR-009 / 021-SC-007 made mechanical.
+- **`min-w-0` and `min-h-0` are always applied**, so a tile can shrink inside its track. This
+  is what stops an `overflow-y-auto` child from blowing past the viewport in `fit` mode.
+- **`scroll: true` wraps the body in a focusable region** — `tabIndex={0}`, `role="region"`,
+  `aria-label={scrollLabel}` — with a visible overflow affordance. Without `tabIndex`, a
+  scrollable div with no focusable children is **keyboard-unreachable in Firefox and Safari**;
+  that is why `scrollLabel` is required rather than optional (021-FR-021).
+- **Styling is closed.** `className` may adjust internal body layout (flex direction, gap) but
+  must not set background, border, radius, padding or colour. Those come from tokens.
+
+`tone="inverse"` is the high-contrast tile — it inverts `--foreground`/`--background` and
+**never uses the accent**.
+
+Span translation is owned by the primitive, not the caller:
+
+| `span` | 5col | 4col | 3col | 2col | 1col |
+|---|---|---|---|---|---|
+| `compact` / `standard` | 1×1 | 1×1 | 1×1 | 1×1 | 1×1 |
+| `wide` | 2×1 | 2×1 | 2×1 | 2×1 | 1×1 |
+| `tall` | 1×2 | 1×2 | 1×2 | 1×2 | 1×1 |
+| `feature` | 3×2 | 2×2 | 2×2 | 2×1 | 1×1 |
+| `full` | 5×1 | 4×1 | 3×1 | 2×1 | 1×1 |
+
+Row spans are enforced in `fit` and advisory (`min-height`) in `flow`.
+
+`TileSkeleton`, `TileEmpty` and `TileError` are the internal state presentations, exported for
+panels rendering sub-regions. **`TileError` never rethrows** — a failing widget stays contained
+to its own cell.
+
+`PageHeader` keeps its `{title, description?, actions?}` API, restyled, with one constraint:
+total rendered height stays within one grid row, so the description truncates rather than
+wrapping to a third line at desktop widths.
+
+**Layout mode is a route property, not a tile property.** `fit` for `/`, `/status` and
+`/tracker`; `flow` for the rest; an undeclared route defaults to `flow`. The shell resolves it
+once and applies it to `<main>` — `fit` → `lg:h-[100dvh] lg:overflow-hidden` (gated on the
+min-height query), `flow` → normal document scroll. **A tile cannot override the mode**; a
+page needing a different one changes its route declaration.
+
+What the rewrite removed, and what replaced it:
+
+| Removed | Replacement |
+|---|---|
+| `GridCard` | `Tile` (`narrow`→`standard`, `wide`→`wide`, `full`→`full`) |
+| `Surface` (from `ui.tsx`) | `Tile` chrome |
+| `LoadingRegion`, `SkeletonLine`/`Block`/`Circle` | `Tile state="loading"` / `TileSkeleton` |
+| `EmptyState`, `ErrorState` | `Tile state="empty" \| "error"` / `TileEmpty`, `TileError` |
+| `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Field`, `Chip`, `Spinner` | HeroUI subpath imports |
+| `ScoreBadge`, `GhostBadge`, `HealthDot` | Kept as app-specific components, restyled onto tokens + HeroUI `Chip`/`Tag` |
+
+**Import HeroUI from subpaths (`@heroui/react/button`), never the barrel** — the barrel blows
+the bundle budget.
+
+### 2.2 The token contract
+
+`apps/dashboard/src/index.css` is **the single place a colour literal may appear.** HeroUI
+reads these CSS custom properties directly and maps them onto Tailwind utilities, so
+overriding the variables re-themes HeroUI components and app markup at once.
+
+```css
+@import '@heroui/styles';        /* replaces @import 'tailwindcss'; brings the layer order too */
+
+@theme {
+  --breakpoint-3xl: 120rem;      /* 1920px — 4 columns */
+  --breakpoint-4xl: 160rem;      /* 2560px — 5 columns */
+  --container-dashboard: 140rem; /* 2240px content cap */
+}
+```
+
+Tokens fixed by HeroUI: `--background` (+ `-secondary`/`-tertiary`), `--foreground`,
+`--surface` (tile background), `--surface-secondary` (nested/inset panel),
+`--surface-tertiary` (hover/subtle fill), `--overlay` (**floating surfaces only** — modal,
+popover, tooltip, menu), `--muted`, `--border`, `--separator`, `--accent` /
+`--accent-foreground`, `--focus`, `--success`/`--warning`/`--danger` (+ `-foreground`),
+`--radius`, `--spacing`. Project-defined additions: `--faint` (tertiary text — HeroUI ships
+only two text tones), `--border-strong`, `--accent-soft`, and
+`--success-soft`/`--warning-soft`/`--danger-soft`.
+
+Deleted by 021: `--bg`, `--fg`, `--elevated`, `--primary`, `--primary-fg`, `--primary-soft`,
+and the **second hue** `--accent: #22d3ee` — along with the body `radial-gradient` wash and
+the `from-primary to-accent` brand gradients.
+
+Six invariants, all machine-checked:
+
+| # | Invariant | Checked by |
+|---|---|---|
+| T1 | Every neutral token is `oklch(L 0 0)` — non-zero chroma on a neutral is a defect | vitest parses `index.css` |
+| T2 | Exactly one non-status chromatic token (`--accent`); `--focus` derives from it | same |
+| T3 | No colour literal (hex, `rgb()`, `oklch()`, `color-mix()`) and no Tailwind palette utility (`bg-zinc-*`, …) outside `index.css` | repo-wide grep gate |
+| T4 | Both `[data-theme]` blocks define the identical token set | vitest |
+| T5 | The accent appears **only** on primary buttons, active nav, focus rings, selected/checked states and single-series data emphasis — never on tile backgrounds, headers, borders or decorative fills | grep gate |
+| T6 | Dark is the default; `data-theme` is set on `<html>`, replacing the old `.light` class convention (which was inverted relative to HeroUI) | `tests/e2e/contrast.spec.ts`, which also runs axe's `color-contrast` rule over all nine routes in both appearances |
+
+> **`bg-overlay` was the only rename that fails silently.** After the token swap it still
+> compiles and still resolves — to HeroUI's floating-surface colour, which is wrong in all 22
+> places it appeared. Renames like this must land in the same commit as the token definitions.
+
+**Bundle budget.** The pre-rewrite baseline (2026-07-28) was 182.55 KB initial JS gzipped,
+7.64 KB CSS, with 204 tests across 24 files all passing. The rewrite's ceiling was baseline +
+100 KB — **282.55 KB gzipped**.
 
 ## 3. Loading, empty and error states (006, 021-FR-009)
 
