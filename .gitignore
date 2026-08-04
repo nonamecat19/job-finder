@@ -29,3 +29,6 @@ apps/dashboard/playwright-report/
 !.claude/settings.json
 !.claude/skills/
 .playwright-mcp/
+
+# opencode agent tooling (local, contains node_modules)
+.opencode/
