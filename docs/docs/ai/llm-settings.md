@@ -131,8 +131,9 @@ field-for-field mirror of `generation/domain.ShapeConfig`.
   failure, with the final page count and reason reported.
 - **Disabling a section is not a violation.** It is not reported as a structural or
   grounding failure; every other structure and grounding check still applies.
-- **Section positions are fixed.** Projects, certifications, publications and links keep
-  their established position in the enforced order regardless of configuration.
+- **Section positions are fixed.** Projects, certifications and publications keep their
+  established position in the enforced order regardless of configuration. There is no
+  separate links section.
 
 ### HTTP surface
 

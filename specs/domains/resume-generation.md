@@ -50,7 +50,7 @@ individually plausible while rearranging the document into a different résumé.
 
 | # | Invariant |
 |---|---|
-| 028-FR-001 | A canonical block sequence is defined: name → personal info → summary → skills → experience → education. |
+| 028-FR-001 | A canonical block sequence is defined: name → personal info → summary → experience → skills → education. |
 | 028-FR-002 | Blocks are never added, removed, renamed or reordered by tailoring. The tailored block sequence equals the master's. |
 | 028-FR-010 | When the master's blocks are **not** in canonical order, the master's authored order wins. The canonical sequence is the default, not an override. |
 | 028-FR-003 | Experience entries are never reordered, added or removed within the experience block. Order and identity are the master's. |
@@ -68,8 +68,9 @@ rejected and why.
 baseline. See § 4.
 
 031-FR-019: the projects section sits where the master profile places it, consistent with
-section-order preservation. Section order for projects, certifications, publications and
-links is pinned.
+section-order preservation. Section order for projects, certifications and publications is
+pinned. There is no links section; a résumé's contact URL lives in personal info, not a
+separate block.
 
 ### 3.1 How the invariants are enforced
 

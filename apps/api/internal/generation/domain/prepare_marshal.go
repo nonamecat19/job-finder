@@ -38,13 +38,12 @@ func (o OrderedYAMLMap) MarshalYAML() (any, error) {
 // sort alphabetically after these.
 var defaultSectionOrder = []string{
 	"summary",
-	"skills",
 	"experience",
+	"skills",
 	"projects",
 	"education",
 	"certifications",
 	"publications",
-	"links",
 }
 
 // SortByDefaultSectionOrder sorts section keys into the fixed resume order:
