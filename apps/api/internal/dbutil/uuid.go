@@ -65,6 +65,15 @@ func NowTimestamp() pgtype.Timestamp {
 	return pgtype.Timestamp{Time: time.Now().UTC(), Valid: true}
 }
 
+// TimestampAt builds a pgtype.Timestamp for t, normalized to UTC. All
+// timestamp columns are naive (`timestamp`, no time zone) and every DB-side
+// default is now() under an UTC-configured server, so any wall clock built
+// from a local time.Now() would compare against them shifted by the local
+// offset — e.g. a cutoff that sweeps rows the instant they are written.
+func TimestampAt(t time.Time) pgtype.Timestamp {
+	return pgtype.Timestamp{Time: t.UTC(), Valid: true}
+}
+
 // TimestampFromPtr converts an optional ISO date string (as adapters/DTOs
 // carry) into a pgtype.Timestamp; nil/empty/unparseable -> invalid (NULL).
 func TimestampFromPtr(s *string) pgtype.Timestamp {

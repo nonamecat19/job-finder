@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -338,8 +337,8 @@ func (s *SearchService) RunAllSubscriptions(ctx context.Context) (int, error) {
 func (s *SearchService) ReconcileUnmatched(ctx context.Context) (int, error) {
 	now := time.Now()
 	rows, err := s.q.ListJobsMissingMatch(ctx, sqlcgen.ListJobsMissingMatchParams{
-		OlderThan: pgtype.Timestamp{Time: now.Add(-reconcileMinAge), Valid: true},
-		NewerThan: pgtype.Timestamp{Time: now.Add(-reconcileMaxAge), Valid: true},
+		OlderThan: dbutil.TimestampAt(now.Add(-reconcileMinAge)),
+		NewerThan: dbutil.TimestampAt(now.Add(-reconcileMaxAge)),
 		Limit:     reconcileBatch,
 	})
 	if err != nil {
