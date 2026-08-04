@@ -2,7 +2,7 @@
 #
 # Claude Code PreToolUse hook: block the agent from committing or pushing
 # while checked out on master. See
-# specs/archive/023-workflow-quality-gates/contracts/hooks.md — Layer 2 — PreToolUse
+# specs/domains/platform-operations.md § 4.1 — Layer 2 — PreToolUse
 # -> guard-master.sh.
 #
 # Bound in .claude/settings.json to Bash, filtered by `if` to
