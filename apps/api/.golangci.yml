@@ -79,11 +79,12 @@ linters:
         # Prefix-based and therefore approximate; it catches the mechanical
         # regressions, which are the ones that actually occur.
         #
-        # contracts/depguard.md specifies this as the single pattern
-        # `internal/*/infrastructure`. depguard matches `pkg` by prefix, not by
-        # glob, so that entry matches nothing and the rule ships silently dead
-        # — the exact failure mode the verification step exists to catch. The
-        # feature infrastructure packages are therefore enumerated. A new
+        # This rule was designed as the single pattern `internal/*/infrastructure`.
+        # depguard matches `pkg` by prefix, not by glob, so that entry matched
+        # nothing and the rule would have shipped silently dead — the exact
+        # failure mode the verification step exists to catch. See
+        # specs/domains/codebase-structure.md § 1.1. The feature infrastructure
+        # packages are therefore enumerated below. A new
         # feature that adds one belongs on this list.
         #
         # platform/* is deliberately absent: it is shared infrastructure, not a

@@ -37,12 +37,13 @@ An **in-flight** feature directory carries the full speckit set:
 | `checklists/` | verification | deleted |
 | `quickstart.md` | how to exercise the feature | deleted |
 
-Once the feature ships, its durable requirements are folded into the matching
-`specs/domains/*.md`, its `spec.md` and `contracts/` move to
-`specs/archive/<nnn>-<slug>/`, and the build-time artifacts are deleted — they describe
-how a thing was *going to be* built, and the code answers that better. Git history keeps
-them. The registry in `specs/README.md` records every feature and where its requirements
-now live.
+Once the feature ships, its durable requirements **and** its interface contracts are folded
+into the matching `specs/domains/*.md`, and the whole `specs/<nnn>-<slug>/` directory is
+deleted. There is no archive: the build-time artifacts describe how a thing was *going to
+be* built and the code answers that better, while `spec.md` and `contracts/` would leave a
+second copy of a still-binding rule to drift against the domain doc. Git history keeps
+everything. The registry in `specs/README.md` records every feature and where its
+requirements now live.
 
 Templates live in `.specify/templates/`; the project constitution is
 `.specify/memory/constitution.md`.

@@ -19,7 +19,7 @@ targeting `master`, and a Claude Code `PreToolUse` hook
 (`scripts/hooks/guard-master.sh`) stops the agent before it even reaches
 git. Server-side branch protection is not available on the current GitHub
 plan (private repo, Free tier) — see
-`specs/archive/023-workflow-quality-gates/contracts/required-checks.md` for the
+`specs/domains/platform-operations.md` § 2.2 for the
 ruleset recorded to apply the moment that changes.
 
 **Emergency override**: if the trunk itself is broken and the normal branch
@@ -64,12 +64,12 @@ is ever committed.
 - `apps/dashboard` — React/Vite dashboard
 - `packages/shared` — shared TS types, generated from Go DTOs via tygo
 - `specs/` — requirement records. `specs/domains/*.md` hold the rules that
-  currently bind, consolidated per capability area; `specs/archive/<nnn>-<slug>/`
-  holds shipped features' original `spec.md` + `contracts/`. Start at
-  `specs/README.md`. An **in-flight** feature scaffolds `specs/<nnn>-<slug>/`
-  with `spec.md`, `plan.md` and `tasks.md`; those build-time files are deleted
-  and the feature is archived once it ships. There is no top-level `plans/`
-  directory.
+  currently bind, consolidated per capability area — they are the **only**
+  requirement record. Start at `specs/README.md`. An **in-flight** feature
+  scaffolds `specs/<nnn>-<slug>/` with `spec.md`, `plan.md` and `tasks.md`; once
+  it ships, its durable requirements and contracts fold into the matching domain
+  doc and the whole directory is deleted, not archived. There is no top-level
+  `plans/` directory and no `specs/archive/`.
 - `docs/` — the Docusaurus implementation guide (architecture, data, ingestion,
   AI, async, frontend, operations). `specs/` says what must be true; `docs/`
   says how it works. Do not duplicate one in the other.

@@ -12,7 +12,7 @@ jobs:
   #
   # Deliberately NOT a top-level `on: paths:` filter: a workflow skipped that
   # way never reports its checks at all, so once the Phase 2 ruleset in
-  # specs/archive/023-workflow-quality-gates/contracts/required-checks.md is applied
+  # specs/domains/platform-operations.md § 2.2 is applied
   # every required check would sit at "Expected" forever and block the merge.
   # A job skipped by `if:` reports as skipped, which GitHub counts as passing.
   #

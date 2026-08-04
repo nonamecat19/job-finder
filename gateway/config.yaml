@@ -1,5 +1,5 @@
 # LiteLLM proxy configuration (030-litellm-model-routing).
-# Contract: specs/030-litellm-model-routing/contracts/gateway-config.md
+# Contract: specs/domains/llm-routing.md § 2.1
 #
 # The Go backend sends the task key as the `model` field and never learns
 # which upstream served the request beyond what apps/api logs from

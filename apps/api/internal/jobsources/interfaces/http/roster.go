@@ -23,7 +23,7 @@ type RosterProvider interface {
 	Discover(ctx context.Context) (int, error)
 }
 
-// RosterHandler wires /api/roster, per contracts/roster-api.md (013).
+// RosterHandler wires /api/roster, per specs/domains/job-sources.md § 3.
 type RosterHandler struct {
 	Roster RosterProvider
 }

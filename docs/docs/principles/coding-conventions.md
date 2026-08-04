@@ -115,13 +115,14 @@ flowchart LR
     CODE --> CHECK["checklists/"]
     CHECK --> PR["PR with FR citations in comments"]
     PR --> DOM["specs/domains/*.md"]
-    PR --> ARCH["specs/archive/NNN-name/"]
+    PR --> DEL["specs/NNN-name/ deleted"]
 ```
 
 In-flight feature directories are numbered (`specs/<nnn>-<slug>/`) and carry `spec.md`,
 `plan.md`, `tasks.md`, plus `checklists/` and `contracts/` where relevant. On merge the
-requirements fold into `specs/domains/` and the spec is archived under `specs/archive/`.
-Tooling lives in `.specify/`; the registry is `specs/README.md`.
+requirements and contracts fold into `specs/domains/` and the feature directory is deleted
+outright — there is no archive, so exactly one copy of every binding rule exists. Tooling
+lives in `.specify/`; the registry is `specs/README.md`.
 
 ## Commits
 
