@@ -45,6 +45,7 @@ func (f *fakeRepo) UpdateResumeShapeSetting(_ context.Context, arg sqlcgen.Updat
 		CertificationsEnabled: arg.CertificationsEnabled,
 		CertificationsMin:     arg.CertificationsMin,
 		CertificationsMax:     arg.CertificationsMax,
+		FontSize:              arg.FontSize,
 	}
 	return f.row, nil
 }
@@ -55,6 +56,7 @@ func defaultRow() sqlcgen.ResumeShapeSetting {
 		ExperienceBulletsMin: 8, ExperienceBulletsMax: 10, TargetPages: 2,
 		ProjectsEnabled: true, ProjectsMin: 0, ProjectsMax: 0, ProjectBulletsMax: 0,
 		CertificationsEnabled: true, CertificationsMin: 0, CertificationsMax: 0,
+		FontSize: 10,
 	}
 }
 
@@ -125,6 +127,7 @@ func TestUpdateRefreshesCache(t *testing.T) {
 		ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
 		ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 2, ProjectBulletsMax: 3,
 		CertificationsEnabled: true, CertificationsMin: 1, CertificationsMax: 5,
+		FontSize: 12,
 	}
 	got, err := s.Update(context.Background(), want)
 	if err != nil {

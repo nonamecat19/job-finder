@@ -315,6 +315,7 @@ type ResumeShapeSetting struct {
 	CertificationsEnabled bool             `json:"certificationsEnabled"`
 	CertificationsMin     int32            `json:"certificationsMin"`
 	CertificationsMax     int32            `json:"certificationsMax"`
+	FontSize              int32            `json:"fontSize"`
 }
 
 type SalaryCache struct {

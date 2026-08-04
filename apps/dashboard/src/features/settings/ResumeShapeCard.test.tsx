@@ -17,6 +17,7 @@ const defaults = {
   certificationsEnabled: true,
   certificationsMin: 0,
   certificationsMax: 0,
+  fontSize: 10,
 }
 
 const getResumeShape = vi.fn()
@@ -49,22 +50,19 @@ describe('ResumeShapeCard', () => {
     renderWithProviders(<ResumeShapeCard />)
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Summary sentences')).toHaveValue(4)
+      expect(screen.getByLabelText('Summary sentences')).toHaveTextContent('4')
     })
     // Every value is visible in this single place, each with its range.
     expect(screen.getByText('Summary sentences (1-12)')).toBeInTheDocument()
     expect(screen.getByText('Max skill groups (0-20)')).toBeInTheDocument()
-    expect(screen.getByText('Min bullets per job (1-20)')).toBeInTheDocument()
-    expect(screen.getByText('Max bullets per job (1-20)')).toBeInTheDocument()
+    expect(screen.getByText('Bullets per job (1-10)')).toBeInTheDocument()
     expect(screen.getByText('Target pages (1-3)')).toBeInTheDocument()
-    expect(screen.getByText('Min projects (0-20)')).toBeInTheDocument()
-    expect(screen.getByText('Max projects (0-20)')).toBeInTheDocument()
+    expect(screen.getByText('Projects (0-10)')).toBeInTheDocument()
     expect(screen.getByText('Max bullets per project (0-10)')).toBeInTheDocument()
-    expect(screen.getByText('Min certifications (0-20)')).toBeInTheDocument()
-    expect(screen.getByText('Max certifications (0-20)')).toBeInTheDocument()
+    expect(screen.getByText('Certifications (0-10)')).toBeInTheDocument()
 
-    expect(screen.getByLabelText('Max bullets per job')).toHaveValue(10)
-    expect(screen.getByLabelText('Target pages')).toHaveValue(2)
+    expect(screen.getByLabelText('Max Bullets per job')).toHaveValue('10')
+    expect(screen.getByLabelText('Target pages')).toHaveTextContent('2')
     expect(screen.getByLabelText('Include skills section')).toBeChecked()
     expect(screen.getByLabelText('Include projects section')).toBeChecked()
     expect(screen.getByLabelText('Include certifications section')).toBeChecked()
@@ -87,18 +85,16 @@ describe('ResumeShapeCard', () => {
     putResumeShape.mockRejectedValue(new Error('targetPages must be between 1 and 3'))
     renderWithProviders(<ResumeShapeCard />)
 
-    await waitFor(() => expect(screen.getByLabelText('Target pages')).toHaveValue(2))
-    const pages = screen.getByLabelText('Target pages')
-    await user.clear(pages)
-    await user.type(pages, '4')
+    await waitFor(() => expect(screen.getByLabelText('Target pages')).toHaveTextContent('2'))
+    await user.click(screen.getByRole('button', { name: 'Increase Target pages' }))
     await user.click(screen.getByRole('button', { name: 'save' }))
 
     await waitFor(() => {
       expect(screen.getByText(/targetPages must be between 1 and 3/)).toBeInTheDocument()
     })
     // The other values are untouched: nothing was stored.
-    expect(screen.getByLabelText('Summary sentences')).toHaveValue(4)
-    expect(screen.getByLabelText('Max bullets per job')).toHaveValue(10)
+    expect(screen.getByLabelText('Summary sentences')).toHaveTextContent('4')
+    expect(screen.getByLabelText('Max Bullets per job')).toHaveValue('10')
   })
 
   it('restores the defaults in the UI after a reset', async () => {
@@ -106,15 +102,15 @@ describe('ResumeShapeCard', () => {
     getResumeShape.mockResolvedValue({ ...defaults, targetPages: 1, summaryLines: 8 })
     renderWithProviders(<ResumeShapeCard />)
 
-    await waitFor(() => expect(screen.getByLabelText('Target pages')).toHaveValue(1))
-    expect(screen.getByLabelText('Summary sentences')).toHaveValue(8)
+    await waitFor(() => expect(screen.getByLabelText('Target pages')).toHaveTextContent('1'))
+    expect(screen.getByLabelText('Summary sentences')).toHaveTextContent('8')
 
     // After the reset the refetch serves the defaults again.
     getResumeShape.mockResolvedValue({ ...defaults })
     await user.click(screen.getByRole('button', { name: 'reset to defaults' }))
 
-    await waitFor(() => expect(screen.getByLabelText('Target pages')).toHaveValue(2))
-    expect(screen.getByLabelText('Summary sentences')).toHaveValue(4)
+    await waitFor(() => expect(screen.getByLabelText('Target pages')).toHaveTextContent('2'))
+    expect(screen.getByLabelText('Summary sentences')).toHaveTextContent('4')
     expect(resetResumeShape).toHaveBeenCalled()
   })
 })

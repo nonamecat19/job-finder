@@ -349,6 +349,10 @@ type renderOutcome struct {
 // way degrades gracefully — the best result reached is returned rather than
 // erroring, so an unreachable target never fails a generation (FR-021).
 func (s *Service) renderResume(ctx context.Context, master, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, baseName string, rec *activity.Recorder) (string, error) {
+	// Set once, on merged, before any render in this run: every reMerged
+	// variant below is deep-cloned from merged (via MergeTailored), so this
+	// carries through expand/condense/compact without being reapplied.
+	domain.ApplyFontSize(merged, cfg)
 	outcome, err := s.renderToPageTarget(ctx, s.defaultRenderDeps(), master, merged, analysis, level, cfg, baseName, rec)
 	if err != nil {
 		return "", err

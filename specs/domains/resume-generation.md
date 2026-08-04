@@ -236,6 +236,7 @@ additive, and two export paths coexist by design.
 | `certificationsEnabled` | true | — | `false` removes the certifications section entirely | 032-FR-001, 032-FR-004 |
 | `certificationsMin` | 0 | 0–20 | Target floor of certifications; `0` = no minimum | 032-FR-003 |
 | `certificationsMax` | 0 | 0–20 | Hard cap on certifications; `0` includes all | 032-FR-002, 032-FR-005 |
+| `fontSize` | 10 | 8–14 | Body text size in points; name scales to 3x body, headline and connections match body | — |
 
 **Minima are targets; maxima are guarantees.**
 
