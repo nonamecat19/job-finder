@@ -7,13 +7,13 @@ import (
 
 // VerifyTailoredSectionsGrounding checks the LLM's TailoredSections payload
 // against the master before any merge. It enforces the tighter rules from
-// feature 020: SkillGroupsToAdd tokens must all be in masterSkillTokens;
+// feature 020: SkillGroupsToAdd tokens must all be in MasterSkillTokens;
 // SkillGroupsToRemove labels must exist in the master; SkillChanges.AddTokens
-// must be in masterSkillTokens; per-company Highlights whose LCS-matched set
+// must be in MasterSkillTokens; per-company Highlights whose LCS-matched set
 // doesn't cover the proposed bullets are rejected.
 func VerifyTailoredSectionsGrounding(master RendercvMaster, payload TailoredSections) []string {
 	var violations []string
-	allowed := masterSkillTokens(master)
+	allowed := MasterSkillTokens(master)
 	sections := CvSections(master)
 
 	for _, add := range payload.SkillGroupsToAdd {
@@ -152,7 +152,7 @@ func VerifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel
 
 	// 4. Strict skill grounding: no tokens outside the master skill pool
 	if level == GroundingStrict {
-		allowed := masterSkillTokens(master)
+		allowed := MasterSkillTokens(master)
 		for _, g := range AsSliceOfMaps(mergedSections["skills"]) {
 			label := StringField(g, "label")
 			for _, t := range tokens(StringField(g, "details")) {
