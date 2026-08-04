@@ -46,7 +46,7 @@ func TestCertificationsShortfall_UnmeetableMinStillSucceedsAndRecordsActivity(t 
 	cfg := domain.DefaultShapeConfig()
 	cfg.CertificationsMin = 4
 
-	report := domain.ApplyHardLimits(merged, cfg)
+	report := domain.ApplyHardLimits(merged, merged, cfg)
 
 	// The run itself does not fail: ApplyHardLimits returns a report, not an
 	// error, and the caller (tailorRendercvResume) proceeds regardless.

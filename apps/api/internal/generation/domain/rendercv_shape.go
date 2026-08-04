@@ -42,9 +42,11 @@ type ShapeConfig struct {
 	SkillsEnabled bool
 	// SkillsMaxGroups caps how many skill groups are kept. 0 = unlimited.
 	SkillsMaxGroups int
-	// ExperienceBulletsMin is the target floor for bullets per experience
-	// entry. It is never satisfied by padding — a master with fewer bullets
-	// available reports a shortfall instead.
+	// ExperienceBulletsMin is the hard floor for bullets per experience entry.
+	// When the master's own entry has at least this many bullets, a
+	// model-trimmed selection is padded back up from the master's remaining
+	// highlights. Only a master with fewer bullets available than the floor
+	// reports a shortfall instead — the floor is never met by inventing one.
 	ExperienceBulletsMin int
 	// ExperienceBulletsMax is the hard cap on bullets per experience entry.
 	// 0 = unlimited.
@@ -114,8 +116,8 @@ func (c ShapeConfig) Validate() error {
 	}{
 		{"summaryLines", c.SummaryLines, 1, 12},
 		{"skillsMaxGroups", c.SkillsMaxGroups, 0, 20},
-		{"experienceBulletsMin", c.ExperienceBulletsMin, 1, 20},
-		{"experienceBulletsMax", c.ExperienceBulletsMax, 1, 20},
+		{"experienceBulletsMin", c.ExperienceBulletsMin, 1, 10},
+		{"experienceBulletsMax", c.ExperienceBulletsMax, 1, 10},
 		{"targetPages", c.TargetPages, 1, 3},
 		{"projectsMin", c.ProjectsMin, 0, 20},
 		{"projectsMax", c.ProjectsMax, 0, 20},
@@ -175,18 +177,29 @@ func ApplySectionToggles(master RendercvMaster, cfg ShapeConfig) {
 // ApplyHardLimits enforces the count limits the model cannot be trusted with,
 // on the already-merged document: bullets per experience entry are clamped to
 // ExperienceBulletsMax, skill groups to SkillsMaxGroups, projects to
-// ProjectsMax and their bullets to ProjectBulletsMax. It only ever truncates —
-// a configured minimum the
-// master cannot satisfy is reported as a Shortfall, never padded (a padded
-// bullet would be an invented one).
+// ProjectsMax and their bullets to ProjectBulletsMax. Truncation keeps the
+// first N in order, which is the most relevant N: the model returns
+// highlights in relevance order and the merge preserves it.
 //
-// Truncation keeps the first N in order, which is the most relevant N: the
-// model returns highlights in relevance order and the merge preserves it.
-func ApplyHardLimits(merged RendercvMaster, cfg ShapeConfig) ShapeReport {
+// ExperienceBulletsMin is a hard floor when the master can actually meet it:
+// if the model under-selected and the master's own entry for that company has
+// at least Min bullets, the entry is padded back up from the master's
+// remaining highlights (in the master's authored order) — never an invented
+// bullet, just one the model left out. Only when the master itself has fewer
+// than Min bullets is the gap reported as a Shortfall instead.
+func ApplyHardLimits(master, merged RendercvMaster, cfg ShapeConfig) ShapeReport {
 	report := ShapeReport{Config: cfg, PageTarget: cfg.TargetPages}
 	sections := CvSections(merged)
 	if sections == nil {
 		return report
+	}
+
+	masterHighlights := map[string][]any{}
+	if masterSections := CvSections(master); masterSections != nil {
+		for _, e := range AsSliceOfMaps(masterSections["experience"]) {
+			highlights, _ := e["highlights"].([]any)
+			masterHighlights[norm(StringField(e, "company"))] = highlights
+		}
 	}
 
 	for _, e := range AsSliceOfMaps(sections["experience"]) {
@@ -195,11 +208,16 @@ func ApplyHardLimits(merged RendercvMaster, cfg ShapeConfig) ShapeReport {
 		if cfg.ExperienceBulletsMax > 0 && available > cfg.ExperienceBulletsMax {
 			e["highlights"] = highlights[:cfg.ExperienceBulletsMax]
 		} else if available < cfg.ExperienceBulletsMin {
-			report.Shortfalls = append(report.Shortfalls, Shortfall{
-				Path:      fmt.Sprintf("cv.sections.experience[%s].highlights", StringField(e, "company")),
-				Requested: cfg.ExperienceBulletsMin,
-				Available: available,
-			})
+			pool := masterHighlights[norm(StringField(e, "company"))]
+			if len(pool) >= cfg.ExperienceBulletsMin {
+				e["highlights"] = padHighlights(highlights, pool, cfg.ExperienceBulletsMin, cfg.ExperienceBulletsMax)
+			} else {
+				report.Shortfalls = append(report.Shortfalls, Shortfall{
+					Path:      fmt.Sprintf("cv.sections.experience[%s].highlights", StringField(e, "company")),
+					Requested: cfg.ExperienceBulletsMin,
+					Available: available,
+				})
+			}
 		}
 	}
 
@@ -207,9 +225,11 @@ func ApplyHardLimits(merged RendercvMaster, cfg ShapeConfig) ShapeReport {
 	// list, but only this truncation makes the configured cap binding. Keeps
 	// the first N in the master's authored order, which is its own priority
 	// order.
+	// Pinned groups (spoken languages) survive the cap: they are kept in place
+	// and count against it, so the cap still bounds the total.
 	if cfg.SkillsMaxGroups > 0 {
 		if skills, ok := sections["skills"].([]any); ok && len(skills) > cfg.SkillsMaxGroups {
-			sections["skills"] = skills[:cfg.SkillsMaxGroups]
+			sections["skills"] = capSkillGroups(skills, cfg.SkillsMaxGroups)
 		}
 	}
 
@@ -255,4 +275,61 @@ func ApplyHardLimits(merged RendercvMaster, cfg ShapeConfig) ShapeReport {
 	}
 
 	return report
+}
+
+// padHighlights fills a model-trimmed highlight list back up to min bullets
+// using the master's own remaining highlights, in the master's authored
+// order, skipping any already present. It never exceeds max (when capped),
+// so a model that under-selected on a short entry never ends up over the
+// configured ceiling.
+// capSkillGroups trims skill groups to max while keeping every pinned group.
+// Pinned groups are kept regardless of position; the remaining slots go to the
+// other groups in their authored order, and the result keeps that order too.
+func capSkillGroups(groups []any, max int) []any {
+	kept := make([]any, 0, max)
+	pinned := make([]bool, len(groups))
+	slots := max
+	for i, g := range groups {
+		m, ok := g.(map[string]any)
+		if ok && IsPinnedSkillGroup(StringField(m, "label")) {
+			pinned[i] = true
+			slots--
+		}
+	}
+	for i, g := range groups {
+		if pinned[i] {
+			kept = append(kept, g)
+			continue
+		}
+		if slots > 0 {
+			kept = append(kept, g)
+			slots--
+		}
+	}
+	return kept
+}
+
+func padHighlights(current, pool []any, min, max int) []any {
+	have := map[string]bool{}
+	for _, h := range current {
+		if s, ok := h.(string); ok {
+			have[s] = true
+		}
+	}
+	padded := append([]any{}, current...)
+	for _, h := range pool {
+		if len(padded) >= min {
+			break
+		}
+		if max > 0 && len(padded) >= max {
+			break
+		}
+		s, ok := h.(string)
+		if !ok || have[s] {
+			continue
+		}
+		have[s] = true
+		padded = append(padded, h)
+	}
+	return padded
 }

@@ -226,8 +226,8 @@ additive, and two export paths coexist by design.
 | `summaryLines` | 4 | 1–12 | Approximate summary length in sentences | 031-FR-007 |
 | `skillsEnabled` | true | — | `false` removes the skills section entirely | 031-FR-009 |
 | `skillsMaxGroups` | 0 | 0–20 | Skill groups kept; `0` keeps all | 031-FR-008 |
-| `experienceBulletsMin` | 8 | 1–20 | Target floor of bullets per job | 031-FR-010 |
-| `experienceBulletsMax` | 10 | 1–20 | Hard cap of bullets per job | 031-FR-010 |
+| `experienceBulletsMin` | 8 | 1–10 | Target floor of bullets per job | 031-FR-010 |
+| `experienceBulletsMax` | 10 | 1–10 | Hard cap of bullets per job | 031-FR-010 |
 | `targetPages` | 2 | 1–3 | Page count the render loop aims for | 031-FR-011 |
 | `projectsEnabled` | true | — | `false` removes the projects section entirely | 031-FR-012 |
 | `projectsMin` | 0 | 0–20 | Target floor of projects; `0` = no minimum | 031-FR-012 |

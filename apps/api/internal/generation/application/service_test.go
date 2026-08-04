@@ -68,7 +68,7 @@ func testMaster() domain.RendercvMaster {
 func renderWith(t *testing.T, f *fakeRenderer, cfg domain.ShapeConfig) renderOutcome {
 	t.Helper()
 	s := &Service{}
-	out, err := s.renderToPageTarget(context.Background(), f.deps(), testMaster(), domain.VacancyAnalysis{}, domain.GroundingModerate, cfg, "base", nil)
+	out, err := s.renderToPageTarget(context.Background(), f.deps(), testMaster(), testMaster(), domain.VacancyAnalysis{}, domain.GroundingModerate, cfg, "base", nil)
 	if err != nil {
 		t.Fatalf("renderToPageTarget: %v", err)
 	}
