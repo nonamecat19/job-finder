@@ -84,7 +84,7 @@ type TailoredProject struct {
 
 // TailoredSkillGroupAdd is a proposed new skill group the AI may suggest
 // when the job posting emphasizes a domain the user has tagged but hasn't
-// grouped. Details must be drawn from masterSkillTokens only.
+// grouped. Details must be drawn from MasterSkillTokens only.
 type TailoredSkillGroupAdd struct {
 	Label   string `json:"label" jsonschema_description:"name for the new skill group"`
 	Details string `json:"details" jsonschema_description:"comma-separated skills drawn ONLY from the master skill tokens"`
@@ -201,8 +201,8 @@ func tokens(details string) []string {
 	return out
 }
 
-// masterSkillTokens is the union of every skill token in the master (all groups).
-func masterSkillTokens(master RendercvMaster) map[string]bool {
+// MasterSkillTokens is the union of every skill token in the master (all groups).
+func MasterSkillTokens(master RendercvMaster) map[string]bool {
 	set := map[string]bool{}
 	sections := CvSections(master)
 	for _, g := range AsSliceOfMaps(sections["skills"]) {
