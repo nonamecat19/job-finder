@@ -118,6 +118,7 @@ func TestPutValidConfigRoundTrips(t *testing.T) {
 		ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
 		ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 2, ProjectBulletsMax: 3,
 		CertificationsEnabled: true, CertificationsMin: 1, CertificationsMax: 5,
+		FontSize: 12,
 	}
 	rec := do(t, r, http.MethodPut, "/settings/resume-shape", want)
 	if rec.Code != http.StatusOK {
@@ -142,6 +143,7 @@ func TestPutFullNonDefaultRoundTrip(t *testing.T) {
 		ExperienceBulletsMin: 1, ExperienceBulletsMax: 10, TargetPages: 3,
 		ProjectsEnabled: true, ProjectsMin: 2, ProjectsMax: 4, ProjectBulletsMax: 10,
 		CertificationsEnabled: true, CertificationsMin: 2, CertificationsMax: 20,
+		FontSize: 14,
 	}
 	if rec := do(t, r, http.MethodPut, "/settings/resume-shape", want); rec.Code != http.StatusOK {
 		t.Fatalf("PUT status = %d (%s), want 200", rec.Code, rec.Body.String())

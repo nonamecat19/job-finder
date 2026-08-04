@@ -114,6 +114,7 @@ already in flight finishes with the settings it started with.
 | `certificationsEnabled` | true | — | `false` removes the certifications section entirely |
 | `certificationsMin` | 0 | 0–20 | Target floor of certifications; `0` = no minimum |
 | `certificationsMax` | 0 | 0–20 | Hard cap on certifications; `0` includes all |
+| `fontSize` | 10 | 8–14 | Body text size, in points. Name scales to 3x body; headline and connections match body |
 
 The wire form is `dto.ResumeShapeConfigDto` (`apps/api/internal/dto/settings.go`), a
 field-for-field mirror of `generation/domain.ShapeConfig`.

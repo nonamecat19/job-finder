@@ -49,6 +49,7 @@ func configToDto(c domain.ShapeConfig) dto.ResumeShapeConfigDto {
 		CertificationsEnabled: c.CertificationsEnabled,
 		CertificationsMin:     c.CertificationsMin,
 		CertificationsMax:     c.CertificationsMax,
+		FontSize:              c.FontSize,
 	}
 }
 
@@ -67,6 +68,7 @@ func dtoToConfig(d dto.ResumeShapeConfigDto) domain.ShapeConfig {
 		CertificationsEnabled: d.CertificationsEnabled,
 		CertificationsMin:     d.CertificationsMin,
 		CertificationsMax:     d.CertificationsMax,
+		FontSize:              d.FontSize,
 	}
 }
 

@@ -27,4 +27,5 @@ type ResumeShapeConfigDto struct {
 	CertificationsEnabled bool `json:"certificationsEnabled"`
 	CertificationsMin     int  `json:"certificationsMin"`
 	CertificationsMax     int  `json:"certificationsMax"`
+	FontSize              int  `json:"fontSize"`
 }

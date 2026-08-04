@@ -7,10 +7,11 @@ import {
   EmptyState,
   ErrorState,
   Field,
-  Input,
   LoadingRegion,
+  RangeSlider,
   SkeletonBlock,
   SkeletonLine,
+  Stepper,
 } from '../../components/ui';
 import { useResetResumeShape, useResumeShape, useUpdateResumeShape } from './hooks';
 
@@ -19,9 +20,8 @@ type NumericKey = Exclude<
   'skillsEnabled' | 'projectsEnabled' | 'certificationsEnabled'
 >;
 
-// One row per configurable value, each carrying its allowed range and what it
-// does — this card is the single place the whole resume shape is visible.
-const NUMERIC_FIELDS: { key: NumericKey; label: string; min: number; max: number; description: string }[] = [
+// Single-value settings, each with its allowed range and what it does.
+const STEPPER_FIELDS: { key: NumericKey; label: string; min: number; max: number; description: string }[] = [
   {
     key: 'summaryLines',
     label: 'Summary sentences',
@@ -37,39 +37,11 @@ const NUMERIC_FIELDS: { key: NumericKey; label: string; min: number; max: number
     description: 'How many skill groups to keep. 0 keeps all of them.',
   },
   {
-    key: 'experienceBulletsMin',
-    label: 'Min bullets per job',
-    min: 1,
-    max: 20,
-    description: 'Target floor per experience entry. A job with fewer available bullets keeps what it has — nothing is invented.',
-  },
-  {
-    key: 'experienceBulletsMax',
-    label: 'Max bullets per job',
-    min: 1,
-    max: 20,
-    description: 'Hard cap per experience entry; extra bullets are dropped.',
-  },
-  {
     key: 'targetPages',
     label: 'Target pages',
     min: 1,
     max: 3,
     description: 'Page count the render loop aims for. It overrides the section lengths above when they conflict.',
-  },
-  {
-    key: 'projectsMin',
-    label: 'Min projects',
-    min: 0,
-    max: 20,
-    description: 'Target floor for the projects section. 0 means no minimum; requires projects to be enabled.',
-  },
-  {
-    key: 'projectsMax',
-    label: 'Max projects',
-    min: 0,
-    max: 20,
-    description: 'Hard cap on projects, kept in the order they appear in your master resume. 0 includes all of them.',
   },
   {
     key: 'projectBulletsMax',
@@ -79,19 +51,55 @@ const NUMERIC_FIELDS: { key: NumericKey; label: string; min: number; max: number
     description: 'Hard cap per project. 0 keeps every bullet.',
   },
   {
-    key: 'certificationsMin',
-    label: 'Min certifications',
-    min: 0,
-    max: 20,
-    description: 'Target floor for the certifications section. 0 means no minimum; requires certifications to be enabled.',
+    key: 'fontSize',
+    label: 'Body font size (pt)',
+    min: 8,
+    max: 14,
+    description: 'Body text size. Name scales to 3x, headline and connections match body.',
+  },
+];
+
+// Min/max pairs, each rendered as a single two-thumb range.
+const RANGE_FIELDS: {
+  minKey: NumericKey;
+  maxKey: NumericKey;
+  label: string;
+  min: number;
+  max: number;
+  description: string;
+}[] = [
+  {
+    minKey: 'experienceBulletsMin',
+    maxKey: 'experienceBulletsMax',
+    label: 'Bullets per job',
+    min: 1,
+    max: 10,
+    description:
+      'Target range per experience entry. A job with fewer available bullets keeps what it has — nothing is invented; extras beyond the cap are dropped.',
   },
   {
-    key: 'certificationsMax',
-    label: 'Max certifications',
+    minKey: 'projectsMin',
+    maxKey: 'projectsMax',
+    label: 'Projects',
     min: 0,
-    max: 20,
-    description: 'Hard cap on certifications, kept in the order they appear in your master resume. 0 includes all of them.',
+    max: 10,
+    description:
+      'Target range for the projects section. 0 on either end means no floor / no cap; requires projects to be enabled.',
   },
+  {
+    minKey: 'certificationsMin',
+    maxKey: 'certificationsMax',
+    label: 'Certifications',
+    min: 0,
+    max: 10,
+    description:
+      'Target range for the certifications section, kept in the order they appear in your master resume. 0 on either end means no floor / no cap.',
+  },
+];
+
+const ALL_NUMERIC_KEYS: NumericKey[] = [
+  ...STEPPER_FIELDS.map((f) => f.key),
+  ...RANGE_FIELDS.flatMap((f) => [f.minKey, f.maxKey]),
 ];
 
 function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
@@ -107,7 +115,7 @@ function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
     setDraft(config);
   }, [config]);
 
-  const dirty = NUMERIC_FIELDS.some((f) => draft[f.key] !== config[f.key])
+  const dirty = ALL_NUMERIC_KEYS.some((key) => draft[key] !== config[key])
     || draft.skillsEnabled !== config.skillsEnabled
     || draft.projectsEnabled !== config.projectsEnabled
     || draft.certificationsEnabled !== config.certificationsEnabled;
@@ -146,17 +154,35 @@ function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {NUMERIC_FIELDS.map((f) => (
+        {STEPPER_FIELDS.map((f) => (
           <div key={f.key}>
             <Field label={`${f.label} (${f.min}-${f.max})`}>
-              <Input
-                type="number"
+              <Stepper
                 min={f.min}
                 max={f.max}
                 value={draft[f.key]}
                 aria-label={f.label}
-                onChange={(e) => setDraft({ ...draft, [f.key]: Number(e.target.value) })}
-                className="w-24"
+                onChange={(value) => setDraft({ ...draft, [f.key]: value })}
+              />
+            </Field>
+            <p className="mt-1 text-xs text-muted">{f.description}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {RANGE_FIELDS.map((f) => (
+          <div key={f.minKey}>
+            <Field label={`${f.label} (${f.min}-${f.max})`}>
+              <RangeSlider
+                min={f.min}
+                max={f.max}
+                valueMin={draft[f.minKey]}
+                valueMax={draft[f.maxKey]}
+                labelMin={`Min ${f.label}`}
+                labelMax={`Max ${f.label}`}
+                onChangeMin={(value) => setDraft({ ...draft, [f.minKey]: value })}
+                onChangeMax={(value) => setDraft({ ...draft, [f.maxKey]: value })}
               />
             </Field>
             <p className="mt-1 text-xs text-muted">{f.description}</p>

@@ -266,11 +266,14 @@ func TestShapeConfigValidate(t *testing.T) {
 			c.CertificationsEnabled = false
 		}), "certificationsMin > 0 requires certificationsEnabled"},
 		{"certifications disabled with no minimum is fine", with(func(c *ShapeConfig) { c.CertificationsEnabled = false }), ""},
+		{"fontSize too low", with(func(c *ShapeConfig) { c.FontSize = 7 }), "fontSize must be between 8 and 14"},
+		{"fontSize too high", with(func(c *ShapeConfig) { c.FontSize = 15 }), "fontSize must be between 8 and 14"},
 		{"in-range non-defaults", ShapeConfig{
 			SummaryLines: 2, SkillsEnabled: false, SkillsMaxGroups: 3,
 			ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
 			ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 2, ProjectBulletsMax: 3,
 			CertificationsEnabled: true, CertificationsMin: 1, CertificationsMax: 2,
+			FontSize: 11,
 		}, ""},
 	}
 
@@ -595,6 +598,45 @@ func sectionOrder(m RendercvMaster) []string {
 		}
 	}
 	return out
+}
+
+func TestApplyFontSizeSetsBodyNameHeadlineConnections(t *testing.T) {
+	m := RendercvMaster{}
+	cfg := DefaultShapeConfig()
+	cfg.FontSize = 12
+
+	ApplyFontSize(m, cfg)
+
+	design := m["design"].(map[string]any)
+	typography := design["typography"].(map[string]any)
+	fontSize := typography["font_size"].(map[string]any)
+	if fontSize["body"] != "12pt" {
+		t.Errorf("body = %v, want 12pt", fontSize["body"])
+	}
+	if fontSize["name"] != "36pt" {
+		t.Errorf("name = %v, want 36pt", fontSize["name"])
+	}
+	if fontSize["headline"] != "12pt" {
+		t.Errorf("headline = %v, want 12pt", fontSize["headline"])
+	}
+	if fontSize["connections"] != "12pt" {
+		t.Errorf("connections = %v, want 12pt", fontSize["connections"])
+	}
+}
+
+func TestApplyFontSizeOverridesExistingValue(t *testing.T) {
+	m := RendercvMaster{"design": map[string]any{"typography": map[string]any{
+		"font_size": map[string]any{"body": "8pt", "name": "24pt"},
+	}}}
+	cfg := DefaultShapeConfig()
+	cfg.FontSize = 10
+
+	ApplyFontSize(m, cfg)
+
+	fontSize := m["design"].(map[string]any)["typography"].(map[string]any)["font_size"].(map[string]any)
+	if fontSize["body"] != "10pt" {
+		t.Errorf("body = %v, want 10pt (setting overrides, unlike CompactDesign's defaults)", fontSize["body"])
+	}
 }
 
 func TestApplySectionTogglesRemovesDisabledSkills(t *testing.T) {

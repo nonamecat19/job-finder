@@ -98,6 +98,7 @@ func rowToConfig(r sqlcgen.ResumeShapeSetting) domain.ShapeConfig {
 		CertificationsEnabled: r.CertificationsEnabled,
 		CertificationsMin:     int(r.CertificationsMin),
 		CertificationsMax:     int(r.CertificationsMax),
+		FontSize:              int(r.FontSize),
 	}
 }
 
@@ -116,5 +117,6 @@ func configToParams(c domain.ShapeConfig) sqlcgen.UpdateResumeShapeSettingParams
 		CertificationsEnabled: c.CertificationsEnabled,
 		CertificationsMin:     int32(c.CertificationsMin),
 		CertificationsMax:     int32(c.CertificationsMax),
+		FontSize:              int32(c.FontSize),
 	}
 }

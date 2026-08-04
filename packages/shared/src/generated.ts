@@ -547,6 +547,7 @@ export interface ResumeCertificate {
   name?: string;
   issuer?: string;
   date?: string;
+  url?: string;
 }
 export interface JsonResume {
   basics?: ResumeBasics;
@@ -811,6 +812,7 @@ export interface ResumeShapeConfigDto {
   certificationsEnabled: boolean;
   certificationsMin: number /* int */;
   certificationsMax: number /* int */;
+  fontSize: number /* int */;
 }
 
 //////////

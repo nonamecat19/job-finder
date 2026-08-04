@@ -71,6 +71,10 @@ type ShapeConfig struct {
 	// CertificationsMax is the hard cap on how many certifications are kept.
 	// 0 = unlimited.
 	CertificationsMax int
+	// FontSize is the body text size in points. Name scales to 3x body,
+	// headline and connections match body — the classic rendercv theme's own
+	// ratios, just parameterized on body instead of hardcoded at 10pt.
+	FontSize int
 }
 
 // DefaultShapeConfig is the single source of truth for the defaults, matching
@@ -93,6 +97,7 @@ func DefaultShapeConfig() ShapeConfig {
 		CertificationsEnabled: true,
 		CertificationsMin:     0,
 		CertificationsMax:     0,
+		FontSize:              10,
 	}
 }
 
@@ -124,6 +129,7 @@ func (c ShapeConfig) Validate() error {
 		{"projectBulletsMax", c.ProjectBulletsMax, 0, 10},
 		{"certificationsMin", c.CertificationsMin, 0, 20},
 		{"certificationsMax", c.CertificationsMax, 0, 20},
+		{"fontSize", c.FontSize, 8, 14},
 	}
 	for _, r := range ranges {
 		if r.value < r.min || r.value > r.max {
@@ -172,6 +178,39 @@ func ApplySectionToggles(master RendercvMaster, cfg ShapeConfig) {
 	if !cfg.CertificationsEnabled {
 		RemoveSection(sections, "certifications")
 	}
+}
+
+// ApplyFontSize sets the master's design.typography.font_size block from
+// cfg.FontSize, in points. It overrides rather than defaults (unlike
+// CompactDesign) because the setting is the explicit, user-chosen size — name
+// scales to 3x body, headline and connections match body, mirroring the
+// classic rendercv theme's own default ratios (30pt/10pt/10pt at body=10pt).
+// section_titles is left alone: it is authored as "1.4em", already relative
+// to body.
+func ApplyFontSize(master RendercvMaster, cfg ShapeConfig) {
+	if cfg.FontSize <= 0 {
+		return
+	}
+	design, _ := master["design"].(map[string]any)
+	if design == nil {
+		design = map[string]any{}
+		master["design"] = design
+	}
+	typography, _ := design["typography"].(map[string]any)
+	if typography == nil {
+		typography = map[string]any{}
+		design["typography"] = typography
+	}
+	fontSize, _ := typography["font_size"].(map[string]any)
+	if fontSize == nil {
+		fontSize = map[string]any{}
+		typography["font_size"] = fontSize
+	}
+	body := fmt.Sprintf("%dpt", cfg.FontSize)
+	fontSize["body"] = body
+	fontSize["name"] = fmt.Sprintf("%dpt", cfg.FontSize*3)
+	fontSize["headline"] = body
+	fontSize["connections"] = body
 }
 
 // ApplyHardLimits enforces the count limits the model cannot be trusted with,
