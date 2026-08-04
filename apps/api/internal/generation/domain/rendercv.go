@@ -82,6 +82,22 @@ type TailoredProject struct {
 	Highlights []string `json:"highlights" jsonschema_description:"selected, rephrased highlights drawn only from THIS project's own master bullets"`
 }
 
+// TailoredSkillGroupAdd is a proposed new skill group the AI may suggest
+// when the job posting emphasizes a domain the user has tagged but hasn't
+// grouped. Details must be drawn from masterSkillTokens only.
+type TailoredSkillGroupAdd struct {
+	Label   string `json:"label" jsonschema_description:"name for the new skill group"`
+	Details string `json:"details" jsonschema_description:"comma-separated skills drawn ONLY from the master skill tokens"`
+}
+
+// SkillChange is a per-token add/remove within an existing skill group.
+type SkillChange struct {
+	GroupLabel     string  `json:"groupLabel" jsonschema_description:"the existing group label to modify"`
+	AddTokens      string  `json:"addTokens" jsonschema_description:"comma-separated tokens to add, drawn ONLY from master skill tokens"`
+	RemoveTokens   string  `json:"removeTokens" jsonschema_description:"comma-separated tokens to remove from this group"`
+	ReplaceDetails *string `json:"replaceDetails,omitempty" jsonschema_description:"full replacement details string; when set, AddTokens/RemoveTokens are ignored"`
+}
+
 // TailoredSections is the output of Step 2 (content selection). It carries
 // only the content fields the LLM may change — summary, skill details,
 // experience highlights and (only when a project limit is configured) project
@@ -93,6 +109,10 @@ type TailoredSections struct {
 	Skills     []TailoredSkillGroup `json:"skills" jsonschema_description:"one entry per master skill group, same indexes, vacancy-required skills first"`
 	Experience []TailoredExperience `json:"experience" jsonschema_description:"one entry per master experience entry, keyed by company"`
 	Projects   []TailoredProject    `json:"projects" jsonschema_description:"the most vacancy-relevant master projects, keyed by name; empty unless a project limit is configured"`
+
+	SkillGroupsToAdd    []TailoredSkillGroupAdd `json:"skillGroupsToAdd,omitempty" jsonschema_description:"new skill groups to propose adding, populated from master skill tokens"`
+	SkillGroupsToRemove []string                `json:"skillGroupsToRemove,omitempty" jsonschema_description:"existing group labels to propose removing"`
+	SkillChanges        []SkillChange           `json:"skillChanges,omitempty" jsonschema_description:"per-token add/remove within existing groups"`
 }
 
 var LevelRules = map[GroundingLevel]string{

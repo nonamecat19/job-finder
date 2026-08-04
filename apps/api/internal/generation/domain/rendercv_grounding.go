@@ -5,6 +5,99 @@ import (
 	"unicode"
 )
 
+// VerifyTailoredSectionsGrounding checks the LLM's TailoredSections payload
+// against the master before any merge. It enforces the tighter rules from
+// feature 020: SkillGroupsToAdd tokens must all be in masterSkillTokens;
+// SkillGroupsToRemove labels must exist in the master; SkillChanges.AddTokens
+// must be in masterSkillTokens; per-company Highlights whose LCS-matched set
+// doesn't cover the proposed bullets are rejected.
+func VerifyTailoredSectionsGrounding(master RendercvMaster, payload TailoredSections) []string {
+	var violations []string
+	allowed := masterSkillTokens(master)
+	sections := CvSections(master)
+
+	for _, add := range payload.SkillGroupsToAdd {
+		for _, t := range tokens(add.Details) {
+			if !allowed[t] {
+				violations = append(violations, `skill_group_add "`+add.Label+`" token "`+t+`" not in master skill tokens`)
+			}
+		}
+	}
+
+	masterGroupLabels := map[string]bool{}
+	for _, g := range AsSliceOfMaps(sections["skills"]) {
+		masterGroupLabels[norm(StringField(g, "label"))] = true
+	}
+	for _, label := range payload.SkillGroupsToRemove {
+		if !masterGroupLabels[norm(label)] {
+			violations = append(violations, `skill_group_remove "`+label+`" not in master skill groups`)
+		}
+	}
+
+	for _, sc := range payload.SkillChanges {
+		for _, t := range tokens(sc.AddTokens) {
+			if !allowed[t] {
+				violations = append(violations, `skill_change "`+sc.GroupLabel+`" add token "`+t+`" not in master skill tokens`)
+			}
+		}
+	}
+
+	masterCompanies := map[string][]string{}
+	for _, e := range AsSliceOfMaps(sections["experience"]) {
+		masterCompanies[norm(StringField(e, "company"))] = StringSliceField(e, "highlights")
+	}
+	for _, pe := range payload.Experience {
+		masterHighlights, ok := masterCompanies[norm(pe.Company)]
+		if !ok {
+			violations = append(violations, `experience "`+pe.Company+`" not in master`)
+			continue
+		}
+		for _, h := range pe.Highlights {
+			if !lcsCovered(h, masterHighlights) {
+				violations = append(violations, `experience "`+pe.Company+`" highlight not grounded in master: "`+truncateStr(h, 60)+`"`)
+			}
+		}
+	}
+
+	return violations
+}
+
+func lcsCovered(proposed string, masterBullets []string) bool {
+	proposedWords := wordSet(proposed)
+	for _, b := range masterBullets {
+		masterWords := wordSet(b)
+		overlap := 0
+		for w := range proposedWords {
+			if masterWords[w] {
+				overlap++
+			}
+		}
+		if overlap >= len(proposedWords)/2 {
+			return true
+		}
+	}
+	return len(proposedWords) == 0
+}
+
+func wordSet(s string) map[string]bool {
+	set := map[string]bool{}
+	for _, w := range strings.FieldsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	}) {
+		if n := norm(w); len(n) >= 3 {
+			set[n] = true
+		}
+	}
+	return set
+}
+
+func truncateStr(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}
+
 // verifyRendercvGrounding is the post-merge grounding check for the RenderCV
 // path. It verifies:
 // - No fabricated companies (experience entries must exist in master)
