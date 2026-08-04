@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/job-finder/api/internal/platform/llm/domain"
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/ollama"
@@ -263,5 +264,29 @@ func TestGatewayEmbedDelegatesToOllama(t *testing.T) {
 	}
 	if len(vec) != 2 {
 		t.Errorf("Embed() len = %d, want 2", len(vec))
+	}
+}
+
+// The regression this guards: an http.Client timeout is absolute and
+// overrides the caller's context, so a value below the proxy's worst-case
+// fallback chain truncates long tasks locally. Generation runs carrying a
+// 900s budget once died at exactly 120.0s under a 120s client cap while the
+// proxy was still working. gateway/config.yaml bounds its chain to
+// tiers x (1+num_retries) x request_timeout = 5 x 2 x 60 = 600s; this must
+// stay above that so the proxy is what times out first and the caller gets a
+// real upstream error instead of a local deadline.
+func TestClientTimeoutExceedsProxyWorstCaseChain(t *testing.T) {
+	const proxyWorstCase = 600 * time.Second
+
+	g, err := New("http://gateway.invalid", "key", nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if g.http.Timeout != safetyNetTimeout {
+		t.Fatalf("client timeout = %s, want the safety net %s", g.http.Timeout, safetyNetTimeout)
+	}
+	if safetyNetTimeout <= proxyWorstCase {
+		t.Fatalf("safetyNetTimeout %s must exceed the proxy's worst-case chain %s, "+
+			"or the app aborts mid-chain and reports a local deadline", safetyNetTimeout, proxyWorstCase)
 	}
 }

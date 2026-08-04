@@ -19,6 +19,21 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/shared"
 )
 
+// safetyNetTimeout is a backstop for a caller that supplies no deadline, not
+// the operating limit. The per-call budget belongs to the caller's context:
+// resume generation allows 15 minutes, fit analysis 5, and an http.Client
+// timeout is absolute — it overrides the context rather than deferring to it,
+// so a value below the caller's budget silently truncates every long task.
+//
+// A 120s cap here previously did exactly that: generation runs with a 900s
+// budget died at 120.0s reporting "Client.Timeout exceeded while awaiting
+// headers" while the proxy was still working. This value therefore sits above
+// the proxy's own worst-case chain (see request_timeout in
+// gateway/config.yaml, whose arithmetic is bounded to 600s) so the timeout
+// that fires first is always the proxy's — which returns a real upstream
+// error — and never this one, which can only report a local deadline.
+const safetyNetTimeout = 15 * time.Minute
+
 // Provider talks to a LiteLLM proxy. The proxy has no embeddings endpoint, so
 // Embed delegates to an injected Ollama provider (FR-006: embeddings always
 // stay on Ollama). Unlike the Cerebras adapter there is deliberately no
@@ -44,7 +59,7 @@ func New(baseURL, apiKey string, ollama domain.Provider) (*Provider, error) {
 		return nil, errors.New("gateway: apiKey is required")
 	}
 	return &Provider{
-		http:    &http.Client{Timeout: 120 * time.Second},
+		http:    &http.Client{Timeout: safetyNetTimeout},
 		baseURL: baseURL,
 		apiKey:  apiKey,
 		ollama:  ollama,
