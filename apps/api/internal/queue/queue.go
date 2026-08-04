@@ -86,10 +86,11 @@ type GhostScorePayload struct {
 
 // GeneratePayload mirrors GenerateJobData.
 type GeneratePayload struct {
-	JobID      string  `json:"jobId"`
-	Type       string  `json:"type"` // "resume" | "cover_letter"
-	ProfileID  *string `json:"profileId,omitempty"`
-	ActivityID *string `json:"activityId,omitempty"`
+	JobID             string    `json:"jobId"`
+	Type              string    `json:"type"` // "resume" | "cover_letter"
+	ProfileID         *string   `json:"profileId,omitempty"`
+	ActivityID        *string   `json:"activityId,omitempty"`
+	TailoringDraftID  *string   `json:"tailoringDraftId,omitempty"`
 }
 
 // RedisOpt parses a redis:// URL into asynq's client/server connection
