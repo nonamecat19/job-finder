@@ -58,18 +58,19 @@ func NewHtmlPdfRenderer(scrapingSvc *scraping.Service, outDir string) (*HtmlPdfR
 // {{if .Field}} in the template behaves like Handlebars' {{#if}} (falsy for
 // nil/empty), matching resume.hbs's conditionals field-for-field.
 type resumeView struct {
-	Name      string
-	Label     string
-	Email     string
-	Phone     string
-	URL       string
-	Location  string
-	Summary   string
-	Skills    []skillView
-	Work      []workView
-	Projects  []projectView
-	Education []eduView
-	Languages []langView
+	Name         string
+	Label        string
+	Email        string
+	Phone        string
+	URL          string
+	Location     string
+	Summary      string
+	Skills       []skillView
+	Work         []workView
+	Projects     []projectView
+	Education    []eduView
+	Languages    []langView
+	Certificates []certView
 }
 
 type skillView struct {
@@ -89,6 +90,9 @@ type eduView struct {
 }
 type langView struct {
 	Language, Fluency string
+}
+type certView struct {
+	Name, Issuer, Date, URL string
 }
 
 func deref(s *string) string {
@@ -139,6 +143,11 @@ func toResumeView(r dto.JsonResume) resumeView {
 	}
 	for _, l := range r.Languages {
 		v.Languages = append(v.Languages, langView{Language: deref(l.Language), Fluency: deref(l.Fluency)})
+	}
+	for _, c := range r.Certificates {
+		v.Certificates = append(v.Certificates, certView{
+			Name: deref(c.Name), Issuer: deref(c.Issuer), Date: deref(c.Date), URL: deref(c.URL),
+		})
 	}
 	return v
 }
