@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron/v3"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -76,7 +75,7 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		slog.Error("scheduler: reconcile unmatched jobs failed", "error", err)
 	}
 
-	cutoff := pgtype.Timestamp{Time: now.AddDate(0, 0, -7), Valid: true}
+	cutoff := dbutil.TimestampAt(now.AddDate(0, 0, -7))
 	if err := s.q.DeleteActivityRunsBefore(ctx, cutoff); err != nil {
 		slog.Error("scheduler: activity retention sweep failed", "error", err)
 	}

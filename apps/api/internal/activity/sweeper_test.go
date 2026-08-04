@@ -17,6 +17,7 @@ type fakeSweeperStore struct {
 	sweptReason    *string
 	sweptCutoff    time.Time
 	staleQueued    []sqlcgen.ActivityRun
+	queuedCutoff   time.Time
 	interruptedIDs []pgtype.UUID
 }
 
@@ -27,6 +28,7 @@ func (f *fakeSweeperStore) SweepStaleRunningActivityRuns(ctx context.Context, ar
 }
 
 func (f *fakeSweeperStore) ListStaleQueuedActivityRuns(ctx context.Context, cutoff pgtype.Timestamp) ([]sqlcgen.ActivityRun, error) {
+	f.queuedCutoff = cutoff.Time
 	return f.staleQueued, nil
 }
 
@@ -162,5 +164,26 @@ func TestSweeper_RunSweepsOnceImmediatelyThenStopsOnCtxDone(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("Run did not stop after ctx cancellation")
+	}
+}
+
+// Both cutoffs go into naive `timestamp` columns whose values are written by
+// a DB-side now() on a UTC server, so the wall clock sent must be UTC. Under
+// a local zone ahead of UTC an unconverted cutoff reads as a future wall
+// clock and sweeps every running row the instant it starts.
+func TestSweeper_CutoffsAreUTCWallClock(t *testing.T) {
+	store := &fakeSweeperStore{}
+	sweeper := NewSweeper(store, &fakeInspector{}, 2*time.Minute, time.Minute, 30*time.Minute)
+
+	sweeper.sweepOnce(context.Background())
+
+	nowUTC := time.Now().UTC()
+	for name, got := range map[string]time.Time{
+		"running": store.sweptCutoff,
+		"queued":  store.queuedCutoff,
+	} {
+		if got.After(nowUTC) {
+			t.Errorf("%s cutoff wall clock %v is ahead of UTC now %v — local time leaked into a naive timestamp", name, got, nowUTC)
+		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
+	"github.com/job-finder/api/internal/dbutil"
 )
 
 // Inspector is the subset of *asynq.Inspector the sweeper needs to confirm
@@ -86,7 +87,7 @@ func (s *Sweeper) sweepRunning(ctx context.Context) {
 	reason := fmt.Sprintf("interrupted: no worker heartbeat for at least %s", s.staleAfter)
 	rows, err := s.store.SweepStaleRunningActivityRuns(ctx, sqlcgen.SweepStaleRunningActivityRunsParams{
 		Reason: &reason,
-		Cutoff: pgtype.Timestamp{Time: cutoff, Valid: true},
+		Cutoff: dbutil.TimestampAt(cutoff),
 	})
 	if err != nil {
 		slog.Error("activity: sweep running failed", "error", err)
@@ -99,7 +100,7 @@ func (s *Sweeper) sweepRunning(ctx context.Context) {
 
 func (s *Sweeper) sweepQueued(ctx context.Context) {
 	cutoff := time.Now().Add(-s.queuedGrace)
-	rows, err := s.store.ListStaleQueuedActivityRuns(ctx, pgtype.Timestamp{Time: cutoff, Valid: true})
+	rows, err := s.store.ListStaleQueuedActivityRuns(ctx, dbutil.TimestampAt(cutoff))
 	if err != nil {
 		slog.Error("activity: list stale queued failed", "error", err)
 		return
