@@ -1,0 +1,81 @@
+Job Finder — Proprietary Source-Available License
+Copyright (c) 2026 Oleksandr Shumskyi. All rights reserved.
+
+This software and its source code (the "Software") are made publicly viewable
+for the purposes of transparency, evaluation, and security review only. The
+Software is NOT open source. No license to use, copy, modify, or distribute
+the Software is granted except as expressly stated below.
+
+1. PERMITTED USE
+
+   Subject to the restrictions in Section 2, you MAY:
+
+   (a) View, read, and study the source code;
+   (b) Create a temporary local copy solely for the purpose of reading the
+       source code or reporting a security vulnerability to the copyright
+       holder.
+
+2. RESTRICTIONS
+
+   You MAY NOT, without prior written permission from the copyright holder:
+
+   (a) Use the Software, in whole or in part, for any purpose other than the
+       reading described in Section 1, including any personal, internal,
+       educational, research, evaluation, or production use;
+   (b) Run, execute, deploy, host, or operate the Software or any service
+       derived from it, whether or not for a fee;
+   (c) Copy, publish, redistribute, sublicense, sell, rent, or lease the
+       Software or any portion of it;
+   (d) Create derivative works, modifications, ports, or forks of the
+       Software, including forks created through source code hosting
+       platforms;
+   (e) Incorporate any portion of the Software, including source code,
+       algorithms, prompts, schemas, database migrations, or configuration,
+       into any other software or service;
+   (f) Use the Software to train, fine-tune, evaluate, or otherwise develop
+       any machine learning or artificial intelligence model or dataset;
+   (g) Remove, obscure, or alter any copyright, trademark, or license notice.
+
+3. NO CONTRIBUTIONS
+
+   This project does not accept external contributions. Any code, patch,
+   suggestion, or other material submitted to the copyright holder in
+   connection with the Software is submitted voluntarily and irrevocably
+   assigned to the copyright holder, who may use it for any purpose without
+   restriction, attribution, or compensation. Do not submit material you are
+   not entitled to assign.
+
+4. THIRD-PARTY COMPONENTS
+
+   The Software incorporates third-party open source components, each of
+   which remains subject to its own license. Those licenses govern the
+   corresponding components and are not superseded by this License. See the
+   NOTICE file, where provided, for details.
+
+5. TRADEMARKS
+
+   This License grants no rights to the names, logos, or trademarks of the
+   copyright holder.
+
+6. TERMINATION
+
+   Any use of the Software in breach of this License terminates the rights
+   granted in Section 1 immediately and automatically.
+
+7. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+8. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES,
+   OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+   ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+   OTHER DEALINGS IN THE SOFTWARE.
+
+9. COMMERCIAL LICENSING
+
+   Licenses for use, deployment, or integration are available on request.
+   Contact: shumsky.alexander.work@gmail.com
