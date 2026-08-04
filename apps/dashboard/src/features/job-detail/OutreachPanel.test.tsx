@@ -186,4 +186,22 @@ describe('OutreachPanel', () => {
     render(<OutreachPanel jobId="job-1" />);
     expect(screen.getByText('LLM unavailable')).toBeInTheDocument();
   });
+
+  it('renders empty state when contacts loaded but none resolved', () => {
+    setupContacts([]);
+    setupTones();
+    setupGenerate();
+
+    render(<OutreachPanel jobId="job-1" />);
+    expect(screen.getByText(/No resolved contact/)).toBeInTheDocument();
+  });
+
+  it('renders loading spinner while generating draft', () => {
+    setupContacts([]);
+    setupTones();
+    setupGenerate({ isPending: true });
+
+    render(<OutreachPanel jobId="job-1" />);
+    expect(screen.getByText(/drafting outreach message/)).toBeInTheDocument();
+  });
 });

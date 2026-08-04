@@ -126,6 +126,31 @@ describe('StatusPage backlog panel (019-ai-job-throughput US4)', () => {
     vi.mocked(useActivity).mockReturnValue({ data: { active: [], recent: [] }, isLoading: false, error: null } as any);
   });
 
+  it('renders loading skeleton while activity is loading', () => {
+    vi.mocked(useActivity).mockReturnValue({ data: undefined, isLoading: true, error: null } as any);
+    vi.mocked(useQueueBacklog).mockReturnValue({ data: undefined, isLoading: false, error: null } as any);
+
+    renderStatusPage();
+    expect(screen.getByText('loading activity…')).toBeInTheDocument();
+  });
+
+  it('renders error state when activity fails', () => {
+    vi.mocked(useActivity).mockReturnValue({ data: undefined, isLoading: false, error: new Error('network down') } as any);
+    vi.mocked(useQueueBacklog).mockReturnValue({ data: undefined, isLoading: false, error: null } as any);
+
+    renderStatusPage();
+    expect(screen.getByText('network down')).toBeInTheDocument();
+  });
+
+  it('renders empty state when no active or recent activity', () => {
+    vi.mocked(useActivity).mockReturnValue({ data: { active: [], recent: [] }, isLoading: false, error: null } as any);
+    vi.mocked(useQueueBacklog).mockReturnValue({ data: undefined, isLoading: false, error: null } as any);
+
+    renderStatusPage();
+    expect(screen.getByText('Nothing running.')).toBeInTheDocument();
+    expect(screen.getByText('No activity yet.')).toBeInTheDocument();
+  });
+
   it('renders per-queue pending/active, concurrency, provider class, and ETA', () => {
     vi.mocked(useQueueBacklog).mockReturnValue({
       data: {
