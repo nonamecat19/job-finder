@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -703,6 +705,82 @@ func (s *Service) GetDocumentPdfPath(ctx context.Context, id string) (*string, e
 		return nil, err
 	}
 	return row.PdfPath, nil
+}
+
+// GetDocumentDownload returns a document's rendered PDF path along with the
+// name it should be offered under. On-disk names encode company, title,
+// version and a timestamp because the render loop needs them unique across
+// candidate renders; the download name is the one a human files away, so a
+// résumé is served as CV_Name_Surname.pdf from the profile's own name.
+//
+// The name is cosmetic: any failure to resolve it falls back to the on-disk
+// base name rather than failing the download.
+func (s *Service) GetDocumentDownload(ctx context.Context, id string) (path *string, filename string, err error) {
+	row, err := s.GetDocument(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+	if row.PdfPath == nil {
+		return nil, "", nil
+	}
+	filename = filepath.Base(*row.PdfPath)
+	if row.Type != string(dto.DocumentTypeResume) {
+		return row.PdfPath, filename, nil
+	}
+	if named := s.resumeDownloadName(ctx); named != "" {
+		filename = named
+	}
+	return row.PdfPath, filename, nil
+}
+
+// resumeDownloadName builds "CV_Name_Surname.pdf" from the default profile's
+// cv.name. It returns "" when the profile, its config or the name is missing —
+// every one of those is a fall-back-to-disk-name case, not an error.
+func (s *Service) resumeDownloadName(ctx context.Context) string {
+	prof, err := s.profiles.GetDefault(ctx)
+	if err != nil || prof.RendercvConfig == nil {
+		return ""
+	}
+	master, err := domain.MasterFromProfile(prof)
+	if err != nil {
+		return ""
+	}
+	cv, _ := master["cv"].(map[string]any)
+	if cv == nil {
+		return ""
+	}
+	name, _ := cv["name"].(string)
+	slug := downloadNameSlug(name)
+	if slug == "" {
+		return ""
+	}
+	return "CV_" + slug + ".pdf"
+}
+
+// downloadNameSlug turns a person's name into a filename-safe fragment,
+// preserving case (unlike sanitize, which is for on-disk base names): runs of
+// anything that isn't a letter or digit collapse to a single underscore, and
+// leading/trailing underscores are trimmed. "Ada  Lovelace-King" becomes
+// "Ada_Lovelace_King".
+//
+// Letters are judged by Unicode class, not ASCII: a Cyrillic or accented name
+// must keep its own spelling here. The header writer is what deals with
+// non-ASCII bytes (see downloadDisposition).
+func downloadNameSlug(name string) string {
+	var b strings.Builder
+	pendingSep := false
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if pendingSep && b.Len() > 0 {
+				b.WriteByte('_')
+			}
+			pendingSep = false
+			b.WriteRune(r)
+			continue
+		}
+		pendingSep = true
+	}
+	return b.String()
 }
 
 func (s *Service) UpdateDocument(ctx context.Context, id, text string) (dto.GeneratedDocumentDto, error) {

@@ -3,8 +3,10 @@ package http
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -19,7 +21,7 @@ type DocumentGenerator interface {
 	ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocumentDto, error)
 	GetDocumentDto(ctx context.Context, id string) (dto.GeneratedDocumentDto, error)
 	UpdateDocument(ctx context.Context, id, text string) (dto.GeneratedDocumentDto, error)
-	GetDocumentPdfPath(ctx context.Context, id string) (*string, error)
+	GetDocumentDownload(ctx context.Context, id string) (path *string, filename string, err error)
 }
 
 // DocumentsHandler wires /api/documents, mirroring documents.controller.ts.
@@ -119,9 +121,33 @@ func (h *DocumentsHandler) update(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
+// downloadDisposition builds the Content-Disposition value for a PDF.
+// filename= carries only ASCII, since anything else is undefined there; a name
+// with non-ASCII characters (a Cyrillic or accented surname) additionally gets
+// an RFC 5987 filename*, which every current browser prefers. When stripping
+// leaves nothing usable, the ASCII parameter degrades to a generic name rather
+// than an empty one, and filename* still carries the real spelling.
+func downloadDisposition(filename string) string {
+	var ascii strings.Builder
+	for _, r := range filename {
+		if r < 0x80 && r != '"' && r != '\\' && r >= 0x20 {
+			ascii.WriteRune(r)
+		}
+	}
+	fallback := strings.Trim(ascii.String(), "_")
+	if fallback == "" || fallback == ".pdf" {
+		fallback = "document.pdf"
+	}
+	disposition := `attachment; filename="` + fallback + `"`
+	if fallback != filename {
+		disposition += `; filename*=UTF-8''` + url.PathEscape(filename)
+	}
+	return disposition
+}
+
 func (h *DocumentsHandler) pdf(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	pdfPath, err := h.Generation.GetDocumentPdfPath(r.Context(), id)
+	pdfPath, filename, err := h.Generation.GetDocumentDownload(r.Context(), id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, err.Error())
 		return
@@ -134,7 +160,10 @@ func (h *DocumentsHandler) pdf(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "PDF not rendered yet")
 		return
 	}
+	if filename == "" {
+		filename = filepath.Base(*pdfPath)
+	}
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(*pdfPath)+`"`)
+	w.Header().Set("Content-Disposition", downloadDisposition(filename))
 	http.ServeFile(w, r, *pdfPath)
 }
