@@ -58,12 +58,21 @@ export function useMarkJobApplied(jobId: string | undefined) {
   return useMutation({
     mutationFn: async () => {
       const job = await api.jobs.get(jobId!);
-      if (job.application) return api.applications.update(job.application.id, { status: 'applied' });
+      if (job.application) {
+        if (job.application.status === 'applied') return job.application;
+        return api.applications.update(job.application.id, { status: 'applied' });
+      }
       await api.jobs.shortlist(jobId!);
       const nextJob = await api.jobs.get(jobId!);
       return api.applications.update(nextJob.application!.id, { status: 'applied' });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) });
+      emitToast({ variant: 'success', title: 'Marked as applied' });
+    },
+    onError: (err) => {
+      emitToast({ variant: 'error', title: 'Failed to mark as applied', description: toErrorMessage(err) });
+    },
   });
 }
 
