@@ -7,7 +7,7 @@ SELECT * FROM "Application" WHERE "jobId" = $1;
 -- name: UpsertApplicationStatus :exec
 INSERT INTO "Application" ("jobId", "status", "events")
 VALUES ($1, $2, $3)
-ON CONFLICT ("jobId") DO UPDATE SET "status" = EXCLUDED."status";
+ON CONFLICT ("jobId") DO UPDATE SET "status" = EXCLUDED."status", "events" = EXCLUDED."events";
 
 -- name: UpdateApplication :one
 UPDATE "Application" SET

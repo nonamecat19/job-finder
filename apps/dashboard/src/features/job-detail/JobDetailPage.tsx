@@ -255,6 +255,7 @@ function statusLabel(s: string): string {
     shortlisted: 'Shortlisted',
     hidden: 'Hidden',
     docs_generated: 'Docs ready',
+    applied: 'Applied',
   };
   return labels[s] ?? s;
 }

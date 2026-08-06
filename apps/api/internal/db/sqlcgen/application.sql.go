@@ -262,7 +262,7 @@ func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationPa
 const upsertApplicationStatus = `-- name: UpsertApplicationStatus :exec
 INSERT INTO "Application" ("jobId", "status", "events")
 VALUES ($1, $2, $3)
-ON CONFLICT ("jobId") DO UPDATE SET "status" = EXCLUDED."status"
+ON CONFLICT ("jobId") DO UPDATE SET "status" = EXCLUDED."status", "events" = EXCLUDED."events"
 `
 
 type UpsertApplicationStatusParams struct {
