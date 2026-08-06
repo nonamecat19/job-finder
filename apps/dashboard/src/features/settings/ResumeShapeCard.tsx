@@ -73,7 +73,7 @@ const RANGE_FIELDS: {
     maxKey: 'experienceBulletsMax',
     label: 'Bullets per job',
     min: 1,
-    max: 10,
+    max: 20,
     description:
       'Target range per experience entry. A job with fewer available bullets keeps what it has — nothing is invented; extras beyond the cap are dropped.',
   },

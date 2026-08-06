@@ -121,8 +121,8 @@ func (c ShapeConfig) Validate() error {
 	}{
 		{"summaryLines", c.SummaryLines, 1, 12},
 		{"skillsMaxGroups", c.SkillsMaxGroups, 0, 20},
-		{"experienceBulletsMin", c.ExperienceBulletsMin, 1, 10},
-		{"experienceBulletsMax", c.ExperienceBulletsMax, 1, 10},
+		{"experienceBulletsMin", c.ExperienceBulletsMin, 1, 20},
+		{"experienceBulletsMax", c.ExperienceBulletsMax, 1, 20},
 		{"targetPages", c.TargetPages, 1, 3},
 		{"projectsMin", c.ProjectsMin, 0, 20},
 		{"projectsMax", c.ProjectsMax, 0, 20},

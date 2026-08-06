@@ -34,6 +34,8 @@ function filtersFromParams(params: URLSearchParams): FeedFilters {
     remote: params.get('remote') === 'true' ? true : undefined,
     q: params.get('q') ?? undefined,
     showBelowFloor: params.get('showBelowFloor') === 'true' ? true : undefined,
+    includeHidden: params.get('includeHidden') === 'true' ? true : undefined,
+    includeApplied: params.get('includeApplied') === 'true' ? true : undefined,
   };
 }
 
@@ -173,13 +175,29 @@ export default function FeedPage() {
             remote
           </label>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-sm font-medium text-muted">
-          <Checkbox
-            checked={!filters.showBelowFloor}
-            onChange={(e) => set({ showBelowFloor: e.target.checked ? undefined : true })}
-          />
-          hide below-floor jobs
-        </label>
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-muted">
+            <Checkbox
+              checked={!filters.showBelowFloor}
+              onChange={(e) => set({ showBelowFloor: e.target.checked ? undefined : true })}
+            />
+            hide below-floor jobs
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium text-muted">
+            <Checkbox
+              checked={!filters.includeApplied}
+              onChange={(e) => set({ includeApplied: e.target.checked ? undefined : true })}
+            />
+            show unapplied
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium text-muted">
+            <Checkbox
+              checked={!filters.includeHidden}
+              onChange={(e) => set({ includeHidden: e.target.checked ? undefined : true })}
+            />
+            hide non-fit
+          </label>
+        </div>
         </Surface>
       </div>
 

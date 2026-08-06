@@ -26,6 +26,8 @@ export default tseslint.config(
       "**/node_modules/**",
       "packages/shared/src/generated.ts",
       "apps/api/**",
+      "apps/dashboard/.ds-sync/**",
+      "apps/dashboard/ds-bundle/**",
     ],
   },
   js.configs.recommended,

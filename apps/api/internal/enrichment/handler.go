@@ -542,6 +542,40 @@ func (h *Handler) enqueueSalaryInfer(ctx context.Context, jobID string) {
 	}
 }
 
+// RescrapeOne re-triggers detail scraping for a single job (dashboard
+// "Rescrape vacancy"): clears detailScrapedAt so it re-qualifies as
+// needing detail, then enqueues the same enrich task EnqueueBackfill uses.
+func (h *Handler) RescrapeOne(ctx context.Context, jobID string) error {
+	uid, err := dbutil.ParseUUID(jobID)
+	if err != nil {
+		return err
+	}
+	job, err := h.q.GetJobByID(ctx, uid)
+	if err != nil {
+		return err
+	}
+	if err := h.q.ClearJobDetailScrapedAt(ctx, uid); err != nil {
+		return err
+	}
+
+	var actID *string
+	enrichRec := activity.New(ctx, h.q, "enrich", fmt.Sprintf("%s — %s", job.Company, job.Title), &jobID, &job.SourceKey, "")
+	if enrichRec != nil {
+		idStr := dbutil.UUIDString(enrichRec.ID())
+		actID = &idStr
+	}
+
+	payload, err := json.Marshal(queue.EnrichPayload{JobID: jobID, ActivityID: actID})
+	if err != nil {
+		return err
+	}
+	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload),
+		asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)); err != nil {
+		return fmt.Errorf("enrichment: enqueue rescrape: %w", err)
+	}
+	return nil
+}
+
 func (h *Handler) EnqueueBackfill(ctx context.Context, sourceKey string, limit int32) (int, error) {
 	jobs, err := h.q.ListJobsNeedingDetail(ctx, sqlcgen.ListJobsNeedingDetailParams{SourceKey: sourceKey, Limit: limit})
 	if err != nil {

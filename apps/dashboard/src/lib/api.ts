@@ -73,6 +73,9 @@ export interface JobFilters {
   // showBelowFloor reveals jobs below SALARY_FLOOR_USD (spec 006 US2); the
   // API defaults to hiding them, so this is only sent when toggled on.
   showBelowFloor?: boolean;
+  // The API excludes hidden/applied jobs by default; these opt back in.
+  includeHidden?: boolean;
+  includeApplied?: boolean;
 }
 
 export const api = {

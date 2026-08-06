@@ -652,8 +652,6 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	jobsHandler := &jobshttp.JobsHandler{Jobs: matchingH.Jobs, Generation: generationH.Generation}
-
 	retrievalSvc, err := composeRetrieval(p)
 	if err != nil {
 		return nil, err
@@ -661,6 +659,8 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 
 	enrichHandler := composeEnrichment(p, sources, retrievalSvc)
 	ingestionH.Sources.Enrichment = enrichHandler
+
+	jobsHandler := &jobshttp.JobsHandler{Jobs: matchingH.Jobs, Generation: generationH.Generation, Enrichment: enrichHandler}
 
 	salaryH := composeSalary(ctx, p, llmH.DefaultRouter)
 

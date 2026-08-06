@@ -20,21 +20,25 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
   AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
     ($3::text IS NOT NULL AND j."status" = $3)
-    OR ($3::text IS NULL AND j."status" != 'hidden')
+    OR (
+      $3::text IS NULL
+      AND (COALESCE($4::bool, false) OR j."status" != 'hidden')
+      AND (COALESCE($5::bool, false) OR j."status" != 'applied')
+    )
   )
-  AND ($4::bool IS NULL OR j."remote" = $4)
+  AND ($6::bool IS NULL OR j."remote" = $6)
   AND (
-    $5::text IS NULL
-    OR j."title" ILIKE $5
-    OR j."company" ILIKE $5
-    OR j."description" ILIKE $5
+    $7::text IS NULL
+    OR j."title" ILIKE $7
+    OR j."company" ILIKE $7
+    OR j."description" ILIKE $7
   )
-  AND ($6::int IS NULL OR mr."score" >= $6)
+  AND ($8::int IS NULL OR mr."score" >= $8)
   AND (
-    $7::int IS NULL
+    $9::int IS NULL
     OR j."salaryMax" IS NULL
     OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $7
+    OR j."salaryMax" >= $9
   )
 `
 
@@ -42,6 +46,8 @@ type CountJobsParams struct {
 	Source         *string     `json:"source"`
 	SubscriptionID pgtype.UUID `json:"subscription_id"`
 	Status         *string     `json:"status"`
+	IncludeHidden  *bool       `json:"include_hidden"`
+	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
 	MinScore       *int32      `json:"min_score"`
@@ -53,6 +59,8 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 		arg.Source,
 		arg.SubscriptionID,
 		arg.Status,
+		arg.IncludeHidden,
+		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
@@ -110,31 +118,37 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
   AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
     ($3::text IS NOT NULL AND j."status" = $3)
-    OR ($3::text IS NULL AND j."status" != 'hidden')
+    OR (
+      $3::text IS NULL
+      AND (COALESCE($4::bool, false) OR j."status" != 'hidden')
+      AND (COALESCE($5::bool, false) OR j."status" != 'applied')
+    )
   )
-  AND ($4::bool IS NULL OR j."remote" = $4)
+  AND ($6::bool IS NULL OR j."remote" = $6)
   AND (
-    $5::text IS NULL
-    OR j."title" ILIKE $5
-    OR j."company" ILIKE $5
-    OR j."description" ILIKE $5
+    $7::text IS NULL
+    OR j."title" ILIKE $7
+    OR j."company" ILIKE $7
+    OR j."description" ILIKE $7
   )
-  AND ($6::int IS NULL OR mr."score" >= $6)
+  AND ($8::int IS NULL OR mr."score" >= $8)
   AND (
-    $7::int IS NULL
+    $9::int IS NULL
     OR j."salaryMax" IS NULL
     OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $7
+    OR j."salaryMax" >= $9
   )
 ORDER BY j."ingestedAt" DESC
-OFFSET $8
-LIMIT $9
+OFFSET $10
+LIMIT $11
 `
 
 type ListJobsByDateParams struct {
 	Source         *string     `json:"source"`
 	SubscriptionID pgtype.UUID `json:"subscription_id"`
 	Status         *string     `json:"status"`
+	IncludeHidden  *bool       `json:"include_hidden"`
+	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
 	MinScore       *int32      `json:"min_score"`
@@ -194,6 +208,8 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 		arg.Source,
 		arg.SubscriptionID,
 		arg.Status,
+		arg.IncludeHidden,
+		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
@@ -274,31 +290,37 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
   AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
     ($3::text IS NOT NULL AND j."status" = $3)
-    OR ($3::text IS NULL AND j."status" != 'hidden')
+    OR (
+      $3::text IS NULL
+      AND (COALESCE($4::bool, false) OR j."status" != 'hidden')
+      AND (COALESCE($5::bool, false) OR j."status" != 'applied')
+    )
   )
-  AND ($4::bool IS NULL OR j."remote" = $4)
+  AND ($6::bool IS NULL OR j."remote" = $6)
   AND (
-    $5::text IS NULL
-    OR j."title" ILIKE $5
-    OR j."company" ILIKE $5
-    OR j."description" ILIKE $5
+    $7::text IS NULL
+    OR j."title" ILIKE $7
+    OR j."company" ILIKE $7
+    OR j."description" ILIKE $7
   )
-  AND ($6::int IS NULL OR mr."score" >= $6)
+  AND ($8::int IS NULL OR mr."score" >= $8)
   AND (
-    $7::int IS NULL
+    $9::int IS NULL
     OR j."salaryMax" IS NULL
     OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $7
+    OR j."salaryMax" >= $9
   )
 ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
-OFFSET $8
-LIMIT $9
+OFFSET $10
+LIMIT $11
 `
 
 type ListJobsByScoreParams struct {
 	Source         *string     `json:"source"`
 	SubscriptionID pgtype.UUID `json:"subscription_id"`
 	Status         *string     `json:"status"`
+	IncludeHidden  *bool       `json:"include_hidden"`
+	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
 	MinScore       *int32      `json:"min_score"`
@@ -358,6 +380,8 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 		arg.Source,
 		arg.SubscriptionID,
 		arg.Status,
+		arg.IncludeHidden,
+		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
