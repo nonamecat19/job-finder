@@ -283,6 +283,25 @@ func (s *Service) Hide(ctx context.Context, id string) (dto.JobDto, error) {
 	return out, nil
 }
 
+// Unhide reverses Hide, restoring a job marked "not fit" back to its default
+// unreviewed state.
+func (s *Service) Unhide(ctx context.Context, id string) (dto.JobDto, error) {
+	uid, err := dbutil.ParseUUID(id)
+	if err != nil {
+		return dto.JobDto{}, err
+	}
+	if _, err := s.Get(ctx, id); err != nil {
+		return dto.JobDto{}, err
+	}
+	updated, err := s.q.UpdateJobStatus(ctx, sqlcgen.UpdateJobStatusParams{ID: uid, Status: "found"})
+	if err != nil {
+		return dto.JobDto{}, err
+	}
+	out := jobToDto(updated)
+	s.markBelowFloor(&out)
+	return out, nil
+}
+
 // DeleteAll wipes every job (and, via ON DELETE cascade, its applications,
 // documents, match results, and activity). Returns the number of jobs removed.
 func (s *Service) DeleteAll(ctx context.Context) (int64, error) {
@@ -389,15 +408,15 @@ func jobToDto(j sqlcgen.Job) dto.JobDto {
 		PostedAt: dbutil.TimestampPtr(j.PostedAt), IngestedAt: dbutil.Timestamp(j.IngestedAt), Status: j.Status,
 		SalaryMin: int32PtrToIntPtr(j.SalaryMin), SalaryMax: int32PtrToIntPtr(j.SalaryMax),
 		SalaryCurrency: j.SalaryCurrency, SalaryConfidence: j.SalaryConfidence, SalarySource: j.SalarySource,
-		SubscriptionID: dbutil.UUIDStringPtr(j.SubscriptionId),
-		ExperienceLevel:       j.ExperienceLevel,
-		ExperienceMinYears:    int32PtrToIntPtr(j.ExperienceMinYears),
-		EnglishLevel:          j.EnglishLevel,
-		SalaryEstimateRaw:     j.SalaryEstimateRaw,
-		SalaryEstimateMin:     int32PtrToIntPtr(j.SalaryEstimateMin),
-		SalaryEstimateMax:     int32PtrToIntPtr(j.SalaryEstimateMax),
+		SubscriptionID:         dbutil.UUIDStringPtr(j.SubscriptionId),
+		ExperienceLevel:        j.ExperienceLevel,
+		ExperienceMinYears:     int32PtrToIntPtr(j.ExperienceMinYears),
+		EnglishLevel:           j.EnglishLevel,
+		SalaryEstimateRaw:      j.SalaryEstimateRaw,
+		SalaryEstimateMin:      int32PtrToIntPtr(j.SalaryEstimateMin),
+		SalaryEstimateMax:      int32PtrToIntPtr(j.SalaryEstimateMax),
 		SalaryEstimateCurrency: j.SalaryEstimateCurrency,
-		SalaryIsEstimated:     j.SalaryEstimateMin != nil || j.SalaryEstimateMax != nil,
+		SalaryIsEstimated:      j.SalaryEstimateMin != nil || j.SalaryEstimateMax != nil,
 	}
 	var rawFields struct {
 		DetailHTML *string `json:"detailHtml"`

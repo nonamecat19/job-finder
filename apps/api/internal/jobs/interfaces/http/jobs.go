@@ -18,6 +18,7 @@ type JobsProvider interface {
 	Get(ctx context.Context, id string) (dto.JobDto, error)
 	Shortlist(ctx context.Context, id string) (dto.JobDto, error)
 	Hide(ctx context.Context, id string) (dto.JobDto, error)
+	Unhide(ctx context.Context, id string) (dto.JobDto, error)
 	DeleteAll(ctx context.Context) (int64, error)
 	EnqueueGeneration(ctx context.Context, id, docType string, profileID *string) (map[string]any, error)
 }
@@ -46,6 +47,7 @@ func (h *JobsHandler) Mount(r chi.Router) {
 	r.Get("/jobs/{id}", h.get)
 	r.Post("/jobs/{id}/shortlist", h.shortlist)
 	r.Post("/jobs/{id}/hide", h.hide)
+	r.Post("/jobs/{id}/unhide", h.unhide)
 	r.Post("/jobs/{id}/generate", h.generate)
 	r.Get("/jobs/{id}/documents", h.documents)
 	r.Get("/jobs/{id}/documents/status", h.documentStatuses)
@@ -132,6 +134,16 @@ func (h *JobsHandler) shortlist(w http.ResponseWriter, r *http.Request) {
 func (h *JobsHandler) hide(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Jobs.Hide(r.Context(), id)
+	if err != nil {
+		httpx.WriteError(w, http.StatusNotFound, "job not found: "+id)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *JobsHandler) unhide(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	out, err := h.Jobs.Unhide(r.Context(), id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "job not found: "+id)
 		return

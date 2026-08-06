@@ -76,6 +76,54 @@ export function useMarkJobApplied(jobId: string | undefined) {
   });
 }
 
+export function useUnmarkJobApplied(jobId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const job = await api.jobs.get(jobId!);
+      return api.applications.update(job.application!.id, { status: 'shortlisted' });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) });
+      emitToast({ variant: 'success', title: 'Unmarked as applied' });
+    },
+    onError: (err) => {
+      emitToast({ variant: 'error', title: 'Failed to unmark as applied', description: toErrorMessage(err) });
+    },
+  });
+}
+
+export function useMarkJobNotFit(jobId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.jobs.hide(jobId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) });
+      emitToast({ variant: 'success', title: 'Marked as not fit' });
+    },
+    onError: (err) => {
+      emitToast({ variant: 'error', title: 'Failed to mark as not fit', description: toErrorMessage(err) });
+    },
+  });
+}
+
+export function useUndoJobNotFit(jobId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.jobs.unhide(jobId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) });
+      emitToast({ variant: 'success', title: 'Undid not fit' });
+    },
+    onError: (err) => {
+      emitToast({ variant: 'error', title: 'Failed to undo not fit', description: toErrorMessage(err) });
+    },
+  });
+}
+
 export function useInterviewPrep(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.jobs.interviewPrep(id),

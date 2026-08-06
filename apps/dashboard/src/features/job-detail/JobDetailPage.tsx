@@ -14,8 +14,11 @@ import {
   useJobDocuments,
   useJobDocumentStatuses,
   useMarkJobApplied,
+  useMarkJobNotFit,
   useReenrichJob,
   useSaveDocument,
+  useUndoJobNotFit,
+  useUnmarkJobApplied,
 } from './hooks';
 import CoachPanel from './CoachPanel';
 import CompanyIntelCard from './CompanyIntelCard';
@@ -61,6 +64,9 @@ export default function JobDetailPage() {
     return resumes.length ? resumes.reduce((a, b) => (b.version > a.version ? b : a)) : null;
   }, [documents]);
   const markApplied = useMarkJobApplied(id);
+  const unmarkApplied = useUnmarkJobApplied(id);
+  const markNotFit = useMarkJobNotFit(id);
+  const undoNotFit = useUndoJobNotFit(id);
   const saveLetter = useSaveDocument(id, () => setEditingDoc(null));
   const reenrich = useReenrichJob(id);
   const [resumeOpen, setResumeOpen] = useState(false);
@@ -111,9 +117,28 @@ export default function JobDetailPage() {
                 open posting <ExternalLink className="h-4 w-4" aria-hidden="true" />
               </Button>
             </a>
-            <Button onClick={() => markApplied.mutate()} disabled={markApplied.isPending}>
-              mark applied
-            </Button>
+            {job.status === 'hidden' ? (
+              <Button variant="secondary" onClick={() => undoNotFit.mutate()} disabled={undoNotFit.isPending}>
+                undo not fit
+              </Button>
+            ) : job.application?.status === 'applied' ? (
+              <Button
+                variant="secondary"
+                onClick={() => unmarkApplied.mutate()}
+                disabled={unmarkApplied.isPending}
+              >
+                unapply
+              </Button>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => markNotFit.mutate()} disabled={markNotFit.isPending}>
+                  not fit
+                </Button>
+                <Button onClick={() => markApplied.mutate()} disabled={markApplied.isPending}>
+                  mark applied
+                </Button>
+              </>
+            )}
           </>
         }
       />
@@ -252,8 +277,9 @@ export default function JobDetailPage() {
 function statusLabel(s: string): string {
   const labels: Record<string, string> = {
     new: 'New',
+    found: 'New',
     shortlisted: 'Shortlisted',
-    hidden: 'Hidden',
+    hidden: 'Not fit',
     docs_generated: 'Docs ready',
     applied: 'Applied',
   };
