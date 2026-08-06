@@ -30,6 +30,10 @@ func (f *fakeJobsProvider) Hide(ctx context.Context, id string) (dto.JobDto, err
 	return dto.JobDto{ID: id, Status: "hidden"}, nil
 }
 
+func (f *fakeJobsProvider) Unhide(ctx context.Context, id string) (dto.JobDto, error) {
+	return dto.JobDto{ID: id, Status: "found"}, nil
+}
+
 func (f *fakeJobsProvider) DeleteAll(ctx context.Context) (int64, error) {
 	n := int64(len(f.jobs))
 	f.jobs = nil

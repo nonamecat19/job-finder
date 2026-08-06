@@ -91,6 +91,7 @@ export const api = {
     clear: () => request<{ deleted: number }>(`/jobs`, { method: 'DELETE' }),
     shortlist: (id: string) => request(`/jobs/${id}/shortlist`, { method: 'POST' }),
     hide: (id: string) => request(`/jobs/${id}/hide`, { method: 'POST' }),
+    unhide: (id: string) => request(`/jobs/${id}/unhide`, { method: 'POST' }),
     generate: (id: string, type: DocumentType) =>
       request(`/jobs/${id}/generate`, { method: 'POST', body: JSON.stringify({ type }) }),
     documents: (id: string) => request<GeneratedDocumentDto[]>(`/jobs/${id}/documents`),
