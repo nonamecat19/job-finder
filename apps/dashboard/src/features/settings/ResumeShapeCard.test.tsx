@@ -55,7 +55,7 @@ describe('ResumeShapeCard', () => {
     // Every value is visible in this single place, each with its range.
     expect(screen.getByText('Summary sentences (1-12)')).toBeInTheDocument()
     expect(screen.getByText('Max skill groups (0-20)')).toBeInTheDocument()
-    expect(screen.getByText('Bullets per job (1-10)')).toBeInTheDocument()
+    expect(screen.getByText('Bullets per job (1-20)')).toBeInTheDocument()
     expect(screen.getByText('Target pages (1-3)')).toBeInTheDocument()
     expect(screen.getByText('Projects (0-10)')).toBeInTheDocument()
     expect(screen.getByText('Max bullets per project (0-10)')).toBeInTheDocument()

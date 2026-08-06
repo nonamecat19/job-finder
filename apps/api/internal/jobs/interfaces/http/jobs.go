@@ -73,6 +73,12 @@ func (h *JobsHandler) list(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("status"); v != "" {
 		params.Status = &v
 	}
+	if v := q.Get("includeHidden"); v != "" {
+		params.IncludeHidden = v == "true"
+	}
+	if v := q.Get("includeApplied"); v != "" {
+		params.IncludeApplied = v == "true"
+	}
 	if v := q.Get("remote"); v != "" {
 		b := v == "true"
 		params.Remote = &b

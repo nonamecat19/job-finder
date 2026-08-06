@@ -9,7 +9,11 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
-    OR (sqlc.narg('status')::text IS NULL AND j."status" != 'hidden')
+    OR (
+      sqlc.narg('status')::text IS NULL
+      AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
+      AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+    )
   )
   AND (sqlc.narg('remote')::bool IS NULL OR j."remote" = sqlc.narg('remote'))
   AND (
@@ -40,7 +44,11 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
-    OR (sqlc.narg('status')::text IS NULL AND j."status" != 'hidden')
+    OR (
+      sqlc.narg('status')::text IS NULL
+      AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
+      AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+    )
   )
   AND (sqlc.narg('remote')::bool IS NULL OR j."remote" = sqlc.narg('remote'))
   AND (
@@ -68,7 +76,11 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
-    OR (sqlc.narg('status')::text IS NULL AND j."status" != 'hidden')
+    OR (
+      sqlc.narg('status')::text IS NULL
+      AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
+      AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+    )
   )
   AND (sqlc.narg('remote')::bool IS NULL OR j."remote" = sqlc.narg('remote'))
   AND (

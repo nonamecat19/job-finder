@@ -214,16 +214,16 @@ func TestShapeConfigValidate(t *testing.T) {
 		{"summaryLines too high", with(func(c *ShapeConfig) { c.SummaryLines = 13 }), "summaryLines must be between 1 and 12"},
 		{"skillsMaxGroups too low", with(func(c *ShapeConfig) { c.SkillsMaxGroups = -1 }), "skillsMaxGroups must be between 0 and 20"},
 		{"skillsMaxGroups too high", with(func(c *ShapeConfig) { c.SkillsMaxGroups = 21 }), "skillsMaxGroups must be between 0 and 20"},
-		{"experienceBulletsMin too low", with(func(c *ShapeConfig) { c.ExperienceBulletsMin = 0 }), "experienceBulletsMin must be between 1 and 10"},
+		{"experienceBulletsMin too low", with(func(c *ShapeConfig) { c.ExperienceBulletsMin = 0 }), "experienceBulletsMin must be between 1 and 20"},
 		{"experienceBulletsMin too high", with(func(c *ShapeConfig) {
-			c.ExperienceBulletsMin = 11
-			c.ExperienceBulletsMax = 10
-		}), "experienceBulletsMin must be between 1 and 10"},
+			c.ExperienceBulletsMin = 21
+			c.ExperienceBulletsMax = 20
+		}), "experienceBulletsMin must be between 1 and 20"},
 		{"experienceBulletsMax too low", with(func(c *ShapeConfig) {
 			c.ExperienceBulletsMin = 1
 			c.ExperienceBulletsMax = 0
-		}), "experienceBulletsMax must be between 1 and 10"},
-		{"experienceBulletsMax too high", with(func(c *ShapeConfig) { c.ExperienceBulletsMax = 11 }), "experienceBulletsMax must be between 1 and 10"},
+		}), "experienceBulletsMax must be between 1 and 20"},
+		{"experienceBulletsMax too high", with(func(c *ShapeConfig) { c.ExperienceBulletsMax = 21 }), "experienceBulletsMax must be between 1 and 20"},
 		{"targetPages too low", with(func(c *ShapeConfig) { c.TargetPages = 0 }), "targetPages must be between 1 and 3"},
 		{"targetPages too high", with(func(c *ShapeConfig) { c.TargetPages = 4 }), "targetPages must be between 1 and 3"},
 		{"projectsMin too low", with(func(c *ShapeConfig) { c.ProjectsMin = -1 }), "projectsMin must be between 0 and 20"},

@@ -47,6 +47,8 @@ type ListParams struct {
 	SubscriptionID *string
 	MinScore       *int
 	Status         *string
+	IncludeHidden  bool
+	IncludeApplied bool
 	Remote         *bool
 	Q              *string
 	Page           int
@@ -110,9 +112,12 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		salaryFloor = &v
 	}
 
+	includeHidden := &params.IncludeHidden
+	includeApplied := &params.IncludeApplied
+
 	count, err := s.q.CountJobs(ctx, sqlcgen.CountJobsParams{
 		Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
-		SalaryFloor: salaryFloor,
+		SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
 	})
 	if err != nil {
 		return dto.JobListResponse{}, err
@@ -125,7 +130,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	if params.Sort == "date" {
 		r, err := s.q.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{
 			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
-			SalaryFloor: salaryFloor, Offset: offset, Limit: limit,
+			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied, Offset: offset, Limit: limit,
 		})
 		if err != nil {
 			return dto.JobListResponse{}, err
@@ -148,7 +153,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	} else {
 		r, err := s.q.ListJobsByScore(ctx, sqlcgen.ListJobsByScoreParams{
 			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
-			SalaryFloor: salaryFloor, Offset: offset, Limit: limit,
+			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied, Offset: offset, Limit: limit,
 		})
 		if err != nil {
 			return dto.JobListResponse{}, err
