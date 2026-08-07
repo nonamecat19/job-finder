@@ -419,6 +419,13 @@ func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, p
 }
 
 func (s *Service) tailorRendercvResume(ctx context.Context, master domain.RendercvMaster, vacancy string, level domain.GroundingLevel, cfg domain.ShapeConfig, hints *domain.VacancyHints, rec *activity.Recorder, prov *runProvenance) (domain.RendercvMaster, domain.VacancyAnalysis, error) {
+	// Stamp the run id once, here, so every LLM call below inherits it and the
+	// whole tailoring pass lands in one observability trace (036 FR-009).
+	// Retries, re-prompts and escalations are emitted from helpers several
+	// frames down; stamping the context is what makes them correlate without
+	// each of those call sites having to remember to.
+	ctx = withRunTrace(ctx, rec)
+
 	if rec != nil {
 		rec.Step(ctx, "analyzing vacancy", nil)
 	}
@@ -784,6 +791,11 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	var content []byte
 	var pdfPath string
 	genCtx, served := llm.WithServedModelCapture(ctx)
+	// The cover-letter branch below is a single LLM call that never enters
+	// tailorRendercvResume, so it would be the one call of this run with no
+	// trace on it (036 C4-10). Stamping genCtx covers both branches: the resume
+	// path re-stamps the same run id, which is idempotent.
+	genCtx = withRunTrace(genCtx, rec)
 	prov := &runProvenance{}
 
 	if docType == string(dto.DocumentTypeResume) {
@@ -1123,4 +1135,22 @@ func numericToFloatPtr(n pgtype.Numeric) *float64 {
 	}
 	v := f.Float64
 	return &v
+}
+
+// withRunTrace stamps the activity-run id onto the context as the observability
+// correlation id (036 FR-010). Reusing the run id rather than minting a new one
+// is what lets an operator move between a trace and the platform's own run
+// history in either direction with no lookup table.
+//
+// A nil or invalid recorder leaves the context untouched, so an uncorrelated
+// run behaves exactly as it did before 036.
+func withRunTrace(ctx context.Context, rec *activity.Recorder) context.Context {
+	if rec == nil {
+		return ctx
+	}
+	id := dbutil.UUIDString(rec.ID())
+	if id == "" {
+		return ctx
+	}
+	return llm.WithTraceID(ctx, id)
 }

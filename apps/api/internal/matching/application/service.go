@@ -47,6 +47,17 @@ func (s *Service) fitModel() string {
 }
 
 func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Recorder) (dto.MatchResultDto, error) {
+	// Correlate this match's LLM call with the platform's own run history
+	// (036 FR-009/FR-010). The task key rides along separately — the router
+	// stamps it on every call it makes — so this is the only half the call
+	// site has to supply. An absent recorder leaves the call uncorrelated,
+	// which is the pre-036 behaviour and valid.
+	if rec != nil {
+		if runID := dbutil.UUIDString(rec.ID()); runID != "" {
+			ctx = llm.WithTraceID(ctx, runID)
+		}
+	}
+
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
 		return dto.MatchResultDto{}, err

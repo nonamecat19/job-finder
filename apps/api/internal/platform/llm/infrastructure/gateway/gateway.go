@@ -54,6 +54,47 @@ type chatRequest struct {
 	Temperature         float64         `json:"temperature"`
 	MaxCompletionTokens *int            `json:"max_completion_tokens,omitempty"`
 	ResponseFormat      *responseFormat `json:"response_format,omitempty"`
+	// Metadata carries observability grouping keys to the proxy's collector
+	// callbacks (036). omitempty on a nil map keeps the body byte-identical to
+	// the pre-036 request when nothing is set — absent, not null, not {}.
+	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+// observabilityMetadata builds the proxy metadata object from the call options,
+// returning nil when there is nothing to send.
+//
+// Two details are load-bearing and easy to get wrong (036 research R5/R6):
+//
+//   - The correlation key is existing_trace_id, NOT trace_id. trace_id creates
+//     a trace and rewrites its name, input, output and tags on every call, so a
+//     multi-call run would end up described by whichever call finished last.
+//     existing_trace_id appends without overwriting.
+//   - generation_name must carry the requested task key. The collector records
+//     `model` as the *served deployment*, so without this two stages served by
+//     the same model (generation-summary and generation-select-premium both
+//     resolve to the same one) collapse into a single reporting bucket —
+//     erasing exactly the per-stage distinction 035 exists to create.
+//
+// The trace id normally arrives on the context (domain.WithTraceID), stamped
+// once per run; CompleteOptions.TraceID is an explicit per-call override for
+// the rare caller that needs one.
+func observabilityMetadata(ctx context.Context, opts *domain.CompleteOptions) map[string]any {
+	trace, task := opts.Trace(), opts.Task()
+	if trace == "" {
+		trace = domain.TraceIDFrom(ctx)
+	}
+	if trace == "" && task == "" {
+		return nil
+	}
+	md := map[string]any{}
+	if trace != "" {
+		md["existing_trace_id"] = trace
+	}
+	if task != "" {
+		md["generation_name"] = task
+		md["tags"] = []string{task}
+	}
+	return md
 }
 
 // responseFormat expresses the OpenAI response_format parameter in both its
@@ -192,6 +233,7 @@ func (g *Provider) Complete(ctx context.Context, prompt string, opts *domain.Com
 	if opts != nil && opts.MaxTokens != nil {
 		req.MaxCompletionTokens = opts.MaxTokens
 	}
+	req.Metadata = observabilityMetadata(ctx, opts)
 	return g.chat(ctx, req)
 }
 
@@ -211,6 +253,7 @@ func (g *Provider) CompleteJSON(ctx context.Context, prompt string, opts *domain
 	if opts != nil && opts.MaxTokens != nil {
 		req.MaxCompletionTokens = opts.MaxTokens
 	}
+	req.Metadata = observabilityMetadata(ctx, opts)
 
 	strictMode := opts != nil && opts.ResponseMode == domain.ResponseModeStrict && opts.JSONSchema != ""
 	if strictMode {

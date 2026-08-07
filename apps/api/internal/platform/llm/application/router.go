@@ -58,13 +58,13 @@ func (r *Router) ModelName() string {
 
 func (r *Router) Complete(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
 	p, model := r.resolve()
-	opts = withModel(opts, model)
+	opts = withRouting(opts, model, r.taskKey)
 	return p.Complete(ctx, prompt, opts)
 }
 
 func (r *Router) CompleteJSON(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
 	p, model := r.resolve()
-	opts = withModel(opts, model)
+	opts = withRouting(opts, model, r.taskKey)
 	return p.CompleteJSON(ctx, prompt, opts)
 }
 
@@ -72,8 +72,19 @@ func (r *Router) Embed(ctx context.Context, text string) ([]float32, error) {
 	return r.local.Embed(ctx, text)
 }
 
-func withModel(opts *domain.CompleteOptions, model string) *domain.CompleteOptions {
-	if model == "" {
+// withRouting stamps the resolved model and the router's task key onto a copy
+// of the caller's options.
+//
+// TaskKey is set here rather than at each call site deliberately (036 FR-012).
+// The router is the only place that knows the requested task key for every
+// task in the system, so setting it once covers match, generation, ghost,
+// salary, rephrase and everything added later — where threading it through
+// call sites would cover only the ones somebody remembered. It is observability
+// metadata: the collector records the *served deployment* as `model`, so
+// without the requested key two stages served by one model are indistinguishable
+// in reporting.
+func withRouting(opts *domain.CompleteOptions, model, taskKey string) *domain.CompleteOptions {
+	if model == "" && taskKey == "" {
 		return opts
 	}
 	cp := domain.CompleteOptions{}
@@ -82,6 +93,9 @@ func withModel(opts *domain.CompleteOptions, model string) *domain.CompleteOptio
 	}
 	if cp.Model == "" {
 		cp.Model = model
+	}
+	if cp.TaskKey == "" {
+		cp.TaskKey = taskKey
 	}
 	return &cp
 }
