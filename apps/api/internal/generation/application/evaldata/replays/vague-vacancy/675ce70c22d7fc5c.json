@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:675ce70c22d7fc5c25d417a345ee524609ff77af12f16f31385417922a733c64",
+  "request_summary": {
+    "model_key": "generation-analyze",
+    "prompt_prefix": "Analyze this job vacancy and extract structured requirements.  VACANCY TEXT: Software Engineer  We are a fast-growing company looking for talented engineers to ",
+    "prompt_len": 1792,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "8192",
+    "response_mode": 0,
+    "schema_len": 0,
+    "json_output": true
+  },
+  "response": "{\n  \"requiredSkills\": [],\n  \"niceToHaveSkills\": [],\n  \"experienceLevel\": \"mid\",\n  \"keyResponsibilities\": [\n    \"Work on interesting problems\",\n    \"Help shape the product\",\n    \"Build things that matter\"\n  ],\n  \"industryKeywords\": [],\n  \"seniorityKeywords\": [\n    \"ownership\"\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-analyze"
+}

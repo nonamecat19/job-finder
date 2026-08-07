@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:ad7115364c827524b048b35c25c5d14c25c24822a8a00a79721d3969545f2b9a",
+  "request_summary": {
+    "model_key": "generation-analyze",
+    "prompt_prefix": "Analyze this job vacancy and extract structured requirements.  VACANCY TEXT: Senior Machine Learning Engineer — Inference Platform  We are building the servin",
+    "prompt_len": 2294,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "8192",
+    "response_mode": 0,
+    "schema_len": 0,
+    "json_output": true
+  },
+  "response": "{\n  \"requiredSkills\": [\n    \"Python\",\n    \"C++\",\n    \"CUDA\",\n    \"PyTorch\",\n    \"production model serving\",\n    \"distributed systems\",\n    \"Kubernetes in production\",\n    \"measurable latency or throughput improvements\"\n  ],\n  \"niceToHaveSkills\": [\n    \"JAX\",\n    \"Triton\",\n    \"model compression\",\n    \"quantization\",\n    \"pruning\",\n    \"published research in efficient inference\",\n    \"scaling an engineering team\"\n  ],\n  \"experienceLevel\": \"senior\",\n  \"keyResponsibilities\": [\n    \"building the serving layer for large language models\",\n    \"owning the inference path end to end\",\n    \"kernel-level performance work\",\n    \"distributed serving\",\n    \"platform development for research team deployment\"\n  ],\n  \"industryKeywords\": [\n    \"machine learning\",\n    \"large language models\",\n    \"inference platform\",\n    \"serving layer\"\n  ],\n  \"seniorityKeywords\": [\n    \"senior\",\n    \"own the inference path end to end\",\n    \"make architectural decisions independently\"\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-analyze"
+}

@@ -1,0 +1,14 @@
+Staff Backend Engineer — Platform
+
+You will own our platform services: billing, ingestion and the internal APIs the product
+teams build on. We are looking for someone senior enough to make architectural calls and
+patient enough to migrate things carefully.
+
+Required:
+- Go and Postgres at scale
+- Kubernetes in production
+- A track record of latency or throughput improvements
+
+Nice to have:
+- Terraform
+- Experience splitting a shared database

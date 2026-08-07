@@ -1,0 +1,48 @@
+cv:
+  name: Alex Chen
+  location: Remote
+  email: alex@example.invalid
+  sections:
+    summary:
+      - Backend engineer with platform and data experience.
+    experience:
+      # Overlapping roles: the two below run at the same time, so summing
+      # durations double-counts 2020.
+      - company: Northwind Data
+        position: Senior Engineer
+        start_date: 2019-03
+        end_date: 2021-06
+        location: Remote
+        highlights:
+          - Rebuilt the ingestion pipeline to handle ten times the daily volume
+          - Introduced schema versioning across six downstream consumers
+      - company: Contoso Consulting
+        position: Contract Engineer
+        start_date: 2020-01
+        end_date: 2020-11
+        location: Remote
+        highlights:
+          - Delivered a reporting service for a logistics client
+          - Automated the client's nightly reconciliation job
+      # A gap: nothing between 2021-06 and 2023-02.
+      - company: Fabrikam
+        position: Staff Engineer
+        start_date: 2023-02
+        end_date: 2025-04
+        location: Remote
+        highlights:
+          - Led the migration of the billing service off a shared database
+          - Cut p95 checkout latency from 900ms to 210ms
+      # A role with no start date at all.
+      - company: Early Startup
+        position: Engineer
+        end_date: 2019-01
+        location: Remote
+        highlights:
+          - Built the first version of the customer portal
+          - Set up the deployment pipeline the team used for three years
+    skills:
+      - label: Backend
+        details: Go, Python, Postgres
+      - label: Platform
+        details: Kubernetes, Terraform, AWS

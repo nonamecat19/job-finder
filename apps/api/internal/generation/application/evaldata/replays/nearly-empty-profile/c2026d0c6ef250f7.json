@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:c2026d0c6ef250f72bf677f19e0f5abc107ea54937d5dd276c8fd24bbc6447c4",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write the professional summary for a tailored resume.  VACANCY REQUIRED SKILLS: Go, Postgres, Docker VACANCY NICE-TO-HAVE: database migration, Linux operations ",
+    "prompt_len": 1278,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"2+ years of experience in backend development with Go and Postgres, building and maintaining robust APIs. Owned the end-to-end development of the REST API for a scheduling product and migrated the service from SQLite to Postgres, ensuring zero downtime.\"}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-summary"
+}

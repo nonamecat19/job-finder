@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:00c711d7a0095fc5f2e3f58a84e08845eae260b990515089d3f4a98c295215be",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "The resume below is too short (only 1 page). Expand it to fill TWO pages with more detail.  RULES: - Leave the summary alone. It is written by a separate step a",
+    "prompt_len": 5373,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Northwind Data\",\n      \"highlights\": [\n        \"Rebuilt ingestion pipeline to handle ten times the daily volume, improving throughput and system scalability.\",\n        \"Introduced schema versioning across six downstream consumers, enabling careful and controlled migrations.\",\n        \"Optimized data processing for the ingestion pipeline, significantly reducing latency and increasing overall efficiency.\",\n        \"Collaborated with cross-functional teams to define and implement data ingestion strategies.\"\n      ]\n    },\n    {\n      \"company\": \"Contoso Consulting\",\n      \"highlights\": [\n        \"Delivered a comprehensive reporting service for a key logistics client, enhancing their operational visibility.\",\n        \"Automated the client's nightly reconciliation job, saving significant manual effort and reducing errors.\",\n        \"Developed custom data processing scripts to meet specific client reporting requirements.\",\n        \"Provided technical consultation and support to the client throughout the project lifecycle.\"\n      ]\n    },\n    {\n      \"company\": \"Fabrikam\",\n      \"highlights\": [\n        \"Led the migration of the billing service off a shared database, ensuring data integrity and minimal downtime.\",\n        \"Cut p95 checkout latency from 900ms to 210ms, a significant throughput improvement and enhancement to user experience.\",\n        \"Designed and implemented a new database schema to support the standalone billing service.\",\n        \"Developed monitoring and alerting for the billing service to ensure production reliability.\"\n      ]\n    },\n    {\n      \"company\": \"Early Startup\",\n      \"highlights\": [\n        \"Built the first version of the customer portal, establishing a foundational customer-facing application.\",\n        \"Set up the initial deployment pipeline, which was successfully used by the team for three years.\",\n        \"Developed core features for the customer portal, focusing on user experience and functionality.\",\n        \"Contributed to the overall architecture and technical direction of the early-stage product.\"\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": [],\n  \"skills\": [\n    {\n      \"details\": \"Go, Postgres\",\n      \"index\": 0\n    },\n    {\n      \"details\": \"Kubernetes, Terraform\",\n      \"index\": 1\n    }\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

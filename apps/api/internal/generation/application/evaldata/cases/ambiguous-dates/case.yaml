@@ -1,0 +1,15 @@
+name: ambiguous-dates
+why: >
+  Overlapping roles, an employment gap, and a role with no start date. The derived total
+  experience figure is contestable here, and the summary stage states it — so a wrong
+  derivation produces a summary that contradicts the experience section beneath it, which
+  is the 035 FR-008 failure. Ambiguity comes from the overlaps and the missing start date,
+  deliberately NOT from an open-ended `present` role, which would make the derived figure
+  and every fixture for this case expire on 1 January.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 2
+  experience_bullets_max: 3
+  skills_max_groups: 3
+  summary_lines: 3
+page_counts: [1]

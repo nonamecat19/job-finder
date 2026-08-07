@@ -1,0 +1,24 @@
+name: baseline
+# Why this case exists. Required, and not decorative: a corpus case whose reason
+# for existing is not written down becomes one nobody dares delete and nobody
+# understands.
+why: >
+  The healthy path. A well-matched vacancy against a full synthetic profile, where
+  every production check must come back clean — this case exists to catch the
+  opposite failure from the others: a verifier that starts firing on good output.
+  A gate made only of failure cases cannot tell "stricter" from "broken", and a
+  false positive on the healthy path is what makes a gate get skipped.
+  Provenance: shaped from internal/generation/testdata/sample_rendercv.yaml, the
+  upstream RenderCV demo document (Jane Doe, Princeton, rendercv.com), with every
+  open-ended date closed.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 2
+  experience_bullets_max: 4
+  skills_max_groups: 4
+  summary_lines: 3
+# What the stubbed countPages returns, one entry per render round. A single
+# entry means the page-fit loop settles immediately; [3, 2] would force one
+# condense round. This is what makes page fitting exercisable with no PDF
+# toolchain installed.
+page_counts: [2]

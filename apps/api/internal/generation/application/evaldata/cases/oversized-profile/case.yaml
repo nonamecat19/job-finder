@@ -1,0 +1,15 @@
+name: oversized-profile
+why: >
+  A large master profile with a tight page target, so the pipeline must select
+  aggressively and then condense. This is where 035 found the economy model silently
+  truncating its selection output — returning a structurally valid document with most of
+  the candidate's skills missing, which no schema check catches because nothing was
+  malformed. The completeness scorers are what catch it, and the declared page_counts
+  force the condense round that made the truncation worse.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 2
+  experience_bullets_max: 3
+  skills_max_groups: 3
+  summary_lines: 2
+page_counts: [3, 2]

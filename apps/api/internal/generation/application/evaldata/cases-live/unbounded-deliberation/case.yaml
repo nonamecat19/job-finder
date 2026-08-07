@@ -1,0 +1,18 @@
+name: unbounded-deliberation
+why: >
+  LIVE MODE ONLY — this case must never be discovered by the deterministic gate.
+  It catches a thinking model spending its entire output budget on reasoning and
+  returning empty content: the 033/035 precondition bug, which made every resume
+  run fail before reasoning bounds were added to gateway/config.yaml. That is a
+  provider-side behaviour governed by reasoning_effort, and a replay provider
+  never contacts a provider — so under replay this case could only ever assert
+  something about a fixture the harness itself recorded. It is meaningful against
+  a real model and meaningless against a fixture, which is why it lives outside
+  the corpus the gate walks.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 2
+  experience_bullets_max: 4
+  skills_max_groups: 4
+  summary_lines: 3
+page_counts: [2]

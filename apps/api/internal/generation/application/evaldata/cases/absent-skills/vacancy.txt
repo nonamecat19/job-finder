@@ -1,0 +1,18 @@
+Senior Rust Systems Engineer — Embedded Trading Infrastructure
+
+We write low-latency order-matching systems in Rust on bare metal. You will work on the
+matching engine itself: lock-free data structures, NUMA-aware memory layout, and kernel
+bypass networking.
+
+Required:
+- 5+ years of production Rust, including unsafe and async runtimes
+- FPGA or kernel-bypass networking (DPDK, io_uring)
+- Exchange connectivity protocols (FIX, ITCH, OUCH)
+- Formal verification or model checking experience
+
+Nice to have:
+- Erlang or OCaml
+- Hardware timestamping
+- Options market microstructure
+
+This is a systems role. Machine learning experience is not relevant here.

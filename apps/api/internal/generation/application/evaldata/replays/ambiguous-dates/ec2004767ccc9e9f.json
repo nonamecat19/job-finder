@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:ec2004767ccc9e9f825aca055b1f8a7bcf1dba19f7c27ab6f0376be06b8fae1a",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write the professional summary for a tailored resume.  VACANCY REQUIRED SKILLS: Go, Postgres at scale, Kubernetes in production, Track record of latency or thro",
+    "prompt_len": 1748,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"4+ years of experience in backend and platform engineering, with a track record of improving throughput and managing careful migrations. Led the migration of the billing service off a shared database, and rebuilt an ingestion pipeline to handle ten times the daily volume. Skilled in delivering scalable systems that support production reliability and performance goals.\"}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-summary"
+}

@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:e2d479312e5d832ed9f0c52a3a591d5e8dbb1cec24ef0e685704295fbca74f23",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: 5+ years of production Rust, unsafe Rust, async Rust run",
+    "prompt_len": 6830,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\":",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

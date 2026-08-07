@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:5f913aadec7e343b9020d6682a4d8cf52cb47ef60af0c4f29d0b25f1651d2768",
+  "request_summary": {
+    "model_key": "generation-select-premium",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: Python, C++, CUDA, PyTorch, production model serving, di",
+    "prompt_len": 7040,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\"experience\":[{\"company\":\"Nexus AI (Co-Founder \u0026 CTO) | San Francisco, CA\",\"highlights\":[\"Built foundation model serving infrastructure handling 2M+ monthly API requests with 99.97% uptime, owning the inference path end to end\",\"Developed proprietary inference optimization reducing latency by 73% through kernel-level and architectural improvements\",\"Scaled engineering team from 3 to 28 across ML research, platform, and applied AI divisions, making architectural decisions independently\"]},{\"company\":\"NVIDIA Research (Research Intern) | Santa Clara, CA\",\"highlights\":[\"Designed sparse attention mechanism reducing transformer memory footprint by 4.2x, directly improving inference efficiency\",\"Co-authored paper accepted at NeurIPS 2022 (spotlight presentation, top 5% of submissions) on efficient inference techniques\"]},{\"company\":\"Google DeepMind (Research Intern) | London, UK\",\"highlights\":[\"Developed reinforcement learning algorithms for multi-agent coordination and distributed systems\",\"Published research at top-tier venues including ICML 2022 main conference paper, cited 340+ times\"]},{\"company\":\"Apple ML Research (Research Intern) | Cupertino, CA\",\"highlights\":[\"Created on-device neural network compression pipeline deployed across 50M+ devices, demonstrating model compression and quantization at scale\",\"Filed 2 patents on efficient model quantization techniques for edge inference\"]},{\"company\":\"Microsoft Research (Research Intern) | Redmond, WA\",\"highlights\":[\"Implemented novel self-supervised learning framework for low-resource language modeling\",\"Research integrated into Azure Cognitive Services, reducing training data requirements by 60%\"]}],\"projects\":[],\"skillChanges\":null,\"skillGroupsToAdd\":null,\"skillGroupsToRemove\":null,\"skills\":[{\"details\":\"Python, C++, CUDA, Rust, Julia\",\"index\":0},{\"details\":\"PyTorch, JAX, Triton, TensorFlow, ONNX\",\"index\":1},{\"details\":\"Kubernetes, distributed training, Ray, AWS, GCP\",\"index\":2}]}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select-premium"
+}

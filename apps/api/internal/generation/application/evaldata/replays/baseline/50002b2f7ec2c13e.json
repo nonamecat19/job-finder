@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:50002b2f7ec2c13eb817c7b3622daea8766eda7f52f723ca79ad5ee157bd2916",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write the professional summary for a tailored resume.  VACANCY REQUIRED SKILLS: Python, C++, CUDA, PyTorch, production model serving, distributed systems, Kuber",
+    "prompt_len": 2728,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"2+ years of experience building large-scale ML inference platforms, with deep expertise in distributed systems, production model serving, and kernel-level performance optimization. Built foundation model serving infrastructure handling 2M+ monthly API requests with 99.97% uptime, owning the inference path end to end. Skilled in developing latency-reducing optimizations and scaling engineering teams to support production research deployment.\"}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-summary"
+}

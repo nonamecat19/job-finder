@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:b6f7beebe217d4121f3c5040756a2ed87b458020f18c368a08239cd5bbe71383",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: Go, Postgres at scale, Kubernetes in production, Track r",
+    "prompt_len": 5597,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Northwind Data\",\n      \"highlights\": [\n        \"Rebuilt ingestion pipeline to handle ten times the daily volume, improving throughput\",\n        \"Introduced schema versioning across six downstream consumers for careful migration\"\n      ]\n    },\n    {\n      \"company\": \"Contoso Consulting\",\n      \"highlights\": [\n        \"Delivered a reporting service for a logistics client\",\n        \"Automated client's nightly reconciliation job\"\n      ]\n    },\n    {\n      \"company\": \"Fabrikam\",\n      \"highlights\": [\n        \"Led the migration of the billing service off a shared database, demonstrating careful migration\",\n        \"Cut p95 checkout latency from 900ms to 210ms, a significant throughput improvement\"\n      ]\n    },\n    {\n      \"company\": \"Early Startup\",\n      \"highlights\": [\n        \"Built the first version of the customer portal\",\n        \"Set up the deployment pipeline used by the team for three years\"\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [\n    {\n      \"addTokens\": \"Kubernetes\",\n      \"groupLabel\": \"Platform\",\n      \"removeTokens\": \"\",\n      \"replaceDetails\": null\n    }\n  ],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": [],\n  \"skills\": [\n    {\n      \"details\": \"Go, Postgres\",\n      \"index\": 0\n    },\n    {\n      \"details\": \"Kubernetes, Terraform\",\n      \"index\": 1\n    }\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

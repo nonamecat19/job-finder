@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:24d4aebba44cad5578e52edf637357600a2e98e5c932f695401023035e6e68b8",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: Python, C++, CUDA, PyTorch, production model serving, di",
+    "prompt_len": 7040,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Nexus AI (Co-Founder \u0026 CTO) | San Francisco, CA\",\n      \"highlights\": [\n        \"Architected and built the production serving layer for large language models, handling over 2M monthly API requests with 99.97% uptime.\",\n        \"Owned the end-to-end inference path, developing proprietary optimizations that reduced latency by 73% compared to baseline.\",\n        \"Led platform development and made key architectural decisions for deploying research team models, scaling the engineering team from 3 to 28.\"\n      ]\n    },\n    {\n      \"company\": \"NVIDIA Research (Research Intern) | Santa Clara, CA\",\n      \"highlights\": [\n        \"Developed kernel-level performance work on attention mechanisms, contributing to a 4.2x reduction in transformer memory footprint.\",\n        \"Published research in efficient inference techniques at NeurIPS 2022.\"\n      ]\n    },\n    {\n      \"company\": \"Google DeepMind (Research Intern) | London, UK\",\n      \"highlights\": [\n        \"Developed reinforcement learning algorithms for multi-agent coordination, demonstrating foundational work in distributed systems.\",\n        \"Published research at top-tier venues including ICML 2022 and JMLR, contributing to the field of efficient machine learning.\"\n      ]\n    },\n    {\n      \"company\": \"Apple ML Research (Research Intern) | Cupertino, CA\",\n      \"highlights\": [\n        \"Created an on-device neural network compression pipeline, demonstrating expertise in model compression and quantization techniques.\",\n        \"Filed patents on efficient model quantization for edge inference, showcasing innovation in optimizing model performance.\"\n      ]\n    },\n    {\n      \"company\": \"Microsoft Research (Research Intern) | Redmond, WA\",\n      \"highlights\": [\n        \"Implemented a novel self-supervised learning framework, showcasing skills in advanced ML techniques.\",\n        \"Integrated research into Azure Cognitive Services, demonstrating practical application of ML advancements.\"\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": [],\n  \"skills\": [\n    {\n      \"details\": \"Python, C++, CUDA\",\n      \"index\": 0\n    },\n    {\n      \"details\": \"PyTorch, Triton\",\n      \"index\": 1\n    },\n    {\n      \"details\": \"Kubernetes, distributed systems\",\n      \"index\": 2\n    },\n    {\n      \"details\": \"model compression, efficient inference\",\n      \"index\": 3\n    }\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:2ad68dfe71a03874defb724a06452e5b552c9b5770043bdf3981dd9fd6c15a2b",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: Python, C++, CUDA, PyTorch, production model serving, di",
+    "prompt_len": 7006,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Nexus AI (Co-Founder \u0026 CTO)\",\n      \"highlights\": [\n        \"Architected and built the foundation model serving layer, handling over 2M monthly API requests with 99.97% uptime.\",\n        \"Led end-to-end ownership of the inference path, implementing proprietary optimizations that reduced latency by 73%.\",\n        \"Developed distributed systems for large-scale model serving and scaled the engineering team to support platform development.\",\n        \"Drove architectural decisions for the inference platform, enabling research team deployment.\"\n      ]\n    },\n    {\n      \"company\": \"NVIDIA Research (Research Intern)\",\n      \"highlights\": [\n        \"Designed and implemented a sparse attention mechanism for transformers, significantly reducing memory footprint.\",\n        \"Contributed to research published at NeurIPS 2022, focusing on efficient model architectures.\"\n      ]\n    },\n    {\n      \"company\": \"Google DeepMind (Research Intern)\",\n      \"highlights\": [\n        \"Developed and published research on reinforcement learning algorithms with significant academic impact.\",\n        \"Gained experience with advanced ML research and publication in top-tier venues.\"\n      ]\n    },\n    {\n      \"company\": \"Apple ML Research (Research Intern)\",\n      \"highlights\": [\n        \"Created an on-device neural network compression pipeline deployed to over 50 million devices.\",\n        \"Filed patents on model quantization techniques for efficient edge inference.\"\n      ]\n    },\n    {\n      \"company\": \"Microsoft Research (Research Intern)\",\n      \"highlights\": [\n        \"Implemented a novel self-supervised learning framework for low-resource language modeling.\",\n        \"Contributed research that was integrated into Azure Cognitive Services, improving data efficiency.\"\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [\n    {\n      \"addTokens\": \"CUDA\",\n      \"groupLabel\": \"Languages\",\n      \"removeTokens\": \"Rust, Julia\"\n    ,\n      \"replaceDetails\": null\n    },\n    {\n      \"addTokens\": \"Triton\",\n      \"groupLabel\": \"ML Frameworks\",\n      \"removeTokens\": \"TensorFlow, ONNX\"\n    ,\n      \"replaceDetails\": null\n    },\n    {\n      \"addTokens\": \"Kubernetes\",\n      \"groupLabel\": \"Infrastructure\",\n      \"removeTokens\": \"Ray, AWS, GCP\"\n    ,\n      \"replaceDetails\": null\n    },\n    {\n      \"addTokens\": \"efficient inference\",\n      \"groupLabel\": \"Research Areas\",\n      \"removeTokens\": \"Neural architecture search, multi-agent RL\"\n    ,\n      \"replaceDetails\": null\n    }\n  ],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": [],\n  \"skills\": [\n    {\n      \"details\": \"Python, C++, CUDA\",\n      \"index\": 0\n    },\n    {\n      \"details\": \"PyTorch, Triton\",\n      \"index\": 1\n    },\n    {\n      \"details\": \"Kubernetes\",\n      \"index\": 2\n    },\n    {\n      \"details\": \"efficient inference, model compression\",\n      \"index\": 3\n    }\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

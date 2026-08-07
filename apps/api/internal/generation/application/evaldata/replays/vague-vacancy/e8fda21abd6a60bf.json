@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:e8fda21abd6a60bf5bd11b183bb9225a442b7108d86230cb7137fea7e177712c",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write the professional summary for a tailored resume.  VACANCY REQUIRED SKILLS:  VACANCY SENIORITY: mid  CANDIDATE SKILL AREAS: Backend, Tools  ACHIEVEMENTS SEL",
+    "prompt_len": 1398,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"2+ years of experience in backend development, with strong ownership of core services and tools. Owned and maintained the REST API for a scheduling product and led a zero-downtime migration of the core service from SQLite to Postgres, while contributing to key backend services that shaped the product.\"}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-summary"
+}

@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:60e53fd4dd3c68245aa184675f518bfe0e35f224c645389de96b484c35bb5ddc",
+  "request_summary": {
+    "model_key": "generation-analyze",
+    "prompt_prefix": "Analyze this job vacancy and extract structured requirements.  VACANCY TEXT: Staff Backend Engineer — Platform  You will own our platform services: billing, i",
+    "prompt_len": 1925,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "8192",
+    "response_mode": 0,
+    "schema_len": 0,
+    "json_output": true
+  },
+  "response": "{\n  \"requiredSkills\": [\n    \"Go\",\n    \"Postgres at scale\",\n    \"Kubernetes in production\",\n    \"Track record of latency or throughput improvements\"\n  ],\n  \"niceToHaveSkills\": [\n    \"Terraform\",\n    \"Experience splitting a shared database\"\n  ],\n  \"experienceLevel\": \"staff\",\n  \"keyResponsibilities\": [\n    \"Own platform services: billing, ingestion, and internal APIs\",\n    \"Make architectural calls\",\n    \"Migrate things carefully\"\n  ],\n  \"industryKeywords\": [\n    \"Platform\"\n  ],\n  \"seniorityKeywords\": [\n    \"Own\",\n    \"Architectural calls\",\n    \"Senior enough\",\n    \"Patient enough\"\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-analyze"
+}

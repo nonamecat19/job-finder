@@ -1,0 +1,15 @@
+name: absent-skills
+why: >
+  A vacancy demanding skills the candidate does not have. This is the failure that
+  motivated 035: under pressure to look like a match, the summary stage fabricates
+  competence the master profile does not support — a Rust systems role answered by an
+  ML researcher's profile invites exactly that. The grounding scorers must catch a
+  fabricated skill, and the completeness scorer must report the genuinely missing
+  required skills rather than the pipeline quietly inventing them.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 2
+  experience_bullets_max: 4
+  skills_max_groups: 4
+  summary_lines: 3
+page_counts: [2]

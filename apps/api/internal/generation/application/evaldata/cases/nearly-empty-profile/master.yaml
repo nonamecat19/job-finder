@@ -1,0 +1,30 @@
+cv:
+  name: Sam Rivera
+  location: Remote
+  email: sam@example.invalid
+  sections:
+    summary:
+      - Junior backend developer, two years of professional experience.
+    experience:
+      - company: Small Studio
+        position: Backend Developer
+        start_date: 2023-01
+        end_date: 2025-01
+        location: Remote
+        highlights:
+          - Built and maintained the REST API behind a scheduling product
+          - Migrated the service from SQLite to Postgres with no downtime
+    education:
+      - institution: State University
+        area: Computer Science
+        degree: BS
+        start_date: 2019-09
+        end_date: 2022-12
+        location: Remote
+        highlights:
+          - Coursework in distributed systems and databases
+    skills:
+      - label: Backend
+        details: Go, Postgres, Docker
+      - label: Tools
+        details: Git, Linux

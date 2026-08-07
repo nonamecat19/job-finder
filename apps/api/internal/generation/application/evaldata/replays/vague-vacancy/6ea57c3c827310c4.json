@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:6ea57c3c827310c4eb811bad71a44abf52d749d8a173d1dc008cdadd3c9777c1",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS:  EXPERIENCE LEVEL: mid KEY RESPONSIBILITIES:   - Work on",
+    "prompt_len": 4774,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Small Studio\",\n      \"highlights\": [\n        \"Owned and maintained the REST API for a scheduling product, demonstrating a strong sense of ownership.\",\n        \"Successfully migrated the core service from SQLite to Postgres with zero downtime, ensuring product continuity.\",\n        \"Contributed to building and shaping a product by developing key backend services.\"\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": [],\n  \"skills\": [\n    {\n      \"details\": \"Postgres, Go, Docker\",\n      \"index\": 0\n    },\n    {\n      \"details\": \"Git, Linux\",\n      \"index\": 1\n    }\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

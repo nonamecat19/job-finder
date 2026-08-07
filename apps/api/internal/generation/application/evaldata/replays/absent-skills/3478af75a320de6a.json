@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:3478af75a320de6ac6825bfd95d3ded93e22699d3cb26667cf1df58a815c87a3",
+  "request_summary": {
+    "model_key": "generation-analyze",
+    "prompt_prefix": "Analyze this job vacancy and extract structured requirements.  VACANCY TEXT: Senior Rust Systems Engineer — Embedded Trading Infrastructure  We write low-late",
+    "prompt_len": 2136,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "8192",
+    "response_mode": 0,
+    "schema_len": 0,
+    "json_output": true
+  },
+  "response": "{\n  \"requiredSkills\": [\n    \"5+ years of production Rust\",\n    \"unsafe Rust\",\n    \"async Rust runtimes\",\n    \"FPGA\",\n    \"kernel-bypass networking\",\n    \"DPDK\",\n    \"io_uring\",\n    \"Exchange connectivity protocols\",\n    \"FIX\",\n    \"ITCH\",\n    \"OUCH\",\n    \"Formal verification\",\n    \"model checking\"\n  ],\n  \"niceToHaveSkills\": [\n    \"Erlang\",\n    \"OCaml\",\n    \"Hardware timestamping\",\n    \"Options market microstructure\"\n  ],\n  \"experienceLevel\": \"senior\",\n  \"keyResponsibilities\": [\n    \"Work on the matching engine\",\n    \"Develop lock-free data structures\",\n    \"Implement NUMA-aware memory layout\",\n    \"Develop kernel bypass networking\"\n  ],\n  \"industryKeywords\": [\n    \"trading infrastructure\",\n    \"fintech\",\n    \"embedded systems\"\n  ],\n  \"seniorityKeywords\": [\n    \"Senior\"\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-analyze"
+}
