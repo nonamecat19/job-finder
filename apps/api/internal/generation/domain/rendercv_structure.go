@@ -43,9 +43,22 @@ func parseExperienceYear(s string) (int, bool) {
 	return y, true
 }
 
+// DeriveTotalExperienceYears resolves open-ended ("present") experience spans
+// against the current year.
+//
+// It is therefore NOT a pure function of its input: a profile with an ongoing
+// role yields a different figure on either side of 1 January. The value reaches
+// the summary prompt via SummaryBrief.TotalYears, so anything recording or
+// replaying generation requests must pin the year rather than call this —
+// use DeriveTotalExperienceYearsAsOf.
 func DeriveTotalExperienceYears(master RendercvMaster) int {
+	return DeriveTotalExperienceYearsAsOf(master, time.Now().Year())
+}
+
+// DeriveTotalExperienceYearsAsOf is DeriveTotalExperienceYears with "now"
+// supplied by the caller, making it deterministic for a fixed input.
+func DeriveTotalExperienceYearsAsOf(master RendercvMaster, now int) int {
 	sections := CvSections(master)
-	now := time.Now().Year()
 	total := 0
 	for _, e := range AsSliceOfMaps(sections["experience"]) {
 		startYear, ok := parseExperienceYear(StringField(e, "start_date"))
