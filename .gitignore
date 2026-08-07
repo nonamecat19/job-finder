@@ -16,6 +16,11 @@ resume/
 /apps/api/server
 /apps/api/seed
 /apps/api/tmp
+# Go build/test artefacts. Note: evaluation fixtures and baselines under
+# apps/api/internal/generation/application/evaldata/ are deliberately NOT
+# ignored — they are the committed source of truth for the eval gate (038).
+*.test
+*.out
 .aider*
 apps/api/data/
 apps/dashboard/test-results/
