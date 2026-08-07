@@ -156,6 +156,8 @@ export function mockDocument(overrides: Partial<GeneratedDocumentDto> = {}): Gen
     pdfPath: '/path/to/resume.pdf',
     model: 'test-model',
     createdAt: '2025-01-15T12:00:00Z',
+    summarySubstituted: false,
+    selectionEscalated: false,
     ...overrides,
   }
 }

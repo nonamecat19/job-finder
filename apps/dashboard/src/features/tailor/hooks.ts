@@ -18,6 +18,15 @@ export function useTailorDocuments() {
   });
 }
 
+export function useGenerateCoverLetter() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (resumeId: string) => api.documents.coverLetter(resumeId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.documents.adHoc }),
+  });
+}
+
 export function useSaveAdHocDocument(onSaved: () => void) {
   const qc = useQueryClient();
 
