@@ -61,9 +61,11 @@ func buildAnalyzePrompt(vacancy string, hints *domain.VacancyHints) string {
 // vacancy text (optionally enriched with caller-provided hints).
 func analyzeVacancy(ctx context.Context, lc llm.Provider, model, vacancy string, hints *domain.VacancyHints) (domain.VacancyAnalysis, error) {
 	prompt := buildAnalyzePrompt(vacancy, hints)
+	maxT := analysisMaxTokens
 	return llm.CompleteStructured[domain.VacancyAnalysis](ctx, lc, prompt, &llm.CompleteOptions{
-		System: "You are a job-market analyst who extracts structured requirements from vacancy descriptions. Be precise and concise.",
-		Model:  model,
+		System:    "You are a job-market analyst who extracts structured requirements from vacancy descriptions. Be precise and concise.",
+		Model:     model,
+		MaxTokens: &maxT,
 	})
 }
 
@@ -144,6 +146,17 @@ func pageTargetPhrase(cfg domain.ShapeConfig) string {
 // Step 2: Content Selection & Tailoring
 // ---------------------------------------------------------------------------
 
+// generationMaxTokens is the explicit output token cap for generation calls
+// (033 FR-012). A TailoredSections payload for a one-page resume (summary +
+// ~10 skill groups + ~10 experience entries with up to 10 highlights each +
+// projects) fits comfortably within 4096 tokens with headroom for the model's
+// own formatting.
+const generationMaxTokens = 4096
+
+// analysisMaxTokens is the cap for vacancy analysis — a smaller payload
+// (required skills, nice-to-haves, responsibilities, keywords).
+const analysisMaxTokens = 2048
+
 // buildSelectPrompt constructs the prompt for Step 2. It receives the vacancy
 // analysis from Step 1 and the full master resume content, and asks the LLM
 // to select, reorder, rephrase and optionally drop content.
@@ -214,7 +227,7 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	}
 	b.WriteString("- Return the \"Spoken Languages\" group exactly as given: same details, same order, no rewording. It is a fact about the candidate, not a tailoring target.\n")
 	b.WriteString("- Keep highlights concise, one achievement each, no fabricated numbers.\n")
-	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given. Do not populate sectionsToDrop.\n\n")
+	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given.\n\n")
 	summaryMin, summaryMax := summarySelectRange(cfg)
 	fmt.Fprintf(&b, "Generate a tailored summary (%d-%d sentences) that:\n", summaryMin, summaryMax)
 	fmt.Fprintf(&b, "- Opens with \"%d+ years of experience\" (this figure is derived from the master's dates; use it verbatim) and domain expertise\n", domain.DeriveTotalExperienceYears(master))
@@ -270,10 +283,12 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 // resume content and the vacancy analysis.
 func selectAndTailor(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, prevViolations []string, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
 	prompt := buildSelectPrompt(master, analysis, level, prevViolations, cfg)
+	maxT := generationMaxTokens
 	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, prompt, &llm.CompleteOptions{
-		System: "You are an expert resume writer who never fabricates information. " +
-			"You select, reorder and rephrase existing content to match a specific vacancy.",
-		Model: model,
+		System:      "You are an expert resume writer who never fabricates information. " + "You select, reorder and rephrase existing content to match a specific vacancy.",
+		Model:       model,
+		MaxTokens:   &maxT,
+		ResponseMode: llm.ResponseModeStrict,
 	})
 }
 
@@ -288,10 +303,12 @@ func retailorForStructure(ctx context.Context, lc llm.Provider, model string, ma
 	for _, v := range violations {
 		fmt.Fprintf(&b, "- %s: %s Use exactly %d+ years; never substitute a seniority label.\n", v.Path, v.Message, domain.DeriveTotalExperienceYears(master))
 	}
+	maxT := generationMaxTokens
 	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, b.String(), &llm.CompleteOptions{
-		System: "You are an expert resume writer who never fabricates information. " +
-			"You select, reorder and rephrase existing content to match a specific vacancy.",
-		Model: model,
+		System:      "You are an expert resume writer who never fabricates information. " + "You select, reorder and rephrase existing content to match a specific vacancy.",
+		Model:       model,
+		MaxTokens:   &maxT,
+		ResponseMode: llm.ResponseModeStrict,
 	})
 }
 
@@ -300,10 +317,12 @@ func retailorForStructure(ctx context.Context, lc llm.Provider, model string, ma
 // merged master and returns a new TailoredSections with a longer summary,
 // more highlights per job, and richer skill details.
 func expandContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
+	maxT := generationMaxTokens
 	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, buildExpandPrompt(master, analysis, cfg), &llm.CompleteOptions{
-		System: "You are an expert resume writer who adds relevant detail without fabricating information. " +
-			"Use only content from the master profile.",
-		Model: model,
+		System:      "You are an expert resume writer who adds relevant detail without fabricating information. " + "Use only content from the master profile.",
+		Model:       model,
+		MaxTokens:   &maxT,
+		ResponseMode: llm.ResponseModeStrict,
 	})
 }
 
@@ -389,10 +408,12 @@ func buildExpandPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 // returns a new TailoredSections with shorter summary, fewer highlights per
 // job, and more compact skill details.
 func condenseContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
+	maxT := generationMaxTokens
 	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, buildCondensePrompt(master, analysis, cfg), &llm.CompleteOptions{
-		System: "You are an expert resume writer who makes content concise without losing impact. " +
-			"Never fabricate information.",
-		Model: model,
+		System:      "You are an expert resume writer who makes content concise without losing impact. " + "Never fabricate information.",
+		Model:       model,
+		MaxTokens:   &maxT,
+		ResponseMode: llm.ResponseModeStrict,
 	})
 }
 

@@ -203,6 +203,20 @@ func TestBuildSelectPromptNoReorderOrDrop(t *testing.T) {
 	}
 }
 
+// 033 FR-004: the prompt must not reference struct fields that were removed
+// from TailoredSections (sectionsToDrop, ExperienceOrder, Drop).
+func TestBuildSelectPromptNoRemovedFieldReferences(t *testing.T) {
+	master := loadSampleMaster(t)
+	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
+	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, domain.DefaultShapeConfig())
+
+	for _, forbidden := range []string{"sectionsToDrop", "ExperienceOrder"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Errorf("prompt must not reference removed field %q:\n%s", forbidden, prompt)
+		}
+	}
+}
+
 // R7: with no project limit configured the projects block must not reach the
 // prompt at all, so the default path costs exactly the tokens it always did.
 func TestBuildSelectPromptProjectsBlockOnlyWhenLimited(t *testing.T) {
