@@ -175,9 +175,16 @@ func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
 }
 
 type llmHandles struct {
-	Ollama           *llm.OllamaProvider
-	MatchRouter      *llm.Router
-	GenerationRouter *llm.Router
+	Ollama      *llm.OllamaProvider
+	MatchRouter *llm.Router
+	// GenerationRouter serves the cover letter, which is still a single call
+	// against the `generation` task key. Resume generation itself is split
+	// across the stage routers below (035).
+	GenerationRouter        *llm.Router
+	GenerationAnalyzeRouter *llm.Router
+	GenerationSelectRouter  *llm.Router
+	GenerationPremiumRouter *llm.Router
+	GenerationSummaryRouter *llm.Router
 	RephraseRouter   *llm.Router
 	GhostRouter      *llm.Router
 	DefaultRouter    *llm.Router
@@ -196,7 +203,11 @@ func composeLLM(p *Platform) (*llmHandles, error) {
 	return &llmHandles{
 		Ollama:           ollamaProvider,
 		MatchRouter:      llm.NewRouter("match", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelMatch)),
-		GenerationRouter: llm.NewRouter("generation", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
+		GenerationRouter:        llm.NewRouter("generation", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
+		GenerationAnalyzeRouter: llm.NewRouter("generation-analyze", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
+		GenerationSelectRouter:  llm.NewRouter("generation-select", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
+		GenerationPremiumRouter: llm.NewRouter("generation-select-premium", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
+		GenerationSummaryRouter: llm.NewRouter("generation-summary", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
 		RephraseRouter:   llm.NewRouter("rephrase", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelRephrase)),
 		GhostRouter:      llm.NewRouter("ghost", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGhost)),
 		DefaultRouter:    llm.NewRouter("default", gatewayIface, ollamaProvider, cfg.LLMModel),
@@ -270,7 +281,7 @@ type generationHandles struct {
 	ResumeShape *resumeshapehttp.ResumeShapeHandler
 }
 
-func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Service, generationRouter *llm.Router) (*generationHandles, error) {
+func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Service, routers generation.Routers) (*generationHandles, error) {
 	cfg := p.Config
 
 	var blobStore storage.Blobstore
@@ -300,7 +311,7 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	if err != nil {
 		return nil, err
 	}
-	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, generationRouter, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl, shapeSvc)
+	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, routers, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl, shapeSvc)
 	return &generationHandles{
 		Generation:  generationSvc,
 		Handler:     generation.NewHandler(generationSvc, p.DB.Queries),
@@ -580,7 +591,13 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	}
 	ghostH := composeGhostJob(p, llmH.GhostRouter)
 
-	generationH, err := composeGeneration(ctx, p, profileH.Profile, llmH.GenerationRouter)
+	generationH, err := composeGeneration(ctx, p, profileH.Profile, generation.Routers{
+		Analyze: llmH.GenerationAnalyzeRouter,
+		Select:  llmH.GenerationSelectRouter,
+		Premium: llmH.GenerationPremiumRouter,
+		Summary: llmH.GenerationSummaryRouter,
+		Cover:   llmH.GenerationRouter,
+	})
 	if err != nil {
 		return nil, err
 	}

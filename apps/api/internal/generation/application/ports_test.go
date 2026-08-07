@@ -24,14 +24,14 @@ func newFakeShape(cfg domain.ShapeConfig) *fakeShape { return &fakeShape{cfg: cf
 func (f *fakeShape) Shape(context.Context) domain.ShapeConfig { return f.cfg }
 
 func TestNewServiceAcceptsRepositoryPort(t *testing.T) {
-	svc := application.NewService(&fakeRepo{}, nil, nil, nil, nil, "", "", "", nil)
+	svc := application.NewService(&fakeRepo{}, nil, nil, nil, application.GenerationRouters{}, "", "", "", nil)
 	if svc == nil {
 		t.Fatal("NewService returned nil")
 	}
 }
 
 func TestNewServiceAcceptsShapeProvider(t *testing.T) {
-	svc := application.NewService(&fakeRepo{}, nil, nil, nil, nil, "", "", "", newFakeShape(domain.DefaultShapeConfig()))
+	svc := application.NewService(&fakeRepo{}, nil, nil, nil, application.GenerationRouters{}, "", "", "", newFakeShape(domain.DefaultShapeConfig()))
 	if svc == nil {
 		t.Fatal("NewService returned nil")
 	}

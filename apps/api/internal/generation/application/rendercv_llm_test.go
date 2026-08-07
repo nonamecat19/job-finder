@@ -112,13 +112,32 @@ func TestBuildSelectPromptUsesConfiguredTargets(t *testing.T) {
 
 	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
 
-	if !containsAll(prompt, "TOP 4-5 most relevant highlights", "summary (1-2 sentences)") {
-		t.Errorf("prompt does not carry the configured targets:\n%s", prompt)
+	if !containsAll(prompt, "TOP 4-5 most relevant highlights") {
+		t.Errorf("select prompt does not carry the configured bullet targets:\n%s", prompt)
 	}
-	for _, stale := range []string{"3-4 sentences", "TOP 8-10"} {
+	for _, stale := range []string{"TOP 8-10"} {
 		if strings.Contains(prompt, stale) {
-			t.Errorf("prompt still contains the hardcoded %q:\n%s", stale, prompt)
+			t.Errorf("select prompt still contains the hardcoded %q:\n%s", stale, prompt)
 		}
+	}
+
+	// The summary target moved with the summary: it belongs to the stage that
+	// writes it, and the select prompt must no longer ask for one at all.
+	if strings.Contains(prompt, "sentences") {
+		t.Errorf("select prompt still asks for a summary:\n%s", prompt)
+	}
+	min, max := summarySelectRange(cfg)
+	summaryPrompt := buildSummaryPrompt(domain.SummaryBrief{
+		Analysis:    analysis,
+		TotalYears:  7,
+		SentenceMin: min,
+		SentenceMax: max,
+	})
+	if !containsAll(summaryPrompt, "Write 1-2 sentences") {
+		t.Errorf("summary prompt does not carry the configured sentence target:\n%s", summaryPrompt)
+	}
+	if strings.Contains(summaryPrompt, "3-4 sentences") {
+		t.Errorf("summary prompt still contains the hardcoded range:\n%s", summaryPrompt)
 	}
 }
 
@@ -132,16 +151,21 @@ func TestPromptsWithDefaultConfigReproduceOriginalWording(t *testing.T) {
 	selectPrompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
 	if !containsAll(selectPrompt,
 		"select the TOP 8-10 most relevant highlights",
-		"Generate a tailored summary (3-4 sentences)",
 		"keep all relevant keywords (do not trim)",
 	) {
 		t.Errorf("default select prompt drifted from the original wording:\n%s", selectPrompt)
 	}
 
+	// The summary instruction left this prompt with the summary stage (035).
+	summaryPrompt := buildSummaryPrompt(domain.SummaryBrief{Analysis: analysis, TotalYears: 7, SentenceMin: 3, SentenceMax: 4})
+	if !containsAll(summaryPrompt, "Write 3-4 sentences", "years of experience") {
+		t.Errorf("default summary prompt drifted from the original wording:\n%s", summaryPrompt)
+	}
+
 	expandPrompt := buildExpandPrompt(master, analysis, cfg)
 	if !containsAll(expandPrompt,
 		"Expand it to fill TWO pages",
-		"expand to 4-5 sentences",
+		"Leave the summary alone",
 		"aim for 10-12 per job",
 	) {
 		t.Errorf("default expand prompt drifted from the original wording:\n%s", expandPrompt)
@@ -151,7 +175,7 @@ func TestPromptsWithDefaultConfigReproduceOriginalWording(t *testing.T) {
 	if !containsAll(condensePrompt,
 		"overflows past two pages",
 		"Shorten it to fit on TWO pages",
-		"reduce to 2-3 tight sentences",
+		"Leave the summary alone",
 		"keep only the TOP 5-6 most relevant per job",
 	) {
 		t.Errorf("default condense prompt drifted from the original wording:\n%s", condensePrompt)
@@ -169,13 +193,13 @@ func TestExpandAndCondensePromptsDeriveFromConfig(t *testing.T) {
 
 	expandPrompt := buildExpandPrompt(master, analysis, cfg)
 	// One step above the configured targets, aimed at the configured pages.
-	if !containsAll(expandPrompt, "fill ONE page", "expand to 6-7 sentences", "aim for 6-8 per job") {
+	if !containsAll(expandPrompt, "fill ONE page", "aim for 6-8 per job") {
 		t.Errorf("expand prompt does not derive from the config:\n%s", expandPrompt)
 	}
 
 	condensePrompt := buildCondensePrompt(master, analysis, cfg)
 	// One step below: the page target outranks the section lengths (FR-016).
-	if !containsAll(condensePrompt, "fit on ONE page", "reduce to 4-5 tight sentences", "TOP 2-4 most relevant per job") {
+	if !containsAll(condensePrompt, "fit on ONE page", "TOP 2-4 most relevant per job") {
 		t.Errorf("condense prompt does not derive from the config:\n%s", condensePrompt)
 	}
 }

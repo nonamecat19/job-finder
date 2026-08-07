@@ -114,11 +114,22 @@ func tailorRendercvResumeWithModel(t *testing.T, gatewayURL, masterKey, modelKey
 	if err != nil {
 		return nil, domain.VacancyAnalysis{}, fmt.Errorf("analyze: %w", err)
 	}
-	payload, err := selectAndTailor(ctx, gw, modelKey, master, analysis, level, nil, cfg)
+	payload, err := selectContent(ctx, gw, modelKey, master, analysis, level, nil, cfg)
 	if err != nil {
 		return nil, analysis, fmt.Errorf("tailor: %w", err)
 	}
-	merged, err := domain.MergeTailored(master, payload)
+	summary, err := writeSummary(ctx, gw, modelKey, domain.SummaryBrief{
+		Analysis:         analysis,
+		TotalYears:       domain.DeriveTotalExperienceYears(master),
+		Highlights:       domain.SelectedHighlights(payload),
+		SkillGroupLabels: domain.SkillGroupLabels(master),
+		SentenceMin:      2,
+		SentenceMax:      4,
+	})
+	if err != nil {
+		return nil, analysis, fmt.Errorf("summary: %w", err)
+	}
+	merged, err := domain.MergeTailored(master, payload, &summary)
 	if err != nil {
 		return nil, analysis, fmt.Errorf("merge: %w", err)
 	}

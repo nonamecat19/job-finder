@@ -12,6 +12,15 @@ type GeneratedDocumentDto struct {
 	Title     *string `json:"title,omitempty"`
 	Vacancy   *string `json:"vacancy,omitempty"`
 	CreatedAt string  `json:"createdAt"`
+
+	// Which model wrote the summary, and whether it was the configured one.
+	// SummarySubstituted is what the review surface shows the user: a summary
+	// written by a fallback is still a summary, but they should know (035
+	// FR-012).
+	SummaryModel       *string  `json:"summaryModel,omitempty"`
+	SummarySubstituted bool     `json:"summarySubstituted"`
+	SelectionEscalated bool     `json:"selectionEscalated"`
+	StageCostUsd       *float64 `json:"stageCostUsd,omitempty"`
 }
 
 type DocumentStatusDto struct {
