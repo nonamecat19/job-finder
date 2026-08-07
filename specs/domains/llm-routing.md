@@ -129,12 +129,11 @@ at request time, which advances the chain (030-FR-007).
 > Model IDs are verified against each provider's live catalogue at implementation time and
 > pinned with a dated comment.
 
+
 **Change contract (030-C6).** Changing which model serves a task requires exactly: edit this
 file → `docker compose restart litellm`. No application rebuild, no migration, no dashboard
 action.
 
-Config can also be hot-reloaded without a restart where the admin API is enabled:
-`curl -X POST http://litellm:4000/config/reload -H "Authorization: Bearer $LITELLM_MASTER_KEY"`.
 
 ### 2.2 Generation stage keys (035-split-model-generation)
 
@@ -286,7 +285,7 @@ name).
 |---|---|
 | 029-FR-006, 030-FR-014 | **Embeddings never touch the gateway.** They go directly to local Ollama. No remote provider in the chain offers an embeddings API, and 029-SC-004 requires no change in embedding latency or behaviour. |
 | 030-FR-010 | Provider credentials come from environment configuration only. They are never stored in the application database and never readable through any API. They live in the `litellm` compose service's environment; the Go backend never reads them. |
-| 029-FR-012 | The gateway retains and logs **no** prompt or response data. |
+| 029-FR-012, **amended by 036** | The gateway itself still retains nothing. **Since 036 it forwards prompt and response bodies to the self-hosted collector**, which does store them — inside the deployment, behind a loopback-bound UI, for a bounded window. See §7. The original rule read "the gateway retains and logs no prompt or response data"; that is no longer the whole truth, and leaving it stated that way would misdescribe where the user's data lives. |
 | 030-FR-012 | Per AI request, the provider and model that served it is recorded, so effective routing is determinable from logs alone (030-SC-006: within 2 minutes, no DB query). The application learns nothing about the upstream beyond a `served_model` log line. |
 | 030-FR-015 | Environment documentation lists every provider key the gateway consumes — `CEREBRAS_API_KEY`, `GROQ_API_KEY`, `COHERE_API_KEY`, `OPENROUTER_API_KEY` — and no longer describes per-task provider settings. |
 
@@ -514,3 +513,104 @@ rg -n "CEREBRAS_API_KEY" apps .env.example                                    # 
 029-SC-007 required the Cerebras and Ollama direct providers to keep working unchanged. **That
 is void** — 030 deleted the Cerebras provider outright (§ 5.1). It was an additive-migration
 criterion, satisfied at the time and superseded since.
+
+## 7. LLM observability (036)
+
+Every AI call routed through the gateway is recorded by a self-hosted collector. The recording is
+configuration, not code: the routing service already sees every request, already resolves a task key
+to a serving deployment, already computes cost and already knows which tier answered, so
+instrumenting the Go client would duplicate all of it at every call site.
+
+### 7.1 The callback contract
+
+```yaml
+litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+```
+
+Both lists, not just success. A call that exhausts every tier is exactly the call worth having a
+record of.
+
+**Binding rules.**
+
+| # | Rule |
+|---|---|
+| 036-C1-1 | Both `success_callback` and `failure_callback` list the collector. |
+| 036-C1-2 | The callback is **global**, never added to a per-deployment `litellm_params`. Per-deployment callbacks give coverage that depends on which tier answered — precisely the question observability exists to answer. |
+| 036-C1-3 | No credential appears literally in `gateway/config.yaml`. |
+| 036-C1-4 | Adding the callbacks changes no `request_timeout`, `num_retries`, `allowed_fails`, `cooldown_time` or `fallbacks` entry. The worst-case timing arithmetic in §2 must hold unchanged. |
+| 036-FR-004 | A collector that is **down**, or up but **not answering**, must not slow or fail any call. This is a hard gate, verified against a stopped *and* a paused collector — not assumed from the fact that the callback is asynchronous. |
+| 036-C3-2 | `litellm` must never gain a `depends_on` for a collector service. Asserted in `apps/api/internal/config/config_test.go`. |
+
+**Retune procedure**: edit `gateway/config.yaml` or the collector's environment, then
+`docker compose restart litellm`. No application rebuild, no migration — the same procedure as a
+model swap.
+
+### 7.2 What is recorded, and under what name
+
+The application sends nothing about a call except transport metadata:
+
+```json
+{
+  "model": "generation-summary",
+  "metadata": {
+    "existing_trace_id": "<activity-run id>",
+    "generation_name":   "generation-summary",
+    "tags":              ["generation-summary"]
+  }
+}
+```
+
+Three details are load-bearing and each was got wrong before being got right:
+
+- **`existing_trace_id`, never `trace_id`.** `trace_id` *rewrites* the trace's name, input, output
+  and tags on every call, so trace-level fields would describe whichever call happened to finish
+  last. The key name is asserted in a test, because the wrong key still groups and would look fine.
+- **`generation_name` is required for per-task reporting.** Without it a record's name defaults to
+  `litellm-{call_type}` and every task looks identical. Grouping by the `model` field instead groups
+  by *serving deployment*, which collapses `generation-summary` and `generation-select-premium` into
+  one bucket whenever they share a model — erasing exactly the per-stage distinction feature 035
+  exists to create.
+- **The trace value is the platform's own activity-run id.** Not a new identifier: reusing the run id
+  is what lets an operator move between a trace and the platform's run history in either direction
+  with no lookup table.
+
+The trace rides on the **context** (`llm.WithTraceID`), stamped once at the top of a run, and the
+task key is stamped by the router on every call it makes. Neither is threaded through stage
+signatures, which is why retries, re-prompts and escalations inherit them automatically — a partially
+correlated run looks complete and is not.
+
+Neither value is ever interpolated into a prompt. They are transport metadata; a run id reaching the
+model would be a grounding-surface change.
+
+### 7.3 Coverage — binding
+
+| Path | Recorded? |
+|---|---|
+| Any chat completion through the gateway provider | **Yes**, including the `local` tier when reached through the proxy |
+| Chat completion when `GATEWAY_URL` is unset (local-first path) | **No** — there is no proxy in the path. Principle V working as designed, not a gap |
+| **Embeddings — always** | **No.** `Router.Embed` delegates straight to the local provider and the gateway provider's `Embed` forwards to Ollama. Already binding as 030-FR-014 |
+| ↳ affected call sites | `matching/application/service.go`, `profile/application/service.go` |
+
+- **036-C5-1**: This table is updated **in the same change** as any new AI call path. A call path
+  added without a coverage decision is a defect against FR-013, not a follow-up.
+- **036-C5-2**: The embeddings row is unconditional. There is no configuration under which
+  embeddings are recorded; writing it as conditional would imply one exists.
+
+### 7.4 Cost
+
+The collector stores the proxy's computed cost. A deployment absent from the proxy's cost map yields
+**no** cost rather than zero, so a genuinely free call and an unpriced one are indistinguishable in
+the record. Read a missing cost as "unpriced", never as "free".
+
+### 7.5 Latency baseline (036-SC-003) — **not yet measured**
+
+SC-003 requires showing that observability adds no measurable latency, which means comparing the
+same task key **with `success_callback: []`** against **with callbacks configured**, using
+proxy-side timing over at least 20 calls. Comparing collector-up against collector-down does not
+isolate it and is not an acceptable substitute.
+
+This measurement requires a running collector and has not been taken. Until it is, SC-003 is
+unverified — the callback is asynchronous by construction, which is a reason to expect the result,
+not a substitute for it. Record both figures here when the collector is first brought up.
