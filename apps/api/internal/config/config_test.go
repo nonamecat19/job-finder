@@ -3,8 +3,6 @@ package config
 import "testing"
 
 func TestLoadDefaults(t *testing.T) {
-	// t.Setenv on an unrelated key ensures a clean, isolated env for the test
-	// process without clobbering the real environment.
 	t.Setenv("PORT", "")
 	if err := unsetForTest(t); err != nil {
 		t.Fatal(err)
@@ -111,8 +109,6 @@ func TestModelOr(t *testing.T) {
 	}
 }
 
-// unsetForTest clears every config env var for the duration of the test, so a
-// developer's real .env / shell exports don't leak into default assertions.
 func unsetForTest(t *testing.T) error {
 	t.Helper()
 	all := append([]string{

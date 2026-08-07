@@ -6,7 +6,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// ToDto flattens an OutreachDraft into its wire shape.
 func (d *OutreachDraft) ToDto() dto.OutreachDraftDto {
 	traces := make([]dto.GroundingTraceDto, 0, len(d.GroundingTraces))
 	for _, tr := range d.GroundingTraces {

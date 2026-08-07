@@ -12,9 +12,6 @@ vi.mock('./hooks', () => ({
   useQueueBacklog: vi.fn(),
 }));
 
-// VirtualList relies on measured container size (@tanstack/react-virtual),
-// which jsdom reports as 0 — bypass virtualization here so recent-run rows
-// actually render, since this test asserts on their content.
 vi.mock('../../components/VirtualList', () => ({
   VirtualList: ({ items, getKey, renderItem }: any) => (
     <div>{items.map((item: any, i: number) => <div key={getKey(item, i)}>{renderItem(item, i)}</div>)}</div>
@@ -112,7 +109,6 @@ describe('StatusPage new terminal states (019-ai-job-throughput)', () => {
 
     renderStatusPage();
 
-    // retry all + one per-op retry group per distinct op among the retryable set
     expect(screen.getByText('retry all')).toBeInTheDocument();
     expect(screen.getAllByText('retry').length).toBeGreaterThanOrEqual(2);
   });

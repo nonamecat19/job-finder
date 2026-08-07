@@ -12,8 +12,6 @@ import (
 	"github.com/job-finder/api/internal/referral/infrastructure/github"
 )
 
-// Service orchestrates CSV import, GitHub cross-referencing, and warm-path
-// finding/ranking over the Contact/ContactConnection graph.
 type Service struct {
 	repo   domain.Repository
 	jobs   domain.JobRepository
@@ -32,10 +30,6 @@ func NewService(repo domain.Repository, jobs domain.JobRepository, gh *github.Gi
 	}
 }
 
-// ImportCSV parses a contacts CSV and inserts one Contact row per record
-// that has a non-empty name. Rows with an empty name are silently skipped
-// (ParseCSV already drops them), so Skipped only reflects rows that failed
-// to insert (e.g. a transient DB error) rather than blank rows.
 func (s *Service) ImportCSV(ctx context.Context, r io.Reader) (domain.ImportSummary, error) {
 	rows, err := domain.ParseCSV(r)
 	if err != nil {
@@ -62,11 +56,6 @@ func (s *Service) ImportCSV(ctx context.Context, r io.Reader) (domain.ImportSumm
 	return summary, nil
 }
 
-// SyncGithub fetches the given contact's GitHub followers and following,
-// then cross-references each returned login against the existing contact
-// book (by githubUsername). Every match becomes (or strengthens) a
-// ContactConnection between the two contacts — the "GitHub cross-reference"
-// step that turns two independently-imported contacts into a warm-path edge.
 func (s *Service) SyncGithub(ctx context.Context, contactID string) (*domain.GithubSyncResult, error) {
 	uid, err := dbutil.ParseUUID(contactID)
 	if err != nil {
@@ -128,7 +117,6 @@ func (s *Service) SyncGithub(ctx context.Context, contactID string) (*domain.Git
 	}
 
 	for _, p := range followers {
-		// Mutual (follows each other) is a stronger tie than one-directional.
 		strength := float32(0.5)
 		if followingSet[strings.ToLower(p.Login)] {
 			strength = 0.8
@@ -145,9 +133,6 @@ func (s *Service) SyncGithub(ctx context.Context, contactID string) (*domain.Git
 	return result, nil
 }
 
-// ListContacts returns every contact in the book (CSV-imported or GitHub-
-// discovered), most-recently-added first — the source list for the
-// contacts UI and for picking a contact to run GitHub sync against.
 func (s *Service) ListContacts(ctx context.Context) ([]domain.Contact, error) {
 	rows, err := s.repo.ListContacts(ctx)
 	if err != nil {
@@ -160,8 +145,6 @@ func (s *Service) ListContacts(ctx context.Context) ([]domain.Contact, error) {
 	return out, nil
 }
 
-// FindReferralPaths resolves the job's company, walks the contact graph for
-// warm paths into it, and returns the top-N paths ranked by strength.
 func (s *Service) FindReferralPaths(ctx context.Context, jobID string, maxDepth, topN int) ([]domain.ReferralPath, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {

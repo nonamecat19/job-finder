@@ -11,7 +11,6 @@ import (
 	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 )
 
-// The concrete infra types must satisfy the ports structurally.
 var (
 	_ enrichment.Repository = (*sqlcgen.Queries)(nil)
 	_ enrichment.Enqueuer   = (*asynq.Client)(nil)
@@ -25,7 +24,6 @@ type fakeEnqueuer struct {
 	enrichment.Enqueuer
 }
 
-// NewHandler accepts the ports, not concrete infra values.
 func TestNewHandlerAcceptsPorts(t *testing.T) {
 	h := enrichment.NewHandler(&fakeRepo{}, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{}, adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, &fakeEnqueuer{}, time.Second, nil)
 	if h == nil {

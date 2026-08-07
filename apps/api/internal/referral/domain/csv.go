@@ -19,9 +19,6 @@ type CSVContact struct {
 func ParseCSV(r io.Reader) ([]CSVContact, error) {
 	reader := csv.NewReader(r)
 	reader.TrimLeadingSpace = true
-	// Real-world exports often omit trailing empty columns on some rows;
-	// getCol already treats an out-of-range index as "", so accept any
-	// row width rather than erroring on a short/long row.
 	reader.FieldsPerRecord = -1
 
 	header, err := reader.Read()

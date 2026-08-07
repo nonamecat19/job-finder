@@ -9,8 +9,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// fakeContacts implements ContactsProvider with a fixed response, mirroring
-// the fakeLLM pattern used across the repo's other service tests.
 type fakeContacts struct {
 	contacts []dto.JobContactDto
 	err      error
@@ -23,7 +21,6 @@ func (f *fakeContacts) ListContacts(ctx context.Context, jobID string) ([]dto.Jo
 	return f.contacts, nil
 }
 
-// fakeIntel implements IntelProvider with a fixed response.
 type fakeIntel struct {
 	intel *dto.CompanyIntelDto
 	err   error
@@ -36,9 +33,6 @@ func (f *fakeIntel) GetIntel(ctx context.Context, jobID string) (*dto.CompanyInt
 	return f.intel, nil
 }
 
-// fakeLLM implements llm.Provider and returns a queue of fixed JSON
-// responses from CompleteJSON, one per call, repeating the last once
-// exhausted — lets a test script a "fabricate then correct" retry sequence.
 type fakeLLM struct {
 	responses []string
 	calls     int
@@ -71,8 +65,6 @@ func sampleIntel() *dto.CompanyIntelDto {
 	}
 }
 
-// TestGenerateDraft_AddressesRealContact covers US1 AS1: the draft names
-// the resolved contact, not an invented one.
 func TestGenerateDraft_AddressesRealContact(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{
 		{ID: "c1", Name: "Jane Doe", Source: "posting", Confidence: 0.9},
@@ -98,9 +90,6 @@ func TestGenerateDraft_AddressesRealContact(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_ClaimsTraceToSignals covers US1 AS3 / US3 AS1: every
-// grounding trace's claim is a substring of the message and of the signal
-// value it cites.
 func TestGenerateDraft_ClaimsTraceToSignals(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
@@ -125,9 +114,6 @@ func TestGenerateDraft_ClaimsTraceToSignals(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_NoSignals_GenericOpener covers the "no company-intel
-// signals" edge case (FR-012, SC-003): the draft is a generic, honest
-// opener with zero specific claims, and the LLM is never even called.
 func TestGenerateDraft_NoSignals_GenericOpener(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: nil}
@@ -149,8 +135,6 @@ func TestGenerateDraft_NoSignals_GenericOpener(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_ToneChangesWordingNotFacts covers US2 AS2 / SC-006:
-// two tones draw the same grounded fact but read differently.
 func TestGenerateDraft_ToneChangesWordingNotFacts(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
@@ -184,8 +168,6 @@ func TestGenerateDraft_ToneChangesWordingNotFacts(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_DefaultTone covers FR-011: an empty/unknown tone
-// defaults rather than erroring.
 func TestGenerateDraft_DefaultTone(t *testing.T) {
 	contacts := &fakeContacts{}
 	intel := &fakeIntel{}
@@ -208,10 +190,8 @@ func TestGenerateDraft_DefaultTone(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_OverLengthRetriesThenFits covers FR-009: an over-length
-// first attempt is rejected and retried rather than ever presented.
 func TestGenerateDraft_OverLengthRetriesThenFits(t *testing.T) {
-	tooLong := strings.Repeat("word ", 200) // way over maxDraftChars
+	tooLong := strings.Repeat("word ", 200)
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
 	llmc := &fakeLLM{responses: []string{
@@ -232,8 +212,6 @@ func TestGenerateDraft_OverLengthRetriesThenFits(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_AllAttemptsOverLength_FallsBackGeneric covers FR-009's
-// "never presented" guarantee even when every attempt violates the limit.
 func TestGenerateDraft_AllAttemptsOverLength_FallsBackGeneric(t *testing.T) {
 	tooLong := strings.Repeat("word ", 200)
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
@@ -253,14 +231,10 @@ func TestGenerateDraft_AllAttemptsOverLength_FallsBackGeneric(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_FabricatedClaimRetriedThenFixed covers FR-006: a claim
-// that isn't a verbatim substring of any allowed fact is never presented —
-// the first (fabricated) attempt is discarded, not stripped-and-kept.
 func TestGenerateDraft_FabricatedClaimRetriedThenFixed(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
 	llmc := &fakeLLM{responses: []string{
-		// Fabricates a Series C round that was never a stored signal.
 		`{"text":"Hi Jane, congrats on the Series C round!","specificClaims":["Series C round"]}`,
 		`{"text":"Hi Jane, saw your Go, React, Postgres stack — nice.","specificClaims":["Go, React, Postgres"]}`,
 	}}
@@ -283,9 +257,6 @@ func TestGenerateDraft_FabricatedClaimRetriedThenFixed(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_AllAttemptsFabricate_FallsBackGeneric covers FR-005/
-// FR-012: when grounded generation can never be produced, the draft is the
-// honest generic opener, never a fabricated one.
 func TestGenerateDraft_AllAttemptsFabricate_FallsBackGeneric(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
@@ -309,8 +280,6 @@ func TestGenerateDraft_AllAttemptsFabricate_FallsBackGeneric(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_MultipleContacts_RequiresChoice covers FR-008 / AS9:
-// two resolved contacts must never be silently merged or guessed among.
 func TestGenerateDraft_MultipleContacts_RequiresChoice(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{
 		{ID: "c1", Name: "Jane Doe"},
@@ -324,9 +293,6 @@ func TestGenerateDraft_MultipleContacts_RequiresChoice(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_UnknownContactID covers FR-007: a caller-supplied
-// contactId that doesn't match a resolved contact is an error, never a
-// silently invented recipient.
 func TestGenerateDraft_UnknownContactID(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	svc := NewService(contacts, &fakeIntel{}, &fakeLLM{}, "")
@@ -337,8 +303,6 @@ func TestGenerateDraft_UnknownContactID(t *testing.T) {
 	}
 }
 
-// TestGenerateDraft_NoContact_NeutralSalutation covers the "no resolved
-// contact" edge case: the system never guesses a name.
 func TestGenerateDraft_NoContact_NeutralSalutation(t *testing.T) {
 	svc := NewService(&fakeContacts{}, &fakeIntel{}, &fakeLLM{}, "")
 
@@ -354,8 +318,6 @@ func TestGenerateDraft_NoContact_NeutralSalutation(t *testing.T) {
 	}
 }
 
-// TestTones covers FR-010/FR-011: a defined set of tones with exactly one
-// marked default.
 func TestTones(t *testing.T) {
 	svc := NewService(&fakeContacts{}, &fakeIntel{}, &fakeLLM{}, "")
 	tones := svc.Tones()

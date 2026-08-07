@@ -16,10 +16,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// TestLive_GhostScore exercises the real Ollama round-trip against a real
-// job row: a schema-valid result comes back, and its explanation doesn't
-// assert anything the measured signals don't support (Principle II). Opt-in
-// only (`go test -tags live ./...`); never runs in `make test-lint`.
 func TestLive_GhostScore(t *testing.T) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {

@@ -40,7 +40,6 @@ function ghostSignal(overrides: Partial<JobSignalDto> = {}): JobSignalDto {
 }
 
 describe('GhostSignalPanel', () => {
-  // Story 2, scenario 4: never-scored job -> explicit "not scored yet" state.
   it('renders "not scored yet" when there is no ghost signal', () => {
     setupRefreshMock();
     render(<GhostSignalPanel jobId="job-1" ghostSignal={null} />);
@@ -72,8 +71,6 @@ describe('GhostSignalPanel', () => {
     expect(screen.getByText('9')).toBeInTheDocument();
   });
 
-  // Never render an unmeasured signal as a bare 0 — always "unknown" with
-  // its reason (FR-011).
   it('renders unknown signals with their reason, never as 0', () => {
     setupRefreshMock();
     const sig = ghostSignal({
@@ -99,8 +96,6 @@ describe('GhostSignalPanel', () => {
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
 
-  // Story 2, scenario 5: low confidence must be visible, not silently
-  // dropped, so a weak verdict isn't read as a strong one.
   it('shows a low-confidence indicator when confidence is below the threshold', () => {
     setupRefreshMock();
     const sig = ghostSignal({ signals: { ...ghostSignal().signals, confidence: 0.3 } });
@@ -123,8 +118,6 @@ describe('GhostSignalPanel', () => {
     expect(mutate).toHaveBeenCalledOnce();
   });
 
-  // Story 3, scenario 3: a second press while a refresh is in flight must
-  // not start a duplicate run — the button is disabled.
   it('disables the refresh button while a refresh is in flight', () => {
     setupRefreshMock(true);
     render(<GhostSignalPanel jobId="job-1" ghostSignal={ghostSignal()} />);

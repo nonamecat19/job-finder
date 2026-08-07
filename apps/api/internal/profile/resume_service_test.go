@@ -94,8 +94,6 @@ func (stubEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	return []float32{0}, nil
 }
 
-// A blank profile (name only, no uploaded config) is a valid starting point —
-// the dashboard creates one silently so the user lands on the editable form.
 func TestCreate_WithoutYamlSeedsMinimalConfig(t *testing.T) {
 	uid, _ := dbutil.ParseUUID("00000000-0000-0000-0000-000000000002")
 	repo := &createFakeRepo{row: sqlcgen.Profile{ID: uid}}

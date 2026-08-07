@@ -38,13 +38,6 @@ function buildItem(
   return { source, label: ITEM_LABELS[source], value: String(value) };
 }
 
-/**
- * Assemble a dated, sourced company-news briefing from a CompanyIntelDto.
- *
- * Signals are surfaced only when they carry data and are not stale. Stale
- * items (older than `staleMs` relative to `now`) are excluded rather than
- * shown undated, so the briefing never mixes fresh and decayed signal.
- */
 export function assembleCompanyNews(
   intel: CompanyIntelDto | null | undefined,
   now: number = Date.now(),

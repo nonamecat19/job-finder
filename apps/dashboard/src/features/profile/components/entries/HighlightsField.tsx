@@ -7,9 +7,6 @@ interface HighlightsFieldProps {
   className?: string;
 }
 
-// Highlights as individual add/remove items rather than a free-text
-// textarea — each highlight is its own row so entries stay editable one at
-// a time without re-parsing line breaks (FR-004).
 export function HighlightsField({ highlights, onChange, className }: HighlightsFieldProps) {
   const items = highlights ?? [];
 

@@ -7,11 +7,6 @@ import (
 	"testing"
 )
 
-// forbiddenSendTokens are substrings that would indicate a send/transmit
-// path exists in this bounded context — the hard product line is "012
-// generates, the user sends" (spec.md, SC-001). This test walks the
-// package's own non-test source (including domain/ and application/) so a
-// later change cannot quietly add one.
 var forbiddenSendTokens = []string{
 	"net/smtp",
 	"mailto:",
@@ -20,9 +15,6 @@ var forbiddenSendTokens = []string{
 	"smtp.",
 }
 
-// TestNoSendPath is the automated form of plan 012 §4.1: zero SMTP,
-// mailto:, or delivery-integration code paths anywhere in this bounded
-// context.
 func TestNoSendPath(t *testing.T) {
 	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if err != nil {

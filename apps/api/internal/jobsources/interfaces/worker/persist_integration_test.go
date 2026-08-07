@@ -24,8 +24,6 @@ func setupPersistTest(t *testing.T) (context.Context, *db.DB, func()) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
-	// Own database per test (internal/dbtest): no shared tables, so no
-	// truncation and no cross-package coordination. dbtest drops it on cleanup.
 	testDB := dbtest.New(t)
 	cleanup := cancel
 
@@ -85,8 +83,6 @@ func seenCount(t *testing.T, ctx context.Context, testDB *db.DB, key string) int
 	return n
 }
 
-// failingRepo passes everything through until the chosen statement, then
-// fails — standing in for a mid-persist error such as a lost connection.
 type failingRepo struct {
 	domain.BatchRepository
 	failOn string
@@ -101,7 +97,6 @@ func (f *failingRepo) BulkInsertActivities(ctx context.Context, arg sqlcgen.Bulk
 	return f.BatchRepository.BulkInsertActivities(ctx, arg)
 }
 
-// countingRepo counts the batch statements a run issues.
 type countingRepo struct {
 	domain.BatchRepository
 	statements int
@@ -137,9 +132,6 @@ func (c *countingRepo) BulkInsertActivities(ctx context.Context, arg sqlcgen.Bul
 	return c.BatchRepository.BulkInsertActivities(ctx, arg)
 }
 
-// A failure anywhere in the persist phase must leave no posting visible and
-// the run recorded as failed — a run's totals can never describe a storage
-// phase that was rolled back.
 func TestPersistRollsBackWholeRun(t *testing.T) {
 	ctx, testDB, cleanup := setupPersistTest(t)
 	defer cleanup()
@@ -172,8 +164,6 @@ func TestPersistRollsBackWholeRun(t *testing.T) {
 	}
 }
 
-// A retried run re-storing postings the failed attempt already stored must not
-// inflate the sighting counts the ghost-job signal reads.
 func TestPersistRetryCountsEachSightingOnce(t *testing.T) {
 	ctx, testDB, cleanup := setupPersistTest(t)
 	defer cleanup()
@@ -191,7 +181,6 @@ func TestPersistRetryCountsEachSightingOnce(t *testing.T) {
 	}
 	after := seenCount(t, ctx, testDB, key)
 
-	// Same run id: the second and third attempts are retries of one run.
 	for range 2 {
 		batch := NewPostingBatch(jobs, pgtype.UUID{}, run.ID, false)
 		if err := testDB.WithinTx(ctx, func(q *sqlcgen.Queries) error {
@@ -205,7 +194,6 @@ func TestPersistRetryCountsEachSightingOnce(t *testing.T) {
 		t.Fatalf("seenCount = %d after retries, want %d — the guard counts a run once", got, after+1)
 	}
 
-	// A genuinely later run is a real re-sighting.
 	next := startRun(t, ctx, testDB)
 	batch := NewPostingBatch(jobs, pgtype.UUID{}, next.ID, false)
 	if err := testDB.WithinTx(ctx, func(q *sqlcgen.Queries) error {
@@ -219,9 +207,6 @@ func TestPersistRetryCountsEachSightingOnce(t *testing.T) {
 	}
 }
 
-// The design guarantees at most 6 statements per chunk. SC-002 sets the bar at
-// 10, but asserting the looser number would let a regression from 6 to 9 pass
-// silently.
 func TestPersistStatementBudgetPerChunk(t *testing.T) {
 	ctx, testDB, cleanup := setupPersistTest(t)
 	defer cleanup()
@@ -256,8 +241,6 @@ func TestPersistStatementBudgetPerChunk(t *testing.T) {
 	}
 }
 
-// Two runs storing the same posting concurrently: the unique constraint on
-// dedupeKey arbitrates, exactly one row exists, and neither run fails.
 func TestConcurrentRunsStoreOverlappingPostingOnce(t *testing.T) {
 	ctx, testDB, cleanup := setupPersistTest(t)
 	defer cleanup()

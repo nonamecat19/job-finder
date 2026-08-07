@@ -1,8 +1,3 @@
-// Package httpx holds the JSON request/response helpers shared by every
-// feature's HTTP adapter. It is deliberately a leaf: apart from apperr — the
-// error vocabulary the whole codebase already speaks — it depends on the
-// standard library only, so every feature can import it without any risk of
-// an import cycle (027-http-handler-decomposition, FR-003).
 package httpx
 
 import (
@@ -14,7 +9,6 @@ import (
 	"github.com/job-finder/api/internal/apperr"
 )
 
-// ErrorResponse is the wire shape of every error this API returns.
 type ErrorResponse struct {
 	Message string      `json:"message"`
 	Code    apperr.Kind `json:"code,omitempty"`

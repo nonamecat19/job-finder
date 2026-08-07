@@ -6,18 +6,13 @@ import (
 	"github.com/job-finder/api/internal/keyword/domain"
 )
 
-// RegexExtractor must satisfy the Extractor port structurally.
 var _ domain.Extractor = (*domain.RegexExtractor)(nil)
 
-// fixture is one real-ish job description plus the skills we expect to be
-// classified required vs preferred. The extractor is recall-biased, so we
-// assert on the presence and polarity of expected terms rather than an exact
-// set (other noise terms may be present without failing the test).
 type fixture struct {
 	name      string
 	jd        string
-	required  map[string]bool // canonical term -> must be required
-	preferred map[string]bool // canonical term -> must be preferred
+	required  map[string]bool
+	preferred map[string]bool
 }
 
 func findTerm(res *domain.ExtractResult, canonical string) (domain.ExtractedTerm, bool) {
@@ -218,9 +213,6 @@ func termList(res *domain.ExtractResult) []string {
 	return out
 }
 
-// TestAcronymAndSynonymExpansion asserts normalization resolves acronyms and
-// aliases to their canonical form (spec 008-1 §2.2/§2.3): K8s->Kubernetes,
-// JS->JavaScript, Kube->Kubernetes, TS->TypeScript.
 func TestAcronymAndSynonymExpansion(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -252,8 +244,6 @@ func TestAcronymAndSynonymExpansion(t *testing.T) {
 	}
 }
 
-// TestStemmingNormalizesInflections asserts the stemmer collapses plural /
-// suffix variation so the same concept matches across word forms.
 func TestStemmingNormalizesInflections(t *testing.T) {
 	tests := []struct {
 		name string

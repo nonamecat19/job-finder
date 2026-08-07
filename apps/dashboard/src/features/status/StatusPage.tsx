@@ -34,8 +34,6 @@ const OP_LABELS: Record<ActivityOp, string> = {
   salary_infer: 'Salary infer',
 };
 
-// Queue names as reported by GET /api/activity/queues don't match ActivityOp
-// (e.g. "salary:infer" vs "salary_infer"); map separately for display.
 const QUEUE_LABELS: Record<string, string> = {
   ingest: 'Ingest',
   match: 'Match',

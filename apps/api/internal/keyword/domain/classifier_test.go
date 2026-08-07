@@ -6,14 +6,11 @@ import (
 	"github.com/job-finder/api/internal/keyword/domain"
 )
 
-// classifyFixture reuses the same JD fixture set exercised by the 008-3
-// extractor tests (service_test.go): every term the JD frames as a hard
-// requirement must classify as must_have, every optional term as nice_to_have.
 type classifyFixture struct {
 	name      string
 	jd        string
-	mustHave  []string // canonical terms expected must_have
-	niceToHav []string // canonical terms expected nice_to_have
+	mustHave  []string
+	niceToHav []string
 }
 
 func findClassified(cs []domain.ClassifiedTerm, canonical string) (domain.ClassifiedTerm, bool) {
@@ -197,16 +194,13 @@ Bonus points
 	}
 }
 
-// TestClassifySignals asserts the classifier reports the concrete JD phrasing
-// signal behind each verdict (task 009-2: 'required', 'must have',
-// years-of-experience qualifiers).
 func TestClassifySignals(t *testing.T) {
 	tests := []struct {
 		name    string
 		jd      string
 		term    string
 		class   domain.Class
-		signals []domain.Signal // subset that MUST be present
+		signals []domain.Signal
 	}{
 		{
 			name:    "years-of-experience is a hard signal",

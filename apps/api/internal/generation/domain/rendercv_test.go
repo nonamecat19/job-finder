@@ -61,12 +61,6 @@ func loadSampleMaster(t *testing.T) RendercvMaster {
 	return RendercvMaster(NormalizeYAMLMap(m).(map[string]any))
 }
 
-// ---------------------------------------------------------------------------
-// MergeTailored basic tests
-// ---------------------------------------------------------------------------
-
-// The spoken-languages group states a fact about the candidate, so a rewrite
-// returned for its index is ignored and the master's details survive.
 func TestMergeTailored_KeepsSpokenLanguagesGroupVerbatim(t *testing.T) {
 	master := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"skills": []any{
@@ -144,10 +138,6 @@ func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Feature 028: US1 — block sequence is immutable
-// ---------------------------------------------------------------------------
-
 func TestMergeTailoredPreservesBlockOrder(t *testing.T) {
 	master := RendercvMaster{
 		"cv": map[string]any{
@@ -185,7 +175,6 @@ func TestMergeTailoredPreservesBlockOrder(t *testing.T) {
 		}
 	}
 
-	// No section added, removed, renamed, or reordered: exact key set match.
 	masterSections := CvSections(master)
 	if len(sections) != len(masterSections) {
 		t.Fatalf("section set changed: master %v vs merged %v", SectionKeys(masterSections), SectionKeys(sections))
@@ -195,12 +184,10 @@ func TestMergeTailoredPreservesBlockOrder(t *testing.T) {
 			t.Fatalf("section %q missing from merged resume", k)
 		}
 	}
-	// Non-protected, user-authored blocks survive.
 	if _, ok := sections["projects"]; !ok {
 		t.Fatal("projects section was removed by merge")
 	}
 
-	// Contents: summary replaced, highlights replaced, identity verbatim.
 	if got := StringSliceField(sections, "summary"); len(got) != 1 || got[0] != "New tailored summary." {
 		t.Fatalf("summary not replaced: %v", got)
 	}
@@ -216,10 +203,6 @@ func TestMergeTailoredPreservesBlockOrder(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Feature 028: US2 — experience order and identity are preserved
-// ---------------------------------------------------------------------------
-
 func TestMergeTailoredPreservesExperienceOrder(t *testing.T) {
 	master := RendercvMaster{
 		"cv": map[string]any{
@@ -232,7 +215,6 @@ func TestMergeTailoredPreservesExperienceOrder(t *testing.T) {
 			},
 		},
 	}
-	// LLM tries to reorder (Initech first) and drops Globex by omission.
 	payload := TailoredSections{
 		Summary: "Summary",
 		Experience: []TailoredExperience{
@@ -255,11 +237,9 @@ func TestMergeTailoredPreservesExperienceOrder(t *testing.T) {
 			t.Fatalf("experience order changed at %d: got %s, want %s", i, StringField(exp[i], "company"), want[i])
 		}
 	}
-	// The entry the payload omitted (Globex) retains its master highlights.
 	if hl := StringSliceField(exp[1], "highlights"); len(hl) != 1 || hl[0] != "Globex bullet" {
 		t.Fatalf("omitted entry's highlights changed: %v", exp[1])
 	}
-	// Covered entries get the new highlights.
 	if hl := StringSliceField(exp[0], "highlights"); len(hl) != 1 || hl[0] != "Acme new bullet" {
 		t.Fatalf("covered entry highlights not replaced: %v", exp[0])
 	}
@@ -267,10 +247,6 @@ func TestMergeTailoredPreservesExperienceOrder(t *testing.T) {
 		t.Fatalf("covered entry highlights not replaced: %v", exp[2])
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Feature 028: US3 — dates are immutable, text-asserted years are flagged
-// ---------------------------------------------------------------------------
 
 func TestMergeTailoredPreservesDates(t *testing.T) {
 	master := RendercvMaster{
@@ -300,7 +276,6 @@ func TestMergeTailoredPreservesDates(t *testing.T) {
 	}
 }
 
-// yearsMaster derives to exactly 5 years: 2019–2021 (2) + 2021–2024 (3).
 func yearsMaster() RendercvMaster {
 	return RendercvMaster{
 		"cv": map[string]any{
@@ -400,10 +375,6 @@ func TestStripStructureViolationsRemovesYearsClaims(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Grounding checks
-// ---------------------------------------------------------------------------
-
 func TestVerifyRendercvGrounding_RejectsFabricatedCompany(t *testing.T) {
 	master := loadSampleMaster(t)
 	merged, err := DeepCloneYAML(master)
@@ -459,10 +430,6 @@ func TestVerifyRendercvGrounding_RejectsAddedSection(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RendercvToText
-// ---------------------------------------------------------------------------
-
 func containsAll(s string, subs ...string) bool {
 	for _, sub := range subs {
 		if !strings.Contains(s, sub) {
@@ -489,9 +456,6 @@ func TestRendercvToText_ExtractsExperienceHighlights(t *testing.T) {
 	}
 }
 
-// projectMaster builds a master whose projects carry identity fields (url,
-// dates) alongside their bullets, so a merge can be checked for corrupting
-// them.
 func projectMaster() RendercvMaster {
 	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"summary": []any{"Old summary."},
@@ -536,15 +500,12 @@ func TestMergeTailoredReplacesProjectHighlightsByName(t *testing.T) {
 	if got := StringSliceField(projectEntry(t, merged, "Orbit"), "highlights"); len(got) != 1 || got[0] != "Rewrote the scheduler in Go" {
 		t.Errorf("Orbit highlights = %v, want the tailored bullet", got)
 	}
-	// Untouched projects keep their master bullets.
 	if got := StringSliceField(projectEntry(t, merged, "Beacon"), "highlights"); len(got) != 1 || got[0] != "Shipped alerting" {
 		t.Errorf("Beacon highlights = %v, want the master's", got)
 	}
 }
 
 func TestMergeTailoredKeepsProjectIdentityFieldsFromMaster(t *testing.T) {
-	// The payload carries wrong values for every identity field; none of them
-	// may reach the merged document.
 	merged, err := MergeTailored(projectMaster(), TailoredSections{
 		Projects: []TailoredProject{{Name: "orbit", Highlights: []string{"Rewrote the scheduler"}}},
 	})
@@ -582,8 +543,6 @@ func TestMergeTailoredIgnoresUnknownProjectNames(t *testing.T) {
 	}
 }
 
-// The default path: no project limit configured, so the model returns no
-// projects and the master's survive the merge exactly as authored (FR-003).
 func TestMergeTailoredEmptyProjectPayloadLeavesMasterUntouched(t *testing.T) {
 	merged, err := MergeTailored(projectMaster(), TailoredSections{Summary: "New summary."})
 	if err != nil {

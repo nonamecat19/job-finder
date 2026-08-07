@@ -26,6 +26,9 @@ import { postAgeLabel } from '../../lib/time';
 type FeedFilters = Omit<JobFilters, 'page'>;
 
 function filtersFromParams(params: URLSearchParams): FeedFilters {
+  const floor = params.get('floor');
+  const hidden = params.get('hidden');
+  const applied = params.get('applied');
   return {
     sort: params.get('sort') === 'date' ? 'date' : 'score',
     source: params.get('source') ?? undefined,
@@ -33,9 +36,12 @@ function filtersFromParams(params: URLSearchParams): FeedFilters {
     minScore: params.get('minScore') ? Number(params.get('minScore')) : undefined,
     remote: params.get('remote') === 'true' ? true : undefined,
     q: params.get('q') ?? undefined,
-    showBelowFloor: params.get('showBelowFloor') === 'true' ? true : undefined,
-    includeHidden: params.get('includeHidden') === 'true' ? true : undefined,
-    includeApplied: params.get('includeApplied') === 'true' ? true : undefined,
+    showBelowFloor: floor === 'all' ? true : undefined,
+    onlyBelowFloor: floor === 'only' ? true : undefined,
+    includeHidden: hidden === 'all' ? true : undefined,
+    onlyHidden: hidden === 'only' ? true : undefined,
+    includeApplied: applied === 'all' ? true : undefined,
+    onlyApplied: applied === 'only' ? true : undefined,
   };
 }
 
@@ -46,6 +52,18 @@ function paramsFromFilters(filters: FeedFilters): URLSearchParams {
     if (k === 'sort' && v === 'score') continue;
     params.set(k, String(v));
   }
+  const floor = filters.onlyBelowFloor ? 'only' : filters.showBelowFloor ? 'all' : 'above';
+  const hidden = filters.onlyHidden ? 'only' : filters.includeHidden ? 'all' : 'fit';
+  const applied = filters.onlyApplied ? 'only' : filters.includeApplied ? 'all' : 'unapplied';
+  params.delete('showBelowFloor');
+  params.delete('onlyBelowFloor');
+  params.delete('includeHidden');
+  params.delete('onlyHidden');
+  params.delete('includeApplied');
+  params.delete('onlyApplied');
+  if (floor !== 'above') params.set('floor', floor);
+  if (hidden !== 'fit') params.set('hidden', hidden);
+  if (applied !== 'unapplied') params.set('applied', applied);
   return params;
 }
 
@@ -82,11 +100,6 @@ export default function FeedPage() {
 
   const [searchInput, setSearchInput] = useState(filters.q ?? '');
   useEffect(() => {
-    // Deliberate prop-to-state sync: searchInput is a locally-editable,
-    // debounced mirror of the URL-driven filters.q (see the effect below),
-    // not state derivable from props alone during render — the two effects
-    // together implement a controlled+debounced search box. Reviewed as
-    // safe (spec 023-workflow-quality-gates FR-012 lint adoption).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearchInput(filters.q ?? '');
   }, [filters.q]);
@@ -175,28 +188,58 @@ export default function FeedPage() {
             remote
           </label>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-          <label className="flex items-center gap-2 text-sm font-medium text-muted">
-            <Checkbox
-              checked={!filters.showBelowFloor}
-              onChange={(e) => set({ showBelowFloor: e.target.checked ? undefined : true })}
-            />
-            hide below-floor jobs
-          </label>
-          <label className="flex items-center gap-2 text-sm font-medium text-muted">
-            <Checkbox
-              checked={!filters.includeApplied}
-              onChange={(e) => set({ includeApplied: e.target.checked ? undefined : true })}
-            />
-            show unapplied
-          </label>
-          <label className="flex items-center gap-2 text-sm font-medium text-muted">
-            <Checkbox
-              checked={!filters.includeHidden}
-              onChange={(e) => set({ includeHidden: e.target.checked ? undefined : true })}
-            />
-            hide non-fit
-          </label>
+        <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
+          <Field label="Below floor">
+            <Select
+              value={filters.onlyBelowFloor ? 'only' : filters.showBelowFloor ? 'all' : 'above'}
+              onChange={(e) => {
+                const v = e.target.value;
+                set({
+                  onlyBelowFloor: v === 'only' ? true : undefined,
+                  showBelowFloor: v === 'all' ? true : undefined,
+                });
+              }}
+              className="w-full"
+            >
+              <option value="above">only above-floor</option>
+              <option value="all">all</option>
+              <option value="only">only below-floor</option>
+            </Select>
+          </Field>
+          <Field label="Applied">
+            <Select
+              value={filters.onlyApplied ? 'only' : filters.includeApplied ? 'all' : 'unapplied'}
+              onChange={(e) => {
+                const v = e.target.value;
+                set({
+                  onlyApplied: v === 'only' ? true : undefined,
+                  includeApplied: v === 'all' ? true : undefined,
+                });
+              }}
+              className="w-full"
+            >
+              <option value="unapplied">only unapplied</option>
+              <option value="all">all</option>
+              <option value="only">only applied</option>
+            </Select>
+          </Field>
+          <Field label="Non-fit">
+            <Select
+              value={filters.onlyHidden ? 'only' : filters.includeHidden ? 'all' : 'fit'}
+              onChange={(e) => {
+                const v = e.target.value;
+                set({
+                  onlyHidden: v === 'only' ? true : undefined,
+                  includeHidden: v === 'all' ? true : undefined,
+                });
+              }}
+              className="w-full"
+            >
+              <option value="fit">only fit</option>
+              <option value="all">all</option>
+              <option value="only">only non-fit</option>
+            </Select>
+          </Field>
         </div>
         </Surface>
       </div>
@@ -241,8 +284,6 @@ export default function FeedPage() {
   );
 }
 
-// LOW_CONFIDENCE_THRESHOLD mirrors the backend's blended-confidence cutoff
-// (spec 006 FR-006): below this, a band is shown but visibly discredited.
 const LOW_CONFIDENCE_THRESHOLD = 0.3;
 
 function formatSalaryBand(job: JobDto): string | null {
@@ -382,4 +423,3 @@ function JobCard({
     </div>
   );
 }
-

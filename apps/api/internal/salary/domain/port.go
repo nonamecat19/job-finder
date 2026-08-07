@@ -1,6 +1,3 @@
-// Package domain holds the salary bounded context's core model: the
-// Repository persistence port, the SalaryBand/SalarySource schema, and the
-// salaryRaw text parser (a pure business rule, no I/O).
 package domain
 
 import (
@@ -15,8 +12,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// Repository is the outbound persistence port for the salary use-case.
-// *sqlcgen.Queries satisfies it structurally.
 type Repository interface {
 	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
 	UpdateJobSalary(ctx context.Context, arg sqlcgen.UpdateJobSalaryParams) error
@@ -69,10 +64,10 @@ type BlendedBand struct {
 
 var (
 	currencySymbols = map[string]string{
-		"$": "USD",
-		"€": "EUR",
-		"£": "GBP",
-		"₴": "UAH",
+		"$":  "USD",
+		"€":  "EUR",
+		"£":  "GBP",
+		"₴":  "UAH",
 		"zł": "PLN",
 	}
 

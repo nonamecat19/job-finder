@@ -1,15 +1,3 @@
-// Package adapters — Jobgether, direct scrape of public search-results and
-// job pages (no login/session). Search only supports an operator-pasted
-// search URL (query.SubscriptionURL) — no keyword search, mirroring
-// glassdoor.go's stance exactly. Jobgether is treated as anonymously
-// accessible (research.md R1): a plain unauthenticated HTTP request is
-// expected to work, but a rate-limit/challenge response is treated as an
-// expected, distinctly-reported outcome (FR-011) rather than an edge case —
-// never a panic, and never retried aggressively or bypassed. Jobgether
-// surfaces its own AI-generated match-percentage score on both list and
-// detail pages; that score is descriptive metadata only and MUST stay in
-// Raw["jobgetherMatchScore"], never a first-class field feeding this
-// product's own matching/scoring (FR-012).
 package adapters
 
 import (
@@ -26,16 +14,13 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
-	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/platform/scraping"
+	"github.com/job-finder/api/internal/retrieval"
 )
 
 const (
-	// jobgetherMaxSubscriptionPages caps pagination so a redirect loop or an
-	// unbounded feed can't run forever, mirroring glassdoorMaxSubscriptionPages.
 	jobgetherMaxSubscriptionPages = 50
-	// jobgetherRequestDelay is the floor between paginated requests (FR-010).
-	jobgetherRequestDelay = 500 * time.Millisecond
+	jobgetherRequestDelay         = 500 * time.Millisecond
 )
 
 var (
@@ -43,8 +28,6 @@ var (
 	jobgetherPostedAgoRe = regexp.MustCompile(`(?i)(\d+)\s*(day|hour)s?\s*ago`)
 )
 
-// JobgetherAdapter — jobgether.com, public search-results pages, no
-// credentials (FR-013).
 type JobgetherAdapter struct {
 	Scraping  *scraping.Service
 	Retrieval retrieval.Service
@@ -53,8 +36,6 @@ type JobgetherAdapter struct {
 func (JobgetherAdapter) Key() string          { return "jobgether" }
 func (JobgetherAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
-// NeedsDetail reports true: the results page carries a snippet only;
-// FetchDetail fills in the full description.
 func (JobgetherAdapter) NeedsDetail() bool { return true }
 
 func (d JobgetherAdapter) HealthCheck(ctx context.Context, config map[string]any) (bool, error) {
@@ -92,18 +73,11 @@ func (d JobgetherAdapter) fetchPage(ctx context.Context, url string, headers map
 	return html, nil
 }
 
-// jobgetherIsBlockedPage reports whether an HTML response looks like
-// Jobgether's rate-limit/interstitial page rather than real content
-// (research.md R3): a "Rate Limit Exceeded" title/heading combined with body
-// text indicating too many requests. Used as a fallback when Retrieval is
-// nil (tests).
 func jobgetherIsBlockedPage(html string) bool {
 	lower := strings.ToLower(html)
 	return strings.Contains(lower, "rate limit exceeded") && strings.Contains(lower, "too many requests")
 }
 
-// Search only supports the pasted-subscription-URL flow (FR-014); keyword
-// search is out of scope, matching GlassdoorAdapter.Search's stance exactly.
 func (d JobgetherAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
 	if query.SubscriptionURL == "" {
 		return nil, fmt.Errorf("jobgether keyword search not implemented — use subscription URL instead")
@@ -115,13 +89,6 @@ func (d JobgetherAdapter) Search(ctx context.Context, query dto.SearchQuery, _ m
 	return jobs, err
 }
 
-// scrapeSubscription pages through a pasted Jobgether search URL by
-// incrementing its "page" query parameter. Stops on an empty page, a hard
-// page cap, or the page repeating the previous page's first card (loop
-// guard). A later page failing (fetch error, blocked, or unparsable) ends
-// pagination with whatever was collected; only page 1 failing is fatal
-// (mirrors GlassdoorAdapter.scrapeSubscription). A blocked response on page 1
-// is a distinct, reported failure (FR-011).
 func (d JobgetherAdapter) scrapeSubscription(ctx context.Context, subURL string) ([]dto.NormalizedJob, error) {
 	base, err := url.Parse(subURL)
 	if err != nil {
@@ -176,11 +143,6 @@ func (d JobgetherAdapter) scrapeSubscription(ctx context.Context, subURL string)
 	return jobs, nil
 }
 
-// parseJobgetherCards extracts job cards from a Jobgether search-results
-// page. Title and URL are required (card skipped without them); every other
-// field degrades to empty/nil rather than erroring. Jobgether's own
-// match-percentage score, when present, is captured into
-// Raw["jobgetherMatchScore"] only — never a first-class field (FR-012).
 func parseJobgetherCards(doc *goquery.Document, pageURL string) []dto.NormalizedJob {
 	var results []dto.NormalizedJob
 
@@ -239,9 +201,6 @@ func parseJobgetherCards(doc *goquery.Document, pageURL string) []dto.Normalized
 	return results
 }
 
-// jobgetherPostedAtFromText resolves Jobgether's relative "posted N days/
-// hours ago" text into an approximate RFC3339 timestamp, or nil when it
-// doesn't match a recognizable shape.
 func jobgetherPostedAtFromText(text string) *string {
 	m := jobgetherPostedAgoRe.FindStringSubmatch(text)
 	if m == nil {
@@ -264,9 +223,6 @@ func jobgetherPostedAtFromText(text string) *string {
 	return &t
 }
 
-// JobgetherDetailPatch is the parsed subset of a Jobgether job-detail page
-// used to fill in a shallow (list-only) Job row. Not part of the Adapter
-// interface — Jobgether-specific, called directly by the enrichment handler.
 type JobgetherDetailPatch struct {
 	Description string
 	SalaryRaw   *string
@@ -275,14 +231,6 @@ type JobgetherDetailPatch struct {
 	Raw         map[string]any
 }
 
-// FetchDetail fetches a single Jobgether job-detail page and parses the full
-// description, salary, and posted-date. Returns Available: false with a nil
-// error when the detail page has no recognizable description (the listing
-// has rotated out / is gone — FR-009 edge case), so the caller leaves the
-// job's existing summary data untouched rather than overwriting it with
-// nothing. Returns a non-nil error only on fetch failure or a
-// blocked/challenge response. Jobgether's match-percentage score, if present
-// on the detail page, is captured into Raw["jobgetherMatchScore"] (FR-012).
 func (d JobgetherAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (JobgetherDetailPatch, error) {
 	htmlStr, err := d.fetchPage(ctx, jobURL, nil)
 	if err != nil {

@@ -154,8 +154,6 @@ func TestHealthReady_PoolOmittedWhenNil(t *testing.T) {
 	h := &health.HealthHandler{Postgres: fakePinger{}, Redis: fakePinger{}}
 
 	w := doHealthRequest(testutil.SetupRouter(h.Mount))
-	// Omitted, not zero-valued: a zero block is indistinguishable from a
-	// genuinely idle pool and would misreport max_conns as 0.
 	if _, present := decodeReadiness(t, w)["pool"]; present {
 		t.Errorf("pool key present with a nil Pool: %s", w.Body.String())
 	}

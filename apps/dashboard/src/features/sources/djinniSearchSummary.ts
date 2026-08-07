@@ -1,9 +1,3 @@
-// Pure URL → human-readable basic-search summary for the dashboard Sources
-// page, per spec FR-008, FR-009, research.md R3/R4, and
-// contracts/djinni-url-shapes.md.
-//
-// Returns null when the URL is not a basic-search shape (dashboard subs/{id}/
-// or unrecognised), so the row falls back to the existing default label.
 
 export function summarizeDjinniBasicSearch(url: string): string | null {
   if (!url) return null

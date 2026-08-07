@@ -20,8 +20,6 @@ export default function KeywordDiffPanel({ jobId }: { jobId: string | undefined 
 
   const { matched, missingRequired, missingPreferred, metadata, suggestions } = data;
 
-  // Index suggestions by canonical term so each missing-required row can show
-  // its own rephrase inline. Canonical is unique per bucket.
   const suggestionByCanonical = new Map<string, KeywordRephraseSuggestion>();
   for (const s of suggestions) suggestionByCanonical.set(s.canonical, s);
 

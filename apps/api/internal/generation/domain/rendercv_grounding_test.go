@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// groundingProjectMaster has two projects with disjoint vocabulary, so a
-// bullet borrowed from the wrong project is detectable.
 func groundingProjectMaster() RendercvMaster {
 	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"projects": []any{
@@ -49,7 +47,6 @@ func TestVerifyRendercvGroundingRejectsFabricatedProject(t *testing.T) {
 
 func TestVerifyRendercvGroundingStrictRejectsBorrowedProjectHighlight(t *testing.T) {
 	master := groundingProjectMaster()
-	// Orbit's bullet was taken from Beacon's material.
 	merged := mergedWithProjects(
 		map[string]any{"name": "Orbit", "highlights": []any{"Shipped alerting pipelines"}},
 	)
@@ -73,8 +70,6 @@ func TestVerifyRendercvGroundingStrictAcceptsOwnProjectHighlights(t *testing.T) 
 	}
 }
 
-// FR-020: a disabled section is a deletion, and the section-subset check
-// already permits deletions — no carve-out needed.
 func TestVerifyRendercvGroundingAllowsRemovedSections(t *testing.T) {
 	master := loadSampleMaster(t)
 	merged := loadSampleMaster(t)

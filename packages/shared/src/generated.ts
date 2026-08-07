@@ -610,10 +610,6 @@ export interface ExtLink {
 //////////
 // source: queue_backlog.go
 
-/**
- * QueueBacklogDto is one queue's backlog snapshot (019-ai-job-throughput),
- * assembled from the asynq Inspector plus the resolved task policy.
- */
 export interface QueueBacklogDto {
   queue: string;
   providerClass?: string;
@@ -634,10 +630,6 @@ export interface QueueBacklogResponse {
 //////////
 // source: resume.go
 
-/**
- * EntryType is one of the 9 canonical RenderCV entry types. A Section holds
- * entries of exactly one EntryType (see spec 009 data-model.md).
- */
 export type EntryType = string;
 export const EntryEducation: EntryType = "education";
 export const EntryExperience: EntryType = "experience";
@@ -648,117 +640,46 @@ export const EntryBullet: EntryType = "bullet";
 export const EntryNumbered: EntryType = "numbered";
 export const EntryReversedNumbered: EntryType = "reversed_numbered";
 export const EntryText: EntryType = "text";
-/**
- * SocialNetwork mirrors RenderCV's cv.social_networks entries.
- */
 export interface SocialNetwork {
   network: string;
   username: string;
 }
-/**
- * CustomConnection mirrors RenderCV's cv.custom_connections entries: a
- * display label (placeholder), a link, and a fontawesome icon name — used
- * for networks not in RenderCV's built-in social_networks list (e.g.
- * Telegram in some configs).
- */
 export interface CustomConnection {
   placeholder: string;
   url: string;
   icon?: string;
 }
-/**
- * Entry is a tagged-union-by-convention struct: which fields are meaningful
- * depends on the parent Section's EntryType. Represented as one flat struct
- * (rather than a Go interface) so it tygo-generates into a single, simple TS
- * type the dashboard can pattern-match on `entryType`.
- */
 export interface Entry {
-  /**
-   * education
-   */
   institution?: string;
   area?: string;
   degree?: string;
-  /**
-   * experience
-   */
   company?: string;
   position?: string;
-  /**
-   * normal (projects)
-   */
   name?: string;
-  /**
-   * publication
-   */
   title?: string;
   authors?: string[];
   doi?: string;
   journal?: string;
-  /**
-   * publication, normal
-   */
   url?: string;
-  /**
-   * one_line (skills)
-   */
   label?: string;
   details?: string;
-  /**
-   * bullet
-   */
   bullet?: string;
-  /**
-   * numbered
-   */
   number?: string;
-  /**
-   * reversed_numbered — field is named "reversed_number" in RenderCV YAML;
-   * its value is a talk title/description, not a number (RenderCV naming
-   * quirk, preserved as-is for round-trip fidelity).
-   */
   reversedNumber?: string;
-  /**
-   * text
-   */
   text?: string;
-  /**
-   * education, experience, normal, publication
-   */
   date?: string;
-  /**
-   * education, experience, normal
-   */
   startDate?: string;
   endDate?: string;
   location?: string;
-  /**
-   * education, experience, normal, publication
-   */
   summary?: string;
-  /**
-   * education, experience, normal
-   */
   highlights?: string[];
-  /**
-   * Unrecognized carries any fields present in imported data that don't map
-   * to a field above, so nothing is silently dropped (FR-009).
-   */
   unrecognized?: { [key: string]: any};
 }
-/**
- * Section is a named, ordered group of same-typed Entries (FR-005, FR-006).
- */
 export interface Section {
   name: string;
   entryType: EntryType;
   entries: Entry[];
 }
-/**
- * Resume is the top-level structured, editable view of a Profile's resume
- * content (maps to cv.* in the RendercvMaster, minus design/locale/settings,
- * which stay out of scope for this feature).
- */
 export interface Resume {
   name: string;
   headline?: string;
@@ -770,14 +691,8 @@ export interface Resume {
   socialNetworks?: SocialNetwork[];
   customConnections?: CustomConnection[];
   sections: Section[];
-  /**
-   * Unrecognized carries any top-level cv.* keys not modeled above.
-   */
   unrecognized?: { [key: string]: any};
 }
-/**
- * ResumeDto wraps Resume for the GET/PUT /profiles/{id}/resume endpoints.
- */
 export interface ResumeDto {
   resume: Resume;
 }
@@ -790,14 +705,6 @@ export interface AiFeatureSettingDto {
   enabled: boolean;
   threshold: number /* int */;
 }
-/**
- * ResumeShapeConfigDto is the wire form of the resume generation shape
- * settings — a field-for-field mirror of generation/domain.ShapeConfig. It is
- * both the request and the response body of /v1/settings/resume-shape; PUT
- * replaces the whole config, so every field must be present.
- * 0 means "unlimited / no limit" for skillsMaxGroups, projectsMin, projectsMax,
- * projectBulletsMax, certificationsMin and certificationsMax.
- */
 export interface ResumeShapeConfigDto {
   summaryLines: number /* int */;
   skillsEnabled: boolean;
@@ -818,15 +725,6 @@ export interface ResumeShapeConfigDto {
 //////////
 // source: tailoring.go
 
-/**
- * EditProposalDto is one atomic, reviewable change produced by the
- * tailoring proposal generator (specs/020-ai-resume-tailoring,
- * data-model.md). FieldType partitions the review UI: "summary" |
- * "experience_highlights" | "skill_change" | "skill_group_add" |
- * "skill_group_remove". Status is "pending" | "accepted" | "rejected" |
- * "dropped" ("dropped" = suppressed by grounding, never surfaced to the
- * user).
- */
 export interface EditProposalDto {
   id: string;
   draftId: string;
@@ -840,24 +738,10 @@ export interface EditProposalDto {
   acceptedAt?: string;
   rejectedAt?: string;
 }
-/**
- * TraceabilityDto records where a proposed value came from: Source is
- * "master" | "job_posting"; Path is a locator like
- * "cv.sections.experience[Acme].highlights[2]" or "job.required_skills".
- * Required on every proposal per FR-003/SC-005.
- */
 export interface TraceabilityDto {
   source: string;
   path: string;
 }
-/**
- * TailoredDraftDto is a single review-lifecycle unit for tailoring a
- * profile's resume against one job (or one ad-hoc vacancy). State is
- * "drafting" | "proposing" | "review" | "finalized" | "expounded" |
- * "abandoned". BaselineSummary is a projection of the full baseline (not
- * the full RendercvMaster blob) to avoid shipping the master config to the
- * client on every poll.
- */
 export interface TailoredDraftDto {
   id: string;
   profileId: string;
@@ -876,47 +760,25 @@ export interface TailoredDraftDto {
   createdAt: string;
   updatedAt: string;
 }
-/**
- * BaselineSummaryDto is a lightweight projection of a draft's baseline:
- * profile name, skill-group labels, and company list — enough for the
- * review UI without shipping the full master config.
- */
 export interface BaselineSummaryDto {
   profileName: string;
   skillGroups: string[];
   companies: string[];
 }
-/**
- * ExportBlockDto is one actionable reason a single-page export was
- * blocked, e.g. Field="experience:Acme:3",
- * Suggestion="shorten or drop this bullet to fit on one page".
- */
 export interface ExportBlockDto {
   field: string;
   suggestion: string;
 }
-/**
- * TailorResumeRequestDto is the POST /api/tailoring request body: either
- * JobID (existing job posting) or Vacancy (ad-hoc, pasted vacancy text) is
- * set, not both.
- */
 export interface TailorResumeRequestDto {
   profileId: string;
   jobId?: string;
   vacancy?: AdhocVacancyDto;
 }
-/**
- * AdhocVacancyDto is a pasted job vacancy not tracked as a Job row.
- */
 export interface AdhocVacancyDto {
   company: string;
   title: string;
   text: string;
 }
-/**
- * ExportPdfRequestDto is the POST /api/tailoring/{draftId}/export-pdf
- * request body.
- */
 export interface ExportPdfRequestDto {
   draftId: string;
 }

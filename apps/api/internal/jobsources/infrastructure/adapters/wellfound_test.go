@@ -10,8 +10,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/platform/scraping"
+	"github.com/job-finder/api/internal/retrieval"
 )
 
 func loadWellfoundFixture(t *testing.T, name string) string {
@@ -217,10 +217,6 @@ func TestWellfoundSearch_EmptyResultsSucceeds(t *testing.T) {
 }
 
 func TestWellfoundHealthCheck(t *testing.T) {
-	// HealthCheck targets the fixed wellfound.com host; reachability in a
-	// sandboxed/offline test environment is not guaranteed, so this only
-	// asserts the "never a non-nil error" contract, matching GlassdoorAdapter's
-	// equivalent test.
 	a := WellfoundAdapter{Scraping: scraping.New()}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
@@ -228,10 +224,6 @@ func TestWellfoundHealthCheck(t *testing.T) {
 }
 
 func TestWellfoundHealthCheck_BlockedDetection(t *testing.T) {
-	// HealthCheck always hits the fixed wellfound.com host rather than a
-	// configurable URL, so the blocked-page branch is exercised directly
-	// against a captured response shape instead of redirecting HealthCheck
-	// itself.
 	blocked := loadWellfoundFixture(t, "wellfound_blocked.html")
 	if !retrieval.IsChallenged(blocked, 0) {
 		t.Fatal("expected blocked fixture to be detected as blocked")

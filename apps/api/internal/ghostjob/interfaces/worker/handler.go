@@ -1,5 +1,3 @@
-// Package worker holds the ghost-job bounded context's inbound worker
-// adapter: the asynq "ghost:score" task handler.
 package worker
 
 import (
@@ -17,10 +15,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// Handler processes "ghost:score" asynq tasks, mirroring matching.Handler /
-// salary.Handler. Triggered by ingestion (handler.go's enqueueGhostScore)
-// and by the manual POST /api/jobs/{id}/ghost-score endpoint only — no
-// scheduled or background re-scoring path exists anywhere (FR-014).
 type Handler struct {
 	svc   *application.Service
 	store activity.Store
@@ -45,11 +39,6 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	_, err := h.svc.ScoreJob(ctx, payload.JobID)
 	if err != nil {
 		if errors.Is(err, application.ErrDeclinedToScore) {
-			// Not an error: every signal was unknown, so the service
-			// correctly declined rather than guessing (SC-003). A
-			// scoring "failure" for one job must never affect another
-			// job or the ingestion run (FR-018), so this always returns
-			// nil to asynq — there is nothing to retry.
 			slog.Info("ghostjob: declined to score (insufficient signal)", "job", payload.JobID)
 			if rec != nil {
 				rec.Ok(ctx, "", map[string]any{"declined": true})

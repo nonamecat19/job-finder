@@ -12,21 +12,11 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// CoachProvider is the interface CoachHandler needs from the fit-gap coach
-// assessment service (009).
 type CoachProvider interface {
 	Assess(ctx context.Context, jobID string) (dto.FitGapAssessmentDto, error)
 	CachedAssessment(ctx context.Context, jobID string) (dto.FitGapAssessmentDto, error)
 }
 
-// CoachHandler wires the fit-gap coach endpoints (009-wiring):
-//
-//	POST /jobs/{id}/coach/assess      — run a fresh assessment
-//	GET  /jobs/{id}/coach/assessment  — return the last assessment for this job
-//
-// Assess is a POST (not a GET) because it generates a grounded rephrase via a
-// live LLM call per missing must-have, mirroring 008-6's keyword-diff
-// suggestions — that cost never runs inline on a GET.
 type CoachHandler struct {
 	Coach CoachProvider
 }

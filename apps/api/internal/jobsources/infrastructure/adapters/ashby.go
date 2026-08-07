@@ -24,8 +24,6 @@ type ashbyResponse struct {
 	Jobs []ashbyJob `json:"jobs"`
 }
 
-// AshbyAdapter reads every registered Ashby employer's open postings via the
-// vendor's public, unauthenticated job-board API (research.md §1).
 type AshbyAdapter struct {
 	Roster *roster.Service
 	boardRunState

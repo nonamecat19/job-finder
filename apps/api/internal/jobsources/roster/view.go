@@ -8,11 +8,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// View presents roster state as DTOs. It exists so callers outside this
-// feature — the HTTP adapter in particular — never have to name the sqlcgen
-// row types or reach for dbutil to convert them
-// (027-http-handler-decomposition, FR-012). Service keeps its row-typed
-// methods for in-feature callers such as the board adapters.
 type View struct{ svc *Service }
 
 func NewView(svc *Service) *View { return &View{svc: svc} }

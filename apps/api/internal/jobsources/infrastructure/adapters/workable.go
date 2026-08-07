@@ -27,8 +27,6 @@ type workableResponse struct {
 	Jobs []workableJob `json:"jobs"`
 }
 
-// WorkableAdapter reads every registered Workable employer's open postings
-// via the vendor's public, unauthenticated widget API (research.md §1).
 type WorkableAdapter struct {
 	Roster *roster.Service
 	boardRunState

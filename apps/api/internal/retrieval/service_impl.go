@@ -68,9 +68,6 @@ func (s *ServiceImpl) Fetch(ctx context.Context, req FetchRequest) (FetchResult,
 	}
 
 	if state != nil && state.CrawlDelaySeconds == nil {
-		// First contact with this host: discover its advertised crawl
-		// delay out of band so no user-facing fetch waits on the
-		// robots.txt round trip (FR-009, research Finding 3).
 		go func(h string) { _ = s.store.FetchAndSetCrawlDelay(context.Background(), h) }(host)
 	}
 
@@ -280,9 +277,6 @@ func (s *ServiceImpl) ClearCookies(ctx context.Context, host string) error {
 	return s.store.ClearCookies(ctx, host)
 }
 
-// OverrideCoolingOff clears an active cooling-off period for host, resetting
-// the consecutive-block counter so recordBlock starts fresh. Returns the
-// remaining duration that was cleared (0 if none was active).
 func (s *ServiceImpl) OverrideCoolingOff(ctx context.Context, host string) (time.Duration, error) {
 	state, err := s.store.Get(ctx, host)
 	if err != nil {

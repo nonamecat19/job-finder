@@ -11,7 +11,6 @@ import (
 	"github.com/job-finder/api/internal/subscriptions"
 )
 
-// SubscriptionProvider is the interface SubscriptionsHandler needs from the subscriptions service.
 type SubscriptionProvider interface {
 	List(ctx context.Context) ([]dto.SubscriptionDto, error)
 	ListBySource(ctx context.Context, sourceKey string) ([]dto.SubscriptionDto, error)
@@ -20,15 +19,11 @@ type SubscriptionProvider interface {
 	Delete(ctx context.Context, id string) error
 }
 
-// SubscriptionRunner enqueues subscription ingest tasks.
 type SubscriptionRunner interface {
 	RunSubscription(ctx context.Context, subID string) error
 	RunAllSubscriptions(ctx context.Context) (int, error)
 }
 
-// SubscriptionsHandler wires /api/subscriptions: URL-based subscriptions per
-// job source (CRUD + enable toggle), plus a direct "run now" trigger that
-// scrapes the subscription's URL through its source adapter.
 type SubscriptionsHandler struct {
 	Subs      SubscriptionProvider
 	Ingestion SubscriptionRunner

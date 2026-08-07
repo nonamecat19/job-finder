@@ -181,7 +181,6 @@ func TestResetRestoresDefaults(t *testing.T) {
 		t.Errorf("cached config = %+v, want the defaults", cached)
 	}
 
-	// Idempotent: resetting an already-default config returns the same values.
 	again, err := s.Reset(context.Background())
 	if err != nil {
 		t.Fatalf("second Reset: %v", err)

@@ -7,9 +7,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SectionOrderKey is the synthetic cv.sections key ParseRendercv writes the
-// original section key order under, so downstream mapping can preserve the
-// author's intended order rather than the map's random iteration order.
 const SectionOrderKey = "_order"
 
 func ParseRendercv(yamlText string) (RendercvMaster, error) {
@@ -44,10 +41,6 @@ func ParseRendercv(yamlText string) (RendercvMaster, error) {
 	return RendercvMaster(m), nil
 }
 
-// RemoveSection deletes a section from cv.sections and drops its entry from
-// the synthetic _order list, so no stale order entry names a section that no
-// longer exists. It lives beside the code that builds the order, because that
-// is where the invariant is owned.
 func RemoveSection(sections map[string]any, key string) {
 	if sections == nil {
 		return
@@ -68,9 +61,6 @@ func RemoveSection(sections map[string]any, key string) {
 	sections[SectionOrderKey] = filtered
 }
 
-// sectionOrderFromYAML walks the raw YAML (before it's flattened into an
-// unordered map[string]any) to recover the original cv.sections key order,
-// which rendercv uses to decide the order sections are rendered in.
 func sectionOrderFromYAML(yamlText string) []string {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(yamlText), &doc); err != nil || len(doc.Content) == 0 {

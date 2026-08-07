@@ -1,5 +1,3 @@
-// Package worker holds the salary bounded context's inbound worker adapter:
-// the asynq "salary_infer" task handler.
 package worker
 
 import (
@@ -47,8 +45,6 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 			return nil
 		}
 		if llm.Terminal(err) {
-			// Bad credential / missing model / no credits: retrying cannot
-			// help, so record the failure and stop.
 			slog.Error("salary: inference failed: llm misconfigured", "job", payload.JobID, "error", err)
 			if rec != nil {
 				rec.Fail(ctx, err)

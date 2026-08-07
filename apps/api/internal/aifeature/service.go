@@ -1,10 +1,3 @@
-// Package aifeature holds the "run this AI feature automatically when a
-// job's match score is high enough" settings: one enabled/threshold pair per
-// feature, configurable from Settings, and read by matching/handler.go right
-// after a job's score is computed to decide whether to auto-enqueue that
-// feature's work. Below the threshold (or when disabled), the feature only
-// ever runs on-demand. Match scoring itself has no entry here — it always
-// runs unconditionally.
 package aifeature
 
 import (
@@ -21,7 +14,6 @@ const (
 	SalaryInfer = "salary_infer"
 )
 
-// Keys lists every configurable feature, in the order Settings displays them.
 var Keys = []string{Resume, CoverLetter, SalaryInfer}
 
 type Repository interface {
@@ -35,8 +27,6 @@ type State struct {
 	Threshold int
 }
 
-// Service caches the current settings in memory so the per-match hook
-// (matching/handler.go) never needs a DB round trip on the hot path.
 type Service struct {
 	q Repository
 
@@ -56,14 +46,12 @@ func NewService(ctx context.Context, q Repository) (*Service, error) {
 	return s, nil
 }
 
-// Get returns the current setting for one feature (zero value if unknown).
 func (s *Service) Get(feature string) State {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.current[feature]
 }
 
-// GetAll returns every feature's setting, in Keys order.
 func (s *Service) GetAll() []State {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -90,9 +78,6 @@ func (s *Service) Update(ctx context.Context, feature string, enabled bool, thre
 	return st, nil
 }
 
-// ShouldRun reports whether a job with this score should trigger the given
-// feature automatically, per its current cached setting. Unknown features
-// report false.
 func (s *Service) ShouldRun(feature string, score int) bool {
 	st := s.Get(feature)
 	return st.Enabled && score >= st.Threshold

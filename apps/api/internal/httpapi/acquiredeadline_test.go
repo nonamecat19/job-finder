@@ -22,7 +22,6 @@ func serveWithDeadline(t *testing.T, timeout time.Duration, req *http.Request, h
 func TestAcquireDeadlineReportsCapacityExhaustion(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/jobs", nil)
 
-	// A handler that blocks on the context, as a starved pgx Acquire does.
 	rec := serveWithDeadline(t, 20*time.Millisecond, req, func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
 	})
@@ -73,7 +72,6 @@ func TestAcquireDeadlineDoesNotExtendAShorterContext(t *testing.T) {
 	if observed > time.Second {
 		t.Errorf("handler ran for %s; the caller's shorter deadline was replaced by the middleware's", observed)
 	}
-	// The handler answered, so the middleware must not overwrite its response.
 	if rec.Code != http.StatusGatewayTimeout {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusGatewayTimeout)
 	}
@@ -82,7 +80,6 @@ func TestAcquireDeadlineDoesNotExtendAShorterContext(t *testing.T) {
 func TestAcquireDeadlineKeepsHandlerResponseAfterExpiry(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/jobs", nil)
 
-	// The deadline passes, but the handler still answers on its own.
 	rec := serveWithDeadline(t, 10*time.Millisecond, req, func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
 		httpx.WriteError(w, http.StatusNotFound, "not found")

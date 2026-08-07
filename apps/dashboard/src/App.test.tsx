@@ -68,9 +68,6 @@ describe('App', () => {
   })
 
   it('renders exactly one link per nav label (no duplicate nav DOM)', () => {
-    // Regression guard: shell.tsx used to mount both the desktop sidebar and
-    // the mobile header nav simultaneously, so every label matched twice and
-    // getByRole('link', ...) threw getMultipleElementsFoundError.
     renderWithProviders(<App />)
     for (const label of ['Feed', 'Tracker', 'Tailor', 'Status', 'Sources', 'Profile']) {
       expect(screen.getAllByRole('link', { name: label })).toHaveLength(1)
@@ -89,8 +86,6 @@ describe('App', () => {
     const user = userEvent.setup()
     renderWithProviders(<App />)
     await user.click(screen.getByRole('link', { name: 'Sources' }))
-    // Assert the page-level <h1>, not the "Job sources" section title: that section
-    // only renders once api.sources.list returns a non-empty list (mocked empty here).
     expect(screen.getByRole('heading', { name: 'Sources & searches' })).toBeInTheDocument()
   })
 

@@ -11,18 +11,11 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// AiFeatureProvider is the interface AiFeatureHandler needs from the
-// aifeature service. *aifeature.Service satisfies it structurally.
 type AiFeatureProvider interface {
 	GetAll() []aifeature.State
 	Update(ctx context.Context, feature string, enabled bool, threshold int) (aifeature.State, error)
 }
 
-// AiFeatureHandler exposes GET /v1/settings/ai-features and PUT
-// /v1/settings/ai-features/{feature}: per-feature "run automatically when
-// match score is high" toggle and threshold, for every AI feature except
-// match scoring itself (resume generation, cover letter generation, salary
-// inference).
 type AiFeatureHandler struct {
 	Settings AiFeatureProvider
 }

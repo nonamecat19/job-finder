@@ -1,7 +1,5 @@
 import { GhostBadge, ScoreBadge } from '@job-finder/dashboard';
 
-// GhostBadge renders nothing below 50 — that is the component's own gate, so
-// every cell here uses a score at or above it.
 export const Bands = () => (
   <div className="flex flex-wrap items-center gap-2">
     <GhostBadge score={95} />

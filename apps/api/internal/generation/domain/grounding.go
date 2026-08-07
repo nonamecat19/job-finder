@@ -1,5 +1,3 @@
-// Grounding verification: every employer, institution, degree and date in
-// a tailored resume must already exist in the master profile.
 package domain
 
 import (
@@ -8,10 +6,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// verifyGrounding is a post-generation check: every employer, institution,
-// degree and date in the tailored resume must already exist in the master
-// profile. The LLM may reorder/rephrase/omit — never invent. Mirrors
-// grounding.ts's verifyGrounding exactly.
 func VerifyGrounding(master, tailored dto.JsonResume) []string {
 	var violations []string
 

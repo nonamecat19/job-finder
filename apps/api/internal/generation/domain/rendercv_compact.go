@@ -1,9 +1,5 @@
 package domain
 
-// CompactDesign injects tighter typography and margin settings into the
-// master's design block so the rendered PDF fits on a single page. It only
-// sets keys that are not already explicitly configured by the user — existing
-// design settings are preserved.
 func CompactDesign(master RendercvMaster) {
 	design, _ := master["design"].(map[string]any)
 	if design == nil {

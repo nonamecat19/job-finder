@@ -8,9 +8,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// Repository is the outbound persistence port for the referral use-case.
-// *sqlcgen.Queries satisfies it structurally, mirroring the companyintel /
-// salary package convention.
 type Repository interface {
 	InsertContact(ctx context.Context, arg sqlcgen.InsertContactParams) (sqlcgen.Contact, error)
 	GetContactByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Contact, error)
@@ -26,8 +23,6 @@ type Repository interface {
 	FindContactsAtCompany(ctx context.Context, company *string) ([]sqlcgen.Contact, error)
 }
 
-// JobRepository is the slice of job persistence the referral service needs
-// to resolve a job's company for a warm-path lookup.
 type JobRepository interface {
 	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
 }

@@ -32,8 +32,6 @@ func TestMatchJob_SkipsProfileWithoutConfig(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Own database per suite: no shared tables, so no truncation and no
-	// cross-package coordination (internal/dbtest).
 	testDB := dbtest.New(t)
 
 	if err := testDB.Queries.UpsertJobSource(ctx, sqlcgen.UpsertJobSourceParams{
@@ -54,7 +52,6 @@ func TestMatchJob_SkipsProfileWithoutConfig(t *testing.T) {
 		t.Fatalf("insert job: %v", err)
 	}
 
-	// Profile with no rendercv config at all — the hard gate should skip it.
 	if _, err := testDB.Queries.CreateProfile(ctx, sqlcgen.CreateProfileParams{
 		Name: "No Config Profile",
 	}); err != nil {

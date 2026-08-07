@@ -10,8 +10,6 @@ import (
 	"github.com/job-finder/api/internal/ratelimit"
 )
 
-// recordingRT stands in for the network so the tests measure pacing, not
-// round-trip latency.
 type recordingRT struct{ calls int }
 
 func (r *recordingRT) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -28,8 +26,6 @@ func get(t *testing.T, c *http.Client, url string) {
 	res.Body.Close()
 }
 
-// Past the burst, requests to one host are spaced — this is the whole point:
-// a multi-page search used to fire its pages as fast as the network allowed.
 func TestRoundTrip_PacesRequestsToTheSameHost(t *testing.T) {
 	rt := &recordingRT{}
 	c := &http.Client{Transport: &ratelimit.Transport{Base: rt, RPS: 20, Burst: 1}}
@@ -39,7 +35,6 @@ func TestRoundTrip_PacesRequestsToTheSameHost(t *testing.T) {
 	get(t, c, "https://example.test/b")
 	elapsed := time.Since(start)
 
-	// Burst 1 covers the first request; the second waits out one 1/20s token.
 	if elapsed < 40*time.Millisecond {
 		t.Errorf("expected the second request to wait for a token, took only %v", elapsed)
 	}
@@ -48,7 +43,6 @@ func TestRoundTrip_PacesRequestsToTheSameHost(t *testing.T) {
 	}
 }
 
-// Limiters are per host, so a slow board never holds up a fast one.
 func TestRoundTrip_DoesNotPaceAcrossHosts(t *testing.T) {
 	rt := &recordingRT{}
 	c := &http.Client{Transport: &ratelimit.Transport{Base: rt, RPS: 1, Burst: 1}}
@@ -67,7 +61,7 @@ func TestRoundTrip_PerHostOverrideWins(t *testing.T) {
 	rt := &recordingRT{}
 	c := &http.Client{Transport: &ratelimit.Transport{
 		Base:       rt,
-		RPS:        0.01, // would stall for ~100s on the second request
+		RPS:        0.01,
 		Burst:      1,
 		PerHostRPS: map[string]float64{"fast.test": 1000},
 	}}
@@ -82,8 +76,6 @@ func TestRoundTrip_PerHostOverrideWins(t *testing.T) {
 	}
 }
 
-// Local dependencies (FlareSolverr, Ollama, MinIO) are ours to hammer — the
-// politeness here is owed to third-party hosts.
 func TestRoundTrip_SkipsLoopback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
@@ -98,8 +90,6 @@ func TestRoundTrip_SkipsLoopback(t *testing.T) {
 	}
 }
 
-// FR-006/data-model Resolution rules: operator override wins over crawl
-// delay, even though both flow through the same resolver callback.
 func TestResolveRate_OverrideWinsOverCrawlDelay(t *testing.T) {
 	tr := &ratelimit.Transport{
 		RateResolver: func(host string) (float64, string, bool) {
@@ -115,11 +105,10 @@ func TestResolveRate_OverrideWinsOverCrawlDelay(t *testing.T) {
 	}
 }
 
-// A crawl delay slower than the default is adopted as-is.
 func TestResolveRate_SlowerCrawlDelayIsAdopted(t *testing.T) {
 	tr := &ratelimit.Transport{
 		RateResolver: func(host string) (float64, string, bool) {
-			return 0.2, "site-requested", true // Crawl-delay: 5
+			return 0.2, "site-requested", true
 		},
 	}
 	rps, source := tr.RateFor("slow.test")
@@ -131,9 +120,6 @@ func TestResolveRate_SlowerCrawlDelayIsAdopted(t *testing.T) {
 	}
 }
 
-// A crawl delay faster than the default must not speed anything up — that
-// precedence call is the resolver's to make, but the transport must relay
-// whatever the resolver decides rather than second-guessing it.
 func TestResolveRate_ResolverDecisionIsRelayedVerbatim(t *testing.T) {
 	tr := &ratelimit.Transport{
 		RateResolver: func(host string) (float64, string, bool) {
@@ -146,10 +132,6 @@ func TestResolveRate_ResolverDecisionIsRelayedVerbatim(t *testing.T) {
 	}
 }
 
-// crawl_delay_seconds == 0 must never resolve to an unbounded rate — the
-// single highest-risk case in this feature (research Finding 3). A resolver
-// that saw "0, looked, nothing advertised" must report DefaultRPS/"default",
-// never a 0 or infinite rate.
 func TestResolveRate_ZeroCrawlDelayFallsThroughToDefault(t *testing.T) {
 	tr := &ratelimit.Transport{
 		RateResolver: func(host string) (float64, string, bool) {
@@ -165,8 +147,6 @@ func TestResolveRate_ZeroCrawlDelayFallsThroughToDefault(t *testing.T) {
 	}
 }
 
-// A nil resolver must yield DefaultRPS for every host — the pre-existing
-// behaviour that keeps every earlier test in this file passing untouched.
 func TestResolveRate_NilResolverYieldsDefault(t *testing.T) {
 	tr := &ratelimit.Transport{}
 	rps, source := tr.RateFor("anyhost.test")
@@ -178,9 +158,6 @@ func TestResolveRate_NilResolverYieldsDefault(t *testing.T) {
 	}
 }
 
-// Two concurrent callers to one host must share a single limiter (FR-008):
-// pacing is per host, not per caller, so neither gets its own budget of
-// tokens.
 func TestRoundTrip_ConcurrentCallersShareOneLimiter(t *testing.T) {
 	rt := &recordingRT{}
 	c := &http.Client{Transport: &ratelimit.Transport{Base: rt, RPS: 5, Burst: 1}}
@@ -197,15 +174,11 @@ func TestRoundTrip_ConcurrentCallersShareOneLimiter(t *testing.T) {
 	<-done
 	elapsed := time.Since(start)
 
-	// Burst 1 covers one request; the second, whichever caller sent it,
-	// must wait roughly one token interval (1/5s) — not run concurrently
-	// unthrottled, which two independent limiters would allow.
 	if elapsed < 100*time.Millisecond {
 		t.Errorf("expected concurrent callers to share one limiter and for the second to wait, took %v", elapsed)
 	}
 }
 
-// Loopback destinations stay exempt from pacing regardless of any resolver.
 func TestRateFor_LoopbackExempt(t *testing.T) {
 	tr := &ratelimit.Transport{
 		RateResolver: func(host string) (float64, string, bool) {
@@ -218,13 +191,11 @@ func TestRateFor_LoopbackExempt(t *testing.T) {
 	}
 }
 
-// A cancelled context has to unblock the wait, or shutdown would be held up
-// by a queue of requests waiting on tokens.
 func TestRoundTrip_CancelledContextDoesNotBlock(t *testing.T) {
 	rt := &recordingRT{}
 	c := &http.Client{Transport: &ratelimit.Transport{Base: rt, RPS: 0.01, Burst: 1}}
 
-	get(t, c, "https://example.test/first") // consume the burst
+	get(t, c, "https://example.test/first")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

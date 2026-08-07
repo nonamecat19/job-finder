@@ -17,11 +17,6 @@ const (
 	noLayoffData  = "no layoff data found"
 )
 
-// LayoffsScraper reads the public layoffs.fyi tracker table and looks up
-// the most recent row matching the target company. Per spec.md edge cases,
-// a page-layout change or a company that simply has no entry both resolve
-// to the "no layoff data found" value — a successful, zero-result probe,
-// never an error (mirrors the workua zero-results convention).
 type LayoffsScraper struct {
 	Scraping scraping.Scraper
 }
@@ -46,11 +41,6 @@ func (s LayoffsScraper) Scrape(ctx context.Context, in domain.Input) (*domain.Si
 	return parseLayoffsRow(doc, in.CompanyName, layoffsURL), nil
 }
 
-// parseLayoffsRow scans `.layoff-row` rows for a `.company` cell matching
-// name case-insensitively, returning the most recently-listed match (rows
-// are assumed most-recent-first, matching the live site's default sort).
-// Never returns an error — a missing/unmatched row is a successful
-// zero-result probe.
 func parseLayoffsRow(doc *goquery.Document, name, sourceURL string) *domain.SignalResult {
 	target := strings.ToLower(strings.TrimSpace(name))
 

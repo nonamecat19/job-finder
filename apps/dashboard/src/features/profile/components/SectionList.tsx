@@ -14,9 +14,6 @@ interface SectionListProps {
   onChange: (sections: Section[]) => void;
 }
 
-// Ordered list of resume sections: add (custom names allowed, FR-005),
-// rename, delete (confirmed, FR-011), and reorder via drag or up/down
-// buttons (FR-006). Each section's entries are delegated to SectionEditor.
 export function SectionList({ sections, onChange }: SectionListProps) {
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [newSectionName, setNewSectionName] = useState('');

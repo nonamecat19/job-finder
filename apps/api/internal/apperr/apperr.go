@@ -15,12 +15,8 @@ const (
 	KindForbidden       Kind = "forbidden"
 	KindPrecondition    Kind = "precondition_failed"
 	KindTooManyRequests Kind = "too_many_requests"
-	// KindUnavailable is a transient capacity condition — the request was not
-	// served because a shared resource (today: the database connection pool)
-	// was exhausted. Distinct from KindInternal: nothing is broken and the
-	// same request is expected to succeed on retry.
-	KindUnavailable Kind = "unavailable"
-	KindInternal    Kind = "internal"
+	KindUnavailable     Kind = "unavailable"
+	KindInternal        Kind = "internal"
 )
 
 type Error struct {

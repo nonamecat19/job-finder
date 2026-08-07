@@ -78,10 +78,6 @@ func (s *Service) Create(ctx context.Context, name string, rendercvYaml string, 
 		return dto.ProfileDto{}, fmt.Errorf("name is required")
 	}
 	if rendercvYaml == "" {
-		// A blank profile is a valid starting point: the dashboard creates one
-		// silently so the user lands on the editable resume form instead of a
-		// "name it first" gate (spec 009 FR-001/FR-012). Seed the minimal
-		// rendercv document so downstream parsing/rendering stays uniform.
 		seed, err := yaml.Marshal(map[string]any{"cv": map[string]any{"name": name}})
 		if err != nil {
 			return dto.ProfileDto{}, err
@@ -170,8 +166,6 @@ func (s *Service) masterFor(row sqlcgen.Profile) (generation.RendercvMaster, err
 	return master, nil
 }
 
-// GetResume returns the structured, editable Resume view of a profile's
-// current resume content (spec 009, GET /profiles/{id}/resume).
 func (s *Service) GetResume(ctx context.Context, id string) (dto.Resume, error) {
 	row, err := s.Get(ctx, id)
 	if err != nil {
@@ -184,10 +178,6 @@ func (s *Service) GetResume(ctx context.Context, id string) (dto.Resume, error) 
 	return generation.MasterToResume(master)
 }
 
-// UpdateResume applies a structured Resume edit, validates it, converts it
-// back to RendercvMaster (preserving section order + any non-cv config
-// blocks), and persists it through the existing rendercvYaml/rendercvConfig
-// update path so both columns stay in sync (spec 009, PUT /profiles/{id}/resume).
 func (s *Service) UpdateResume(ctx context.Context, id string, resume dto.Resume) (dto.Resume, error) {
 	if verr := generation.ValidateResume(resume); verr != nil {
 		return dto.Resume{}, verr
@@ -219,9 +209,6 @@ func (s *Service) UpdateResume(ctx context.Context, id string, resume dto.Resume
 	return s.GetResume(ctx, id)
 }
 
-// HasResumeContent reports whether a profile already has resume content
-// beyond a bare name — used to gate the config-reupload overwrite warning
-// (FR-010, spec 009 contracts/profile-resume-api.md).
 func (s *Service) HasResumeContent(ctx context.Context, id string) (bool, error) {
 	resume, err := s.GetResume(ctx, id)
 	if err != nil {
@@ -245,7 +232,6 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 		return dto.ProfileDto{}, err
 	}
 
-	// Render smoke test in a temp directory
 	tempDir, err := os.MkdirTemp("", "rendercv-smoke-*")
 	if err != nil {
 		return dto.ProfileDto{}, fmt.Errorf("failed to create temp dir for smoke test: %w", err)
@@ -258,8 +244,6 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 		return dto.ProfileDto{}, fmt.Errorf("smoke test render failed: %w", err)
 	}
 
-	// Parsing and rendering succeeded!
-	// Get the name from cv block
 	cv, _ := master["cv"].(map[string]any)
 	name := "Default Profile"
 	if cv != nil {
@@ -273,11 +257,9 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 		return dto.ProfileDto{}, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Check if a default profile exists to update
 	var profileRow sqlcgen.Profile
 	defaultProf, err := s.GetDefault(ctx)
 	if err == nil {
-		// Update existing profile
 		params := sqlcgen.UpdateProfileParams{
 			ID:             defaultProf.ID,
 			Name:           &name,
@@ -292,7 +274,6 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 			return dto.ProfileDto{}, err
 		}
 	} else {
-		// Create a new profile
 		profileRow, err = s.q.CreateProfile(ctx, sqlcgen.CreateProfileParams{
 			Name:           name,
 			RendercvYaml:   &yamlText,
@@ -303,13 +284,11 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 		}
 	}
 
-	// Refresh embedding
 	id := dbutil.UUIDString(profileRow.ID)
 	if err := s.RefreshEmbedding(ctx, id); err != nil {
 		slog.Error("failed to refresh embedding after config upload", "error", err)
 	}
 
-	// Get fresh row
 	profileRow, err = s.Get(ctx, id)
 	if err != nil {
 		return dto.ProfileDto{}, err

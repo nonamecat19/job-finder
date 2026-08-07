@@ -1,8 +1,3 @@
-// Package infrastructure implements domain.Scraper: HTML fetching
-// (goquery-friendly, plain HTTP) and a shared headless-Chromium context
-// (chromedp) for PDF rendering, mirroring
-// apps/api/src/modules/scraping/scraping.service.ts (which used axios + a
-// shared Playwright browser).
 package infrastructure
 
 import (
@@ -20,8 +15,6 @@ import (
 
 const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
-// HTTPScraper bundles the HTTP fetcher and the lazily-launched shared
-// Chromium instance used for PDF rendering. Implements domain.Scraper.
 type HTTPScraper struct {
 	http *http.Client
 
@@ -37,16 +30,10 @@ func New() *HTTPScraper {
 
 var _ domain.Scraper = (*HTTPScraper)(nil)
 
-// HTTPClient returns the underlying *http.Client so adapters can make
-// arbitrary requests (POST, custom headers, etc.) using the same timeout and
-// connection pool.
 func (s *HTTPScraper) HTTPClient() *http.Client {
 	return s.http
 }
 
-// FetchHTML fetches server-rendered HTML over plain HTTP with a browser-like
-// UA. Only 5xx responses are treated as errors — 4xx pages are still
-// parseable HTML, matching axios's `validateStatus: (s) => s < 500`.
 func (s *HTTPScraper) FetchHTML(ctx context.Context, url string, headers map[string]string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -71,10 +58,6 @@ func (s *HTTPScraper) FetchHTML(ctx context.Context, url string, headers map[str
 	return string(body), nil
 }
 
-// BrowserContext lazily launches a shared headless Chromium instance and
-// returns a chromedp context rooted on it. Callers create a new tab context
-// per render with chromedp.NewContext(browserCtx) so pages don't share state,
-// mirroring getBrowser()+browser.newPage() in the TS ScrapingService.
 func (s *HTTPScraper) BrowserContext(ctx context.Context) (context.Context, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -83,24 +66,16 @@ func (s *HTTPScraper) BrowserContext(ctx context.Context) (context.Context, erro
 		if err := s.browserCtx.Err(); err == nil {
 			return s.browserCtx, nil
 		}
-		// previous browser context died — relaunch.
 		if s.allocCancel != nil {
 			s.allocCancel()
 		}
 	}
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		// The container image runs as root with no user namespace, and
-		// Chromium refuses to start as root without this flag ("Running as
-		// root without --no-sandbox is not supported", crbug.com/638180).
-		// Safe here: chromedp only ever renders our own locally-generated
-		// resume/cover-letter HTML, never third-party/untrusted content.
 		chromedp.Flag("no-sandbox", true),
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
-	// Force the browser process to actually start so failures surface here,
-	// not on the first render call.
 	if err := chromedp.Run(browserCtx); err != nil {
 		browserCancel()
 		allocCancel()
@@ -113,7 +88,6 @@ func (s *HTTPScraper) BrowserContext(ctx context.Context) (context.Context, erro
 	return s.browserCtx, nil
 }
 
-// Close shuts down the shared browser, if launched.
 func (s *HTTPScraper) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -17,10 +17,6 @@ import (
 	"github.com/job-finder/api/internal/dbtest"
 )
 
-// stubHost is a fake job-board host: an httptest server plus a real
-// Postgres-backed ServiceImpl pointed at it, so a test can drive as many
-// sequential fetches as it likes and inspect every PageOutcome without
-// touching a live third party.
 type stubHost struct {
 	t        *testing.T
 	server   *httptest.Server
@@ -30,22 +26,15 @@ type stubHost struct {
 	url      string
 	dbConn   *db.DB
 	mu       sync.Mutex
-	delay    string // Crawl-delay value served by /robots.txt; empty means no line
+	delay    string
 	pageHTML string
 }
 
-// newStubHost spins the httptest server, opens a real Postgres connection
-// (via DATABASE_URL, matching the other integration suites in this repo),
-// and wires a ServiceImpl at it exactly as production composition does.
 func newStubHost(t *testing.T) *stubHost {
 	t.Helper()
 
-	// Own database per test (internal/dbtest), dropped on cleanup: the host
-	// policy rows written here stay invisible to packages running in parallel.
 	database := dbtest.New(t)
 
-	// IsChallenged treats anything under 200 bytes as suspicious, so the stub
-	// page must be padded well past that floor to read as a normal response.
 	sh := &stubHost{t: t, pageHTML: "<html><body>" + strings.Repeat("ok ", 100) + "</body></html>"}
 
 	mux := http.NewServeMux()
@@ -96,22 +85,16 @@ func newStubHost(t *testing.T) *stubHost {
 	return sh
 }
 
-// setCrawlDelay configures the "Crawl-delay" value future /robots.txt
-// responses advertise. An empty string omits the line entirely (NULL from
-// the discovery path's point of view, before it is ever fetched).
 func (sh *stubHost) setCrawlDelay(seconds int) {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 	sh.delay = strconv.Itoa(seconds)
 }
 
-// pageURL builds a request URL against the stub host for the given path.
 func (sh *stubHost) pageURL(path string) string {
 	return sh.url + path
 }
 
-// fetchMany issues n sequential fetches against the stub host's root page
-// and returns every collected outcome, in order.
 func (sh *stubHost) fetchMany(t *testing.T, n int) []PageOutcome {
 	t.Helper()
 	outcomes := make([]PageOutcome, 0, n)
@@ -127,10 +110,6 @@ func (sh *stubHost) fetchMany(t *testing.T, n int) []PageOutcome {
 	return outcomes
 }
 
-// assertNoDeferralsOrBudgetLanguage is the reusable form of FR-002 and
-// FR-017: it fails the test if any collected outcome was deferred for any
-// reason, or if any reason string names the removed budget/quota/allowance/
-// limit mechanism.
 func assertNoDeferralsOrBudgetLanguage(t *testing.T, outcomes []PageOutcome) {
 	t.Helper()
 	banned := []string{"budget", "quota", "allowance", "limit"}

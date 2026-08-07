@@ -11,9 +11,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// Ingest tasks retry now, so the handler has to mark the failures that
-// retrying cannot fix — otherwise a malformed payload burns the whole retry
-// budget re-running a decode that will never succeed.
 func TestProcessTask_InvalidPayloadIsNotRetried(t *testing.T) {
 	h := worker.NewHandler(&fakeSearchRepo{}, nil, nil, &fakeEnqueuer{})
 

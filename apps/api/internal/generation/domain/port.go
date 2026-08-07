@@ -9,9 +9,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// Repository is the outbound persistence port for the generation use-case.
-// *sqlcgen.Queries satisfies it structurally. It embeds activity.Store because
-// the handler resumes an activity record from the same value (activity.FromID).
 type Repository interface {
 	activity.Store
 

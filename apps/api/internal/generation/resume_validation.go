@@ -7,10 +7,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// ValidationError points at the specific offending field (e.g.
-// "sections[2].entries[0].endDate"), per contracts/profile-resume-api.md's
-// 400 response shape, so the client can surface an inline error (FR-007)
-// instead of a generic message.
 type ValidationError struct {
 	Path    string
 	Message string
@@ -20,8 +16,6 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Path, e.Message)
 }
 
-// ValidateResume enforces the data-model.md validation rules. Returns the
-// first violation found (nil if none).
 func ValidateResume(resume dto.Resume) *ValidationError {
 	if strings.TrimSpace(resume.Name) == "" {
 		return &ValidationError{Path: "name", Message: "name is required"}
@@ -43,8 +37,6 @@ func ValidateResume(resume dto.Resume) *ValidationError {
 	return nil
 }
 
-// entryIsBlank reports whether none of the fields relevant to entryType are
-// populated, to prevent silently saving a blank entry.
 func entryIsBlank(entryType dto.EntryType, e dto.Entry) bool {
 	nonEmpty := func(s *string) bool { return s != nil && strings.TrimSpace(*s) != "" }
 	switch entryType {

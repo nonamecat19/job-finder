@@ -11,19 +11,12 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// ShapeProvider is the interface ResumeShapeHandler needs from the resumeshape
-// service. *resumeshape.Service satisfies it structurally.
 type ShapeProvider interface {
 	Get() domain.ShapeConfig
 	Update(ctx context.Context, cfg domain.ShapeConfig) (domain.ShapeConfig, error)
 	Reset(ctx context.Context) (domain.ShapeConfig, error)
 }
 
-// ResumeShapeHandler exposes GET/PUT/DELETE /v1/settings/resume-shape: the
-// shape of every generated resume (summary length, bullets per job, optional
-// sections, project limits, page target). PUT replaces the whole config —
-// validation runs before any write, so a rejected payload stores nothing.
-// DELETE means "drop my overrides" and returns the defaults.
 type ResumeShapeHandler struct {
 	Settings ShapeProvider
 }
@@ -83,8 +76,6 @@ func (h *ResumeShapeHandler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := dtoToConfig(body)
-	// Validate here as well as in the service so a bad payload is a 400 rather
-	// than a 500 — the service's own check is what makes the write atomic.
 	if err := cfg.Validate(); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return

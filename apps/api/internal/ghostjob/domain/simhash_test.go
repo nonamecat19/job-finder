@@ -14,8 +14,6 @@ and a generous benefits package including health insurance and paid time
 off for the right candidate who joins our mission-driven company.`
 
 func TestSimilarText_ReformattedCopyWithinThreshold(t *testing.T) {
-	// Same JD, re-wrapped with different line breaks/whitespace and a stray
-	// HTML tag, as a board's own renderer would produce.
 	reformatted := "<p>" + strings.ReplaceAll(baseJD, "\n", "  ") + "</p>\n\n  extra   spacing "
 
 	if !SimilarText(baseJD, reformatted) {

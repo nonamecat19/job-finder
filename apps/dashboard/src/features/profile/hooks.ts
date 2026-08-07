@@ -55,8 +55,6 @@ export function useUploadConfig() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.profiles.all });
       qc.invalidateQueries({ queryKey: queryKeys.profiles.configStatus });
-      // Structured view must reflect newly-imported data immediately, not
-      // just the raw config summary (FR-002, spec 009).
       qc.invalidateQueries({ queryKey: ['profiles', 'resume'] });
     },
   });

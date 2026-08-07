@@ -10,16 +10,11 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// ContactsProvider is the interface ContactsHandler needs from the
-// recruiter service.
 type ContactsProvider interface {
 	ListContacts(ctx context.Context, jobID string) ([]dto.JobContactDto, error)
 	Resolve(ctx context.Context, jobID string) ([]dto.JobContactDto, error)
 }
 
-// ContactsHandler wires /api/jobs/{id}/contacts and
-// /api/jobs/{id}/contacts/refresh (spec 007). Read-only per Constitution
-// Principle I: neither route ever sends anything to a resolved contact.
 type ContactsHandler struct {
 	Recruiter ContactsProvider
 }

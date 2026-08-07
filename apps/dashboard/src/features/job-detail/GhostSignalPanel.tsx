@@ -3,8 +3,6 @@ import type { JobSignalDto } from '@job-finder/shared';
 import { Button, Chip, Spinner } from '../../components/ui';
 import { useRefreshGhostScore } from './hooks';
 
-// Below this, a reported confidence is called out visibly so a weak verdict
-// is never read as a strong one (Story 2, scenario 5).
 const LOW_CONFIDENCE_THRESHOLD = 0.5;
 
 function scoreTone(score: number): string {

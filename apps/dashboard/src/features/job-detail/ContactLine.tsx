@@ -4,11 +4,6 @@ import type { JobContactDto } from '@job-finder/shared';
 import { Button, Chip, LoadingRegion, Spinner, SkeletonCircle, SkeletonLine } from '../../components/ui';
 import { useJobContacts, useRefreshJobContacts } from './hooks';
 
-// pickHeadline returns the highest-confidence contact. useJobContacts
-// already serves contacts pre-ordered best-first by the API (confidence
-// desc, source-priority, name — FR-010/SC-010), so the first entry is the
-// headline; this stays a pure function so it is trivially unit-testable
-// and doesn't depend on request ordering being preserved by a future change.
 export function pickHeadline(contacts: JobContactDto[] | undefined): JobContactDto | null {
   if (!contacts || contacts.length === 0) return null;
   return contacts[0];

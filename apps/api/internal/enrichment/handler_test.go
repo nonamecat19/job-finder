@@ -34,8 +34,6 @@ func (f *enrichFakeRepo) UpdateJobDetail(ctx context.Context, arg sqlcgen.Update
 	return f.job, nil
 }
 
-// InsertActivityRun no-ops: activity.New calls it unconditionally, and these
-// tests don't assert on activity-run bookkeeping.
 func (f *enrichFakeRepo) InsertActivityRun(ctx context.Context, arg sqlcgen.InsertActivityRunParams) (sqlcgen.ActivityRun, error) {
 	return sqlcgen.ActivityRun{}, nil
 }
@@ -172,8 +170,6 @@ func TestEnrichRemoteOK_RotatedOutDoesNotUpdate(t *testing.T) {
 	}
 }
 
-// enrichJobLeadsFakeSession always returns a fixed cookie, bypassing the
-// real login flow so these tests only exercise FetchDetail/enrichment.
 type enrichJobLeadsFakeSession struct{ cookie string }
 
 func (s *enrichJobLeadsFakeSession) Ensure(_ context.Context) (string, error)  { return s.cookie, nil }
@@ -293,11 +289,6 @@ func TestEnrichWellfound_UnavailableDoesNotUpdate(t *testing.T) {
 	}
 }
 
-// Ingestion no longer enqueues match/ghost for a NeedsDetail source — it
-// hands both to this handler. So enrichment owes every job it touches a match
-// and a ghost task, including on the give-up paths where the detail fetch
-// failed: otherwise the job carries no score at all and never surfaces in the
-// score-sorted feed.
 func TestEnrich_EnqueuesDownstreamEvenWhenFetchDetailFails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -326,8 +317,6 @@ func TestEnrich_EnqueuesDownstreamEvenWhenFetchDetailFails(t *testing.T) {
 	}
 }
 
-// A source with no enrich branch must not strand the job either: ingestion
-// skipped its match/ghost on the promise that this handler would run them.
 func TestEnrich_UnknownSourceStillEnqueuesDownstream(t *testing.T) {
 	repo := &enrichFakeRepo{job: sqlcgen.Job{
 		ID:        newIndeedEnrichTestUUID(),

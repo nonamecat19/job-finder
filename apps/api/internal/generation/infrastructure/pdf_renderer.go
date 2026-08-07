@@ -22,21 +22,14 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
-// mmToInches converts a CSS millimeter margin to the inches PrintToPDF expects.
 func mmToInches(mm float64) float64 { return mm / 25.4 }
 
-// HtmlPdfRenderer renders JSON-Resume data through an html/template, then
-// prints the resulting page to PDF via a shared headless Chromium instance
-// (chromedp), mirroring pdf-renderer.ts (which used Handlebars + Playwright's
-// page.pdf()).
 type HtmlPdfRenderer struct {
 	scraping  *scraping.Service
 	outDir    string
 	resumeTpl *template.Template
 	letterTpl *template.Template
-	// Store, when set, receives every rendered PDF so all resume files are
-	// persisted to object storage (MinIO) in addition to the local outDir.
-	Store storage.Blobstore
+	Store     storage.Blobstore
 }
 
 func NewHtmlPdfRenderer(scrapingSvc *scraping.Service, outDir string) (*HtmlPdfRenderer, error) {
@@ -54,9 +47,6 @@ func NewHtmlPdfRenderer(scrapingSvc *scraping.Service, outDir string) (*HtmlPdfR
 	return &HtmlPdfRenderer{scraping: scrapingSvc, outDir: outDir, resumeTpl: resumeTpl, letterTpl: letterTpl}, nil
 }
 
-// resumeView flattens dto.JsonResume's pointer fields into plain values so
-// {{if .Field}} in the template behaves like Handlebars' {{#if}} (falsy for
-// nil/empty), matching resume.hbs's conditionals field-for-field.
 type resumeView struct {
 	Name         string
 	Label        string
@@ -199,9 +189,6 @@ func (r *HtmlPdfRenderer) htmlToPDF(ctx context.Context, html string, outName st
 			return page.SetDocumentContent(tree.Frame.ID, html).Do(ctx)
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			// TS used page.pdf({ format: 'A4', ... }); CDP's PrintToPDF has no
-			// named-format shortcut and defaults to US Letter (8.5x11in), so
-			// the paper size must be set explicitly to match (A4 = 210x297mm).
 			buf, _, err := page.PrintToPDF().
 				WithPrintBackground(true).
 				WithPaperWidth(mmToInches(210)).
@@ -234,7 +221,6 @@ func (r *HtmlPdfRenderer) htmlToPDF(ctx context.Context, html string, outName st
 
 var paragraphSplitRe = regexp.MustCompile(`\n{2,}|\n`)
 
-// splitParagraphs mirrors `text.split(/\n{2,}|\n/).map(trim).filter(Boolean)`.
 func splitParagraphs(text string) []string {
 	var out []string
 	for _, p := range paragraphSplitRe.Split(text, -1) {

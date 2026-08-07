@@ -2,8 +2,8 @@ package companyintel
 
 import (
 	"github.com/job-finder/api/internal/companyintel/application"
-	cia "github.com/job-finder/api/internal/companyintel/infrastructure/adapters"
 	"github.com/job-finder/api/internal/companyintel/domain"
+	cia "github.com/job-finder/api/internal/companyintel/infrastructure/adapters"
 )
 
 type (
@@ -17,7 +17,7 @@ type (
 )
 
 var (
-	NewService  = application.NewService
-	NewRegistry = domain.NewRegistry
+	NewService   = application.NewService
+	NewRegistry  = domain.NewRegistry
 	ErrNoCompany = application.ErrNoCompany
 )

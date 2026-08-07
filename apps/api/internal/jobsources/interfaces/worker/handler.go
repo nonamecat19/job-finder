@@ -1,7 +1,3 @@
-// Package worker holds the jobsources bounded context's inbound worker
-// adapters: the asynq ingest task handler (adapter.Search -> dedupe ->
-// persist -> enqueue match) and the due-since-lastRunAt cron Scheduler that
-// triggers it. Mirrors ingestion.processor.ts / ingestion.scheduler.ts.
 package worker
 
 import (
@@ -24,29 +20,12 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// unhealthyAfterConsecutiveFailures is how many consecutive failed source
-// runs flip a JobSource to unhealthy. Since ingest tasks retry (see
-// IngestMaxRetry), a full retry cycle that never succeeds produces this many
-// failed run rows on its own, so the flag now means "one scrape window failed
-// outright" rather than "three scheduled windows failed". It self-clears:
-// SetJobSourceHealthy(true) runs on the next successful run.
 const unhealthyAfterConsecutiveFailures = 3
 
-// permanent wraps an error so asynq drops the task instead of retrying it.
-// Use it for failures no amount of waiting can fix — an unparseable payload,
-// a source or adapter that isn't registered, a subscription that's gone. The
-// transient cases (HTTP 5xx, timeouts, rate limits, a login that needs
-// redoing) stay retryable, which is the whole point of retrying ingest: a
-// single blip used to cost the source its entire cron window.
 func permanent(err error) error {
 	return fmt.Errorf("%w: %w", asynq.SkipRetry, err)
 }
 
-// lastAttempt reports whether the current asynq delivery is the final one, so
-// bookkeeping that must not run per-attempt (flagging the source unhealthy)
-// happens once the retries are actually exhausted. Outside a worker context
-// both lookups fail and it reports true — a direct ProcessTask call in a test
-// is its own last attempt.
 func lastAttempt(ctx context.Context) bool {
 	retried, ok1 := asynq.GetRetryCount(ctx)
 	maxRetry, ok2 := asynq.GetMaxRetry(ctx)
@@ -56,8 +35,6 @@ func lastAttempt(ctx context.Context) bool {
 	return retried >= maxRetry
 }
 
-// Handler processes "ingest" asynq tasks: adapter.Search -> dedupe -> persist
-// -> enqueue match. Mirrors ingestion.processor.ts.
 type Handler struct {
 	q         domain.SearchRepository
 	registry  *domain.Registry
@@ -67,19 +44,12 @@ type Handler struct {
 	chunkSize int
 }
 
-// HandlerOption configures optional collaborators. They are options rather
-// than constructor parameters so the unit tests, which need neither a real
-// transaction runner nor a tuned chunk size, keep constructing the handler
-// from its ports alone.
 type HandlerOption func(*Handler)
 
-// WithTxRunner makes the persist phase atomic. Without one the handler falls
-// back to sequential writes against its own repository.
 func WithTxRunner(tx domain.TxRunner) HandlerOption {
 	return func(h *Handler) { h.tx = tx }
 }
 
-// WithChunkSize overrides the number of postings stored per statement batch.
 func WithChunkSize(n int) HandlerOption {
 	return func(h *Handler) { h.chunkSize = n }
 }
@@ -179,11 +149,6 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 
 	jobs, err = adapter.Search(ctx, query, config)
 
-	// ATS board adapters (013) fan one Search call out over many roster
-	// employers; capture their per-employer outcomes on the run regardless
-	// of whether the overall Search errored (FR-019, FR-020, FR-023) — a
-	// run-level error from a board adapter means "zero employers read"
-	// (FR-021), not "no detail worth keeping".
 	if reporter, ok := adapter.(domain.EmployerReporter); ok {
 		if detail, mErr := json.Marshal(reporter.LastRunDetail()); mErr == nil {
 			_ = h.q.SetSourceRunEmployerDetail(ctx, sqlcgen.SetSourceRunEmployerDetailParams{ID: run.ID, EmployerDetail: detail})
@@ -204,11 +169,6 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		subscriptionID = subscription.ID
 	}
 
-	// Adapters whose Search returns list-only rows get their downstream
-	// analysis deferred: enrichment fetches the real description first, then
-	// enqueues match + ghost itself. Scoring the teaser here as well would
-	// mean two LLM passes per job, the first one on text the job doesn't
-	// actually have.
 	needsDetail := domain.NeedsDetail(adapter)
 
 	batch := NewPostingBatch(jobs, subscriptionID, run.ID, needsDetail)
@@ -224,9 +184,6 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		"statements", result.Statements, "inserted", created,
 		"reposted", result.Reposted, "merged", result.Merged, "skipped", result.Skipped)
 
-	// Redis cannot join the Postgres transaction, so downstream work is
-	// queued after commit and only for genuinely new rows. A crash in between
-	// leaves the job for the ListJobsMissingMatch sweep, exactly as before.
 	h.enqueueInserted(ctx, result, needsDetail)
 
 	verdict := computeVerdict(len(jobs), nil)
@@ -249,24 +206,12 @@ func (h *Handler) finishError(ctx context.Context, runID pgtype.UUID, source sql
 	verdict, blockedCount, blockReason := computeErrorVerdict(cause)
 	h.writeVerdict(ctx, runID, verdict, blockedCount, blockReason)
 
-	// Only judge the source's health once asynq has stopped retrying: an
-	// earlier attempt still has a chance to succeed and clear the flag, and
-	// flipping it mid-cycle would show the source as broken in the UI while
-	// the retry that fixes it is still queued.
 	if lastAttempt(ctx) {
 		h.flagIfUnhealthy(ctx, source, sourceKey)
 	}
 	slog.Error("ingest failed", "source", sourceKey, "error", msg)
 }
 
-// persist stores the whole run atomically. The dedupe key is
-// sha256(lower(company)|lower(title)|canonicalUrl) where canonicalUrl strips
-// the query string and trailing slashes — it must match
-// ingestion.processor.ts:74 exactly, and is unchanged by batching, so every
-// previously stored posting is still recognised.
-//
-// Without a transaction runner injected the same code runs against the
-// handler's own repository, so unit tests need no database.
 func (h *Handler) persist(ctx context.Context, batch PostingBatch) (PersistResult, error) {
 	if h.tx == nil {
 		return persistBatch(ctx, h.q, batch, h.chunkSize)
@@ -283,11 +228,6 @@ func (h *Handler) persist(ctx context.Context, batch PostingBatch) (PersistResul
 	return result, nil
 }
 
-// enqueueInserted queues downstream work for the postings this run actually
-// inserted. needsDetail comes from the source's adapter: when true the row is
-// a list-only stub, so match and ghost scoring are left to enrichment (which
-// runs them once the real description has landed) instead of being enqueued
-// twice against two different versions of the same job.
 func (h *Handler) enqueueInserted(ctx context.Context, result PersistResult, needsDetail bool) {
 	for _, ins := range result.Inserted {
 		jobID := dbutil.UUIDString(ins.JobID)
@@ -302,9 +242,6 @@ func (h *Handler) enqueueInserted(ctx context.Context, result PersistResult, nee
 	}
 }
 
-// activityID renders the pre-created ActivityRun id for an op, or nil when the
-// batch insert produced no row for it — the task is still queued, just
-// untracked, matching the old behaviour when activity.New failed.
 func activityID(ins InsertedJob, op string) *string {
 	id, ok := ins.ActivityIDs[op]
 	if !ok || !id.Valid {
@@ -319,7 +256,6 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, actID *string)
 	if err != nil {
 		return
 	}
-	// attempts: 2 with exponential backoff, matching matchQueue.add's options.
 	opts := []asynq.Option{asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)}
 	if actID != nil {
 		opts = append(opts, asynq.TaskID(*actID))
@@ -329,10 +265,6 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, actID *string)
 	}
 }
 
-// enqueueGhostScore queues the ghost-job detector (005) to score this job
-// right after ingestion. The activity record is tracked for retry/visibility
-// only — a scoring failure here must never affect ingestion or the job's own
-// record (FR-018); the handler always returns nil to asynq regardless.
 func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string, actID *string) {
 	payload, err := json.Marshal(queue.GhostScorePayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
@@ -347,9 +279,6 @@ func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string, actID *st
 	}
 }
 
-// enqueueEnrich queues a detail-fetch task for a shallow (list-only) job
-// row. No retry: a fetch failure just leaves detailScrapedAt NULL, and the
-// next backfill sweep (POST /sources/djinni/enrich) picks it up again.
 func (h *Handler) enqueueEnrich(ctx context.Context, jobID string, j dto.NormalizedJob, actID *string) error {
 	payload, err := json.Marshal(queue.EnrichPayload{JobID: jobID, ActivityID: actID})
 	if err != nil {
@@ -365,8 +294,6 @@ func (h *Handler) enqueueEnrich(ctx context.Context, jobID string, j dto.Normali
 	return nil
 }
 
-// flagIfUnhealthy marks the source unhealthy after N consecutive failed runs,
-// matching flagIfUnhealthy in ingestion.processor.ts.
 func (h *Handler) flagIfUnhealthy(ctx context.Context, sourceID sqlcgen.JobSource, sourceKey string) {
 	recent, err := h.q.RecentSourceRunsForSource(ctx, sqlcgen.RecentSourceRunsForSourceParams{
 		SourceId: sourceID.ID,

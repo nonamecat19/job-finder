@@ -1,10 +1,3 @@
-// Package generation is the facade for the Document Generation bounded
-// context: the pure RendercvMaster/grounding model lives in domain/, the
-// tailoring/rendering orchestration in application/, the HTML+chromedp and
-// RenderCV-CLI adapters in infrastructure/, and the asynq task handler in
-// interfaces/worker/. This file re-exports the shape callers already depend
-// on (matching, profile, httpapi, cmd/server) so relocating the package
-// required no changes at call sites beyond the import path.
 package generation
 
 import (
@@ -40,16 +33,10 @@ var (
 	ParseRendercv           = domain.ParseRendercv
 	PrepareMasterForMarshal = domain.PrepareMasterForMarshal
 
-	// sectionOrderKey mirrors domain.SectionOrderKey for the in-package
-	// resume_mapping.go, which reads the order key ParseRendercv writes.
 	sectionOrderKey = domain.SectionOrderKey
 
-	// deepCloneYAML mirrors domain.DeepCloneYAML for the in-package
-	// resume_mapping.go.
 	deepCloneYAML = domain.DeepCloneYAML
 
-	// sortByDefaultSectionOrder mirrors domain.SortByDefaultSectionOrder for
-	// the in-package resume_mapping.go.
 	sortByDefaultSectionOrder = domain.SortByDefaultSectionOrder
 
 	NewService          = application.NewService

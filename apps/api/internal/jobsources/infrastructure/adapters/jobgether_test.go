@@ -179,9 +179,6 @@ func TestJobgetherSearch_RespectsPageCap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
 		w.Header().Set("Content-Type", "text/html")
-		// Every page returns the same first card, tripping the loop guard
-		// after page 1 — this asserts the cap/guard bounds the request
-		// count rather than looping forever on an unbounded/repeating feed.
 		_, _ = w.Write([]byte(page1))
 	}))
 	defer srv.Close()
@@ -243,10 +240,6 @@ func TestJobgetherSearch_BlockedMidPagination(t *testing.T) {
 }
 
 func TestJobgetherHealthCheck(t *testing.T) {
-	// HealthCheck targets the fixed jobgether.com host; reachability in a
-	// sandboxed/offline test environment is not guaranteed, so this only
-	// asserts the "never a non-nil error" contract, matching
-	// GlassdoorAdapter's equivalent test.
 	a := JobgetherAdapter{Scraping: scraping.New()}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)

@@ -113,7 +113,6 @@ func TestDiffServiceWithRephraser(t *testing.T) {
 	if out.Suggestions[0].Rephrase == nil || *out.Suggestions[0].Rephrase != "Reframed Docker" {
 		t.Errorf("suggestion = %+v", out.Suggestions[0])
 	}
-	// Metadata coveragePct derived (no persisted value): 0 matched of 1 total.
 	if out.Metadata.CoveragePct != 0 {
 		t.Errorf("coveragePct = %v, want 0", out.Metadata.CoveragePct)
 	}

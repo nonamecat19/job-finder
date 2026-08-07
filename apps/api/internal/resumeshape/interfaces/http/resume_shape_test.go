@@ -15,8 +15,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// fakeSettings is the handler's view of resumeshape.Service, with the same
-// validate-before-write ordering: a rejected config must leave state untouched.
 type fakeSettings struct {
 	cfg domain.ShapeConfig
 }
@@ -137,7 +135,6 @@ func TestPutValidConfigRoundTrips(t *testing.T) {
 func TestPutFullNonDefaultRoundTrip(t *testing.T) {
 	r, _ := newTestRouter()
 
-	// Every field set to an in-range value different from its default.
 	want := dto.ResumeShapeConfigDto{
 		SummaryLines: 12, SkillsEnabled: false, SkillsMaxGroups: 20,
 		ExperienceBulletsMin: 1, ExperienceBulletsMax: 10, TargetPages: 3,
@@ -213,7 +210,6 @@ func TestPutRejectsInvalidConfigs(t *testing.T) {
 				}
 			}
 
-			// Nothing was stored: the config is still what it was.
 			rec = do(t, r, http.MethodGet, "/settings/resume-shape", nil)
 			if got := decodeConfig(t, rec); got != defaultDto() {
 				t.Errorf("GET after rejected PUT = %+v, want the previous values %+v", got, defaultDto())

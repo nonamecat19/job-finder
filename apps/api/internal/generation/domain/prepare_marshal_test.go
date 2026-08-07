@@ -2,9 +2,6 @@ package domain
 
 import "testing"
 
-// entriesFromPrepared reads back a section's entries from a
-// PrepareMasterForMarshal result, whose cv.sections is an OrderedYAMLMap
-// (not a plain map[string]any) so CvSections can't be reused here.
 func entriesFromPrepared(t *testing.T, out RendercvMaster, sectionKey string) []map[string]any {
 	t.Helper()
 	cv, _ := out["cv"].(map[string]any)
@@ -19,9 +16,6 @@ func projectsFromPrepared(t *testing.T, out RendercvMaster) []map[string]any {
 	return entriesFromPrepared(t, out, "projects")
 }
 
-// rendercv's NormalEntry (projects) has no dedicated url field: extra keys
-// are silently accepted and ignored by the Typst templates. The only way to
-// get a clickable project link is Markdown syntax inside "name" itself.
 func TestPrepareMasterForMarshalEmbedsProjectURLIntoName(t *testing.T) {
 	master := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"projects": []any{
@@ -85,8 +79,6 @@ func TestPrepareMasterForMarshalDoesNotDoubleWrapAlreadyMarkdownName(t *testing.
 	}
 }
 
-// Certifications are authored as the same rendercv NormalEntry shape as
-// projects (name/url/date), so they hit the same no-url-field limitation.
 func TestPrepareMasterForMarshalEmbedsCertificationURLIntoName(t *testing.T) {
 	master := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"certifications": []any{

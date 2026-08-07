@@ -1,6 +1,3 @@
-// Package adapters — work.ua is a general-purpose (not dev-only) Ukrainian
-// job board, needs no credentials, and the 2s pacing is mandated by its
-// published Crawl-delay: 2.
 package adapters
 
 import (
@@ -26,14 +23,10 @@ const (
 	workuaMaxSubscriptionPages = 50
 )
 
-// WorkUaMinDelay is work.ua's published Crawl-delay: 2 — a floor config may
-// raise but never lower.
 const WorkUaMinDelay = 2 * time.Second
 
 var workuaRemoteRe = regexp.MustCompile(`(?i)remote|віддалено|дистанційно`)
 
-// WorkUaAdapter — work.ua, general-purpose Ukrainian job board, server-rendered HTML.
-// No credentials required.
 type WorkUaAdapter struct {
 	Scraping scraping.Scraper
 }
@@ -41,10 +34,6 @@ type WorkUaAdapter struct {
 func (WorkUaAdapter) Key() string          { return "workua" }
 func (WorkUaAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
-// NeedsDetail reports true: the list page carries a snippet only, and
-// FetchDetail already backs the enrichment sweep for this source — declaring
-// the capability just lets ingestion queue that pass up front (paced by the
-// enrich queue's WorkUaMinDelay) instead of waiting for a manual backfill.
 func (WorkUaAdapter) NeedsDetail() bool { return true }
 
 func (d WorkUaAdapter) Search(ctx context.Context, query dto.SearchQuery, config map[string]any) ([]dto.NormalizedJob, error) {
@@ -84,10 +73,6 @@ func (d WorkUaAdapter) Search(ctx context.Context, query dto.SearchQuery, config
 	return jobs, nil
 }
 
-// scrapeWorkUaSubscription pages through a work.ua search URL — same card
-// markup as the public search, reused via parseWorkUaCards. Stops on an
-// empty page, a hard page cap, or the page returning an already-seen first
-// card (guards an infinite pagination loop).
 func (d WorkUaAdapter) scrapeWorkUaSubscription(ctx context.Context, subURL string) ([]dto.NormalizedJob, error) {
 	base, err := url.Parse(subURL)
 	if err != nil {
@@ -134,7 +119,6 @@ func (d WorkUaAdapter) scrapeWorkUaSubscription(ctx context.Context, subURL stri
 	return jobs, nil
 }
 
-// parseWorkUaCards extracts job cards from a work.ua listing page.
 func parseWorkUaCards(doc *goquery.Document) []dto.NormalizedJob {
 	var jobs []dto.NormalizedJob
 	doc.Find("div.card.job-link").Each(func(_ int, item *goquery.Selection) {
@@ -203,9 +187,6 @@ func parseWorkUaCards(doc *goquery.Document) []dto.NormalizedJob {
 	return jobs
 }
 
-// WorkUaDetailPatch is the parsed subset of a work.ua job detail page used to
-// fill in a shallow (list-only) Job row. Not part of the Adapter interface —
-// work.ua-specific, called directly by the enrichment handler.
 type WorkUaDetailPatch struct {
 	Description string
 	SalaryRaw   *string
@@ -215,9 +196,6 @@ type WorkUaDetailPatch struct {
 	Raw         map[string]string
 }
 
-// FetchDetail fetches a single work.ua job page and parses the full
-// description/salary/location/remote/posted-date. Selectors are best-effort
-// and defensive; a missing field just stays empty rather than erroring.
 func (d WorkUaAdapter) FetchDetail(ctx context.Context, jobURL string, config map[string]any) (WorkUaDetailPatch, error) {
 	html, err := d.Scraping.FetchHTML(ctx, jobURL, nil)
 	if err != nil {
@@ -257,11 +235,6 @@ func (d WorkUaAdapter) FetchDetail(ctx context.Context, jobURL string, config ma
 	return patch, nil
 }
 
-// parseWorkUaPostedAt normalises work.ua's datetime attribute to RFC3339.
-// work.ua emits datetime="2026-07-16 02:29:02" — space separator, no
-// timezone. dbutil.TimestampFromPtr accepts only RFC3339 and date-only
-// "2006-01-02" — on failure it returns a zero timestamp silently, so we
-// must normalise before handing off.
 func parseWorkUaPostedAt(datetimeAttr string) *string {
 	if datetimeAttr == "" {
 		return nil

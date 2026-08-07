@@ -16,9 +16,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// schedulerFakeRepo serves one due search and records whether the scheduler
-// went on to read it back — GetSavedSearch is RunSearch's first call, so it
-// stands in for "the run actually started" without needing a live registry.
 type schedulerFakeRepo struct {
 	domain.SearchRepository
 	search      sqlcgen.SavedSearch
@@ -51,7 +48,7 @@ func (f *schedulerFakeRepo) ClaimSavedSearchRun(ctx context.Context, arg sqlcgen
 
 func (f *schedulerFakeRepo) GetSavedSearch(ctx context.Context, id pgtype.UUID) (sqlcgen.SavedSearch, error) {
 	f.runStarted = true
-	return f.search, pgx.ErrNoRows // stop RunSearch before it needs a registry
+	return f.search, pgx.ErrNoRows
 }
 
 func (f *schedulerFakeRepo) DeleteActivityRunsBefore(ctx context.Context, createdat pgtype.Timestamp) error {
@@ -79,9 +76,6 @@ func (f *schedulerFakeRepo) ClaimSubscriptionRun(ctx context.Context, arg sqlcge
 	return arg.ID, nil
 }
 
-// GetSubscription is RunSubscription's first call, so it stands in for "the
-// run actually started". It hands back a disabled copy so RunSubscription
-// bails on the next line, before it would need a live jobsources.Service.
 func (f *schedulerFakeRepo) GetSubscription(ctx context.Context, id pgtype.UUID) (sqlcgen.Subscription, error) {
 	f.subRunStarted = true
 	if len(f.subs) == 0 {
@@ -102,8 +96,6 @@ func dueSearch() sqlcgen.SavedSearch {
 	}
 }
 
-// The scheduler claims a due search before running it, passing the lastRunAt
-// it made the due decision on so the write is a compare-and-swap.
 func TestTick_ClaimsBeforeRunning(t *testing.T) {
 	repo := &schedulerFakeRepo{search: dueSearch()}
 	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, &fakeEnqueuer{}))
@@ -122,8 +114,6 @@ func TestTick_ClaimsBeforeRunning(t *testing.T) {
 	}
 }
 
-// A lost claim means another scheduler (or another tick) already took this
-// slot — the search must not be scraped a second time.
 func TestTick_LostClaimSkipsRun(t *testing.T) {
 	repo := &schedulerFakeRepo{search: dueSearch(), claimErr: pgx.ErrNoRows}
 	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, &fakeEnqueuer{}))
@@ -135,13 +125,10 @@ func TestTick_LostClaimSkipsRun(t *testing.T) {
 	}
 }
 
-// A job whose match task was lost between InsertJob and EnqueueContext has no
-// score, and an unscored job sorts last in the feed — so nothing surfaces the
-// breakage. Every tick sweeps for them and re-enqueues.
 func TestTick_ReconcilesJobsWithNoMatchResult(t *testing.T) {
 	repo := &schedulerFakeRepo{
 		search:   dueSearch(),
-		claimErr: pgx.ErrNoRows, // skip the run; this test is about the sweep
+		claimErr: pgx.ErrNoRows,
 		unmatched: []sqlcgen.ListJobsMissingMatchRow{
 			{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, Company: "Acme", Title: "Go Developer"},
 			{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, Company: "Globex", Title: "Backend Engineer"},
@@ -161,9 +148,6 @@ func TestTick_ReconcilesJobsWithNoMatchResult(t *testing.T) {
 		}
 	}
 
-	// Both bounds must be set: without the lower one the sweep would fight
-	// with jobs still queued behind enrichment, without the upper one a
-	// permanently failing job would be retried on every tick forever.
 	w := repo.reconcileWindow
 	if !w.OlderThan.Valid || !w.NewerThan.Valid {
 		t.Fatalf("expected the sweep to be bounded on both sides, got %+v", w)
@@ -199,13 +183,10 @@ func dueSubscription() sqlcgen.Subscription {
 	}
 }
 
-// Subscriptions carried a lastRunAt but nothing scheduled them: they only ran
-// when someone pressed Run. They now go through the same due-then-claim pass
-// as saved searches.
 func TestTick_RunsDueSubscriptions(t *testing.T) {
 	repo := &schedulerFakeRepo{
 		search:   dueSearch(),
-		claimErr: pgx.ErrNoRows, // skip the search run; this test is about subs
+		claimErr: pgx.ErrNoRows,
 		subs:     []sqlcgen.Subscription{dueSubscription()},
 	}
 	s := worker.NewScheduler(repo, application.NewSearchService(repo, nil, nil, &countingEnqueuer{}))

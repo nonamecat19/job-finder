@@ -7,7 +7,6 @@ interface EntryFormProps {
   onChange: (entry: Entry) => void;
 }
 
-// "numbered" entries are single-line items (e.g. patents).
 export function NumberedEntryForm({ entry, onChange }: EntryFormProps) {
   const set = makeEntrySetter(entry, onChange);
   return (

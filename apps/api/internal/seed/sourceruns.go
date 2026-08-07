@@ -35,11 +35,7 @@ var sourceRuns = []sourceRunSeed{
 	{sourceKey: "wellfound", searchID: "seed:wellfound:golang-engineer"},
 }
 
-// seedSourceRuns links each run to the JobSource row lazily created by
-// jobsources.Service.GetByKey in cmd/seed/main.go, looked up by key since
-// that row's id isn't known ahead of time.
 func seedSourceRuns(ctx context.Context, pool *pgxpool.Pool, q *sqlcgen.Queries) error {
-	// Idempotency: check if seed source runs already exist.
 	var count int
 	err := pool.QueryRow(ctx, `SELECT count(*) FROM "SourceRun" WHERE "searchId" LIKE 'seed:%'`).Scan(&count)
 	if err != nil {

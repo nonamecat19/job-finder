@@ -18,7 +18,6 @@ Only Name,,,,,
 		t.Fatalf("ParseCSV() error = %v", err)
 	}
 
-	// The blank-name row is dropped.
 	if len(contacts) != 3 {
 		t.Fatalf("ParseCSV() got %d contacts, want 3", len(contacts))
 	}
@@ -26,7 +25,6 @@ Only Name,,,,,
 	if contacts[0].Name != "Jane Doe" || contacts[0].Email != "jane@example.com" || contacts[0].Company != "Acme Inc" {
 		t.Errorf("row 0 = %+v, unexpected", contacts[0])
 	}
-	// Whitespace around fields must be trimmed.
 	if contacts[1].Name != "John Smith" || contacts[1].Email != "john@example.com" || contacts[1].Company != "Acme Inc" {
 		t.Errorf("row 1 = %+v, want trimmed fields", contacts[1])
 	}

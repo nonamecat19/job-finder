@@ -16,25 +16,16 @@ import (
 
 var headcountRe = regexp.MustCompile(`(?i)([\d][\d,]*)\+?\s*employees`)
 
-// HeadcountScraper reads the company's own About/Team page and looks for an
-// employee-count figure. Per spec.md "Headcount trend requires patience":
-// the first probe records a baseline; a second probe (a later manual
-// refresh) computes a delta against domain.Input.PreviousHeadcount.
 type HeadcountScraper struct {
 	Scraping scraping.Scraper
 }
 
 func (HeadcountScraper) Kind() string { return domain.KindHeadcount }
 
-// Domain is intentionally the generic label "company-site" — the actual
-// host varies per company, so it cannot be paced/logged as one shared
-// domain the way the other (fixed-host) scrapers can.
 func (HeadcountScraper) Domain() string { return "company-site" }
 
 func (s HeadcountScraper) Scrape(ctx context.Context, in domain.Input) (*domain.SignalResult, error) {
 	if strings.TrimSpace(in.Website) == "" {
-		// No known website yet — silently skipped, per spec.md edge case
-		// "A company has no website in the job posting".
 		return nil, nil
 	}
 
@@ -70,11 +61,6 @@ func aboutPageURL(website string) (string, error) {
 	return u.String(), nil
 }
 
-// parseHeadcount finds the first "N employees" figure on the page and
-// renders either a baseline message (no previous snapshot) or a
-// current-vs-previous trend line. A page with no recognizable figure is a
-// hard failure — headcount extraction has no standard layout (research.md
-// risk), so a miss is logged and the signal simply stays unset.
 func parseHeadcount(doc *goquery.Document, previous *int, sourceURL string) (*domain.SignalResult, error) {
 	match := headcountRe.FindStringSubmatch(doc.Text())
 	if match == nil {

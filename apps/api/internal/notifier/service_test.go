@@ -185,7 +185,7 @@ func TestMaybeNotify_RateLimitReached(t *testing.T) {
 				PostedAt: pgtype.Timestamp{Time: time.Now().UTC(), Valid: true},
 			},
 		},
-		count: 10, // already at cap
+		count: 10,
 	}
 	svc := notifier.NewService(r,
 		notifier.WithMatchThreshold(70),
@@ -213,7 +213,7 @@ func TestMaybeNotify_UnderRateLimit(t *testing.T) {
 				PostedAt: pgtype.Timestamp{Time: time.Now().UTC(), Valid: true},
 			},
 		},
-		count: 5, // under cap of 10
+		count: 5,
 	}
 	svc := notifier.NewService(r,
 		notifier.WithMatchThreshold(70),

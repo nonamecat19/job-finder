@@ -1,9 +1,5 @@
 import type { Page } from '@playwright/test';
 
-/**
- * The nine top-level routes under test (data-model E4 / SC-001, SC-004, SC-006, SC-010).
- * `/jobs/:id` stands in for the dynamic job-detail route with a fixed id.
- */
 export const ROUTES = [
   '/',
   '/jobs/e2e-job-1',
@@ -29,18 +25,7 @@ const JOB_FIXTURE = {
   matchResult: { score: 85, matchedSkills: ['React'], missingSkills: [] },
 };
 
-/**
- * Stubs every `/api/**` call the shell and the nine pages can issue, so each route mounts its
- * real content instead of failing on ECONNREFUSED (no backend runs in this suite — see
- * feed.spec.ts/sources.spec.ts). A wildcard catch-all covers anything unmatched with an
- * empty-but-valid JSON body; that's enough for layout/contrast assertions since Tile occupies
- * its grid footprint in every state (loading/empty/error/ready) per contracts/layout-primitives.md.
- */
 export async function mockAllRoutes(page: Page): Promise<void> {
-  // Registered first so it runs last: Playwright dispatches route handlers in reverse
-  // registration order, so this catch-all only fires when none of the specific routes below
-  // (registered after it) match. It resolves anything unmodelled to an empty object rather than
-  // a network error, so a widget lands in its `empty`/`error` Tile state instead of hanging.
   await page.route('**/api/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });

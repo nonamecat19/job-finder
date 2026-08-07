@@ -74,7 +74,6 @@ func TestAssessmentServiceAssess_ComputesAndCaches(t *testing.T) {
 	}
 	svc := NewAssessmentService(NewService(model), reader, entries)
 
-	// Before Assess runs, nothing is cached.
 	if _, err := svc.CachedAssessment(context.Background(), validJobID); !errors.Is(err, ErrNotAssessed) {
 		t.Fatalf("expected ErrNotAssessed before Assess, got %v", err)
 	}
@@ -93,8 +92,6 @@ func TestAssessmentServiceAssess_ComputesAndCaches(t *testing.T) {
 		t.Fatalf("unexpected gaps: %+v", out.Gaps)
 	}
 
-	// After Assess, CachedAssessment returns the same result without
-	// needing the diff reader or profile entries again.
 	cached, err := svc.CachedAssessment(context.Background(), validJobID)
 	if err != nil {
 		t.Fatalf("CachedAssessment: %v", err)

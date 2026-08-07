@@ -2,11 +2,6 @@
 
 package infrastructure
 
-// Manual smoke test for the chromedp/chromium PDF path (not part of
-// `go test ./...` — requires a working chromium binary). Run with:
-//
-//	go test -tags live ./internal/generation/... -run TestLive_HtmlPdf -v
-
 import (
 	"context"
 	"os"

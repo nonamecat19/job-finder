@@ -1,7 +1,3 @@
-// Package gateway implements domain.Provider against a LiteLLM proxy's
-// OpenAI-compatible /chat/completions endpoint (029-litellm-proxy-gateway).
-// The proxy maps each task key (sent as the model field) to a configured
-// provider+model, so a model change is a config.yaml edit, not a redeploy.
 package gateway
 
 import (
@@ -19,26 +15,8 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/shared"
 )
 
-// safetyNetTimeout is a backstop for a caller that supplies no deadline, not
-// the operating limit. The per-call budget belongs to the caller's context:
-// resume generation allows 15 minutes, fit analysis 5, and an http.Client
-// timeout is absolute — it overrides the context rather than deferring to it,
-// so a value below the caller's budget silently truncates every long task.
-//
-// A 120s cap here previously did exactly that: generation runs with a 900s
-// budget died at 120.0s reporting "Client.Timeout exceeded while awaiting
-// headers" while the proxy was still working. This value therefore sits above
-// the proxy's own worst-case chain (see request_timeout in
-// gateway/config.yaml, whose arithmetic is bounded to 600s) so the timeout
-// that fires first is always the proxy's — which returns a real upstream
-// error — and never this one, which can only report a local deadline.
 const safetyNetTimeout = 15 * time.Minute
 
-// Provider talks to a LiteLLM proxy. The proxy has no embeddings endpoint, so
-// Embed delegates to an injected Ollama provider (FR-006: embeddings always
-// stay on Ollama). Unlike the Cerebras adapter there is deliberately no
-// circuit breaker here: the proxy already aggregates upstream quotas and is
-// expected to handle provider fallback itself (FR-005 via config.yaml).
 type Provider struct {
 	http    *http.Client
 	baseURL string
@@ -46,11 +24,6 @@ type Provider struct {
 	ollama  domain.Provider
 }
 
-// New builds a provider. baseURL and apiKey are required — the caller
-// (llm.NewProviders) only constructs a Provider when config.GatewayURL and
-// config.LiteLLMMasterKey are set. apiKey is the proxy's master key; the
-// model each request sends is the task key, resolved by the proxy to a real
-// provider+model.
 func New(baseURL, apiKey string, ollama domain.Provider) (*Provider, error) {
 	if baseURL == "" {
 		return nil, errors.New("gateway: baseURL is required")
@@ -66,11 +39,6 @@ func New(baseURL, apiKey string, ollama domain.Provider) (*Provider, error) {
 	}, nil
 }
 
-// ModelName is the fallback model identifier; the effective model is always
-// the task key supplied via CompleteOptions.Model by the Router (the proxy
-// resolves it to a real provider+model). This fallback intentionally names
-// the provider rather than a proxy model, so a miswired call that reaches
-// the proxy with it fails loudly as an unknown model.
 func (g *Provider) ModelName() string { return "gateway" }
 
 type chatMessage struct {
@@ -114,13 +82,6 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
-// servedModel picks the resolved deployment model for FR-012 logging: the
-// x-litellm-model-name response header is authoritative on both the primary
-// and fallback paths (verified 2026-07-31 — the body's model field echoes
-// the *requested* group name on a primary-tier hit, only becoming the
-// resolved model once a fallback fires; see research.md R4). Falls back to
-// the body field, then "unknown". Never errors — an unparsable/absent field
-// is a logging gap, not a request failure.
 func servedModel(headers http.Header, body chatResponse) string {
 	if v := headers.Get("x-litellm-model-name"); v != "" {
 		return v
@@ -176,10 +137,6 @@ func (g *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
 	return parsed.Choices[0].Message.Content, nil
 }
 
-// logServed emits one structured line per gateway request (FR-012): task key,
-// requested group (the same value — the Router always sends the task key as
-// the model), served model, duration, outcome. Logging never changes error
-// classification or introduces a new failure mode.
 func (g *Provider) logServed(requestedGroup, served string, dur time.Duration, outcome, modelID string) {
 	attrs := []any{
 		"task", requestedGroup,
@@ -274,8 +231,6 @@ func isResponseFormatRejection(err error) bool {
 	return errors.Is(err, shared.ErrModelUnavailable) || errors.Is(err, shared.ErrInvalidResponse)
 }
 
-// Embed delegates to the local Ollama embedder — the proxy offers no
-// embeddings API (FR-006: embeddings always stay on Ollama).
 func (g *Provider) Embed(ctx context.Context, text string) ([]float32, error) {
 	return g.ollama.Embed(ctx, text)
 }

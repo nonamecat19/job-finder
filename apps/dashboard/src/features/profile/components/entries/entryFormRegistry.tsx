@@ -39,9 +39,6 @@ export const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
   text: 'Text',
 };
 
-// Returns the structured form for a known entryType, or null when the type
-// doesn't match any of the 9 canonical shapes — callers should render
-// UnrecognizedEntryFallbackForm in that case (FR-009).
 export function getEntryForm(entryType: EntryType): ComponentType<EntryFormProps> | null {
   return REGISTRY[entryType] ?? null;
 }

@@ -118,8 +118,6 @@ func TestProfilesUpdate(t *testing.T) {
 	}
 }
 
-// TestGetResume_EmptyProfile asserts an empty profile (FR-012) returns a
-// valid, non-error structured resume rather than an error.
 func TestGetResume_EmptyProfile(t *testing.T) {
 	h := &profilehttp.ProfilesHandler{Profiles: &fakeProfileProvider{}}
 	r := testutil.SetupRouter(h.Mount)
@@ -135,9 +133,6 @@ func TestGetResume_EmptyProfile(t *testing.T) {
 	}
 }
 
-// TestUpdateResume_AllEntryTypesAndOrder asserts a PUT populating all 9 entry
-// types, then a GET, round-trips content and section order (FR-003, FR-006,
-// SC-004; spec 009 quickstart.md Scenario 1 / 3).
 func TestUpdateResume_AllEntryTypesAndOrder(t *testing.T) {
 	h := &profilehttp.ProfilesHandler{Profiles: &fakeProfileProvider{}}
 	r := testutil.SetupRouter(h.Mount)
@@ -173,8 +168,6 @@ func TestUpdateResume_AllEntryTypesAndOrder(t *testing.T) {
 		}
 	}
 
-	// Reorder sections (experience first) and confirm the new order persists
-	// (FR-006, spec 009 quickstart.md Scenario 3).
 	reordered := out.Resume
 	reordered.Sections[0], reordered.Sections[1] = reordered.Sections[1], reordered.Sections[0]
 	w3 := testutil.DoRequestJSON(r, "PUT", "/api/profiles/p1/resume", dto.ResumeDto{Resume: reordered}, map[string]string{"id": "p1"})
@@ -189,8 +182,6 @@ func TestUpdateResume_AllEntryTypesAndOrder(t *testing.T) {
 	}
 }
 
-// TestUpdateResume_ValidationError asserts an invalid resume (missing name)
-// is rejected with a 400 pointing at the offending field (FR-007).
 func TestUpdateResume_ValidationError(t *testing.T) {
 	h := &profilehttp.ProfilesHandler{Profiles: &fakeProfileProvider{}}
 	r := testutil.SetupRouter(h.Mount)

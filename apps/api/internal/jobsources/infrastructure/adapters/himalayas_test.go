@@ -36,9 +36,6 @@ func TestHimalayasKind(t *testing.T) {
 	}
 }
 
-// TestHimalayasSearch_MapsAndFiltersFixture covers T007: Search against a
-// fixture-backed httptest.Server returns normalized jobs with correct field
-// mapping, and keeps only jobs matching the subscription's category slug.
 func TestHimalayasSearch_MapsAndFiltersFixture(t *testing.T) {
 	body := loadHimalayasFixture(t, "himalayas_list.json")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -87,9 +84,6 @@ func TestHimalayasSearch_MapsAndFiltersFixture(t *testing.T) {
 	}
 }
 
-// TestHimalayasSearch_ZeroResultsVsUnparseable covers T008: zero-results is
-// not an error (FR-011), while unparseable JSON returns a distinguishable
-// error.
 func TestHimalayasSearch_ZeroResultsVsUnparseable(t *testing.T) {
 	t.Run("zero results", func(t *testing.T) {
 		body := loadHimalayasFixture(t, "himalayas_empty.json")
@@ -124,8 +118,6 @@ func TestHimalayasSearch_ZeroResultsVsUnparseable(t *testing.T) {
 	})
 }
 
-// TestHimalayasSearch_NoSubscriptionURL covers T009: keyword search is out
-// of scope, mirroring RemoteOKAdapter.Search's stance.
 func TestHimalayasSearch_NoSubscriptionURL(t *testing.T) {
 	a := HimalayasAdapter{Scraping: scraping.New()}
 	_, err := a.Search(context.Background(), dto.SearchQuery{}, nil)
@@ -134,8 +126,6 @@ func TestHimalayasSearch_NoSubscriptionURL(t *testing.T) {
 	}
 }
 
-// TestHimalayasSearch_MissingCategoriesParam covers the invalid-subscription
-// precondition: a URL missing "categories" returns a distinguishable error.
 func TestHimalayasSearch_MissingCategoriesParam(t *testing.T) {
 	a := HimalayasAdapter{Scraping: scraping.New()}
 	_, err := a.Search(context.Background(), dto.SearchQuery{SubscriptionURL: "https://himalayas.app/jobs"}, nil)
@@ -144,9 +134,6 @@ func TestHimalayasSearch_MissingCategoriesParam(t *testing.T) {
 	}
 }
 
-// TestHimalayasSearch_Pagination covers T010: Search pages through multiple
-// responses up to himalayasMaxSubscriptionPages, stops early once a page's
-// offset >= totalCount, and paces requests at himalayasRequestDelay.
 func TestHimalayasSearch_Pagination(t *testing.T) {
 	var requests []time.Time
 	var offsets []string
@@ -158,7 +145,7 @@ func TestHimalayasSearch_Pagination(t *testing.T) {
 		offset := r.URL.Query().Get("offset")
 		var res himalayasResponse
 		res.Limit = himalayasPageLimit
-		res.TotalCount = 45 // spans 3 pages of 20, last page partial
+		res.TotalCount = 45
 
 		switch offset {
 		case "0":
@@ -205,9 +192,6 @@ func TestHimalayasSearch_Pagination(t *testing.T) {
 	}
 }
 
-// TestHimalayasHealthCheck covers T013: (true, nil) for a decodable
-// response, (false, nil) — never a non-nil error — for unreachable/
-// unparseable responses.
 func TestHimalayasHealthCheck(t *testing.T) {
 	t.Run("healthy", func(t *testing.T) {
 		body := loadHimalayasFixture(t, "himalayas_list.json")
@@ -274,10 +258,6 @@ func TestHimalayasHealthCheck(t *testing.T) {
 	})
 }
 
-// TestHimalayasJobFromRaw_FullDescriptionAndTimezoneText covers T018: the
-// normalized description is the fixture's full text (not a truncated
-// teaser), and Raw carries the folded-in timezone-restriction text for a job
-// with non-empty timezoneRestrictions.
 func TestHimalayasJobFromRaw_FullDescriptionAndTimezoneText(t *testing.T) {
 	raw := himalayasJob{
 		GUID:                 "https://himalayas.app/companies/acme/jobs/senior-backend-engineer",
@@ -308,8 +288,6 @@ func TestHimalayasJobFromRaw_FullDescriptionAndTimezoneText(t *testing.T) {
 	}
 }
 
-// TestHimalayasJobFromRaw_PostedAtConversion covers T019: pubDate (Unix
-// seconds) is converted to an RFC3339 UTC string.
 func TestHimalayasJobFromRaw_PostedAtConversion(t *testing.T) {
 	raw := himalayasJob{
 		GUID:    "https://himalayas.app/companies/acme/jobs/senior-backend-engineer",

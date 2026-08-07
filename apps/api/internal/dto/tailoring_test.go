@@ -8,14 +8,14 @@ import (
 func TestEditProposalDto_RoundTrip(t *testing.T) {
 	dr := "grounding_violation"
 	original := EditProposalDto{
-		ID:           "proposal-1",
-		DraftID:      "draft-1",
-		FieldType:    "summary",
-		FieldKey:     "summary",
-		BeforeValue:  "old summary",
-		AfterValue:   "new summary",
-		Traceability: TraceabilityDto{Source: "master", Path: "cv.sections.summary"},
-		Status:       "pending",
+		ID:            "proposal-1",
+		DraftID:       "draft-1",
+		FieldType:     "summary",
+		FieldKey:      "summary",
+		BeforeValue:   "old summary",
+		AfterValue:    "new summary",
+		Traceability:  TraceabilityDto{Source: "master", Path: "cv.sections.summary"},
+		Status:        "pending",
 		DroppedReason: &dr,
 	}
 	b, err := json.Marshal(original)

@@ -128,10 +128,6 @@ function SourceRow({
   );
 }
 
-// formatPacing renders the interval form users can act on (FR-016) plus the
-// rate's provenance, e.g. "~1 request every 5s (site-requested)". The wire
-// contract sends both requestsPerSecond and intervalSeconds so the client
-// never has to derive one from the other.
 function formatPacing(pacing: { intervalSeconds: number; source: string }): string {
   const rounded = Math.round(pacing.intervalSeconds * 10) / 10;
   const interval = Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);

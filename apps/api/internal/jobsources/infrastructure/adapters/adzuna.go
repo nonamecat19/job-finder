@@ -1,5 +1,3 @@
-// Package adapters implements one JobSourceAdapter per job board, mirroring
-// modules/job-sources/adapters/*.adapter.ts.
 package adapters
 
 import (
@@ -36,9 +34,6 @@ type adzunaResponse struct {
 	Results []adzunaResult `json:"results"`
 }
 
-// AdzunaAdapter mirrors adzuna.adapter.ts. AppID/AppKey/Country are env-sourced
-// defaults injected at construction (config.Config), used when the per-source
-// runtime config (from Search's config param) omits them.
 type AdzunaAdapter struct {
 	AppID   string
 	AppKey  string

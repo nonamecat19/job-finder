@@ -9,17 +9,9 @@ import (
 	"github.com/job-finder/api/internal/profile/domain"
 )
 
-// ProfileEntries returns the default profile's existing resume bullets,
-// verbatim, each paired with its source label. It mirrors ProfileBullets
-// (008-5's grounding source) but keeps the source label alongside each
-// bullet instead of flattening to bare strings, since the fit-gap coach
-// (009) needs the label to ground seniority and duration claims in its
-// rephrase suggestions. A missing or unparseable config yields an empty
-// slice (nil error), matching ProfileBullets' degrade-gracefully behavior.
 func (s *Service) ProfileEntries(ctx context.Context) ([]domain.Entry, error) {
 	p, err := s.GetDefault(ctx)
 	if err != nil {
-		// No profile yet is not an error — there is simply nothing to cite.
 		return nil, nil
 	}
 	if len(p.RendercvConfig) == 0 {
@@ -53,10 +45,6 @@ func (s *Service) ProfileEntries(ctx context.Context) ([]domain.Entry, error) {
 	return entries, nil
 }
 
-// experienceLabel builds "{position}, {company} ({start}–{end})" for one
-// experience entry, degrading gracefully when a field is absent. Accepts
-// both RenderCV's own snake_case date keys and this repo's seed camelCase
-// keys.
 func experienceLabel(e map[string]any) string {
 	position := generation.StringField(e, "position")
 	company := generation.StringField(e, "company")

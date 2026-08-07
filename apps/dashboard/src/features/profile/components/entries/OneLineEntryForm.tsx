@@ -7,7 +7,6 @@ interface EntryFormProps {
   onChange: (entry: Entry) => void;
 }
 
-// "one_line" entries are used for skill groups (label: details).
 export function OneLineEntryForm({ entry, onChange }: EntryFormProps) {
   const set = makeEntrySetter(entry, onChange);
   return (

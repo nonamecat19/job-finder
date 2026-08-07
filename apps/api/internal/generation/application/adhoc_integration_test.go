@@ -13,16 +13,10 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// TestAdHocDocuments_NullJobId covers the migration + query contract that
-// generation.Service.GenerateAdHoc/ListAdHocDocuments rely on: a
-// GeneratedDocument row with no Job (ad-hoc, pasted-vacancy generation) must
-// persist with jobId NULL and be listable separately from job-tied rows.
 func TestAdHocDocuments_NullJobId(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Own database per suite: no shared tables, so no truncation and no
-	// cross-package coordination (internal/dbtest).
 	testDB := dbtest.New(t)
 
 	company, title, vacancy := "Acme Inc", "Senior Engineer", "We are looking for a senior engineer..."
@@ -37,7 +31,6 @@ func TestAdHocDocuments_NullJobId(t *testing.T) {
 		t.Fatalf("expected ad-hoc document to have NULL jobId, got %v", adhoc.JobId)
 	}
 
-	// A job-tied document must not show up in the ad-hoc listing.
 	if err := testDB.Queries.UpsertJobSource(ctx, sqlcgen.UpsertJobSourceParams{
 		Key: "adhoc-src", Kind: "api", Config: []byte(`{}`),
 	}); err != nil {

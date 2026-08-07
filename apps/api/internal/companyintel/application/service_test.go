@@ -18,7 +18,6 @@ import (
 const testJobID = "11111111-1111-1111-1111-111111111111"
 const testCompanyID = "22222222-2222-2222-2222-222222222222"
 
-// fakeRepo embeds the Repository port; the test overrides only what it needs.
 type fakeRepo struct {
 	domain.Repository
 
@@ -84,7 +83,6 @@ func jsonValue(t *testing.T, v any) []byte {
 	return b
 }
 
-// fakeScraper is a deterministic test double for Scraper.
 type fakeScraper struct {
 	kind, domain string
 	result       *domain.SignalResult
@@ -180,9 +178,6 @@ func TestRefresh_PersistsSuccessfulSignalsAndSkipsFailures(t *testing.T) {
 	)
 	svc := application.NewService(repo, registry, time.Millisecond)
 
-	// After Refresh, GetCompanySignals is called again to build the response —
-	// the fake doesn't persist into `signals`, so seed it to reflect what the
-	// fake UpsertCompanySignal call recorded.
 	repo.signals = []sqlcgen.CompanySignal{
 		{CompanyId: companyID, Kind: domain.KindFunding, Value: jsonValue(t, "Series B")},
 	}
@@ -227,7 +222,6 @@ func TestRefresh_AllSourcesFail_SetsTopLevelError(t *testing.T) {
 	if out.Error == nil {
 		t.Fatal("expected a top-level error when every source fails")
 	}
-	// Previously-cached value must remain untouched.
 	if out.Funding == nil || *out.Funding != "Series A (cached)" {
 		t.Errorf("Funding = %v, want the previously-cached value to survive", out.Funding)
 	}

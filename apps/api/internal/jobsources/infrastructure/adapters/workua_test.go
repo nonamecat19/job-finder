@@ -1,10 +1,5 @@
 package adapters
 
-// Fixtures captured on 2026-07-16 from:
-//   workua_list.html:   https://www.work.ua/jobs-php/
-//   workua_detail.html: https://www.work.ua/jobs/8306445/
-//   workua_empty.html:  https://www.work.ua/jobs-kyiv-php/?salaryfrom=4&experience=2
-
 import (
 	"context"
 	"os"

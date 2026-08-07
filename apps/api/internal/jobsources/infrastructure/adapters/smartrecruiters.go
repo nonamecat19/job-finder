@@ -33,9 +33,6 @@ type smartRecruitersResponse struct {
 	Content []smartRecruitersPosting `json:"content"`
 }
 
-// SmartRecruitersAdapter reads every registered SmartRecruiters employer's
-// open postings via the vendor's public, unauthenticated postings API
-// (research.md §1).
 type SmartRecruitersAdapter struct {
 	Roster *roster.Service
 	boardRunState

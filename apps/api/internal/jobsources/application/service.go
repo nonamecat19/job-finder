@@ -1,8 +1,3 @@
-// Package application holds the jobsources use-case orchestration: per-source
-// runtime state (enabled/config/healthy), encrypting/decrypting/masking config,
-// and running health checks. It depends on the domain model (Registry,
-// Repository port, JobSource, typed errors) and never on the HTTP or worker
-// layers.
 package application
 
 import (
@@ -23,14 +18,10 @@ import (
 
 var secretKeyRe = regexp.MustCompile(`(?i)cookie|key|secret|token|password`)
 
-// Service manages per-source runtime state (enabled/config/healthy),
-// encrypting/decrypting/masking config, and running health checks. Source
-// identity (key/kind) lives only in the adapter registry; a JobSource row is
-// created lazily, on first real use of a key, not seeded upfront.
 type Service struct {
 	q        domain.Repository
 	registry *domain.Registry
-	encKey   string // CONFIG_ENCRYPTION_KEY hex; "" disables encryption (dev fallback)
+	encKey   string
 }
 
 func NewService(q domain.Repository, registry *domain.Registry, encKey string) *Service {
@@ -39,7 +30,7 @@ func NewService(q domain.Repository, registry *domain.Registry, encKey string) *
 
 func (s *Service) encryptConfig(config map[string]any) ([]byte, error) {
 	if !crypto.HasEncryptionKey(s.encKey) {
-		return json.Marshal(config) // dev fallback: plaintext
+		return json.Marshal(config)
 	}
 	enc, err := crypto.EncryptJSON(s.encKey, config)
 	if err != nil {
@@ -48,9 +39,6 @@ func (s *Service) encryptConfig(config map[string]any) ([]byte, error) {
 	return json.Marshal(map[string]string{"enc": enc})
 }
 
-// DecryptConfig reverses encryptConfig; on decrypt failure it logs nothing
-// itself (caller decides) and returns an empty map, matching the TS
-// catch-and-return-{} behavior.
 func (s *Service) DecryptConfig(stored []byte) map[string]any {
 	var wrapper struct {
 		Enc string `json:"enc"`
@@ -81,9 +69,6 @@ func maskConfig(config map[string]any) map[string]any {
 	return masked
 }
 
-// List enumerates every source from the registry (code = identity, order),
-// overlaid with its persisted runtime state if a row exists; sources never
-// touched (no row) get default enabled=true, healthy=true, config={}.
 func (s *Service) List(ctx context.Context) ([]dto.JobSourceDto, error) {
 	rows, err := s.q.ListJobSources(ctx)
 	if err != nil {
@@ -119,10 +104,6 @@ func (s *Service) List(ctx context.Context) ([]dto.JobSourceDto, error) {
 	return out, nil
 }
 
-// GetByKey returns the JobSource row for key, creating it with default
-// runtime state on first use. The key must be a registered adapter — source
-// identity is code-defined, so an unknown key is always a "not found" error
-// regardless of what's in the db.
 func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, error) {
 	adapter, err := s.registry.Get(key)
 	if err != nil {
@@ -155,10 +136,6 @@ func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, 
 	return row, nil
 }
 
-// Config returns the decrypted (unmasked) runtime config for a source,
-// lazily creating its row on first use. Used by components that need real
-// secret values — e.g. the djinni session manager reading the stored cookie —
-// unlike List/Update which mask secrets for the API.
 func (s *Service) Config(ctx context.Context, key string) (map[string]any, error) {
 	row, err := s.GetByKey(ctx, key)
 	if err != nil {
@@ -167,8 +144,6 @@ func (s *Service) Config(ctx context.Context, key string) (map[string]any, error
 	return s.DecryptConfig(row.Config), nil
 }
 
-// Update applies partial changes: enabled flag and/or config merge (masked
-// "••••••" values mean "keep existing", null/"" deletes the key).
 func (s *Service) Update(ctx context.Context, key string, enabled *bool, configPatch map[string]any) (*dto.JobSourceDto, error) {
 	source, err := s.GetByKey(ctx, key)
 	if err != nil {
@@ -218,8 +193,6 @@ func (s *Service) Update(ctx context.Context, key string, enabled *bool, configP
 	return nil, domain.SourceNotFoundError{Key: key}
 }
 
-// Test runs the adapter's health check (or falls back to a tiny search) and
-// persists the resulting healthy flag.
 func (s *Service) Test(ctx context.Context, key string) (ok bool, errMsg string) {
 	source, err := s.GetByKey(ctx, key)
 	if err != nil {

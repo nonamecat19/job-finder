@@ -1,9 +1,5 @@
 import { Button, Surface, ToastProvider } from '@job-finder/dashboard';
 
-// ToastProvider renders no visible chrome of its own — it mounts the HeroUI toast
-// region and subscribes to the app's toast bus. Toasts appear only in response to a
-// runtime emit, which a static card cannot trigger, so these cells show the provider
-// in its real position: wrapping the app content it serves.
 export const WrappingAppContent = () => (
   <ToastProvider>
     <Surface>

@@ -47,8 +47,6 @@ func TestSweeper_Integration_ExactlyStaleRowsInterrupted(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Own database per suite: no shared tables, so no truncation and no
-	// cross-package coordination (internal/dbtest).
 	testDB := dbtest.New(t)
 
 	stale := time.Now().Add(-10 * time.Minute)
@@ -85,8 +83,6 @@ func TestSweeper_Integration_ExactlyStaleRowsInterrupted(t *testing.T) {
 	}
 }
 
-// sweepOnceCtx returns a ctx cancelled shortly after Run's immediate sweep,
-// so Run performs exactly one sweep and returns instead of looping forever.
 func sweepOnceCtx(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

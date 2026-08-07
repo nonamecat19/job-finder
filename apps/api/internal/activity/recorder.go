@@ -13,9 +13,6 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 )
 
-// Store is the persistence port activity recording depends on.
-// *sqlcgen.Queries satisfies it, and it lets use-case services expose the same
-// methods through their own repository port so a single value serves both.
 type Store interface {
 	InsertActivityRun(ctx context.Context, arg sqlcgen.InsertActivityRunParams) (sqlcgen.ActivityRun, error)
 	StartActivityRun(ctx context.Context, id pgtype.UUID) error
@@ -131,10 +128,6 @@ func (r *Recorder) Ok(ctx context.Context, refID string, meta map[string]any) {
 	}
 }
 
-// Cancel marks the run "cancelled" rather than "failed" — used when a task is
-// deliberately skipped (e.g. an upstream provider is rate-limited) rather
-// than having actually errored. Retry (POST /activity/retry) treats
-// cancelled the same as failed.
 func (r *Recorder) Cancel(ctx context.Context, reason string) {
 	if !r.valid() {
 		return
@@ -150,10 +143,6 @@ func (r *Recorder) Cancel(ctx context.Context, reason string) {
 	}
 }
 
-// Heartbeat refreshes heartbeatAt, proving the owning worker is still alive.
-// Called by the queue middleware's ticker while a task runs
-// (019-ai-job-throughput) — the sweeper treats a stale heartbeat as a sign
-// the worker vanished.
 func (r *Recorder) Heartbeat(ctx context.Context) {
 	if !r.valid() {
 		return
@@ -163,9 +152,6 @@ func (r *Recorder) Heartbeat(ctx context.Context) {
 	}
 }
 
-// SetTimeout records the deadline (in ms) the run was admitted under, from
-// the task-type policy, independent of Start — called once by the queue
-// middleware right after admission (019-ai-job-throughput).
 func (r *Recorder) SetTimeout(ctx context.Context, ms int32) {
 	if !r.valid() {
 		return
@@ -178,9 +164,6 @@ func (r *Recorder) SetTimeout(ctx context.Context, ms int32) {
 	}
 }
 
-// TimedOut finalizes the run "timed_out": it exceeded its task-type deadline
-// (019-ai-job-throughput). elapsed/limit are formatted into the error
-// string per data-model.md §1.3.
 func (r *Recorder) TimedOut(ctx context.Context, elapsed, limit time.Duration) {
 	if !r.valid() {
 		return

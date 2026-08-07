@@ -6,12 +6,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// orderedSectionKeys returns cv.sections keys in the fixed resume order
-// (see domain.SortByDefaultSectionOrder) — same canonical order
-// PrepareMasterForMarshal enforces, but non-destructive (does not
-// consume/delete the order key). Ignores any captured _order: the business
-// requirement is a resume structure that's always the same, not whatever
-// order the source master config's sections happen to be authored in.
 func orderedSectionKeys(sections map[string]any) []string {
 	keys := make([]string, 0, len(sections))
 	for k := range sections {
@@ -28,10 +22,6 @@ func hasKey(m map[string]any, key string) bool {
 	return ok && v != nil
 }
 
-// inferEntryType classifies a section's entries by field shape. Sections are
-// homogeneous in RenderCV (one entry type per section), so the first
-// classifiable entry decides the whole section. Returns "" when no entry
-// matches a known shape (an unrecognized section, FR-009).
 func inferEntryType(rawEntries []any) dto.EntryType {
 	for _, re := range rawEntries {
 		if _, ok := re.(string); ok {
@@ -80,9 +70,6 @@ func strSlice(m map[string]any, key string, consumed map[string]bool) []string {
 	return StringSliceField(m, key)
 }
 
-// mapEntry converts one raw RenderCV entry (string, for text entries, or a
-// map) into a typed dto.Entry, retaining any fields not recognized for the
-// section's entryType under Unrecognized (FR-009).
 func mapEntry(entryType dto.EntryType, raw any) dto.Entry {
 	if entryType == dto.EntryText {
 		if s, ok := raw.(string); ok {
@@ -157,10 +144,6 @@ func mapEntry(entryType dto.EntryType, raw any) dto.Entry {
 	return e
 }
 
-// MasterToResume converts the generic RendercvMaster (map[string]any) into
-// the typed, structured dto.Resume the client edits. Never drops data: any
-// section/entry that doesn't match a known shape is retained under
-// Unrecognized (FR-009).
 func MasterToResume(master RendercvMaster) (dto.Resume, error) {
 	resume := dto.Resume{Sections: []dto.Section{}}
 	cv, _ := master["cv"].(map[string]any)
@@ -243,9 +226,6 @@ func setSliceOrDelete(m map[string]any, key string, v []string) {
 	}
 }
 
-// entryToRaw is the inverse of mapEntry: renders a typed dto.Entry back into
-// the plain YAML-shaped value (string for text entries, map otherwise) for
-// its section's entryType, re-attaching any Unrecognized fields verbatim.
 func entryToRaw(entryType dto.EntryType, e dto.Entry) any {
 	if entryType == dto.EntryText {
 		if e.Text != nil {
@@ -309,11 +289,6 @@ func entryToRaw(entryType dto.EntryType, e dto.Entry) any {
 	return m
 }
 
-// ResumeToMaster is the inverse of MasterToResume: it applies a structured
-// dto.Resume onto the existing RendercvMaster (preserving any non-cv blocks —
-// design/locale/settings — byte-for-byte, per Assumptions in spec 009), and
-// writes cv.sections' key order back through the same _order convention
-// PrepareMasterForMarshal expects, rather than a parallel marshal path.
 func ResumeToMaster(resume dto.Resume, existing RendercvMaster) (RendercvMaster, error) {
 	base, err := deepCloneYAML(existing)
 	if err != nil {

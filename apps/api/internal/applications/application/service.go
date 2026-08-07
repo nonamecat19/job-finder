@@ -1,6 +1,3 @@
-// Package application holds the application-tracking use-case: status
-// transitions, kanban feed, and the /stats aggregate. Mirrors
-// applications.service.ts.
 package application
 
 import (
@@ -19,8 +16,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// ErrNotFound re-exports domain.ErrNotFound for callers that only import
-// application (e.g. the httpapi handler).
 var ErrNotFound = domain.ErrNotFound
 
 type Service struct {
@@ -28,9 +23,6 @@ type Service struct {
 	tx domain.TxRunner
 }
 
-// NewService builds the use-case. Pass a TxRunner (e.g. *db.DB) to make a
-// status change and the outcome event it records commit atomically; omit it
-// and the writes run sequentially against q, which is what unit-test fakes do.
 func NewService(q domain.Repository, tx ...domain.TxRunner) *Service {
 	s := &Service{q: q}
 	if len(tx) > 0 {
@@ -39,9 +31,6 @@ func NewService(q domain.Repository, tx ...domain.TxRunner) *Service {
 	return s
 }
 
-// inTx runs fn against a transaction-bound Repository when a TxRunner is
-// injected, and against the plain repository otherwise. *sqlcgen.Queries
-// satisfies Repository structurally, so both paths share one fn body.
 func (s *Service) inTx(ctx context.Context, fn func(domain.Repository) error) error {
 	if s.tx == nil {
 		return fn(s.q)
@@ -67,7 +56,7 @@ func (s *Service) List(ctx context.Context, status *string) ([]dto.ApplicationDt
 
 type UpdateInput struct {
 	Status *dto.ApplicationStatus
-	Notes  **string // outer present = field sent; inner nil = clear notes
+	Notes  **string
 }
 
 func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.ApplicationDto, error) {
@@ -87,9 +76,6 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 	_ = dbutil.UnmarshalJSONB(existing.Events, &events)
 	params := sqlcgen.UpdateApplicationParams{ID: uid}
 
-	// One instant shared by the jsonb annotation, the outcome event's
-	// "occurredAt", and "appliedAt" — the post-age signal reads "appliedAt" and
-	// must see the same moment the `applied` event carries.
 	occurredAt := time.Now().UTC()
 	var outcome *dto.OutcomeEventType
 
@@ -109,9 +95,6 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 			outcome = &et
 		}
 	} else {
-		// keep existing events unchanged (params.Events must still be a valid
-		// jsonb value since the column is NOT NULL — COALESCE isn't used here,
-		// mirroring the direct `set: {...}` object the TS code builds).
 		eventsJSON, _ := json.Marshal(events)
 		params.Events = eventsJSON
 	}
@@ -120,8 +103,6 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 		params.Notes = *in.Notes
 	}
 
-	// Status write, outcome-event append, and the mirrored job status all commit
-	// together — the current-state column and the event log must never diverge.
 	var updated sqlcgen.Application
 	err = s.inTx(ctx, func(q domain.Repository) error {
 		var err error
@@ -134,9 +115,6 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 				EventType:     string(*outcome),
 				OccurredAt:    pgtype.Timestamp{Time: occurredAt, Valid: true},
 			})
-			// No row means the partial unique index rejected a duplicate
-			// terminal-once event ('applied'/'offer'/'rejected'). That is the
-			// specified idempotent no-op, not a failure.
 			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return err
 			}
@@ -160,10 +138,6 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (dto.Ap
 	return out, nil
 }
 
-// Timeline returns the application's outcome events oldest-first. The log is
-// append-only, so a status that regressed (offer back to screen) still shows
-// every transition in the order it happened rather than a rewritten linear
-// history.
 func (s *Service) Timeline(ctx context.Context, id string) ([]dto.ApplicationOutcomeDto, error) {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
@@ -252,10 +226,6 @@ func jobDto(j sqlcgen.Job) dto.JobDto {
 	}
 }
 
-// listRowToDto converts a ListApplications joined row (application + job +
-// left-joined match result) into an ApplicationDto with its embedded JobDto,
-// matching `with: { job: { with: { matchResult: true } } }` in
-// applications.service.ts's list().
 func listRowToDto(r sqlcgen.ListApplicationsRow) dto.ApplicationDto {
 	var events []dto.ApplicationEvent
 	_ = dbutil.UnmarshalJSONB(r.Events, &events)

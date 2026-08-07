@@ -139,9 +139,6 @@ func TestIndeedSearch_Pagination(t *testing.T) {
 }
 
 func TestIndeedHealthCheck(t *testing.T) {
-	// HealthCheck targets the fixed indeed.com host; reachability in a
-	// sandboxed/offline test environment is not guaranteed, so this only
-	// asserts the "never a non-nil error" contract (contracts/indeed-adapter.md).
 	a := IndeedAdapter{Scraping: scraping.New()}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)

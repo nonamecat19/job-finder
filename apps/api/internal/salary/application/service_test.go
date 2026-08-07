@@ -210,11 +210,6 @@ func TestInfer_JobNotFound(t *testing.T) {
 
 func int32Ptr(v int32) *int32 { return &v }
 
-// strPtr/float64Ptr: shared with integration_test.go (also package
-// salary_test, but `//go:build integration`-gated, so the `unused` linter
-// flags these under the default build) — service.go's own strPtr/float64Ptr
-// are unexported to package salary and unreachable from here.
-//
 //nolint:unused
 func strPtr(v string) *string { return &v }
 

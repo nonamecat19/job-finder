@@ -14,7 +14,6 @@ import (
 	"github.com/job-finder/api/internal/profile"
 )
 
-// ProfileProvider is the interface ProfilesHandler needs from the profile service.
 type ProfileProvider interface {
 	List(ctx context.Context) ([]dto.ProfileDto, error)
 	GetDto(ctx context.Context, id string) (dto.ProfileDto, error)
@@ -27,7 +26,6 @@ type ProfileProvider interface {
 	HasResumeContent(ctx context.Context, id string) (bool, error)
 }
 
-// ProfilesHandler wires /api/profiles, mirroring profiles.controller.ts.
 type ProfilesHandler struct {
 	Profiles ProfileProvider
 }
@@ -130,7 +128,6 @@ func (h *ProfilesHandler) remove(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) uploadConfig(w http.ResponseWriter, r *http.Request) {
 	var yamlText string
 
-	// Check if it's multipart/form-data
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "failed to parse multipart form")
@@ -149,7 +146,6 @@ func (h *ProfilesHandler) uploadConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		yamlText = string(data)
 	} else {
-		// Read raw body
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "failed to read body")
@@ -163,10 +159,8 @@ func (h *ProfilesHandler) uploadConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Process the config
 	out, err := h.Profiles.SaveConfig(r.Context(), yamlText)
 	if err != nil {
-		// If validation/render fails, reject with 422
 		httpx.WriteError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}

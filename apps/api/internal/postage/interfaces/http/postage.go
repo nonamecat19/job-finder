@@ -10,13 +10,10 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// PostAgeProvider is the interface PostAgeHandler needs from the postage service.
 type PostAgeProvider interface {
 	Compute(ctx context.Context) (dto.PostAgeResponseDto, error)
 }
 
-// PostAgeHandler serves GET /api/postage-response-rate — the post-age-at-apply
-// vs response-rate signal (spec 010).
 type PostAgeHandler struct {
 	PostAge PostAgeProvider
 }

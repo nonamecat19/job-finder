@@ -17,23 +17,15 @@ import (
 	"github.com/job-finder/api/internal/strutil"
 )
 
-// djinniMaxSubscriptionPages caps subscription-page pagination so a
-// redirect-to-page-1 loop (or an unbounded feed) can't run forever.
 const djinniMaxSubscriptionPages = 50
 
 var djinniRemoteRe = regexp.MustCompile(`(?i)remote|віддалено`)
 
-// DjinniAdapter — djinni.co, Ukrainian dev job board, server-rendered HTML.
-// Session is a login-managed sessionid cookie (credentials in env, cookie in
-// the DB); a nil Session means anonymous access (public /jobs only). Selectors
-// are best-effort/defensive, matching djinni.adapter.ts.
 type DjinniAdapter struct {
 	Scraping scraping.Scraper
 	Session  DjinniSessionProvider
 }
 
-// authHeaders builds request headers carrying the current session cookie,
-// logging in on demand when Session is set.
 func (d DjinniAdapter) authHeaders(ctx context.Context) (map[string]string, error) {
 	headers := map[string]string{}
 	if d.Session == nil {
@@ -55,10 +47,6 @@ func setDjinniCookie(headers map[string]string, cookie string) {
 	}
 }
 
-// fetchDoc fetches and parses pageURL. If djinni serves its login page (an
-// expired/absent cookie is 302'd to /login, followed to a 200), it re-logs-in
-// once and retries, mutating headers in place with the fresh cookie so callers
-// keep reusing them.
 func (d DjinniAdapter) fetchDoc(ctx context.Context, pageURL string, headers map[string]string) (*goquery.Document, error) {
 	doc, err := d.fetchParse(ctx, pageURL, headers)
 	if err != nil {
@@ -131,11 +119,6 @@ func (d DjinniAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[
 	return jobs, nil
 }
 
-// scrapeSubscription pages through a logged-in djinni "subs" listing
-// (https://djinni.co/my/dashboard/subs/{id}/) — same card markup as the
-// public /jobs/ search, reused via parseDjinniCards. Stops on an empty page,
-// a hard page cap, or the page redirecting back to an already-seen first
-// card (guards an infinite pagination loop).
 func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
 	base, err := url.Parse(subURL)
 	if err != nil {
@@ -152,9 +135,6 @@ func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, he
 
 		doc, err := d.fetchDoc(ctx, pageURL.String(), headers)
 		if err != nil {
-			// The first page failing (login required, re-login failed, or an
-			// unreachable host) is fatal; a later page failing just ends
-			// pagination with whatever was collected.
 			if page == 1 {
 				return nil, err
 			}
@@ -176,15 +156,10 @@ func (d DjinniAdapter) scrapeSubscription(ctx context.Context, subURL string, he
 	return jobs, nil
 }
 
-// djinniIsLoginPage reports whether doc is djinni's /login page (served with a
-// 200 after an auth redirect). The password input is unique to that page and
-// never present on job-listing markup.
 func djinniIsLoginPage(doc *goquery.Document) bool {
 	return doc.Find(`input[name="password"]`).Length() > 0
 }
 
-// parseDjinniCards extracts job cards from a djinni listing page (shared by
-// the /jobs/ search and the authenticated subs pages — same markup).
 func parseDjinniCards(doc *goquery.Document) []dto.NormalizedJob {
 	var jobs []dto.NormalizedJob
 	doc.Find(`[id^="job-item-"], li.list-jobs__item`).Each(func(_ int, item *goquery.Selection) {
@@ -201,9 +176,6 @@ func parseDjinniCards(doc *goquery.Document) []dto.NormalizedJob {
 		location := strings.TrimSpace(item.Find(`.location-text`).First().Text())
 
 		itemHTML, _ := item.Html()
-		// This page's raw HTML routinely contains Cyrillic (Ukrainian job
-		// board); a byte slice can split a multi-byte UTF-8 sequence and
-		// mangle/corrupt the last character, unlike a rune-safe truncate.
 		itemHTML = strutil.Truncate(itemHTML, 4000)
 
 		full, err := url.Parse(href)
@@ -235,9 +207,6 @@ func parseDjinniCards(doc *goquery.Document) []dto.NormalizedJob {
 	return jobs
 }
 
-// DjinniDetailPatch is the parsed subset of a djinni job detail page used to
-// fill in a shallow (list-only) Job row. Not part of the Adapter interface —
-// djinni-specific, called directly by the enrichment handler.
 type DjinniDetailPatch struct {
 	Description string
 	SalaryRaw   *string
@@ -247,10 +216,6 @@ type DjinniDetailPatch struct {
 	Raw         map[string]string
 }
 
-// FetchDetail fetches a single djinni job page and parses the full
-// description/salary/location/remote/posted-date. Selectors are best-effort
-// and defensive (unverified against live markup — see plan risk #2): a
-// missing field just stays empty rather than erroring.
 func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (DjinniDetailPatch, error) {
 	headers, err := d.authHeaders(ctx)
 	if err != nil {
@@ -269,8 +234,6 @@ func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[str
 	remote := djinniRemoteRe.MatchString(doc.Find("body").Text())
 
 	bodyHTML, _ := doc.Find("body").Html()
-	// Same rune-safety concern as parseDjinniCards — this page is routinely
-	// Cyrillic.
 	bodyHTML = strutil.Truncate(bodyHTML, 8000)
 
 	patch := DjinniDetailPatch{

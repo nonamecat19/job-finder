@@ -12,18 +12,11 @@ import (
 	"github.com/job-finder/api/internal/outreach"
 )
 
-// OutreachProvider is the interface OutreachHandler needs from the
-// outreach service (012). Read-and-produce only per Constitution
-// Principle I: neither route sends, schedules, or queues anything.
 type OutreachProvider interface {
 	GenerateDraft(ctx context.Context, jobID, contactID, tone string) (dto.OutreachDraftDto, error)
 	Tones() []dto.OutreachToneOptionDto
 }
 
-// OutreachHandler wires /api/jobs/{id}/outreach/generate and
-// /api/jobs/{id}/outreach/tones (spec 012). generate is a POST (not a GET)
-// because it may run a live LLM call, mirroring CoachHandler.assess — that
-// cost never runs inline on a GET.
 type OutreachHandler struct {
 	Outreach OutreachProvider
 }

@@ -6,12 +6,12 @@ import (
 )
 
 type EditProposal struct {
-	FieldType    string
-	FieldKey     string
-	BeforeValue  string
-	AfterValue   string
-	Traceability Traceability
-	Status       string
+	FieldType     string
+	FieldKey      string
+	BeforeValue   string
+	AfterValue    string
+	Traceability  Traceability
+	Status        string
 	DroppedReason string
 }
 
@@ -24,7 +24,6 @@ func PayloadToProposals(baseline RendercvMaster, payload TailoredSections, jobPo
 	var proposals []EditProposal
 	sections := CvSections(baseline)
 
-	// 1. Summary diff
 	baselineSummary := ""
 	if raw, ok := sections["summary"]; ok {
 		if items, ok := raw.([]any); ok && len(items) > 0 {
@@ -36,16 +35,15 @@ func PayloadToProposals(baseline RendercvMaster, payload TailoredSections, jobPo
 	proposedSummary := strings.TrimSpace(payload.Summary)
 	if proposedSummary != "" && proposedSummary != baselineSummary {
 		proposals = append(proposals, EditProposal{
-			FieldType:   "summary",
-			FieldKey:    "summary",
-			BeforeValue: baselineSummary,
-			AfterValue:  proposedSummary,
+			FieldType:    "summary",
+			FieldKey:     "summary",
+			BeforeValue:  baselineSummary,
+			AfterValue:   proposedSummary,
 			Traceability: Traceability{Source: "master", Path: "cv.sections.summary"},
-			Status:      "pending",
+			Status:       "pending",
 		})
 	}
 
-	// 2. Experience highlights per company (LCS diff)
 	baselineCompanies := map[string][]string{}
 	for _, e := range AsSliceOfMaps(sections["experience"]) {
 		baselineCompanies[norm(StringField(e, "company"))] = StringSliceField(e, "highlights")
@@ -74,7 +72,6 @@ func PayloadToProposals(baseline RendercvMaster, payload TailoredSections, jobPo
 		}
 	}
 
-	// 3. Skill group additions
 	for _, add := range payload.SkillGroupsToAdd {
 		proposals = append(proposals, EditProposal{
 			FieldType:   "skill_group_add",
@@ -89,7 +86,6 @@ func PayloadToProposals(baseline RendercvMaster, payload TailoredSections, jobPo
 		})
 	}
 
-	// 4. Skill group removals
 	for _, label := range payload.SkillGroupsToRemove {
 		proposals = append(proposals, EditProposal{
 			FieldType:   "skill_group_remove",
@@ -104,7 +100,6 @@ func PayloadToProposals(baseline RendercvMaster, payload TailoredSections, jobPo
 		})
 	}
 
-	// 5. Skill changes (per-token add/remove within existing groups)
 	for _, sc := range payload.SkillChanges {
 		if sc.AddTokens != "" {
 			for _, t := range tokens(sc.AddTokens) {

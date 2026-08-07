@@ -23,7 +23,6 @@ func atsBoardMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 	mux := http.NewServeMux()
 
-	// Greenhouse: /v1/boards/{id}/jobs
 	mux.HandleFunc("/v1/boards/", func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/v1/boards/"), "/", 2)
 		id := parts[0]
@@ -45,7 +44,6 @@ func atsBoardMux(t *testing.T) *http.ServeMux {
 		}
 	})
 
-	// Lever: /v0/postings/{id}
 	mux.HandleFunc("/v0/postings/", func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimPrefix(r.URL.Path, "/v0/postings/")
 		if idx := strings.Index(id, "?"); idx >= 0 {
@@ -70,7 +68,6 @@ func atsBoardMux(t *testing.T) *http.ServeMux {
 		}
 	})
 
-	// Ashby: /posting-api/job-board/{id}
 	mux.HandleFunc("/posting-api/job-board/", func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimPrefix(r.URL.Path, "/posting-api/job-board/")
 		switch id {
@@ -91,7 +88,6 @@ func atsBoardMux(t *testing.T) *http.ServeMux {
 		}
 	})
 
-	// Workable: /api/v1/widget/accounts/{id}
 	mux.HandleFunc("/api/v1/widget/accounts/", func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimPrefix(r.URL.Path, "/api/v1/widget/accounts/")
 		switch id {
@@ -112,7 +108,6 @@ func atsBoardMux(t *testing.T) *http.ServeMux {
 		}
 	})
 
-	// SmartRecruiters: /v1/companies/{id}/postings
 	mux.HandleFunc("/v1/companies/", func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/v1/companies/"), "/", 2)
 		id := parts[0]
@@ -137,7 +132,6 @@ func atsBoardMux(t *testing.T) *http.ServeMux {
 	return mux
 }
 
-// testEmployers are the roster entries used by all vendor Search tests.
 var testEmployers = []sqlcgen.InsertEmployerBoardParams{
 	{Vendor: "greenhouse", EmployerIdentifier: "gh-test", DisplayName: "GH Test Corp", AddedVia: "test"},
 	{Vendor: "greenhouse", EmployerIdentifier: "gh-empty", DisplayName: "GH Empty Corp", AddedVia: "test"},
@@ -165,8 +159,6 @@ func vendorHasJobs(identifier string) bool {
 	return strings.HasSuffix(identifier, "-test")
 }
 
-// rewriteTransport sends every request to the mock server instead of the real
-// vendor host, keeping the path and query the adapter built.
 type rewriteTransport struct {
 	base *url.URL
 	rt   http.RoundTripper
@@ -182,8 +174,6 @@ func (t rewriteTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return t.rt.RoundTrip(clone)
 }
 
-// mockVendorClient returns a client whose requests all land on ts, so the
-// adapters' hard-coded vendor URLs are served by atsBoardMux.
 func mockVendorClient(ts *httptest.Server) *http.Client {
 	base, err := url.Parse(ts.URL)
 	if err != nil {
@@ -199,8 +189,6 @@ func setupATSTest(t *testing.T) (context.Context, *sqlcgen.Queries, *roster.Serv
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 
-	// Own database per test (internal/dbtest): no shared tables, so no
-	// truncation and no cross-package coordination. dbtest drops it on cleanup.
 	testDB := dbtest.New(t)
 
 	q := testDB.Queries
@@ -226,15 +214,11 @@ func setupATSTest(t *testing.T) (context.Context, *sqlcgen.Queries, *roster.Serv
 	return ctx, q, rosterSvc, mux, ts
 }
 
-// TestATSBoardIntegration_Greenhouse verifies end-to-end: employer with
-// postings, empty employer, 404, and malformed JSON.
 func TestATSBoardIntegration_Greenhouse(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
 	gh := &ads.GreenhouseAdapter{Roster: rosterSvc}
 
-	// Route the adapter's HTTP requests through the mock server by swapping
-	// the package-level defaultClient. Each sub-test restores it.
 	origClient := jobsources.DefaultClient()
 	restore := func() { jobsources.SetDefaultClient(origClient) }
 
@@ -277,9 +261,6 @@ func TestATSBoardIntegration_Greenhouse(t *testing.T) {
 		t.Error("expected no jobs from GH Empty Corp")
 	}
 
-	// Re-run: no duplicates (T017-2). The adapter always returns fresh from API;
-	// dedup happens in the ingestion handler, not in the adapter itself. The
-	// adapter level guarantees posting count per employer is capped.
 	origClient = jobsources.DefaultClient()
 	jobsources.SetDefaultClient(mockVendorClient(ts))
 	defer func() { jobsources.SetDefaultClient(origClient) }()
@@ -299,7 +280,6 @@ func TestATSBoardIntegration_Greenhouse(t *testing.T) {
 	}
 }
 
-// TestATSBoardIntegration_Lever verifies the Lever adapter end-to-end.
 func TestATSBoardIntegration_Lever(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
@@ -335,7 +315,6 @@ func TestATSBoardIntegration_Lever(t *testing.T) {
 	}
 }
 
-// TestATSBoardIntegration_Ashby verifies the Ashby adapter end-to-end.
 func TestATSBoardIntegration_Ashby(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
@@ -374,7 +353,6 @@ func TestATSBoardIntegration_Ashby(t *testing.T) {
 	}
 }
 
-// TestATSBoardIntegration_Workable verifies the Workable adapter end-to-end.
 func TestATSBoardIntegration_Workable(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
@@ -413,7 +391,6 @@ func TestATSBoardIntegration_Workable(t *testing.T) {
 	}
 }
 
-// TestATSBoardIntegration_SmartRecruiters verifies the SmartRecruiters adapter.
 func TestATSBoardIntegration_SmartRecruiters(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
@@ -452,8 +429,6 @@ func TestATSBoardIntegration_SmartRecruiters(t *testing.T) {
 	}
 }
 
-// TestATSBoardIntegration_404Employer verifies that a 404 from a board
-// endpoint is handled gracefully without crashing the whole run.
 func TestATSBoardIntegration_404Employer(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
@@ -473,8 +448,6 @@ func TestATSBoardIntegration_404Employer(t *testing.T) {
 	}
 }
 
-// TestATSBoardIntegration_MalformedResponse verifies that a malformed JSON
-// response from a board doesn't crash the adapter.
 func TestATSBoardIntegration_MalformedResponse(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
@@ -494,9 +467,6 @@ func TestATSBoardIntegration_MalformedResponse(t *testing.T) {
 	}
 }
 
-// TestATSBoardIntegration_PreviouslySeenDisappears verifies that when a
-// previously-seen posting disappears from the board (empty response), the
-// adapter still returns success.
 func TestATSBoardIntegration_PreviouslySeenDisappears(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
@@ -505,7 +475,6 @@ func TestATSBoardIntegration_PreviouslySeenDisappears(t *testing.T) {
 	jobsources.SetDefaultClient(mockVendorClient(ts))
 	defer func() { jobsources.SetDefaultClient(origClient) }()
 
-	// First run: the board returns a posting.
 	jobs, err := gh.Search(ctx, emptyQuery, nil)
 	if err != nil {
 		t.Fatalf("Greenhouse Search first run: %v", err)
@@ -521,10 +490,6 @@ func TestATSBoardIntegration_PreviouslySeenDisappears(t *testing.T) {
 		t.Fatal("first run should return a job from GH Test Corp")
 	}
 
-	// The employer gh-empty had no postings the first time. On "re-run",
-	// gh-test still returns postings (mock always returns same), so the
-	// "disappeared" scenario is naturally covered by the gh-empty employer:
-	// the adapter puts no jobs for it and does not error.
 	origClient = jobsources.DefaultClient()
 	jobsources.SetDefaultClient(mockVendorClient(ts))
 	defer func() { jobsources.SetDefaultClient(origClient) }()
@@ -533,7 +498,6 @@ func TestATSBoardIntegration_PreviouslySeenDisappears(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Greenhouse Search re-run: %v", err)
 	}
-	// gh-empty still returns 0 jobs — adapter handles that correctly.
 	for _, j := range jobs2 {
 		if j.Company == "GH Empty Corp" {
 			t.Error("expected no jobs from GH Empty Corp")
@@ -541,8 +505,6 @@ func TestATSBoardIntegration_PreviouslySeenDisappears(t *testing.T) {
 	}
 }
 
-// TestATSBoardIntegration_EmployerReporter verifies that after Search, the
-// adapter reports per-employer outcomes via LastRunDetail().
 func TestATSBoardIntegration_EmployerReporter(t *testing.T) {
 	ctx, _, rosterSvc, _, ts := setupATSTest(t)
 
@@ -585,5 +547,4 @@ func TestATSBoardIntegration_EmployerReporter(t *testing.T) {
 	}
 }
 
-// emptyQuery is reused across adapter Search calls in these tests.
 var emptyQuery = dto.SearchQuery{}

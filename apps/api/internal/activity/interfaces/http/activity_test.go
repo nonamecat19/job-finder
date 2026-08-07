@@ -17,11 +17,8 @@ import (
 func TestActivityList(t *testing.T) {
 	ctx := context.Background()
 
-	// Own database per suite: no shared tables, so no truncation and no
-	// cross-package coordination (internal/dbtest).
 	database := dbtest.New(t)
 
-	// Insert a mock activity
 	_, err := database.Queries.InsertActivityRun(ctx, sqlcgen.InsertActivityRunParams{
 		Op:    "ingest",
 		Label: "test scrape",

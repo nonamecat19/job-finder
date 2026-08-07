@@ -21,9 +21,6 @@ func loadFixtureMaster(t *testing.T) RendercvMaster {
 	return master
 }
 
-// TestMasterToResume_AllEntryTypes asserts every one of the 9 canonical
-// RenderCV entry types is classified correctly with zero data loss (spec 009
-// SC-002 / FR-003), using the same fixture as the smoke-test renderer.
 func TestMasterToResume_AllEntryTypes(t *testing.T) {
 	master := loadFixtureMaster(t)
 	resume, err := MasterToResume(master)
@@ -92,9 +89,6 @@ func TestMasterToResume_AllEntryTypes(t *testing.T) {
 	}
 }
 
-// TestResumeRoundTrip_PreservesSectionOrder asserts MasterToResume ->
-// ResumeToMaster round-trips the fixture's section order and content
-// losslessly (spec 009 research.md #2).
 func TestResumeRoundTrip_PreservesSectionOrder(t *testing.T) {
 	master := loadFixtureMaster(t)
 	resume, err := MasterToResume(master)
@@ -114,7 +108,7 @@ func TestResumeRoundTrip_PreservesSectionOrder(t *testing.T) {
 	sections := CvSections(prepared)
 	ordered, ok := sections["_order"]
 	_ = ordered
-	_ = ok // _order is consumed by PrepareMasterForMarshal; presence checked via orderedYAMLMap below
+	_ = ok
 
 	cv, _ := prepared["cv"].(map[string]any)
 	orderedMap, ok := cv["sections"].(domain.OrderedYAMLMap)
@@ -146,8 +140,6 @@ func TestResumeRoundTrip_PreservesSectionOrder(t *testing.T) {
 	}
 }
 
-// TestMasterToResume_UnrecognizedDataPreserved asserts a field the mapping
-// layer doesn't model is retained rather than dropped (FR-009).
 func TestMasterToResume_UnrecognizedDataPreserved(t *testing.T) {
 	yamlText := `
 cv:
@@ -206,12 +198,6 @@ func TestValidateResume(t *testing.T) {
 	}
 }
 
-
-// TestMasterToResume_SocialNetworksAndCustomConnections asserts identity-level
-// contact fields (social_networks incl. non-standard networks like Telegram,
-// plus custom_connections) round-trip through MasterToResume/ResumeToMaster
-// without being dropped — reported bug: uploaded config's LinkedIn/GitHub/
-// Telegram not showing on the Profile tab.
 func TestMasterToResume_SocialNetworksAndCustomConnections(t *testing.T) {
 	yamlText := `
 cv:

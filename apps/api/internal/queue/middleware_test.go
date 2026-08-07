@@ -17,8 +17,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// fakeActivityStore is a minimal in-memory activity.Store for middleware
-// tests, recording calls instead of touching a real database.
 type fakeActivityStore struct {
 	mu             sync.Mutex
 	timeoutMs      *int32
@@ -131,7 +129,7 @@ func TestGate_WaitingAcquireHonoursCtxCancellation(t *testing.T) {
 
 func TestGate_NonLLMTaskBypassesClassResolution(t *testing.T) {
 	policy := TaskPolicy{HostedConcurrency: 5, LocalConcurrency: 2}
-	g := NewGate(policy, nil) // ingest/enrich: no LLMTaskKey
+	g := NewGate(policy, nil)
 
 	release1, err := g.Acquire(context.Background())
 	if err != nil {
@@ -160,11 +158,8 @@ func TestGate_ClassResolvedOnceDoesNotChangeMidFlight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
-	// Flip the resolved class mid-flight: the held slot must not move.
 	resolver.set(llm.ProviderClassLocal)
 
-	// The local semaphore should still be fully available since this task
-	// acquired hosted, not local.
 	localRelease, err := g.Acquire(context.Background())
 	if err != nil {
 		t.Fatalf("expected local slot still free: %v", err)
@@ -203,7 +198,7 @@ func TestDeadlineMiddleware_ExceedingMaxDurationFinalizesTimedOut(t *testing.T) 
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(200 * time.Millisecond):
-			downstreamEnqueued = true // would only run if the deadline didn't fire
+			downstreamEnqueued = true
 			return nil
 		}
 	}

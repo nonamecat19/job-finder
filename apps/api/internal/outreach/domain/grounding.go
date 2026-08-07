@@ -5,33 +5,19 @@ import (
 	"strings"
 )
 
-// DraftOutput is the LLM structured-output shape for the grounded-generation
-// path. SpecificClaims must be copied verbatim from the allowed facts given
-// in the prompt — that verbatim requirement is what GroundClaims below
-// checks (Constitution Principle II, mirroring recruiter/posting.go's
-// extractedContact + groundContact pattern).
 type DraftOutput struct {
 	Text           string   `json:"text" jsonschema:"description=The outreach message body, addressed to the named contact, written in the requested tone. Must contain ONLY facts explicitly listed in ALLOWED FACTS below — never invent a technology, funding round, headcount figure, or any other specific detail."`
 	SpecificClaims []string `json:"specificClaims" jsonschema:"description=Every specific factual claim the message text makes about the team, company, technology, funding, or size, copied VERBATIM from the ALLOWED FACTS list. Empty array if the message makes no specific claim."`
 }
 
-// MaxDraftChars is the hard length ceiling (FR-009): outreach is a brief
-// opener a busy recruiter reads in one glance, not a cover letter.
 const MaxDraftChars = 500
 
-// toneInstruction is the per-tone register instruction folded into the
-// prompt. Facts (specificClaims) are identical across tones for the same
-// job — only this wording instruction differs (FR-010, SC-006).
 var toneInstruction = map[Tone]string{
 	ToneWarm:   "warm, friendly, and enthusiastic, while staying professional",
 	ToneDirect: "direct and concise — get to the point in as few words as possible, minimal pleasantries",
 	ToneFormal: "formal and polished, traditional business register",
 }
 
-// BuildPrompt renders the full generation prompt, appending the previous
-// violation (if any) so a retry can self-correct, mirroring
-// CompleteStructured's own retry-with-error-appended shape but at the
-// domain-validation level rather than the JSON-parsing level.
 func BuildPrompt(tone Tone, contactName, companyName string, facts []Fact, lastViolation string) string {
 	var b strings.Builder
 	b.WriteString("Write a single short outreach message to a hiring contact after the sender has just applied " +
@@ -65,13 +51,6 @@ func BuildPrompt(tone Tone, contactName, companyName string, facts []Fact, lastV
 	return b.String()
 }
 
-// GroundClaims verifies every claim is (a) actually present in text and
-// (b) a verbatim substring of some fact's value — the same "field must
-// occur in source" check recruiter/posting.go's groundContact applies to
-// LLM-extracted fields. Any claim failing either check fails the whole
-// batch (ok=false), which triggers a retry rather than silently keeping
-// the other, valid claims — a draft that needed one retry to become fully
-// grounded is preferable to ever guessing which of several claims to trust.
 func GroundClaims(claims []string, text string, facts []Fact) ([]GroundingTrace, bool) {
 	lowerText := strings.ToLower(text)
 	traces := make([]GroundingTrace, 0, len(claims))
@@ -92,8 +71,6 @@ func GroundClaims(claims []string, text string, facts []Fact) ([]GroundingTrace,
 	return traces, true
 }
 
-// matchFact finds the first Fact whose Value contains claim as a
-// case-insensitive substring.
 func matchFact(claim string, facts []Fact) (Fact, bool) {
 	lowerClaim := strings.ToLower(claim)
 	for _, f := range facts {
@@ -104,10 +81,6 @@ func matchFact(claim string, facts []Fact) (Fact, bool) {
 	return Fact{}, false
 }
 
-// GenericOpener is the deterministic, zero-signal-dependency fallback used
-// whenever no company-intel signal exists, or grounded generation could not
-// be produced within the retry budget. It contains no specific claim about
-// the team or company (FR-005, FR-012) — vagueness over invention.
 func GenericOpener(tone Tone, contactName, companyName string) string {
 	greeting := "Hi there"
 	if contactName != "" {
@@ -139,7 +112,7 @@ func GenericOpener(tone Tone, contactName, companyName string) string {
 				"Thank you for your consideration.",
 			greeting, role,
 		)
-	default: // ToneWarm
+	default:
 		return fmt.Sprintf(
 			"%s! I just applied for %s and wanted to say hello directly — I'd love to learn more about the team "+
 				"and see if there's a fit. Would you be open to a quick chat?",
@@ -148,10 +121,6 @@ func GenericOpener(tone Tone, contactName, companyName string) string {
 	}
 }
 
-// EnforceLength is the final safety net (FR-009): truncates at the nearest
-// word boundary within the limit and drops any trace whose claim text was
-// truncated away, so a trace is never presented for text that no longer
-// contains it.
 func EnforceLength(text string, traces []GroundingTrace, max int) (string, []GroundingTrace) {
 	text = strings.TrimSpace(text)
 	if len(text) > max {

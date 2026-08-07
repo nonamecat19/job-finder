@@ -2,10 +2,6 @@
 
 package adapters
 
-// Run with: go test -tags live ./internal/jobsources/adapters/... -run Live -v
-// Not run by default (requires internet + upstream APIs to be healthy) — this
-// is a manual parity smoke test, not part of `go test ./...`.
-
 import (
 	"context"
 	"testing"

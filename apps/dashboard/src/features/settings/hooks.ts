@@ -3,8 +3,6 @@ import type { AiFeatureSettingDto, ResumeShapeConfigDto } from '@job-finder/shar
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 
-// Per-feature "run automatically when a job's match score is high enough"
-// toggle and threshold (resume/cover-letter generation, salary inference).
 export function useAiFeatureSettings() {
   return useQuery({
     queryKey: queryKeys.aiFeatures.get,
@@ -23,8 +21,6 @@ export function useUpdateAiFeatureSetting() {
   });
 }
 
-// Shape of every generated resume: summary length, bullets per job, optional
-// sections, project limits and the page target.
 export function useResumeShape() {
   return useQuery({
     queryKey: queryKeys.resumeShape.get,

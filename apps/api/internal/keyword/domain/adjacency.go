@@ -7,29 +7,17 @@ import (
 	"sort"
 )
 
-// The adjacency map is versioned DATA, not code (spec 009 §2.5). Adding or
-// changing an adjacency claim is a JSON edit + PR — there are deliberately no
-// switch/if-else chains over technology names anywhere. The Fit-Gap Coach
-// (009) consults this map when a required term has no exact profile match, to
-// find nearby experience that legitimately counts toward it.
-
 //go:embed adjacency.json
 var adjacencyFS embed.FS
 
-// Proximity is how directly a skill transfers to an adjacent one (spec §2.3).
 type Proximity string
 
 const (
-	// ProximityClose: direct transfer, skills map near-seamlessly.
-	ProximityClose Proximity = "close"
-	// ProximityModerate: significant overlap, genuine differences exist.
+	ProximityClose    Proximity = "close"
 	ProximityModerate Proximity = "moderate"
-	// ProximityDistant: same category, different paradigm/ecosystem.
-	ProximityDistant Proximity = "distant"
+	ProximityDistant  Proximity = "distant"
 )
 
-// proximityRank orders proximity from closest to most distant for stable,
-// usefulness-ordered lookup output.
 func proximityRank(p Proximity) int {
 	switch p {
 	case ProximityClose:
@@ -43,32 +31,23 @@ func proximityRank(p Proximity) int {
 	}
 }
 
-// Adjacency is one edge: a related term and how close the transfer is.
 type Adjacency struct {
 	Term      string    `json:"term"`
 	Proximity Proximity `json:"proximity"`
-	// Symmetric controls whether the reverse edge is implied. Nil means true
-	// (the common case: if A→B is adjacent, B→A is too). Set false in the JSON
-	// for genuinely one-directional adjacency (e.g. Kubernetes→Docker Swarm:
-	// Swarm experience is weak evidence for Kubernetes, not vice-versa).
-	Symmetric *bool `json:"symmetric,omitempty"`
+	Symmetric *bool     `json:"symmetric,omitempty"`
 }
 
-// AdjacencyEntry is all adjacency edges for one term in one role context.
 type AdjacencyEntry struct {
 	Term     string      `json:"term"`
 	Context  string      `json:"context"`
 	Adjacent []Adjacency `json:"adjacent"`
 }
 
-// AdjacencyConfig mirrors adjacency.json.
 type AdjacencyConfig struct {
 	Version int              `json:"version"`
 	Entries []AdjacencyEntry `json:"entries"`
 }
 
-// adjacencyIndex is context -> lowercased term -> adjacency edges (including
-// synthesized reverse edges for symmetric adjacencies). Built once at load.
 type adjacencyIndexT map[string]map[string][]Adjacency
 
 var (
@@ -88,9 +67,6 @@ func mustLoadEmbeddedAdjacency() AdjacencyConfig {
 	return cfg
 }
 
-// LoadAdjacencyMap (re)loads the adjacency map from the embedded config and
-// rebuilds the lookup index. The version is logged at startup for debugging
-// (spec §2.6). Kept as the documented startup hook alongside LoadSynonyms.
 func LoadAdjacencyMap() {
 	adjacencyConfig = mustLoadEmbeddedAdjacency()
 	adjacencyIndex = buildAdjacencyIndex(adjacencyConfig)
@@ -98,14 +74,10 @@ func LoadAdjacencyMap() {
 		"version", adjacencyConfig.Version, "entries", len(adjacencyConfig.Entries))
 }
 
-// isSymmetric reports whether an edge implies its reverse (nil defaults true).
 func (a Adjacency) isSymmetric() bool {
 	return a.Symmetric == nil || *a.Symmetric
 }
 
-// buildAdjacencyIndex builds the context/term lookup, synthesizing the reverse
-// edge for every symmetric adjacency so lookups are symmetric where the data
-// says they are, and one-directional where it does not.
 func buildAdjacencyIndex(cfg AdjacencyConfig) adjacencyIndexT {
 	idx := adjacencyIndexT{}
 	addEdge := func(ctx, from string, edge Adjacency) {
@@ -134,10 +106,6 @@ func buildAdjacencyIndex(cfg AdjacencyConfig) adjacencyIndexT {
 	return idx
 }
 
-// Adjacent returns the terms adjacent to term within the given role context,
-// closest-proximity first. Context resolution (spec §2.4): context-specific
-// entries are merged with the always-applicable "any" context; if a term
-// appears in both, the closer proximity wins. Matching is case-insensitive.
 func Adjacent(term, context string) []Adjacency {
 	merged := map[string]Adjacency{}
 	collect := func(ctx string) {
@@ -170,10 +138,6 @@ func Adjacent(term, context string) []Adjacency {
 	return out
 }
 
-// AdjacencyMapVersion returns the loaded map's version (spec §2.6).
 func AdjacencyMapVersion() int { return adjacencyConfig.Version }
 
-// AdjacencyConfigForTest exposes the loaded, raw adjacency config so tests can
-// assert data-level invariants (e.g. symmetry) against the source-of-truth
-// entries. Not intended for production callers, which should use Adjacent.
 func AdjacencyConfigForTest() AdjacencyConfig { return adjacencyConfig }

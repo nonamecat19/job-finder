@@ -1,7 +1,3 @@
-// SearchService ports modules/ingestion/*'s SavedSearch CRUD and RunSearch
-// (enqueue one ingest task per search × enabled source) use-cases. The asynq
-// ingest task handler and the due-since-lastRunAt scheduler that trigger it
-// live in interfaces/worker.
 package application
 
 import (
@@ -37,10 +33,6 @@ type SearchService struct {
 func NewSearchService(q domain.SearchRepository, registry *domain.Registry, sources *Service, client Enqueuer) *SearchService {
 	return &SearchService{q: q, registry: registry, sources: sources, client: client}
 }
-
-// ---------------------------------------------------------------------------
-// SavedSearch CRUD (searches.controller.ts)
-// ---------------------------------------------------------------------------
 
 func (s *SearchService) ListSearches(ctx context.Context) ([]dto.SavedSearchDto, error) {
 	rows, err := s.q.ListSavedSearches(ctx)
@@ -158,10 +150,6 @@ func savedSearchDto(r sqlcgen.SavedSearch) dto.SavedSearchDto {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RunSearch: enqueue one ingest task per (search × enabled source)
-// ---------------------------------------------------------------------------
-
 func (s *SearchService) RunSearch(ctx context.Context, searchID string) ([]string, error) {
 	uid, err := dbutil.ParseUUID(searchID)
 	if err != nil {
@@ -214,7 +202,6 @@ func (s *SearchService) RunSearch(ctx context.Context, searchID string) ([]strin
 		if err != nil {
 			return nil, err
 		}
-		// attempts: 1 (no retry), matching ingestQueue.add's { attempts: 1 }.
 		if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
 			asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)); err != nil {
 			return nil, fmt.Errorf("ingestion: enqueue %s: %w", key, err)
@@ -227,13 +214,6 @@ func (s *SearchService) RunSearch(ctx context.Context, searchID string) ([]strin
 	return keys, nil
 }
 
-// ---------------------------------------------------------------------------
-// RunSource: enqueue one ingest task for a source (no search / subscription)
-// ---------------------------------------------------------------------------
-
-// RunSource enqueues an ingest task that scrapes a source with no saved search
-// or subscription — a direct "run this source" trigger. Mirrors the planned
-// POST /api/sources/{key}/run endpoint from plan/02-djinni-subscriptions.md.
 func (s *SearchService) RunSource(ctx context.Context, sourceKey string) error {
 	source, err := s.sources.GetByKey(ctx, sourceKey)
 	if err != nil {
@@ -261,13 +241,6 @@ func (s *SearchService) RunSource(ctx context.Context, sourceKey string) error {
 	return nil
 }
 
-// ---------------------------------------------------------------------------
-// RunSubscription: enqueue one ingest task for a URL-based subscription
-// ---------------------------------------------------------------------------
-
-// RunSubscription enqueues an ingest task that scrapes a single subscription
-// URL through its source's adapter (SubscriptionURL in the query, instead of
-// keywords). lastRunAt is touched by the ingest handler once the run finishes.
 func (s *SearchService) RunSubscription(ctx context.Context, subscriptionID string) error {
 	uid, err := dbutil.ParseUUID(subscriptionID)
 	if err != nil {
@@ -311,8 +284,6 @@ func (s *SearchService) RunSubscription(ctx context.Context, subscriptionID stri
 	return nil
 }
 
-// RunAllSubscriptions enqueues an ingest task for every enabled subscription,
-// skipping subscriptions whose source is disabled. Returns the number queued.
 func (s *SearchService) RunAllSubscriptions(ctx context.Context) (int, error) {
 	subs, err := s.q.ListSubscriptions(ctx)
 	if err != nil {
@@ -332,8 +303,6 @@ func (s *SearchService) RunAllSubscriptions(ctx context.Context) (int, error) {
 	return queued, nil
 }
 
-// ReconcileUnmatched re-enqueues match tasks for jobs that were inserted but
-// never received a MatchResult. Returns the number of match tasks enqueued.
 func (s *SearchService) ReconcileUnmatched(ctx context.Context) (int, error) {
 	now := time.Now()
 	rows, err := s.q.ListJobsMissingMatch(ctx, sqlcgen.ListJobsMissingMatchParams{

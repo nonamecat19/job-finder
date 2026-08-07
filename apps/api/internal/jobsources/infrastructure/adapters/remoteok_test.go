@@ -133,9 +133,6 @@ func TestRemoteOKHealthCheck(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// HealthCheck targets the fixed remoteok.com API host; this test only
-	// exercises the "never a non-nil error" contract using the real host,
-	// matching TestIndeedHealthCheck's approach for an external dependency.
 	a := RemoteOKAdapter{Scraping: scraping.New()}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)

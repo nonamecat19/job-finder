@@ -7,7 +7,6 @@ interface IdentityFormProps {
   onChange: (resume: Resume) => void;
 }
 
-// Identity fields: name/headline/location/contact/social links (FR-001).
 export function IdentityForm({ resume, onChange }: IdentityFormProps) {
   const set = <K extends keyof Resume>(key: K, value: Resume[K]) => onChange({ ...resume, [key]: value });
 

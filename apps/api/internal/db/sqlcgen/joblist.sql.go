@@ -22,23 +22,40 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     ($3::text IS NOT NULL AND j."status" = $3)
     OR (
       $3::text IS NULL
-      AND (COALESCE($4::bool, false) OR j."status" != 'hidden')
-      AND (COALESCE($5::bool, false) OR j."status" != 'applied')
+      AND (
+        (COALESCE($4::bool, false) AND j."status" = 'hidden')
+        OR (COALESCE($5::bool, false) AND j."status" = 'applied')
+        OR (
+          NOT COALESCE($4::bool, false)
+          AND NOT COALESCE($5::bool, false)
+          AND (COALESCE($6::bool, false) OR j."status" != 'hidden')
+          AND (COALESCE($7::bool, false) OR j."status" != 'applied')
+        )
+      )
     )
   )
-  AND ($6::bool IS NULL OR j."remote" = $6)
+  AND ($8::bool IS NULL OR j."remote" = $8)
   AND (
-    $7::text IS NULL
-    OR j."title" ILIKE $7
-    OR j."company" ILIKE $7
-    OR j."description" ILIKE $7
+    $9::text IS NULL
+    OR j."title" ILIKE $9
+    OR j."company" ILIKE $9
+    OR j."description" ILIKE $9
   )
-  AND ($8::int IS NULL OR mr."score" >= $8)
+  AND ($10::int IS NULL OR mr."score" >= $10)
   AND (
-    $9::int IS NULL
-    OR j."salaryMax" IS NULL
-    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $9
+    (COALESCE($11::bool, false)
+      AND j."salaryMax" IS NOT NULL
+      AND j."salaryCurrency" = 'USD'
+      AND j."salaryMax" < $12)
+    OR (
+      NOT COALESCE($11::bool, false)
+      AND (
+        $12::int IS NULL
+        OR j."salaryMax" IS NULL
+        OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+        OR j."salaryMax" >= $12
+      )
+    )
   )
 `
 
@@ -46,11 +63,14 @@ type CountJobsParams struct {
 	Source         *string     `json:"source"`
 	SubscriptionID pgtype.UUID `json:"subscription_id"`
 	Status         *string     `json:"status"`
+	OnlyHidden     *bool       `json:"only_hidden"`
+	OnlyApplied    *bool       `json:"only_applied"`
 	IncludeHidden  *bool       `json:"include_hidden"`
 	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
 	MinScore       *int32      `json:"min_score"`
+	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
 }
 
@@ -59,11 +79,14 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 		arg.Source,
 		arg.SubscriptionID,
 		arg.Status,
+		arg.OnlyHidden,
+		arg.OnlyApplied,
 		arg.IncludeHidden,
 		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.OnlyBelowFloor,
 		arg.SalaryFloor,
 	)
 	var count int64
@@ -120,38 +143,58 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     ($3::text IS NOT NULL AND j."status" = $3)
     OR (
       $3::text IS NULL
-      AND (COALESCE($4::bool, false) OR j."status" != 'hidden')
-      AND (COALESCE($5::bool, false) OR j."status" != 'applied')
+      AND (
+        (COALESCE($4::bool, false) AND j."status" = 'hidden')
+        OR (COALESCE($5::bool, false) AND j."status" = 'applied')
+        OR (
+          NOT COALESCE($4::bool, false)
+          AND NOT COALESCE($5::bool, false)
+          AND (COALESCE($6::bool, false) OR j."status" != 'hidden')
+          AND (COALESCE($7::bool, false) OR j."status" != 'applied')
+        )
+      )
     )
   )
-  AND ($6::bool IS NULL OR j."remote" = $6)
+  AND ($8::bool IS NULL OR j."remote" = $8)
   AND (
-    $7::text IS NULL
-    OR j."title" ILIKE $7
-    OR j."company" ILIKE $7
-    OR j."description" ILIKE $7
+    $9::text IS NULL
+    OR j."title" ILIKE $9
+    OR j."company" ILIKE $9
+    OR j."description" ILIKE $9
   )
-  AND ($8::int IS NULL OR mr."score" >= $8)
+  AND ($10::int IS NULL OR mr."score" >= $10)
   AND (
-    $9::int IS NULL
-    OR j."salaryMax" IS NULL
-    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $9
+    (COALESCE($11::bool, false)
+      AND j."salaryMax" IS NOT NULL
+      AND j."salaryCurrency" = 'USD'
+      AND j."salaryMax" < $12)
+    OR (
+      NOT COALESCE($11::bool, false)
+      AND (
+        $12::int IS NULL
+        OR j."salaryMax" IS NULL
+        OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+        OR j."salaryMax" >= $12
+      )
+    )
   )
 ORDER BY j."ingestedAt" DESC
-OFFSET $10
-LIMIT $11
+OFFSET $13
+LIMIT $14
 `
 
 type ListJobsByDateParams struct {
 	Source         *string     `json:"source"`
 	SubscriptionID pgtype.UUID `json:"subscription_id"`
 	Status         *string     `json:"status"`
+	OnlyHidden     *bool       `json:"only_hidden"`
+	OnlyApplied    *bool       `json:"only_applied"`
 	IncludeHidden  *bool       `json:"include_hidden"`
 	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
 	MinScore       *int32      `json:"min_score"`
+	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
 	Offset         int32       `json:"offset"`
 	Limit          int32       `json:"limit"`
@@ -208,11 +251,14 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 		arg.Source,
 		arg.SubscriptionID,
 		arg.Status,
+		arg.OnlyHidden,
+		arg.OnlyApplied,
 		arg.IncludeHidden,
 		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.OnlyBelowFloor,
 		arg.SalaryFloor,
 		arg.Offset,
 		arg.Limit,
@@ -292,38 +338,58 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     ($3::text IS NOT NULL AND j."status" = $3)
     OR (
       $3::text IS NULL
-      AND (COALESCE($4::bool, false) OR j."status" != 'hidden')
-      AND (COALESCE($5::bool, false) OR j."status" != 'applied')
+      AND (
+        (COALESCE($4::bool, false) AND j."status" = 'hidden')
+        OR (COALESCE($5::bool, false) AND j."status" = 'applied')
+        OR (
+          NOT COALESCE($4::bool, false)
+          AND NOT COALESCE($5::bool, false)
+          AND (COALESCE($6::bool, false) OR j."status" != 'hidden')
+          AND (COALESCE($7::bool, false) OR j."status" != 'applied')
+        )
+      )
     )
   )
-  AND ($6::bool IS NULL OR j."remote" = $6)
+  AND ($8::bool IS NULL OR j."remote" = $8)
   AND (
-    $7::text IS NULL
-    OR j."title" ILIKE $7
-    OR j."company" ILIKE $7
-    OR j."description" ILIKE $7
+    $9::text IS NULL
+    OR j."title" ILIKE $9
+    OR j."company" ILIKE $9
+    OR j."description" ILIKE $9
   )
-  AND ($8::int IS NULL OR mr."score" >= $8)
+  AND ($10::int IS NULL OR mr."score" >= $10)
   AND (
-    $9::int IS NULL
-    OR j."salaryMax" IS NULL
-    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= $9
+    (COALESCE($11::bool, false)
+      AND j."salaryMax" IS NOT NULL
+      AND j."salaryCurrency" = 'USD'
+      AND j."salaryMax" < $12)
+    OR (
+      NOT COALESCE($11::bool, false)
+      AND (
+        $12::int IS NULL
+        OR j."salaryMax" IS NULL
+        OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+        OR j."salaryMax" >= $12
+      )
+    )
   )
 ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
-OFFSET $10
-LIMIT $11
+OFFSET $13
+LIMIT $14
 `
 
 type ListJobsByScoreParams struct {
 	Source         *string     `json:"source"`
 	SubscriptionID pgtype.UUID `json:"subscription_id"`
 	Status         *string     `json:"status"`
+	OnlyHidden     *bool       `json:"only_hidden"`
+	OnlyApplied    *bool       `json:"only_applied"`
 	IncludeHidden  *bool       `json:"include_hidden"`
 	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
 	MinScore       *int32      `json:"min_score"`
+	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
 	Offset         int32       `json:"offset"`
 	Limit          int32       `json:"limit"`
@@ -380,11 +446,14 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 		arg.Source,
 		arg.SubscriptionID,
 		arg.Status,
+		arg.OnlyHidden,
+		arg.OnlyApplied,
 		arg.IncludeHidden,
 		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
 		arg.MinScore,
+		arg.OnlyBelowFloor,
 		arg.SalaryFloor,
 		arg.Offset,
 		arg.Limit,

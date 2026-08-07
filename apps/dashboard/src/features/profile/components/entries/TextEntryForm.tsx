@@ -7,7 +7,6 @@ interface EntryFormProps {
   onChange: (entry: Entry) => void;
 }
 
-// "text" entries are plain markdown strings (e.g. an intro/welcome section).
 export function TextEntryForm({ entry, onChange }: EntryFormProps) {
   const set = makeEntrySetter(entry, onChange);
   return (

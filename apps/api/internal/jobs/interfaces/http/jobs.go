@@ -12,7 +12,6 @@ import (
 	"github.com/job-finder/api/internal/jobs"
 )
 
-// JobsProvider is the interface JobsHandler needs from the jobs service.
 type JobsProvider interface {
 	List(ctx context.Context, params jobs.ListParams) (dto.JobListResponse, error)
 	Get(ctx context.Context, id string) (dto.JobDto, error)
@@ -23,18 +22,15 @@ type JobsProvider interface {
 	EnqueueGeneration(ctx context.Context, id, docType string, profileID *string) (map[string]any, error)
 }
 
-// DocumentLister is the interface JobsHandler needs to list generated documents for a job.
 type DocumentLister interface {
 	ListDocuments(ctx context.Context, jobID string) ([]dto.GeneratedDocumentDto, error)
 	ListDocumentStatuses(ctx context.Context, jobID string) ([]dto.DocumentStatusDto, error)
 }
 
-// Reenricher is the interface JobsHandler needs to re-trigger detail scraping.
 type Reenricher interface {
 	RescrapeOne(ctx context.Context, jobID string) error
 }
 
-// JobsHandler wires /api/jobs, mirroring jobs.controller.ts.
 type JobsHandler struct {
 	Jobs       JobsProvider
 	Generation DocumentLister
@@ -98,6 +94,15 @@ func (h *JobsHandler) list(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := q.Get("showBelowFloor"); v != "" {
 		params.ShowBelowFloor = v == "true"
+	}
+	if v := q.Get("onlyHidden"); v != "" {
+		params.OnlyHidden = v == "true"
+	}
+	if v := q.Get("onlyApplied"); v != "" {
+		params.OnlyApplied = v == "true"
+	}
+	if v := q.Get("onlyBelowFloor"); v != "" {
+		params.OnlyBelowFloor = v == "true"
 	}
 
 	out, err := h.Jobs.List(r.Context(), params)

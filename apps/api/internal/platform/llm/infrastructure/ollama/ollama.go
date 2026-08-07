@@ -1,5 +1,3 @@
-// Package ollama implements domain.Provider against an Ollama server (chat +
-// embeddings), either local or Ollama Cloud (https://ollama.com).
 package ollama
 
 import (
@@ -18,8 +16,6 @@ import (
 	"github.com/job-finder/api/internal/strutil"
 )
 
-// Provider talks to an Ollama server. When apiKey is set it authenticates
-// with an Authorization: Bearer header. Mirrors ollama.provider.ts.
 type Provider struct {
 	http       *http.Client
 	baseURL    string
@@ -29,11 +25,6 @@ type Provider struct {
 	embedModel string
 }
 
-// IsHosted reports whether this Ollama server is a hosted/remote instance
-// (e.g. Ollama Cloud) rather than a local one, per research.md R2: hosted
-// when an API key is set, or when the base URL host is not loopback/private.
-// Used by the LLM Router to resolve the admission-gate provider class
-// (019-ai-job-throughput).
 func (o *Provider) IsHosted() bool {
 	if o.apiKey != "" {
 		return true
@@ -55,8 +46,6 @@ func isLoopbackOrPrivateHost(host string) bool {
 	return false
 }
 
-// New builds a provider. embedURL empty falls back to baseURL; apiKey empty
-// means no auth header (local server). Chat and embeddings share apiKey.
 func New(baseURL, apiKey, modelName, embedModel, embedURL string) *Provider {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
@@ -71,7 +60,7 @@ func New(baseURL, apiKey, modelName, embedModel, embedURL string) *Provider {
 		embedModel = "nomic-embed-text"
 	}
 	return &Provider{
-		http:       &http.Client{Timeout: 300 * time.Second}, // local models are slow
+		http:       &http.Client{Timeout: 300 * time.Second},
 		baseURL:    baseURL,
 		apiKey:     apiKey,
 		embedURL:   embedURL,
@@ -82,7 +71,6 @@ func New(baseURL, apiKey, modelName, embedModel, embedURL string) *Provider {
 
 func (o *Provider) ModelName() string { return o.modelName }
 
-// setHeaders applies the JSON content type and, when configured, Bearer auth.
 func (o *Provider) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	if o.apiKey != "" {

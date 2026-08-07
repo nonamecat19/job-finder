@@ -14,8 +14,6 @@ interface SectionEditorProps {
   onChange: (section: Section) => void;
 }
 
-// Renders one section's entries: add/edit entries, delete (confirmed),
-// reorder via drag or up/down buttons (FR-004, FR-006, FR-011).
 export function SectionEditor({ section, onChange }: SectionEditorProps) {
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));

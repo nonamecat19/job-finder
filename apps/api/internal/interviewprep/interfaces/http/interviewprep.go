@@ -12,13 +12,10 @@ import (
 	"github.com/job-finder/api/internal/interviewprep"
 )
 
-// InterviewPrepProvider is the interface InterviewPrepHandler needs from the
-// interview-prep pack service (013).
 type InterviewPrepProvider interface {
 	Get(ctx context.Context, jobID string) (dto.InterviewPrepPackDto, error)
 }
 
-// InterviewPrepHandler wires GET /jobs/{id}/interview-prep (spec 013).
 type InterviewPrepHandler struct {
 	InterviewPrep InterviewPrepProvider
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/job-finder/api/internal/jobsources/application"
 )
 
-// SearchProvider is the interface SearchesHandler needs from the ingestion service.
 type SearchProvider interface {
 	ListSearches(ctx context.Context) ([]dto.SavedSearchDto, error)
 	CreateSearch(ctx context.Context, name string, query dto.SearchQuery, cron string, enabled bool) (*dto.SavedSearchDto, error)
@@ -21,7 +20,6 @@ type SearchProvider interface {
 	RecentRuns(ctx context.Context, limit int32) ([]dto.SourceRunDto, error)
 }
 
-// SearchesHandler wires /api/searches, mirroring searches.controller.ts.
 type SearchesHandler struct {
 	Ingestion SearchProvider
 }

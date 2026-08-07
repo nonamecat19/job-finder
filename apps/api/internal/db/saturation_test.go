@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-// fakeStats replays a scripted sequence of samples, one per tick.
 type fakeStats struct {
 	samples []PoolStats
 	i       int
@@ -30,8 +29,6 @@ func healthy() PoolStats {
 	return PoolStats{MaxConns: 25, AcquiredConns: 3, Saturated: false}
 }
 
-// runSamples drives the sampler over an injected tick source, one tick per
-// scripted sample, and returns the warnings it emitted.
 func runSamples(t *testing.T, samples []PoolStats) []map[string]any {
 	t.Helper()
 
@@ -68,7 +65,6 @@ func runSamples(t *testing.T, samples []PoolStats) []map[string]any {
 }
 
 func TestSaturationBelowThresholdIsSilent(t *testing.T) {
-	// Three consecutive saturated samples is a burst, not exhaustion.
 	got := runSamples(t, []PoolStats{saturated(1), saturated(2), saturated(3)})
 	if len(got) != 0 {
 		t.Errorf("got %d warnings, want 0: %v", len(got), got)

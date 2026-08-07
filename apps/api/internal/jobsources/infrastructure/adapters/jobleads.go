@@ -1,10 +1,3 @@
-// Package adapters — JobLeads, login-gated HTML scrape of authenticated
-// saved-search results and listing-detail pages (no public API, no
-// meaningful anonymous access). Search only supports an operator-pasted
-// saved-search URL (query.SubscriptionURL) — no keyword search, matching
-// the Djinni/Indeed/RemoteOK stance. Session/login handling mirrors
-// djinni.go/djinni_session.go exactly, since JobLeads (unlike Djinni) does
-// not degrade to anonymous access when credentials are absent.
 package adapters
 
 import (
@@ -25,19 +18,12 @@ import (
 )
 
 const (
-	// jobLeadsMaxSubscriptionPages caps pagination so a redirect loop or an
-	// unbounded feed can't run forever, mirroring djinniMaxSubscriptionPages.
 	jobLeadsMaxSubscriptionPages = 50
-	// jobLeadsRequestDelay is the floor between paginated requests (FR-010).
-	jobLeadsRequestDelay = 500 * time.Millisecond
+	jobLeadsRequestDelay         = 500 * time.Millisecond
 )
 
 var jobLeadsRemoteRe = regexp.MustCompile(`(?i)\bremote\b|work from home`)
 
-// JobLeadsAdapter — jobleads.com, authenticated HTML scrape. Session is a
-// login-managed session cookie (credentials in env, cookie in the DB); a nil
-// Session or a Session with no configured credentials means Search/
-// HealthCheck fail clearly rather than attempting anonymous access.
 type JobLeadsAdapter struct {
 	Scraping *scraping.Service
 	Session  JobLeadsSessionProvider
@@ -46,20 +32,10 @@ type JobLeadsAdapter struct {
 func (JobLeadsAdapter) Key() string          { return "jobleads" }
 func (JobLeadsAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
-// NeedsDetail reports true: search results carry a teaser only; the full
-// posting body comes from FetchDetail, so ingestion defers match/ghost
-// scoring until enrichment has run.
 func (JobLeadsAdapter) NeedsDetail() bool { return true }
 
-// UsesUserAccount reports true: JobLeads uses login credentials (session
-// cookie) and the retrieval ladder must never escalate past the direct rung.
 func (JobLeadsAdapter) UsesUserAccount() bool { return true }
 
-// authHeaders builds request headers carrying the current session cookie,
-// logging in on demand when Session is set. Unlike djinni, a Session that
-// resolves to an empty cookie AND has no configured credentials is treated
-// as an explicit "not configured" error here — JobLeads has no useful
-// anonymous view to fall back to.
 func (d JobLeadsAdapter) authHeaders(ctx context.Context) (map[string]string, error) {
 	headers := map[string]string{}
 	if d.Session == nil {
@@ -84,10 +60,6 @@ func setJobLeadsCookie(headers map[string]string, cookie string) {
 	}
 }
 
-// fetchDoc fetches and parses pageURL. If JobLeads serves its login page (an
-// expired/absent cookie is redirected to /login, followed to a 200), it
-// re-logs-in once and retries, mutating headers in place with the fresh
-// cookie so callers keep reusing them. Mirrors DjinniAdapter.fetchDoc.
 func (d JobLeadsAdapter) fetchDoc(ctx context.Context, pageURL string, headers map[string]string) (*goquery.Document, error) {
 	doc, err := d.fetchParse(ctx, pageURL, headers)
 	if err != nil {
@@ -123,16 +95,10 @@ func (d JobLeadsAdapter) fetchParse(ctx context.Context, pageURL string, headers
 	return goquery.NewDocumentFromReader(strings.NewReader(html))
 }
 
-// jobLeadsIsLoginPage reports whether doc is JobLeads's login page (served
-// with a 200 after an auth redirect). The password input is unique to that
-// page and never present on results/detail markup. Mirrors
-// djinniIsLoginPage.
 func jobLeadsIsLoginPage(doc *goquery.Document) bool {
 	return doc.Find(`input[name="password"]`).Length() > 0
 }
 
-// Search only supports the pasted-subscription-URL flow (FR-014); keyword
-// search is out of scope, matching IndeedAdapter.Search's stance exactly.
 func (d JobLeadsAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
 	if query.SubscriptionURL == "" {
 		return nil, fmt.Errorf("jobleads keyword search not implemented — use subscription URL instead")
@@ -150,11 +116,6 @@ func (d JobLeadsAdapter) Search(ctx context.Context, query dto.SearchQuery, _ ma
 	return jobs, err
 }
 
-// scrapeSubscription pages through a saved-search URL by incrementing its
-// "page" query parameter. Stops on an empty page, a hard page cap, or the
-// page repeating the previous page's first card (loop guard). A later page
-// failing ends pagination with whatever was collected; only page 1 failing
-// is fatal. Mirrors IndeedAdapter.scrapeSubscription/DjinniAdapter.scrapeSubscription.
 func (d JobLeadsAdapter) scrapeSubscription(ctx context.Context, subURL string, headers map[string]string) ([]dto.NormalizedJob, error) {
 	base, err := url.Parse(subURL)
 	if err != nil {
@@ -196,10 +157,6 @@ func (d JobLeadsAdapter) scrapeSubscription(ctx context.Context, subURL string, 
 	return jobs, nil
 }
 
-// parseJobLeadsListings extracts job cards from a JobLeads saved-search
-// results page. Selectors are best-effort/defensive: title and URL are
-// required (card skipped without them), every other field degrades to
-// empty/nil rather than erroring.
 func parseJobLeadsListings(doc *goquery.Document, pageURL string) []dto.NormalizedJob {
 	base, _ := url.Parse(pageURL)
 	if base == nil {
@@ -243,9 +200,6 @@ func parseJobLeadsListings(doc *goquery.Document, pageURL string) []dto.Normaliz
 	return jobs
 }
 
-// jobLeadsExternalID derives a stable per-listing identifier from the
-// listing URL's last path segment (e.g. "/job/senior-golang-engineer-abc123"
-// -> "senior-golang-engineer-abc123").
 func jobLeadsExternalID(href string) *string {
 	segs := strings.Split(strings.Trim(href, "/"), "/")
 	if len(segs) > 0 && segs[len(segs)-1] != "" {
@@ -266,9 +220,6 @@ func (d JobLeadsAdapter) HealthCheck(ctx context.Context, config map[string]any)
 	return doc != nil, nil
 }
 
-// JobLeadsDetailPatch is the parsed subset of a JobLeads job detail page
-// used to fill in a shallow (list-only) Job row. Not part of the Adapter
-// interface — JobLeads-specific, called directly by the enrichment handler.
 type JobLeadsDetailPatch struct {
 	Description string
 	SalaryRaw   *string
@@ -277,15 +228,8 @@ type JobLeadsDetailPatch struct {
 	Raw         map[string]any
 }
 
-// jobLeadsUnavailableMarker is the text JobLeads shows on a removed/expired
-// listing's detail page; presence of this (or a missing description
-// container entirely) marks the patch unavailable rather than erroring.
 var jobLeadsUnavailableRe = regexp.MustCompile(`(?i)no longer available|job has been removed|position has expired`)
 
-// FetchDetail fetches a single JobLeads job page and parses the full
-// description/salary/posted-date. If the listing is no longer available,
-// returns Available: false (not an error) so the caller preserves
-// already-captured summary data rather than discarding it (FR-009).
 func (d JobLeadsAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (JobLeadsDetailPatch, error) {
 	headers, err := d.authHeaders(ctx)
 	if err != nil {

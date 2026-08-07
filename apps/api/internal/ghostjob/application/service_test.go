@@ -12,10 +12,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// fakeServiceRepo is a controllable stand-in for ghostjob.Repository at the
-// service level: it tracks every UpsertJobSignal call and simulates the
-// (jobId, kind) upsert-replace semantics the real "JobSignal" unique
-// constraint enforces (FR-009).
 type fakeServiceRepo struct {
 	job sqlcgen.Job
 
@@ -23,7 +19,7 @@ type fakeServiceRepo struct {
 	crossBoardRows []sqlcgen.ListJobsForCrossBoardCheckRow
 	alwaysHiring   int32
 
-	rows        map[string]sqlcgen.JobSignal // key: jobId+kind
+	rows        map[string]sqlcgen.JobSignal
 	upsertCalls int
 }
 
@@ -59,7 +55,7 @@ func (f *fakeServiceRepo) UpsertJobSignal(ctx context.Context, arg sqlcgen.Upser
 		Model:     arg.Model,
 		CreatedAt: pgtype.Timestamp{Valid: true},
 	}
-	f.rows[key] = row // replaces any prior row for this (jobId, kind) — no history accumulates
+	f.rows[key] = row
 	return row, nil
 }
 
@@ -77,9 +73,6 @@ func dbKey(id pgtype.UUID, kind string) string {
 
 var _ ghostjob.Repository = (*fakeServiceRepo)(nil)
 
-// fakeLLM is a scripted llm.Provider: each call to CompleteJSON returns the
-// next canned response in order, so a test can simulate retry-then-succeed,
-// exhaust-the-retry-budget, or a clean one-shot answer.
 type fakeLLM struct {
 	model     string
 	responses []string
@@ -136,8 +129,6 @@ func TestScoreJob_PersistsAValidResult(t *testing.T) {
 	if out.Kind != ghostjob.Kind {
 		t.Errorf("expected kind %q, got %q", ghostjob.Kind, out.Kind)
 	}
-	// SC-003: every persisted row carries score/model/confidence and a
-	// value-or-explicit-unknown for all four signals.
 	if out.Model == "" {
 		t.Error("expected model to be set")
 	}
@@ -152,9 +143,6 @@ func TestScoreJob_PersistsAValidResult(t *testing.T) {
 	}
 }
 
-// FR-010: an out-of-range score persists nothing and preserves whatever was
-// there before (here: nothing was there before, and nothing must appear
-// after either).
 func TestScoreJob_OutOfRangeScorePersistsNothing(t *testing.T) {
 	repo := newFakeServiceRepo(scoredJob())
 	repo.repostCount = 2
@@ -171,8 +159,6 @@ func TestScoreJob_OutOfRangeScorePersistsNothing(t *testing.T) {
 	}
 }
 
-// FR-009: two successive score runs leave exactly one row, with the later
-// values — never accumulated history.
 func TestScoreJob_SecondUpsertReplacesFirst(t *testing.T) {
 	repo := newFakeServiceRepo(scoredJob())
 	repo.repostCount = 2
@@ -186,7 +172,7 @@ func TestScoreJob_SecondUpsertReplacesFirst(t *testing.T) {
 	if _, err := svc.ScoreJob(context.Background(), jobID); err != nil {
 		t.Fatalf("first score: %v", err)
 	}
-	repo.repostCount = 4 // signals age between runs
+	repo.repostCount = 4
 	second, err := svc.ScoreJob(context.Background(), jobID)
 	if err != nil {
 		t.Fatalf("second score: %v", err)
@@ -200,8 +186,6 @@ func TestScoreJob_SecondUpsertReplacesFirst(t *testing.T) {
 	}
 }
 
-// Spec edge case: when every signal is unknown, the service declines to
-// score — no LLM call, no row written.
 func TestScoreJob_DeclinesWhenAllSignalsUnknown(t *testing.T) {
 	job := scoredJob()
 	job.Description = ""
@@ -209,7 +193,7 @@ func TestScoreJob_DeclinesWhenAllSignalsUnknown(t *testing.T) {
 	job.PostedAt = pgtype.Timestamp{Valid: false}
 
 	repo := newFakeServiceRepo(job)
-	repo.repostCount = 1 // only its own appearance
+	repo.repostCount = 1
 	repo.alwaysHiring = 0
 
 	llmc := &fakeLLM{model: "qwen2.5:14b", responses: []string{
@@ -229,11 +213,9 @@ func TestScoreJob_DeclinesWhenAllSignalsUnknown(t *testing.T) {
 	}
 }
 
-// FR-011 / SC-005: confidence is capped when an optional signal is unknown,
-// even if the model reports high confidence anyway.
 func TestScoreJob_CapsConfidenceWhenSignalUnknown(t *testing.T) {
 	job := scoredJob()
-	job.PostedAt = pgtype.Timestamp{Valid: false} // daysOpen unknown
+	job.PostedAt = pgtype.Timestamp{Valid: false}
 
 	repo := newFakeServiceRepo(job)
 	repo.repostCount = 3
@@ -251,11 +233,6 @@ func TestScoreJob_CapsConfidenceWhenSignalUnknown(t *testing.T) {
 	}
 }
 
-// FR-018 / SC-009: a scoring failure for one job must not corrupt or block
-// scoring for another — verified here by scoring two independent jobs
-// against two independent service instances (the real isolation guarantee
-// is "no shared mutable state between calls", exercised at the handler
-// level too).
 func TestScoreJob_FailureIsIsolatedPerJob(t *testing.T) {
 	failing := newFakeServiceRepo(scoredJob())
 	failing.repostCount = 2

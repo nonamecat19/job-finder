@@ -53,7 +53,6 @@ test.describe('Sources page', () => {
     await page.goto('/sources');
     await expect(page.getByText('React jobs')).toBeVisible();
 
-    // The new-search form is collapsed until the button is pressed.
     await page.getByRole('button', { name: '+ new search' }).click();
     await expect(page.getByPlaceholder('e.g. React developer')).toBeVisible();
   });

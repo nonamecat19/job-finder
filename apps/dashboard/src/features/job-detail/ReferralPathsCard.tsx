@@ -27,9 +27,6 @@ export default function ReferralPathsCard({ jobId }: { jobId: string | undefined
     );
   }
 
-  // A 404/no-company job (or the referral graph being empty) both surface
-  // as "nothing to show" rather than an error banner — this card is
-  // advisory, not a required part of the job-detail flow.
   if (isError || !paths || paths.length === 0) return null;
 
   return (

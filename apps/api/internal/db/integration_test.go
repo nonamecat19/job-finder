@@ -21,9 +21,6 @@ import (
 var testDB *db.DB
 
 func TestMain(m *testing.M) {
-	// Each suite runs against its own database (internal/dbtest), so these
-	// tests can TRUNCATE freely without disturbing packages running in
-	// parallel.
 	database, release, err := dbtest.NewForMain("db")
 	if err != nil {
 		panic("dbtest: " + err.Error())
@@ -35,7 +32,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// truncateAll cleans every table in dependency-safe order.
 func truncateAll(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
@@ -101,13 +97,10 @@ func mustInsertJob(t *testing.T, sourceKey, dedupeKey, title string) sqlcgen.Job
 	return job
 }
 
-// --------------- JobSource CRUD ---------------
-
 func TestJobSourceCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
-	// Insert
 	src := mustInsertJobSource(t, "test-src-1", "api")
 	if src.Key != "test-src-1" {
 		t.Fatalf("expected key test-src-1, got %s", src.Key)
@@ -119,7 +112,6 @@ func TestJobSourceCRUD(t *testing.T) {
 		t.Fatal("expected source to be healthy by default")
 	}
 
-	// List all
 	all, err := testDB.Queries.ListJobSources(ctx)
 	if err != nil {
 		t.Fatalf("list sources: %v", err)
@@ -128,7 +120,6 @@ func TestJobSourceCRUD(t *testing.T) {
 		t.Fatalf("expected 1 source, got %d", len(all))
 	}
 
-	// Get by key
 	got, err := testDB.Queries.GetJobSourceByKey(ctx, "test-src-1")
 	if err != nil {
 		t.Fatalf("get source by key: %v", err)
@@ -137,7 +128,6 @@ func TestJobSourceCRUD(t *testing.T) {
 		t.Fatal("ID mismatch")
 	}
 
-	// Toggle enabled
 	err = testDB.Queries.SetJobSourceEnabled(ctx, sqlcgen.SetJobSourceEnabledParams{
 		Key:     "test-src-1",
 		Enabled: false,
@@ -153,7 +143,6 @@ func TestJobSourceCRUD(t *testing.T) {
 		t.Fatal("expected source to be disabled")
 	}
 
-	// List enabled should be empty
 	enabled, err := testDB.Queries.ListEnabledJobSources(ctx)
 	if err != nil {
 		t.Fatalf("list enabled: %v", err)
@@ -162,7 +151,6 @@ func TestJobSourceCRUD(t *testing.T) {
 		t.Fatalf("expected 0 enabled sources, got %d", len(enabled))
 	}
 
-	// Set healthy
 	err = testDB.Queries.SetJobSourceHealthy(ctx, sqlcgen.SetJobSourceHealthyParams{
 		Key:     "test-src-1",
 		Healthy: false,
@@ -178,7 +166,6 @@ func TestJobSourceCRUD(t *testing.T) {
 		t.Fatal("expected source to be unhealthy")
 	}
 
-	// Set config
 	err = testDB.Queries.SetJobSourceConfig(ctx, sqlcgen.SetJobSourceConfigParams{
 		Key:    "test-src-1",
 		Config: []byte(`{"token":"abc"}`),
@@ -198,7 +185,6 @@ func TestJobSourceCRUD(t *testing.T) {
 		t.Fatalf("expected token abc, got %s", cfg["token"])
 	}
 
-	// Upsert kind update
 	err = testDB.Queries.UpsertJobSource(ctx, sqlcgen.UpsertJobSourceParams{
 		Key:    "test-src-1",
 		Kind:   "scraped",
@@ -216,15 +202,12 @@ func TestJobSourceCRUD(t *testing.T) {
 	}
 }
 
-// --------------- Job CRUD ---------------
-
 func TestJobCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-job", "api")
 
-	// Insert
 	job := mustInsertJob(t, "js-job", "dedupe-1", "Go Developer")
 	if job.ID.Valid != true {
 		t.Fatal("expected valid ID")
@@ -236,7 +219,6 @@ func TestJobCRUD(t *testing.T) {
 		t.Fatal("expected ingestedAt to be set")
 	}
 
-	// Get by ID
 	got, err := testDB.Queries.GetJobByID(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("get job by ID: %v", err)
@@ -251,7 +233,6 @@ func TestJobCRUD(t *testing.T) {
 		t.Fatal("expected remote=false")
 	}
 
-	// Get by dedupe key
 	gotID, err := testDB.Queries.GetJobByDedupeKey(ctx, "dedupe-1")
 	if err != nil {
 		t.Fatalf("get by dedupe key: %v", err)
@@ -260,7 +241,6 @@ func TestJobCRUD(t *testing.T) {
 		t.Fatal("dedupe key lookup returned wrong ID")
 	}
 
-	// Update status
 	updated, err := testDB.Queries.UpdateJobStatus(ctx, sqlcgen.UpdateJobStatusParams{
 		ID:     job.ID,
 		Status: "reviewed",
@@ -272,7 +252,6 @@ func TestJobCRUD(t *testing.T) {
 		t.Fatalf("expected status reviewed, got %s", updated.Status)
 	}
 
-	// Update detail
 	salary := "$100k-$150k"
 	loc := "Remote"
 	updatedDetail, err := testDB.Queries.UpdateJobDetail(ctx, sqlcgen.UpdateJobDetailParams{
@@ -299,7 +278,6 @@ func TestJobCRUD(t *testing.T) {
 		t.Fatal("expected detailScrapedAt to be set")
 	}
 
-	// ListJobsNeedingDetail — should be empty since we set detailScrapedAt
 	needDetail, err := testDB.Queries.ListJobsNeedingDetail(ctx, sqlcgen.ListJobsNeedingDetailParams{
 		SourceKey: "js-job",
 		Limit:     10,
@@ -334,15 +312,12 @@ func TestJobNeedingDetail(t *testing.T) {
 	}
 }
 
-// --------------- SavedSearch CRUD ---------------
-
 func TestSavedSearchCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
 	query, _ := json.Marshal(map[string]string{"q": "golang"})
 
-	// Create
 	ss, err := testDB.Queries.CreateSavedSearch(ctx, sqlcgen.CreateSavedSearchParams{
 		Name:    "Golang jobs",
 		Query:   query,
@@ -362,7 +337,6 @@ func TestSavedSearchCRUD(t *testing.T) {
 		t.Fatalf("expected cron, got %s", ss.Cron)
 	}
 
-	// Get
 	got, err := testDB.Queries.GetSavedSearch(ctx, ss.ID)
 	if err != nil {
 		t.Fatalf("get saved search: %v", err)
@@ -371,7 +345,6 @@ func TestSavedSearchCRUD(t *testing.T) {
 		t.Fatal("ID mismatch")
 	}
 
-	// List all
 	all, err := testDB.Queries.ListSavedSearches(ctx)
 	if err != nil {
 		t.Fatalf("list saved searches: %v", err)
@@ -380,7 +353,6 @@ func TestSavedSearchCRUD(t *testing.T) {
 		t.Fatalf("expected 1, got %d", len(all))
 	}
 
-	// List enabled
 	enabled, err := testDB.Queries.ListEnabledSavedSearches(ctx)
 	if err != nil {
 		t.Fatalf("list enabled: %v", err)
@@ -389,7 +361,6 @@ func TestSavedSearchCRUD(t *testing.T) {
 		t.Fatalf("expected 1 enabled, got %d", len(enabled))
 	}
 
-	// Update
 	newName := "Updated Search"
 	disabled := false
 	updated, err := testDB.Queries.UpdateSavedSearch(ctx, sqlcgen.UpdateSavedSearchParams{
@@ -407,7 +378,6 @@ func TestSavedSearchCRUD(t *testing.T) {
 		t.Fatal("expected enabled=false after update")
 	}
 
-	// Touch last run
 	err = testDB.Queries.TouchSavedSearchLastRun(ctx, ss.ID)
 	if err != nil {
 		t.Fatalf("touch last run: %v", err)
@@ -420,7 +390,6 @@ func TestSavedSearchCRUD(t *testing.T) {
 		t.Fatal("expected lastRunAt to be set")
 	}
 
-	// Delete
 	err = testDB.Queries.DeleteSavedSearch(ctx, ss.ID)
 	if err != nil {
 		t.Fatalf("delete saved search: %v", err)
@@ -434,8 +403,6 @@ func TestSavedSearchCRUD(t *testing.T) {
 	}
 }
 
-// --------------- Application CRUD ---------------
-
 func TestApplicationCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -443,7 +410,6 @@ func TestApplicationCRUD(t *testing.T) {
 	mustInsertJobSource(t, "js-app", "api")
 	job := mustInsertJob(t, "js-app", "app-job-1", "Rust Dev")
 
-	// Upsert
 	events, _ := json.Marshal([]map[string]string{{"type": "created"}})
 	err := testDB.Queries.UpsertApplicationStatus(ctx, sqlcgen.UpsertApplicationStatusParams{
 		JobId:  job.ID,
@@ -454,7 +420,6 @@ func TestApplicationCRUD(t *testing.T) {
 		t.Fatalf("upsert application: %v", err)
 	}
 
-	// Get by ID — first need to look it up by job ID
 	app, err := testDB.Queries.GetApplicationByJobID(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("get application by job ID: %v", err)
@@ -463,7 +428,6 @@ func TestApplicationCRUD(t *testing.T) {
 		t.Fatalf("expected status shortlisted, got %s", app.Status)
 	}
 
-	// Get by application ID
 	got, err := testDB.Queries.GetApplicationByID(ctx, app.ID)
 	if err != nil {
 		t.Fatalf("get application by ID: %v", err)
@@ -472,7 +436,6 @@ func TestApplicationCRUD(t *testing.T) {
 		t.Fatal("ID mismatch")
 	}
 
-	// List applications
 	apps, err := testDB.Queries.ListApplications(ctx, nil)
 	if err != nil {
 		t.Fatalf("list applications: %v", err)
@@ -484,7 +447,6 @@ func TestApplicationCRUD(t *testing.T) {
 		t.Fatalf("expected joined job title Rust Dev, got %s", apps[0].JobTitle)
 	}
 
-	// List with status filter
 	filtered, err := testDB.Queries.ListApplications(ctx, strPtr("shortlisted"))
 	if err != nil {
 		t.Fatalf("list filtered: %v", err)
@@ -501,7 +463,6 @@ func TestApplicationCRUD(t *testing.T) {
 		t.Fatalf("expected 0 for non-matching filter, got %d", len(nonexistent))
 	}
 
-	// Update status
 	notes := "Strong candidate"
 	updated, err := testDB.Queries.UpdateApplication(ctx, sqlcgen.UpdateApplicationParams{
 		ID:       app.ID,
@@ -519,7 +480,6 @@ func TestApplicationCRUD(t *testing.T) {
 		t.Fatal("expected notes to be updated")
 	}
 
-	// Upsert again (ON CONFLICT updates status)
 	err = testDB.Queries.UpsertApplicationStatus(ctx, sqlcgen.UpsertApplicationStatusParams{
 		JobId:  job.ID,
 		Status: "hired",
@@ -537,9 +497,6 @@ func TestApplicationCRUD(t *testing.T) {
 	}
 }
 
-// --------------- ApplicationOutcome event log ---------------
-
-// mustInsertApplication creates a job + its application and returns the app.
 func mustInsertApplication(t *testing.T, sourceKey, dedupeKey string) sqlcgen.Application {
 	t.Helper()
 	ctx := context.Background()
@@ -571,9 +528,6 @@ func mustInsertOutcome(t *testing.T, appID pgtype.UUID, eventType string, occurr
 	return row
 }
 
-// TestApplicationOutcomeWriteAndOrdering covers the core acceptance: events are
-// written, and read back ordered by "occurredAt" oldest-first regardless of the
-// order they were inserted in.
 func TestApplicationOutcomeWriteAndOrdering(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -583,9 +537,6 @@ func TestApplicationOutcomeWriteAndOrdering(t *testing.T) {
 
 	base := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 
-	// Insert deliberately out of chronological order: rejected (day 10) first,
-	// then applied (day 0), then screen (day 4). Read-back must still be
-	// oldest-first, proving the ORDER BY drives the timeline, not insert order.
 	mustInsertOutcome(t, app.ID, "rejected", base.AddDate(0, 0, 10))
 	applied := mustInsertOutcome(t, app.ID, "applied", base)
 	mustInsertOutcome(t, app.ID, "screen", base.AddDate(0, 0, 4))
@@ -631,8 +582,6 @@ func TestApplicationOutcomeWriteAndOrdering(t *testing.T) {
 	}
 }
 
-// TestApplicationOutcomeTerminalOnceIdempotency covers the partial unique index:
-// applied/offer/rejected are recorded at most once, viewed/screen may recur.
 func TestApplicationOutcomeTerminalOnceIdempotency(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -645,8 +594,6 @@ func TestApplicationOutcomeTerminalOnceIdempotency(t *testing.T) {
 	for _, terminal := range []string{"applied", "offer", "rejected"} {
 		mustInsertOutcome(t, app.ID, terminal, base)
 
-		// Second submit at a different instant must be a silent no-op — the
-		// query is ON CONFLICT DO NOTHING, so it returns no row.
 		_, err := testDB.Queries.InsertApplicationOutcome(ctx, sqlcgen.InsertApplicationOutcomeParams{
 			ApplicationId: app.ID,
 			EventType:     terminal,
@@ -657,7 +604,6 @@ func TestApplicationOutcomeTerminalOnceIdempotency(t *testing.T) {
 		}
 	}
 
-	// Recurring types are outside the unique index predicate.
 	mustInsertOutcome(t, app.ID, "screen", base.AddDate(0, 0, 2))
 	mustInsertOutcome(t, app.ID, "screen", base.AddDate(0, 0, 5))
 	mustInsertOutcome(t, app.ID, "viewed", base.AddDate(0, 0, 3))
@@ -667,14 +613,11 @@ func TestApplicationOutcomeTerminalOnceIdempotency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("count outcomes: %v", err)
 	}
-	// 3 terminal-once + 2 screen + 2 viewed = 7 (duplicates dropped).
 	if count != 7 {
 		t.Fatalf("expected 7 outcome events, got %d", count)
 	}
 }
 
-// TestApplicationOutcomeConstraints covers the eventType CHECK, the FK, and the
-// ON DELETE cascade from "Application".
 func TestApplicationOutcomeConstraints(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -683,7 +626,6 @@ func TestApplicationOutcomeConstraints(t *testing.T) {
 	app := mustInsertApplication(t, "js-constraint", "constraint-job-1")
 	now := time.Now().UTC()
 
-	// Unknown eventType is rejected by the CHECK constraint.
 	_, err := testDB.Queries.InsertApplicationOutcome(ctx, sqlcgen.InsertApplicationOutcomeParams{
 		ApplicationId: app.ID,
 		EventType:     "ghosted",
@@ -693,7 +635,6 @@ func TestApplicationOutcomeConstraints(t *testing.T) {
 		t.Fatalf("expected CHECK violation for eventType 'ghosted', got %v", err)
 	}
 
-	// Unknown applicationId is rejected by the FK.
 	orphan, perr := dbutil.ParseUUID("00000000-0000-0000-0000-0000000000ff")
 	if perr != nil {
 		t.Fatalf("parse uuid: %v", perr)
@@ -707,7 +648,6 @@ func TestApplicationOutcomeConstraints(t *testing.T) {
 		t.Fatalf("expected FK violation for unknown applicationId, got %v", err)
 	}
 
-	// Deleting the application cascades its outcome events away.
 	note := "phone screen with hiring manager"
 	withNote, err := testDB.Queries.InsertApplicationOutcome(ctx, sqlcgen.InsertApplicationOutcomeParams{
 		ApplicationId: app.ID,
@@ -734,15 +674,12 @@ func TestApplicationOutcomeConstraints(t *testing.T) {
 	}
 }
 
-// --------------- Subscription CRUD ---------------
-
 func TestSubscriptionCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
 	mustInsertJobSource(t, "js-sub", "api")
 
-	// Create
 	sub, err := testDB.Queries.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{
 		SourceKey: "js-sub",
 		Name:      strPtr("Djinni Go jobs"),
@@ -759,7 +696,6 @@ func TestSubscriptionCRUD(t *testing.T) {
 		t.Fatalf("expected sourceKey js-sub, got %s", sub.SourceKey)
 	}
 
-	// Get
 	got, err := testDB.Queries.GetSubscription(ctx, sub.ID)
 	if err != nil {
 		t.Fatalf("get subscription: %v", err)
@@ -768,7 +704,6 @@ func TestSubscriptionCRUD(t *testing.T) {
 		t.Fatal("ID mismatch")
 	}
 
-	// List all
 	all, err := testDB.Queries.ListSubscriptions(ctx)
 	if err != nil {
 		t.Fatalf("list subscriptions: %v", err)
@@ -777,7 +712,6 @@ func TestSubscriptionCRUD(t *testing.T) {
 		t.Fatalf("expected 1, got %d", len(all))
 	}
 
-	// List by source
 	bySource, err := testDB.Queries.ListSubscriptionsBySource(ctx, "js-sub")
 	if err != nil {
 		t.Fatalf("list by source: %v", err)
@@ -786,7 +720,6 @@ func TestSubscriptionCRUD(t *testing.T) {
 		t.Fatalf("expected 1, got %d", len(bySource))
 	}
 
-	// Update
 	newName := "Updated Sub"
 	newUrl := "https://djinni.example.com/jobs?lang=rust"
 	disabled := false
@@ -809,7 +742,6 @@ func TestSubscriptionCRUD(t *testing.T) {
 		t.Fatal("expected enabled=false")
 	}
 
-	// Touch last run
 	err = testDB.Queries.TouchSubscriptionLastRun(ctx, sub.ID)
 	if err != nil {
 		t.Fatalf("touch last run: %v", err)
@@ -822,7 +754,6 @@ func TestSubscriptionCRUD(t *testing.T) {
 		t.Fatal("expected lastRunAt to be set")
 	}
 
-	// Delete
 	err = testDB.Queries.DeleteSubscription(ctx, sub.ID)
 	if err != nil {
 		t.Fatalf("delete subscription: %v", err)
@@ -836,8 +767,6 @@ func TestSubscriptionCRUD(t *testing.T) {
 	}
 }
 
-// --------------- Profile CRUD ---------------
-
 func TestProfileCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -848,7 +777,6 @@ func TestProfileCRUD(t *testing.T) {
 		"skills": []string{"go", "postgres", "docker"},
 	})
 
-	// Create
 	prof, err := testDB.Queries.CreateProfile(ctx, sqlcgen.CreateProfileParams{
 		Name:       "John Doe",
 		Document:   doc,
@@ -867,7 +795,6 @@ func TestProfileCRUD(t *testing.T) {
 		t.Fatal("expected nil embedding initially")
 	}
 
-	// Get by ID
 	got, err := testDB.Queries.GetProfile(ctx, prof.ID)
 	if err != nil {
 		t.Fatalf("get profile: %v", err)
@@ -876,7 +803,6 @@ func TestProfileCRUD(t *testing.T) {
 		t.Fatal("ID mismatch")
 	}
 
-	// Get default (most recently updated)
 	def, err := testDB.Queries.GetDefaultProfile(ctx)
 	if err != nil {
 		t.Fatalf("get default profile: %v", err)
@@ -885,7 +811,6 @@ func TestProfileCRUD(t *testing.T) {
 		t.Fatal("expected default to be our profile")
 	}
 
-	// List profiles
 	all, err := testDB.Queries.ListProfiles(ctx)
 	if err != nil {
 		t.Fatalf("list profiles: %v", err)
@@ -894,7 +819,6 @@ func TestProfileCRUD(t *testing.T) {
 		t.Fatalf("expected 1, got %d", len(all))
 	}
 
-	// Update
 	newDoc, _ := json.Marshal(map[string]any{"name": "Jane Doe"})
 	err = testDB.Queries.UpdateProfile(ctx, sqlcgen.UpdateProfileParams{
 		ID:       prof.ID,
@@ -912,7 +836,6 @@ func TestProfileCRUD(t *testing.T) {
 		t.Fatalf("expected updated name Jane Doe, got %s", got.Name)
 	}
 
-	// Update extra notes
 	err = testDB.Queries.UpdateProfileExtraNotes(ctx, sqlcgen.UpdateProfileExtraNotesParams{
 		ID:         prof.ID,
 		ExtraNotes: strPtr("Updated notes"),
@@ -928,7 +851,6 @@ func TestProfileCRUD(t *testing.T) {
 		t.Fatal("expected updated extra notes")
 	}
 
-	// ProfileHasEmbedding
 	has, err := testDB.Queries.ProfileHasEmbedding(ctx, prof.ID)
 	if err != nil {
 		t.Fatalf("has embedding: %v", err)
@@ -937,7 +859,6 @@ func TestProfileCRUD(t *testing.T) {
 		t.Fatal("expected has_embedding=false")
 	}
 
-	// Delete
 	err = testDB.Queries.DeleteProfile(ctx, prof.ID)
 	if err != nil {
 		t.Fatalf("delete profile: %v", err)
@@ -951,8 +872,6 @@ func TestProfileCRUD(t *testing.T) {
 	}
 }
 
-// --------------- GeneratedDocument CRUD ---------------
-
 func TestGeneratedDocumentCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -962,7 +881,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 
 	content, _ := json.Marshal(map[string]string{"sections": "experience"})
 
-	// Insert v1
 	doc, err := testDB.Queries.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
 		JobId:   job.ID,
 		Type:    "resume",
@@ -981,7 +899,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 		t.Fatalf("expected version 1, got %d", doc.Version)
 	}
 
-	// Get by ID
 	got, err := testDB.Queries.GetDocumentByID(ctx, doc.ID)
 	if err != nil {
 		t.Fatalf("get document: %v", err)
@@ -990,7 +907,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 		t.Fatal("ID mismatch")
 	}
 
-	// List documents for job
 	docs, err := testDB.Queries.ListDocumentsForJob(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("list documents: %v", err)
@@ -999,7 +915,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 		t.Fatalf("expected 1 document, got %d", len(docs))
 	}
 
-	// Max version
 	maxV, err := testDB.Queries.MaxDocumentVersion(ctx, sqlcgen.MaxDocumentVersionParams{
 		JobId: job.ID,
 		Type:  "resume",
@@ -1011,7 +926,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 		t.Fatalf("expected max version 1, got %d", maxV)
 	}
 
-	// Insert v2
 	v2Content, _ := json.Marshal(map[string]string{"sections": "experience+skills"})
 	doc2, err := testDB.Queries.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
 		JobId:   job.ID,
@@ -1034,7 +948,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 		t.Fatalf("expected max version 2, got %d", maxV)
 	}
 
-	// Update content
 	newContent, _ := json.Marshal(map[string]string{"sections": "updated"})
 	pdfPath := "/docs/resume_v2_updated.pdf"
 	updated, err := testDB.Queries.UpdateDocumentContent(ctx, sqlcgen.UpdateDocumentContentParams{
@@ -1049,7 +962,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 		t.Fatal("expected updated pdf path")
 	}
 
-	// List should show 2 documents
 	docs, err = testDB.Queries.ListDocumentsForJob(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("list after v2: %v", err)
@@ -1058,7 +970,6 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 		t.Fatalf("expected 2 documents, got %d", len(docs))
 	}
 
-	// Also test via GetJobDocuments (from joblist.sql.go)
 	jobDocs, err := testDB.Queries.GetJobDocuments(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("get job documents: %v", err)
@@ -1068,15 +979,12 @@ func TestGeneratedDocumentCRUD(t *testing.T) {
 	}
 }
 
-// --------------- SourceRun CRUD ---------------
-
 func TestSourceRunCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
 	src := mustInsertJobSource(t, "js-run", "api")
 
-	// Insert
 	run, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
 		SourceId: src.ID,
 		SearchId: strPtr("search-abc"),
@@ -1094,7 +1002,6 @@ func TestSourceRunCRUD(t *testing.T) {
 		t.Fatal("expected found=0")
 	}
 
-	// Finish OK
 	err = testDB.Queries.FinishSourceRunOk(ctx, sqlcgen.FinishSourceRunOkParams{
 		ID:    run.ID,
 		Found: 25,
@@ -1104,7 +1011,6 @@ func TestSourceRunCRUD(t *testing.T) {
 		t.Fatalf("finish ok: %v", err)
 	}
 
-	// Verify via RecentRunsJoined
 	recent, err := testDB.Queries.RecentRunsJoined(ctx, 10)
 	if err != nil {
 		t.Fatalf("recent runs: %v", err)
@@ -1125,7 +1031,6 @@ func TestSourceRunCRUD(t *testing.T) {
 		t.Fatal("expected ok=true")
 	}
 
-	// RecentSourceRunsForSource
 	statuses, err := testDB.Queries.RecentSourceRunsForSource(ctx, sqlcgen.RecentSourceRunsForSourceParams{
 		SourceId: src.ID,
 		Limit:    10,
@@ -1140,7 +1045,6 @@ func TestSourceRunCRUD(t *testing.T) {
 		t.Fatal("expected ok=true in recent")
 	}
 
-	// Finish with error
 	run2, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
 		SourceId: src.ID,
 	})
@@ -1156,7 +1060,6 @@ func TestSourceRunCRUD(t *testing.T) {
 		t.Fatalf("finish error: %v", err)
 	}
 
-	// Both runs should appear
 	recent, err = testDB.Queries.RecentRunsJoined(ctx, 10)
 	if err != nil {
 		t.Fatalf("recent runs after error: %v", err)
@@ -1177,8 +1080,6 @@ func TestSourceRunCRUD(t *testing.T) {
 	}
 }
 
-// --------------- MatchResult CRUD ---------------
-
 func TestMatchResultCRUD(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -1190,7 +1091,6 @@ func TestMatchResultCRUD(t *testing.T) {
 	missing, _ := json.Marshal([]string{"kubernetes"})
 	redFlags, _ := json.Marshal([]string{"unpaid"})
 
-	// Upsert
 	mr, err := testDB.Queries.UpsertMatchResult(ctx, sqlcgen.UpsertMatchResultParams{
 		JobId:         job.ID,
 		Similarity:    0.85,
@@ -1211,7 +1111,6 @@ func TestMatchResultCRUD(t *testing.T) {
 		t.Fatal("expected score 82")
 	}
 
-	// Get by job ID
 	got, err := testDB.Queries.GetMatchResultByJobID(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("get match result: %v", err)
@@ -1223,7 +1122,6 @@ func TestMatchResultCRUD(t *testing.T) {
 		t.Fatal("expected summary to match")
 	}
 
-	// Upsert again (ON CONFLICT updates)
 	newScore := int32Ptr(90)
 	mr2, err := testDB.Queries.UpsertMatchResult(ctx, sqlcgen.UpsertMatchResultParams{
 		JobId:         job.ID,
@@ -1251,8 +1149,6 @@ func TestMatchResultCRUD(t *testing.T) {
 	}
 }
 
-// --------------- Stats ---------------
-
 func TestStatsQueries(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -1278,7 +1174,6 @@ func TestStatsQueries(t *testing.T) {
 		t.Fatalf("expected 1 job in last 24h, got %d", last24h)
 	}
 
-	// Hide job and verify total excludes it
 	_, err = testDB.Queries.UpdateJobStatus(ctx, sqlcgen.UpdateJobStatusParams{
 		ID:     job.ID,
 		Status: "hidden",
@@ -1294,7 +1189,6 @@ func TestStatsQueries(t *testing.T) {
 		t.Fatalf("expected 0 after hiding, got %d", total)
 	}
 
-	// Pipeline stats (application groups)
 	mustInsertJob(t, "js-stats", "stats-job-2", "Stats Job 2")
 	events, _ := json.Marshal([]any{})
 	_ = testDB.Queries.UpsertApplicationStatus(ctx, sqlcgen.UpsertApplicationStatusParams{
@@ -1316,7 +1210,6 @@ func TestStatsQueries(t *testing.T) {
 		t.Fatalf("expected at least 2 pipeline groups, got %d", len(pipeline))
 	}
 
-	// High-fit count
 	score := int32Ptr(80)
 	_, _ = testDB.Queries.UpsertMatchResult(ctx, sqlcgen.UpsertMatchResultParams{
 		JobId:      job.ID,
@@ -1333,8 +1226,6 @@ func TestStatsQueries(t *testing.T) {
 	}
 }
 
-// --------------- JobList queries ---------------
-
 func TestJobListQueries(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -1343,7 +1234,6 @@ func TestJobListQueries(t *testing.T) {
 	mustInsertJob(t, "js-list", "list-job-1", "Frontend Dev")
 	mustInsertJob(t, "js-list", "list-job-2", "Backend Go Dev")
 
-	// Count all (non-hidden)
 	count, err := testDB.Queries.CountJobs(ctx, sqlcgen.CountJobsParams{})
 	if err != nil {
 		t.Fatalf("count jobs: %v", err)
@@ -1352,7 +1242,6 @@ func TestJobListQueries(t *testing.T) {
 		t.Fatalf("expected 2 jobs, got %d", count)
 	}
 
-	// Count with source filter
 	src := "js-list"
 	count, err = testDB.Queries.CountJobs(ctx, sqlcgen.CountJobsParams{Source: &src})
 	if err != nil {
@@ -1362,7 +1251,6 @@ func TestJobListQueries(t *testing.T) {
 		t.Fatalf("expected 2 for source, got %d", count)
 	}
 
-	// Count with text search
 	q := "%Go%"
 	count, err = testDB.Queries.CountJobs(ctx, sqlcgen.CountJobsParams{Q: &q})
 	if err != nil {
@@ -1372,7 +1260,6 @@ func TestJobListQueries(t *testing.T) {
 		t.Fatalf("expected 1 for query 'Go', got %d", count)
 	}
 
-	// ListJobsByDate
 	jobs, err := testDB.Queries.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{
 		Limit: 10,
 	})
@@ -1383,7 +1270,6 @@ func TestJobListQueries(t *testing.T) {
 		t.Fatalf("expected 2 jobs, got %d", len(jobs))
 	}
 
-	// ListJobsByScore
 	scored, err := testDB.Queries.ListJobsByScore(ctx, sqlcgen.ListJobsByScoreParams{
 		Limit: 10,
 	})
@@ -1395,8 +1281,6 @@ func TestJobListQueries(t *testing.T) {
 	}
 }
 
-// --------------- UUID helpers ---------------
-
 func TestUUIDIntegration(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -1404,13 +1288,11 @@ func TestUUIDIntegration(t *testing.T) {
 	mustInsertJobSource(t, "js-uuid", "api")
 	job := mustInsertJob(t, "js-uuid", "uuid-job-1", "UUID Test Job")
 
-	// UUIDString round-trip via dbutil
 	uuidStr := dbutil.UUIDString(job.ID)
 	if uuidStr == "" {
 		t.Fatal("UUIDString returned empty")
 	}
 
-	// ParseUUID round-trip
 	parsed, err := dbutil.ParseUUID(uuidStr)
 	if err != nil {
 		t.Fatalf("ParseUUID: %v", err)
@@ -1419,7 +1301,6 @@ func TestUUIDIntegration(t *testing.T) {
 		t.Fatal("UUID round-trip mismatch")
 	}
 
-	// Get job using parsed UUID
 	got, err := testDB.Queries.GetJobByID(ctx, parsed)
 	if err != nil {
 		t.Fatalf("get job by parsed UUID: %v", err)
@@ -1428,7 +1309,6 @@ func TestUUIDIntegration(t *testing.T) {
 		t.Fatal("get by parsed UUID returned wrong job")
 	}
 
-	// UUIDStringPtr
 	ptr := dbutil.UUIDStringPtr(job.ID)
 	if ptr == nil || *ptr != uuidStr {
 		t.Fatal("UUIDStringPtr mismatch")
@@ -1438,7 +1318,6 @@ func TestUUIDIntegration(t *testing.T) {
 		t.Fatal("expected nil from UUIDStringPtr for invalid UUID")
 	}
 
-	// Timestamp helpers
 	ts := dbutil.NowTimestamp()
 	if !ts.Valid {
 		t.Fatal("expected valid timestamp")
@@ -1461,8 +1340,6 @@ func TestUUIDIntegration(t *testing.T) {
 	}
 }
 
-// --------------- CASCADE delete tests ---------------
-
 func TestCascadeDeletes(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -1470,7 +1347,6 @@ func TestCascadeDeletes(t *testing.T) {
 	src := mustInsertJobSource(t, "js-cascade", "api")
 	job := mustInsertJob(t, "js-cascade", "cascade-job-1", "Cascade Job")
 
-	// Create dependent records
 	events, _ := json.Marshal([]any{})
 	_ = testDB.Queries.UpsertApplicationStatus(ctx, sqlcgen.UpsertApplicationStatusParams{
 		JobId:  job.ID,
@@ -1490,10 +1366,6 @@ func TestCascadeDeletes(t *testing.T) {
 		Model:      "test",
 	})
 
-	// Delete the source — should cascade delete source runs and subscriptions
-	// but jobs are linked by sourceKey (text), not FK, so jobs stay.
-	// However deleting a job should cascade its app/doc/match.
-	// First verify dependent records exist
 	apps, _ := testDB.Queries.ListApplications(ctx, nil)
 	if len(apps) != 1 {
 		t.Fatalf("expected 1 app before cascade, got %d", len(apps))
@@ -1503,13 +1375,11 @@ func TestCascadeDeletes(t *testing.T) {
 		t.Fatalf("expected 1 doc before cascade, got %d", len(docs))
 	}
 
-	// Delete the job directly
 	_, err := testDB.Pool.Exec(ctx, `DELETE FROM "Job" WHERE "id" = $1`, job.ID)
 	if err != nil {
 		t.Fatalf("delete job: %v", err)
 	}
 
-	// Dependent records should be gone
 	apps, err = testDB.Queries.ListApplications(ctx, nil)
 	if err != nil {
 		t.Fatalf("list apps after cascade: %v", err)
@@ -1526,7 +1396,6 @@ func TestCascadeDeletes(t *testing.T) {
 		t.Fatalf("expected 0 docs after cascade, got %d", len(docs))
 	}
 
-	// Subscription FK cascade: delete source should cascade subscriptions
 	sub, err := testDB.Queries.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{
 		SourceKey: "js-cascade",
 		Url:       "https://example.com/sub",
@@ -1540,7 +1409,6 @@ func TestCascadeDeletes(t *testing.T) {
 		t.Fatalf("expected 1 sub, got %d", len(subs))
 	}
 
-	// Delete the source — subscription should cascade
 	_, err = testDB.Pool.Exec(ctx, `DELETE FROM "JobSource" WHERE "id" = $1`, src.ID)
 	if err != nil {
 		t.Fatalf("delete source: %v", err)
@@ -1552,16 +1420,13 @@ func TestCascadeDeletes(t *testing.T) {
 	if len(subs) != 0 {
 		t.Fatalf("expected 0 subs after source delete cascade, got %d", len(subs))
 	}
-	_ = sub // used above
+	_ = sub
 }
-
-// --------------- Company + CompanySignal CRUD ---------------
 
 func TestCompanyUpsertIdempotent(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
-	// First insert
 	company, err := testDB.Queries.UpsertCompany(ctx, sqlcgen.UpsertCompanyParams{
 		Name:            "Acme Corp",
 		NormalizedName:  "acme-corp",
@@ -1581,7 +1446,6 @@ func TestCompanyUpsertIdempotent(t *testing.T) {
 		t.Fatal("expected firstSeenAt to be set")
 	}
 
-	// Upsert with same normalizedName but different name — should update
 	company2, err := testDB.Queries.UpsertCompany(ctx, sqlcgen.UpsertCompanyParams{
 		Name:            "Acme Corporation",
 		NormalizedName:  "acme-corp",
@@ -1597,7 +1461,6 @@ func TestCompanyUpsertIdempotent(t *testing.T) {
 	if company2.Name != "Acme Corporation" {
 		t.Fatalf("expected updated name Acme Corporation, got %s", company2.Name)
 	}
-	// Website should be preserved via COALESCE since we passed nil
 	if company2.Website == nil || *company2.Website != "https://acme.example.com" {
 		t.Fatal("expected website to be preserved on upsert with nil")
 	}
@@ -1620,7 +1483,6 @@ func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
 	value1, _ := json.Marshal(map[string]any{"rating": 4.5})
 	raw1, _ := json.Marshal(map[string]any{"source": "glassdoor"})
 
-	// First insert
 	signal, err := testDB.Queries.UpsertCompanySignal(ctx, sqlcgen.UpsertCompanySignalParams{
 		CompanyId: company.ID,
 		Kind:      "rating",
@@ -1635,7 +1497,6 @@ func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
 		t.Fatalf("expected kind rating, got %s", signal.Kind)
 	}
 
-	// Upsert with same (companyId, kind) — should replace
 	value2, _ := json.Marshal(map[string]any{"rating": 3.8})
 	raw2, _ := json.Marshal(map[string]any{"source": "indeed"})
 
@@ -1653,7 +1514,6 @@ func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
 		t.Fatal("expected same ID on upsert")
 	}
 
-	// Verify via GetCompanySignalByKind
 	got, err := testDB.Queries.GetCompanySignalByKind(ctx, sqlcgen.GetCompanySignalByKindParams{
 		CompanyId: company.ID,
 		Kind:      "rating",
@@ -1672,7 +1532,6 @@ func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
 		t.Fatal("expected source indeed")
 	}
 
-	// GetCompanySignals should return 1 signal
 	signals, err := testDB.Queries.GetCompanySignals(ctx, company.ID)
 	if err != nil {
 		t.Fatalf("get company signals: %v", err)
@@ -1681,7 +1540,6 @@ func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
 		t.Fatalf("expected 1 signal, got %d", len(signals))
 	}
 
-	// DeleteCompanySignals
 	deleted, err := testDB.Queries.DeleteCompanySignals(ctx, company.ID)
 	if err != nil {
 		t.Fatalf("delete signals: %v", err)
@@ -1690,7 +1548,6 @@ func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
 		t.Fatalf("expected 1 deleted, got %d", deleted)
 	}
 
-	// Verify empty
 	signals, err = testDB.Queries.GetCompanySignals(ctx, company.ID)
 	if err != nil {
 		t.Fatalf("get signals after delete: %v", err)
@@ -1700,8 +1557,6 @@ func TestCompanySignalUpsertReplacesInPlace(t *testing.T) {
 	}
 }
 
-// --------------- JobContact CRUD ---------------
-
 func TestJobContactUpsertIdempotent(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -1709,7 +1564,6 @@ func TestJobContactUpsertIdempotent(t *testing.T) {
 	mustInsertJobSource(t, "js-contact", "api")
 	job := mustInsertJob(t, "js-contact", "contact-job-1", "Contact Job")
 
-	// First insert
 	contact, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
 		JobId:      job.ID,
 		Name:       "Jane Doe",
@@ -1725,8 +1579,6 @@ func TestJobContactUpsertIdempotent(t *testing.T) {
 		t.Fatalf("expected name Jane Doe, got %s", contact.Name)
 	}
 
-	// Re-run with the same (jobId, source, name) but a different title —
-	// should update in place, not duplicate (FR-013/SC-006).
 	contact2, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
 		JobId:      job.ID,
 		Name:       "Jane Doe",
@@ -1761,7 +1613,6 @@ func TestJobContactOrdering(t *testing.T) {
 	mustInsertJobSource(t, "js-contact-order", "api")
 	job := mustInsertJob(t, "js-contact-order", "contact-job-2", "Contact Order Job")
 
-	// Same confidence, different source — posting must sort before linkedin.
 	if _, err := testDB.Queries.UpsertJobContact(ctx, sqlcgen.UpsertJobContactParams{
 		JobId: job.ID, Name: "B Person", Source: "linkedin", Confidence: 0.5,
 	}); err != nil {
@@ -1785,7 +1636,6 @@ func TestJobContactOrdering(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
-	// Highest confidence first, then source priority, then name.
 	want := []string{"C Person", "A Person", "B Person"}
 	for i, w := range want {
 		if rows[i].Name != w {
@@ -1827,8 +1677,6 @@ func TestJobContactCascadeDelete(t *testing.T) {
 		t.Fatalf("expected 0 contacts after cascade delete, got %d", len(rows))
 	}
 }
-
-// --------------- helpers ---------------
 
 func strPtr(s string) *string { return &s }
 

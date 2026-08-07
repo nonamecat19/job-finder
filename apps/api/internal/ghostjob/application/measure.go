@@ -9,9 +9,6 @@ import (
 	"github.com/job-finder/api/internal/ghostjob/domain"
 )
 
-// MeasureSignals computes domain.GhostSignals for one job from data already
-// held — no scraping, no employer contact, no third-party enrichment
-// (FR-016).
 func MeasureSignals(ctx context.Context, repo domain.Repository, job sqlcgen.Job) domain.GhostSignals {
 	notes := map[string]string{}
 
@@ -29,11 +26,6 @@ func MeasureSignals(ctx context.Context, repo domain.Repository, job sqlcgen.Job
 	}
 }
 
-// measureRepostCount is always measurable: the job's own appearance counts
-// as 1, and CountRepostsByDedupeKey (backed by "seenCount") only ever grows
-// from there. A query failure degrades to 1 rather than failing the whole
-// measurement (FR-018): the job's own existence is proof enough of "seen
-// at least once".
 func measureRepostCount(ctx context.Context, repo domain.Repository, job sqlcgen.Job, notes map[string]string) int {
 	n, err := repo.CountRepostsByDedupeKey(ctx, job.DedupeKey)
 	if err != nil || n < 1 {
@@ -74,7 +66,7 @@ func measureCrossBoard(ctx context.Context, repo domain.Repository, job sqlcgen.
 	sources := map[string]struct{}{}
 	for _, c := range candidates {
 		if c.SourceKey == job.SourceKey {
-			continue // same board isn't "cross-board"
+			continue
 		}
 		candidateDesc := strings.TrimSpace(c.Description)
 		if len(candidateDesc) < domain.MinHashableDescriptionLen {

@@ -13,10 +13,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// fakeBatchRepo models just enough of the storage semantics to exercise the
-// caller: the dedupeKey uniqueness that classification relies on, and the
-// "lastSeenRunId" IS DISTINCT FROM guard the repost update carries. The SQL
-// itself is covered by the integration suite.
 type fakeBatchRepo struct {
 	jobs      map[string]*fakeJob
 	calls     []string
@@ -61,7 +57,6 @@ func (f *fakeBatchRepo) FindJobsByCompanies(context.Context, sqlcgen.FindJobsByC
 
 func (f *fakeBatchRepo) BulkInsertJobs(_ context.Context, arg sqlcgen.BulkInsertJobsParams) ([]sqlcgen.BulkInsertJobsRow, error) {
 	f.calls = append(f.calls, "BulkInsertJobs")
-	// Returned in reverse to prove the caller correlates by key, not position.
 	var out []sqlcgen.BulkInsertJobsRow
 	for i := len(arg.DedupeKeys) - 1; i >= 0; i-- {
 		key := arg.DedupeKeys[i]
@@ -83,8 +78,6 @@ func (f *fakeBatchRepo) BulkRecordJobReposts(_ context.Context, arg sqlcgen.Bulk
 		if !ok {
 			continue
 		}
-		// IS DISTINCT FROM: a NULL lastSeenRunId is distinct from any run id,
-		// so a pre-existing row is counted the first time it is seen.
 		if job.lastSeenRunID.Valid && job.lastSeenRunID.Bytes == arg.RunID.Bytes {
 			continue
 		}
@@ -103,7 +96,6 @@ func (f *fakeBatchRepo) BulkMergeJobBoards(_ context.Context, arg sqlcgen.BulkMe
 func (f *fakeBatchRepo) BulkInsertActivities(_ context.Context, arg sqlcgen.BulkInsertActivitiesParams) ([]sqlcgen.BulkInsertActivitiesRow, error) {
 	f.calls = append(f.calls, "BulkInsertActivities")
 	out := make([]sqlcgen.BulkInsertActivitiesRow, 0, len(arg.Ops))
-	// Reverse order again: correlation must be by (jobId, op).
 	for i := len(arg.Ops) - 1; i >= 0; i-- {
 		out = append(out, sqlcgen.BulkInsertActivitiesRow{ID: f.newID(), JobId: arg.JobIds[i], Op: arg.Ops[i]})
 	}
@@ -163,14 +155,12 @@ func TestRepostGuardCountsOncePerRun(t *testing.T) {
 		t.Fatalf("after insert seenCount = %d, want 1", got)
 	}
 
-	// Same run id twice — a retried task — increments once in total.
 	persist(t, repo, jobs, runID(1), 0)
 	persist(t, repo, jobs, runID(1), 0)
 	if got := repo.jobs[key].seenCount; got != 2 {
 		t.Fatalf("after retries seenCount = %d, want 2", got)
 	}
 
-	// A different run is a genuine re-sighting.
 	persist(t, repo, jobs, runID(2), 0)
 	if got := repo.jobs[key].seenCount; got != 3 {
 		t.Fatalf("after second run seenCount = %d, want 3", got)
@@ -181,7 +171,6 @@ func TestRepostGuardCountsRowWithNullLastSeenRun(t *testing.T) {
 	repo := newFakeBatchRepo()
 	jobs := postings(1)
 	key := DedupeKey(jobs[0].Company, jobs[0].Title, jobs[0].URL)
-	// A row predating migration 00032: exists, never counted by a tracked run.
 	repo.jobs[key] = &fakeJob{id: repo.newID(), seenCount: 1}
 
 	result := persist(t, repo, jobs, runID(1), 0)
@@ -234,8 +223,6 @@ func TestPersistBatchChunking(t *testing.T) {
 			if len(result.Inserted) != tt.count {
 				t.Fatalf("Inserted = %d, want %d", len(result.Inserted), tt.count)
 			}
-			// Classify + insert + activities per chunk, and no more: the
-			// interaction count must not grow with posting count.
 			if want := 3 * len(tt.wantChunks); result.Statements != want {
 				t.Fatalf("Statements = %d, want %d", result.Statements, want)
 			}
@@ -260,7 +247,6 @@ func TestNewPostingBatchKeepsFirstOccurrence(t *testing.T) {
 	if batch.Skipped != 1 {
 		t.Fatalf("Skipped = %d, want 1", batch.Skipped)
 	}
-	// found still describes what the source returned, duplicates included.
 	if batch.Found != 3 {
 		t.Fatalf("Found = %d, want 3", batch.Found)
 	}

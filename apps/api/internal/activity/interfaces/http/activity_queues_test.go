@@ -98,8 +98,8 @@ func TestActivityQueues_FixedOrderingAndProviderClass(t *testing.T) {
 
 func TestActivityQueues_EtaNilWhenThroughputOrPendingZero(t *testing.T) {
 	insp := &fakeInspector{infos: map[string]*asynq.QueueInfo{
-		"match":       {Queue: "match", Pending: 100, Processed: 0},      // zero throughput
-		"ghost:score": {Queue: "ghost:score", Pending: 0, Processed: 50}, // zero pending
+		"match":       {Queue: "match", Pending: 100, Processed: 0},
+		"ghost:score": {Queue: "ghost:score", Pending: 0, Processed: 50},
 	}}
 	h := activityhttp.NewActivityHandler(nil, nil, insp, testPolicies(), nil)
 	r := testutil.SetupRouter(h.Mount)

@@ -12,18 +12,6 @@ import (
 
 const chiImport = "github.com/go-chi/chi/v5"
 
-// exemptDirs are the two packages allowed to import chi from outside an
-// interfaces/ package, each for a stated reason rather than because it was
-// convenient:
-//
-//	httpapi  — is the router itself; chi is its subject matter.
-//	httpx    — must not import chi at all. The depguard rule
-//	           `httpx-stays-a-leaf` already enforces that, so exempting it here
-//	           only keeps the two mechanisms from reporting one violation twice.
-//	health   — cross-cutting readiness, owned by no feature, so it has no
-//	           feature module to hold an interfaces/ layer (spec T039/T040).
-//	testutil — builds requests against a router for other packages' tests. It
-//	           serves nothing.
 var exemptDirs = map[string]bool{
 	"httpapi":  true,
 	"httpx":    true,
@@ -31,15 +19,6 @@ var exemptDirs = map[string]bool{
 	"testutil": true,
 }
 
-// TestHandlersLiveInInterfaces covers the half of FR-011 that depguard
-// structurally cannot: depguard matches import paths, not file locations, so a
-// handler placed inside its feature module but outside interfaces/http passes
-// every import rule while still recreating the arrangement this feature
-// removed (specs/domains/codebase-structure.md § 1.1).
-//
-// Limitation: keyed on the chi import, so a handler written against net/http
-// alone would not be caught. Accepted — a handler that never touches the
-// router cannot be registered.
 func TestHandlersLiveInInterfaces(t *testing.T) {
 	root, err := filepath.Abs(".")
 	if err != nil {

@@ -15,26 +15,12 @@ import (
 	"github.com/job-finder/api/internal/recruiter/domain"
 )
 
-// companyPagePaths mirrors companyintel's HeadcountScraper About-page
-// pattern (research.md Decision 3: reuse plan 004's fetch, don't fork it)
-// — tried in order until one page yields at least one grounded contact.
 var companyPagePaths = []string{"/about", "/team", "/about-us", "/company"}
 
-// extractedContactList is the LLM structured-output shape for the
-// (possibly multi-person) company-page source.
 type extractedContactList struct {
 	Contacts []extractedContact `json:"contacts" jsonschema:"description=Every named human team member on this page who could plausibly own hiring for a role: a recruiter, talent acquisition, HR/People team member, or hiring manager. Empty list if none. Never invent a person not present in the text."`
 }
 
-// companyPageSource builds this job's company-page resolution source
-// (US2). It looks up the Company row plan 004 populates (keyed by the
-// job's normalized company name) for its website, then tries a small set
-// of common About/Team page paths via the shared scraping.Service — the
-// same fetch abstraction companyintel's HeadcountScraper uses — and
-// LLM-parses each page's text for named contacts. A missing website, an
-// unreachable page, or a page with no People/Team section all degrade to
-// zero contacts, never an error (spec edge case "Company page has no
-// People/Team section").
 func (s *Service) companyPageSource(job sqlcgen.Job) resolutionSource {
 	return resolutionSource{
 		name: domain.SourceCompanyPage,
@@ -47,7 +33,7 @@ func (s *Service) companyPageSource(job sqlcgen.Job) resolutionSource {
 				return nil, err
 			}
 			if website == "" {
-				return nil, nil // no known website yet — deliberate skip, not a failure
+				return nil, nil
 			}
 
 			for _, path := range companyPagePaths {
@@ -57,7 +43,7 @@ func (s *Service) companyPageSource(job sqlcgen.Job) resolutionSource {
 				}
 				html, err := s.scraping.FetchHTML(ctx, pageURL, nil)
 				if err != nil {
-					continue // unreachable path — try the next one
+					continue
 				}
 				text := extractPageText(html)
 				if text == "" {
@@ -76,10 +62,6 @@ func (s *Service) companyPageSource(job sqlcgen.Job) resolutionSource {
 	}
 }
 
-// companyWebsite resolves the job's company to a website via plan 004's
-// Company row, mirroring companyintel's own normalizeCompanyName join key.
-// Returns "" (not an error) when the company has never been probed by
-// plan 004, or has no website recorded yet.
 func (s *Service) companyWebsite(ctx context.Context, job sqlcgen.Job) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(job.Company))
 	if normalized == "" {
@@ -108,8 +90,6 @@ func joinURL(website, path string) (string, error) {
 
 var whitespaceRe = regexp.MustCompile(`\s+`)
 
-// extractPageText collapses an HTML page to plain, whitespace-normalized
-// text for the LLM prompt and for grounding checks.
 func extractPageText(html string) string {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
@@ -118,14 +98,6 @@ func extractPageText(html string) string {
 	return strings.TrimSpace(whitespaceRe.ReplaceAllString(doc.Text(), " "))
 }
 
-// ExtractCompanyPageContacts runs the local LLM over a company page's
-// (already-flattened) text and returns every grounded contact found,
-// applying the same no-fabrication rules as posting.go's
-// ExtractPostingContact: every field must occur verbatim in pageText, a
-// contact without a grounded name is dropped, and a generic mailbox never
-// counts as a personal channel. Confidence is lower than the posting
-// source's ceiling — a team-page listing is a weaker signal than an
-// explicit "Contact:" line naming who owns this specific req.
 func ExtractCompanyPageContacts(ctx context.Context, llmc llm.Provider, model string, pageText string) ([]domain.ResolvedContact, error) {
 	text := strings.TrimSpace(pageText)
 	if text == "" {
@@ -169,9 +141,6 @@ func ExtractCompanyPageContacts(ctx context.Context, llmc llm.Provider, model st
 	return results, nil
 }
 
-// companyPageConfidence caps well below the posting source's ceiling: a
-// name on a general team page is a weaker "owns this req" signal than an
-// explicit contact line in the posting itself.
 func companyPageConfidence(_, email, phone string) float64 {
 	c := 0.35
 	if email != "" {

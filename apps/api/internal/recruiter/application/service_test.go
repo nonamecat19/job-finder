@@ -16,9 +16,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// multiSourceFakeLLM lets a test drive posting vs. company-page/LinkedIn
-// extraction independently, since both go through the same llm.Provider —
-// it distinguishes them by the prompt marker each source uses.
 type multiSourceFakeLLM struct {
 	postingJSON string
 	pageJSON    string
@@ -42,17 +39,12 @@ func (m *multiSourceFakeLLM) Embed(ctx context.Context, text string) ([]float32,
 	return nil, nil
 }
 
-// fakeRepository is an in-memory Repository. UpsertJobContact mirrors the
-// real (jobId, source, name) upsert-in-place semantics (FR-013) so
-// orchestration-level idempotency can be asserted without a live DB — the
-// SQL-layer constraint itself is covered by
-// apps/api/internal/db/integration_test.go's TestJobContactUpsertIdempotent.
 type fakeRepository struct {
 	job      sqlcgen.Job
 	jobErr   error
 	company  sqlcgen.Company
 	compErr  error
-	contacts map[string]sqlcgen.JobContact // key: source|name
+	contacts map[string]sqlcgen.JobContact
 	nextID   int
 }
 
@@ -100,10 +92,6 @@ func (f *fakeRepository) ListJobContactsByJob(ctx context.Context, jobId pgtype.
 	for _, c := range f.contacts {
 		out = append(out, c)
 	}
-	// Mirror the real ListJobContactsByJob SQL ORDER BY (confidence desc,
-	// source priority, name asc) so orchestration-level tests can assert
-	// deterministic ordering without a live DB — the SQL itself is covered
-	// by apps/api/internal/db/integration_test.go's TestJobContactOrdering.
 	sourcePriority := map[string]int{domain.SourcePosting: 0, domain.SourceCompanyPage: 1, domain.SourceLinkedIn: 2}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Confidence != out[j].Confidence {
@@ -118,8 +106,6 @@ func (f *fakeRepository) ListJobContactsByJob(ctx context.Context, jobId pgtype.
 	return out, nil
 }
 
-// fakeScraping is a ScrapingService that records every URL it was asked to
-// fetch and returns a canned/erroring response per URL substring.
 type fakeScraping struct {
 	responses map[string]string
 	errs      map[string]error
@@ -149,9 +135,6 @@ func testJob(description string) sqlcgen.Job {
 	}
 }
 
-// TestLinkedInSkippedWhenDisabled covers T017/FR-004/SC-004: with
-// linkedInEnabled=false, the LinkedIn source is never invoked — zero
-// requests to any linkedin.com URL are made — and the run still completes.
 func TestLinkedInSkippedWhenDisabled(t *testing.T) {
 	job := testJob("We are hiring. Contact: Jane Doe, Recruiter <jane@acme.com>")
 	repo := newFakeRepository(job)
@@ -179,8 +162,6 @@ func TestLinkedInSkippedWhenDisabled(t *testing.T) {
 	}
 }
 
-// TestLinkedInRunsWhenEnabled is the mirror check: with the flag on, a
-// LinkedIn request IS made.
 func TestLinkedInRunsWhenEnabled(t *testing.T) {
 	job := testJob("We are hiring a backend engineer.")
 	repo := newFakeRepository(job)
@@ -206,11 +187,6 @@ func TestLinkedInRunsWhenEnabled(t *testing.T) {
 	}
 }
 
-// TestResolveOneSourceFails covers T018/FR-015/SC-007: a failing source
-// (the company-page extraction call itself errors, after a successful
-// fetch) does not stop the other sources' contacts from being persisted,
-// and Resolve itself returns no error — the failure is logged and
-// isolated to that one source.
 func TestResolveOneSourceFails(t *testing.T) {
 	job := testJob("Contact: Jane Doe, Recruiter <jane@acme.com>")
 	repo := newFakeRepository(job)
@@ -242,10 +218,6 @@ func TestResolveOneSourceFails(t *testing.T) {
 	}
 }
 
-// TestResolveIdempotent covers T019/FR-013/SC-006 at the orchestration
-// level: two Resolve runs against unchanged source data leave the contact
-// count unchanged (the fake repository mirrors the DB's upsert-in-place
-// semantics on (jobId, source, name)).
 func TestResolveIdempotent(t *testing.T) {
 	job := testJob("Contact: Jane Doe, Recruiter <jane@acme.com>")
 	repo := newFakeRepository(job)
@@ -270,10 +242,6 @@ func TestResolveIdempotent(t *testing.T) {
 	}
 }
 
-// TestListOrderingDeterministic covers T025/FR-010/SC-010: contacts from
-// multiple sources sort by confidence desc with the stable
-// source-priority/name tie-break, and repeated reads of unchanged data
-// return the identical order.
 func TestListOrderingDeterministic(t *testing.T) {
 	job := testJob("n/a")
 	repo := newFakeRepository(job)

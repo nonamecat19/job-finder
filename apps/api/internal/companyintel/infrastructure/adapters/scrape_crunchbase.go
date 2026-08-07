@@ -16,10 +16,6 @@ const crunchbaseDomain = "crunchbase.com"
 
 var crunchbaseSlugRe = regexp.MustCompile(`[^a-z0-9]+`)
 
-// CrunchbaseScraper reads the public Crunchbase organization profile page
-// and captures the most recent funding round. Crunchbase lists rounds most-
-// recent-first, so the first matched row is the one surfaced (spec.md
-// "Conflicting funding data between rounds").
 type CrunchbaseScraper struct {
 	Scraping scraping.Scraper
 }
@@ -50,17 +46,11 @@ func (s CrunchbaseScraper) Scrape(ctx context.Context, in domain.Input) (*domain
 	return result, nil
 }
 
-// crunchbaseSlug renders a company name into Crunchbase's URL-slug shape:
-// lowercased, non-alphanumeric runs collapsed to a single hyphen, trimmed.
 func crunchbaseSlug(name string) string {
 	slug := crunchbaseSlugRe.ReplaceAllString(strings.ToLower(strings.TrimSpace(name)), "-")
 	return strings.Trim(slug, "-")
 }
 
-// parseCrunchbaseFunding extracts the latest funding round from a
-// Crunchbase organization page. Layout: a list of `.funding-round` rows,
-// most-recent first, each with `.round-name`, `.round-amount` (optional),
-// and `.round-date` (optional) children.
 func parseCrunchbaseFunding(doc *goquery.Document, sourceURL string) (*domain.SignalResult, error) {
 	row := doc.Find(".funding-round").First()
 	if row.Length() == 0 {

@@ -97,8 +97,6 @@ func TestSnapshotCache_ExplicitInvalidateForcesRebuild(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 	cache.Invalidate()
-	// UpdatedAt unchanged, but Invalidate forces a rebuild anyway (e.g. after
-	// RefreshEmbedding, which doesn't touch UpdatedAt).
 	if _, err := cache.Get(context.Background()); err != nil {
 		t.Fatalf("Get: %v", err)
 	}

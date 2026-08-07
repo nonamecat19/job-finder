@@ -12,8 +12,6 @@ import (
 	"github.com/job-finder/api/internal/notifier/domain"
 )
 
-// NotificationService implements httpapi.NotificationProvider for the
-// GET /api/notifications and related endpoints.
 type NotificationService struct {
 	q    domain.NotificationReader
 	prof domain.ProfileResolver
@@ -77,9 +75,6 @@ func (s *NotificationService) UnseenCount(ctx context.Context) (int64, error) {
 	return s.q.CountUnseenNotificationsByProfile(ctx, profileUID)
 }
 
-// resolveProfileID returns ok=false (no error) when the user has not
-// created a profile yet, so callers can treat notifications as empty
-// instead of surfacing a 500 during onboarding.
 func (s *NotificationService) resolveProfileID(ctx context.Context) (pgtype.UUID, bool, error) {
 	rows, err := s.prof.ListProfiles(ctx)
 	if err != nil {
