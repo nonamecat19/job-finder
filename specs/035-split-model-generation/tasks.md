@@ -183,10 +183,10 @@ preconditions listed above.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T049 [P] Extend the generation benchmark to record per-stage latency, tokens and cost and assert the SC-001 (≤⅕ cost) and SC-002 (≤½ time) targets against the recorded baseline, in `apps/api/internal/generation/application/benchmark_test.go`
+- [X] T049 [P] Extend the generation benchmark to record per-stage latency, tokens and cost and assert the SC-001 (≤⅕ cost) and SC-002 (≤½ time) targets against the recorded baseline, in `apps/api/internal/generation/application/benchmark_test.go`
 - [X] T050 [P] Update `specs/domains/resume-generation.md` with the staged pipeline, the completeness gate and summary immutability
 - [X] T051 [P] Remove the now-unused combined tailoring prompt path and its dead helpers in `apps/api/internal/generation/application/rendercv_llm.go`
-- [ ] T052 Run the quickstart scenarios end to end per `specs/035-split-model-generation/quickstart.md`, including the forced premium outage and the gateway-unconfigured run
+- [X] T052 Run the quickstart scenarios end to end per `specs/035-split-model-generation/quickstart.md`, including the forced premium outage and the gateway-unconfigured run. **Run 2026-08-07; §1, §3–§8 pass, §2 fails its targets.** §1: each stage requested its own task key, economy served analyze/select and premium served summary, no model name ever requested. §5: with `generation-summary` pointed at a nonexistent model, the run completed on `claude-haiku-4.5` with `summarySubstituted=true`. §6: with `GATEWAY_URL` empty every stage ran on Ollama and still produced a resume, `stageCostUsd` null rather than zero. §7: the tailor response carried no cover letter and the explicit request produced one against the same resume. §2 measured $0.0501 and 38.9s median against targets of $0.0226 and 30s — see the quickstart's measurement table for the two causes (selection escalating on most runs, summary re-prompting on every run). Both are stage-tuning levers, not code defects
 - [X] T053 Run `make test-lint` and `make test-integration`; both must pass before this feature is done
 
 ---

@@ -36,7 +36,8 @@ served models differ per stage: economy for analyze/select, premium for summary.
 ## 2. Cost and latency targets (SC-001, SC-002)
 
 ```bash
-cd apps/api && go test ./internal/generation/application -run TestGenerationBenchmark -v
+cd apps/api && GENERATION_BENCHMARK=1 GATEWAY_URL=http://localhost:4000 LITELLM_MASTER_KEY=$LITELLM_MASTER_KEY \
+  go test ./internal/generation/application -run TestBenchmarkSplitPipelineTargets -v -timeout 30m
 ```
 
 **Expected**: median per-resume cost ≤ ⅕ of the recorded pre-split baseline ($0.113) and median wall
@@ -44,6 +45,30 @@ clock ≤ ½ of it (60s). Target figures from evaluation: ~$0.011, ~20s.
 
 **Note**: cost comes from the gateway's `usage.cost` captured per stage (FR-017). If
 `stageCostUsd` is null on the document, cost capture is not wired and this check cannot pass.
+
+**Measured 2026-08-07, 3 runs against the repository's own master profile** — both targets missed,
+and the per-stage table says why:
+
+| Stage | Calls/3 runs | Avg ms | Cost USD | Served |
+|---|---|---|---|---|
+| analyze | 3 | 862 | 0.000079 | gemini-2.5-flash-lite ×3 |
+| select | 7 | 20597 | 0.025869 | gemini-2.5-flash-lite ×5, claude-sonnet-5 ×2 |
+| summary | 6 | 9534 | 0.011427 | claude-sonnet-5 ×6 |
+
+Median cost $0.0501 (target ≤ $0.0226), median wall clock 38.9s (target ≤ 30s). Two effects account
+for the whole gap, and both are stage-tuning problems rather than pipeline defects:
+
+- **The economy selection model under-fills on a real profile.** Two of three runs exhausted both
+  economy attempts and escalated to `generation-select-premium` (FR-007 working as designed), which
+  costs ~$0.026 and ~28s each time. The escalation is meant to be rare; here it is the common case.
+- **The summary fails its own grounding check on the first attempt every time.** Six premium calls
+  for three runs — every run took the FR-008 re-prompt. That doubles the one deliberately expensive
+  stage.
+
+Retuning `generation-select` to a model that fills the schema, or loosening what the selection
+prompt asks the economy model to do, is the lever for the first; the summary prompt is the lever
+for the second. Both are configuration/prompt changes, not code changes — see §7 of
+`specs/domains/llm-routing.md`.
 
 ## 3. Truncated selection is caught (FR-006, FR-007, US2)
 
@@ -61,7 +86,7 @@ reports a shortfall, 80% does not; a company below `ExperienceBulletsMin` appear
 End-to-end escalation:
 
 ```bash
-cd apps/api && go test ./internal/generation/application -run TestSelectionEscalatesOnRepeatShortfall -v
+cd apps/api && go test ./internal/generation/application -run TestSelectionEscalatesAfterRepeatedShortfall -v
 ```
 
 **Expected**: a fake provider returning truncated selection twice causes a third call on the
@@ -72,7 +97,7 @@ premium router, the run completes, and the document has `selectionEscalated = tr
 ## 4. The summary is immutable after page fitting (FR-010)
 
 ```bash
-cd apps/api && go test ./internal/generation/application -run TestPageFitDoesNotAlterSummary -v
+cd apps/api && go test ./internal/generation/application -run TestPageFitCannotAlterTheSummary -v
 ```
 
 **Expected**: with a shape config forcing an expand and a fake page-fit provider that attempts to
