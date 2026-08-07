@@ -1,1 +1,3 @@
-{"feature_directory":"specs/024-agent-context-consolidation"}
+{
+  "feature_directory": "specs/033-resume-gen-strictness"
+}
