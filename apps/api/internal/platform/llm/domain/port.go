@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -149,8 +150,92 @@ func schemaFor(t reflect.Type) string {
 	if err == nil {
 		s = string(b)
 	}
+	if strict, serr := strictifySchema(s); serr == nil {
+		s = strict
+	}
 	schemaCache.Store(t, s)
 	return s
+}
+
+// strictifySchema rewrites a reflected JSON Schema into the dialect strict
+// structured-output mode accepts. Providers that validate the schema (OpenAI
+// and Azure behind OpenRouter) reject anything looser with a 400: every
+// object must list *every* one of its properties in `required` and must set
+// `additionalProperties: false`. A field the Go type marks omitempty is
+// therefore made required-but-nullable instead, which unmarshals back to the
+// zero value. Meta keywords ($schema/$id) are dropped — they are not part of
+// the accepted dialect.
+func strictifySchema(raw string) (string, error) {
+	if raw == "" {
+		return raw, nil
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+		return raw, err
+	}
+	strictifyNode(doc)
+	delete(doc, "$schema")
+	delete(doc, "$id")
+	b, err := json.Marshal(doc)
+	if err != nil {
+		return raw, err
+	}
+	return string(b), nil
+}
+
+func strictifyNode(node map[string]any) {
+	props, ok := node["properties"].(map[string]any)
+	if ok {
+		required := map[string]bool{}
+		if existing, isList := node["required"].([]any); isList {
+			for _, name := range existing {
+				if s, isStr := name.(string); isStr {
+					required[s] = true
+				}
+			}
+		}
+		names := make([]string, 0, len(props))
+		for name, child := range props {
+			names = append(names, name)
+			childMap, isMap := child.(map[string]any)
+			if !isMap {
+				continue
+			}
+			if !required[name] {
+				makeNullable(childMap)
+			}
+			strictifyNode(childMap)
+		}
+		sort.Strings(names)
+		all := make([]any, len(names))
+		for i, name := range names {
+			all[i] = name
+		}
+		node["required"] = all
+		node["additionalProperties"] = false
+	}
+	if items, isMap := node["items"].(map[string]any); isMap {
+		strictifyNode(items)
+	}
+}
+
+// makeNullable widens a property's declared type to include null, so a field
+// the model has nothing to say about can be omitted in spirit while still
+// satisfying the "every property is required" rule.
+func makeNullable(node map[string]any) {
+	switch t := node["type"].(type) {
+	case string:
+		if t != "null" {
+			node["type"] = []any{t, "null"}
+		}
+	case []any:
+		for _, v := range t {
+			if s, ok := v.(string); ok && s == "null" {
+				return
+			}
+		}
+		node["type"] = append(t, "null")
+	}
 }
 
 // CompleteStructured is the Go equivalent of `completeStructured<T>`: builds
