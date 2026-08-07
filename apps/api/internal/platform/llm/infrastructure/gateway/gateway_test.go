@@ -53,13 +53,7 @@ func TestGatewayCompleteRequestShape(t *testing.T) {
 		gotAuth = r.Header.Get("Authorization")
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
 		_ = json.NewEncoder(w).Encode(chatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{{Message: struct {
-				Content string `json:"content"`
-			}{Content: "hello"}}},
+			Choices: []chatChoice{{Message: chatChoiceMessage{Content: "hello"}}},
 		})
 	})
 
@@ -86,13 +80,7 @@ func TestGatewayCompleteSendsTaskKeyByDefault(t *testing.T) {
 	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
 		_ = json.NewEncoder(w).Encode(chatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{{Message: struct {
-				Content string `json:"content"`
-			}{Content: "ok"}}},
+			Choices: []chatChoice{{Message: chatChoiceMessage{Content: "ok"}}},
 		})
 	})
 	if _, err := p.Complete(context.Background(), "hi", nil); err != nil {
@@ -108,13 +96,7 @@ func TestGatewayCompleteJSONSetsResponseFormat(t *testing.T) {
 	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
 		_ = json.NewEncoder(w).Encode(chatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{{Message: struct {
-				Content string `json:"content"`
-			}{Content: "{}"}}},
+			Choices: []chatChoice{{Message: chatChoiceMessage{Content: "{}"}}},
 		})
 	})
 	if _, err := p.CompleteJSON(context.Background(), "hi", &domain.CompleteOptions{Model: "generation"}); err != nil {
@@ -133,13 +115,7 @@ func TestGatewayCompleteJSONStrictSendsJsonSchema(t *testing.T) {
 	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
 		_ = json.NewEncoder(w).Encode(chatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{{Message: struct {
-				Content string `json:"content"`
-			}{Content: "{}"}}},
+			Choices: []chatChoice{{Message: chatChoiceMessage{Content: "{}"}}},
 		})
 	})
 	opts := &domain.CompleteOptions{

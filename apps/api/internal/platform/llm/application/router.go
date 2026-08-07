@@ -68,6 +68,21 @@ func (r *Router) CompleteJSON(ctx context.Context, prompt string, opts *domain.C
 	return p.CompleteJSON(ctx, prompt, opts)
 }
 
+// CompleteChat is a passthrough (037, contracts C3-1/C3-2/C3-3).
+//
+// It resolves provider and model exactly as Complete does and then gets out of
+// the way. In particular it does not inspect, filter or rewrite tool
+// declarations, and it does not choose a provider based on whether one is
+// thought to support tools — the whole point of 030's routing model is that the
+// application asks for a task and knows nothing about upstream capabilities.
+// Picking a provider here on capability grounds would reintroduce exactly the
+// knowledge that design removed.
+func (r *Router) CompleteChat(ctx context.Context, msgs []domain.Message, opts *domain.CompleteOptions) (domain.ChatResult, error) {
+	p, model := r.resolve()
+	opts = withRouting(opts, model, r.taskKey)
+	return p.CompleteChat(ctx, msgs, opts)
+}
+
 func (r *Router) Embed(ctx context.Context, text string) ([]float32, error) {
 	return r.local.Embed(ctx, text)
 }

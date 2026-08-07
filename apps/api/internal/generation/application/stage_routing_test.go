@@ -48,6 +48,20 @@ func (p *stageProvider) CompleteJSON(ctx context.Context, prompt string, opts *l
 	return p.reply(prompt), nil
 }
 
+// CompleteChat satisfies the 037 Provider interface. The fake's behaviour lives
+// in CompleteJSON, so this delegates to it with the final turn as the prompt —
+// which is what the real adapters do in reverse. Tool calls are never
+// fabricated here: a fake that invented one would make a tool-loop test pass
+// for the wrong reason.
+func (p *stageProvider) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
+	prompt := ""
+	if len(msgs) > 0 {
+		prompt = msgs[len(msgs)-1].Content
+	}
+	text, err := p.CompleteJSON(ctx, prompt, opts)
+	return llm.ChatResult{Content: text}, err
+}
+
 func (p *stageProvider) Embed(context.Context, string) ([]float32, error) { return nil, nil }
 
 func mustJSON(t *testing.T, v any) string {

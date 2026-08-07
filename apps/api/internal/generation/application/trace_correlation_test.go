@@ -41,6 +41,11 @@ func (s *traceSpy) CompleteJSON(ctx context.Context, prompt string, opts *llm.Co
 	return s.inner.CompleteJSON(ctx, prompt, opts)
 }
 
+func (s *traceSpy) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
+	s.record(ctx)
+	return s.inner.CompleteChat(ctx, msgs, opts)
+}
+
 func (s *traceSpy) Embed(ctx context.Context, text string) ([]float32, error) {
 	return s.inner.Embed(ctx, text)
 }
