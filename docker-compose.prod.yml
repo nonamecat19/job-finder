@@ -1,3 +1,22 @@
+# Production compose.
+#
+# --- No gateway here, and therefore no LLM observability (036, contracts C3-5).
+#
+# This file has no `litellm` service and never has. The production deployment
+# talks to Ollama directly, which is the local-first path Constitution
+# Principle V describes: no provider credential, no third-party hop, no proxy.
+#
+# Feature 036 collects LLM observability through the *gateway's* success and
+# failure callbacks. With no gateway in the path there is nothing to attach a
+# callback to, so observability is deliberately a development-time capability
+# here — the collector service group exists in docker-compose.yml only.
+#
+# This is a recorded decision, not an oversight. Adding the collector to
+# production means first adding the gateway to production, which means putting
+# provider credentials on the production host — a Principle V trade to make
+# explicitly, on its own, not as a side effect of wanting dashboards. If that
+# trade is ever made, the collector's UI port must be bound to loopback here
+# too (contracts C3-4): it holds the user's full profile in plain text.
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -24,16 +43,120 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    env_file: .env
+    # NO `env_file: .env` (036 FR-007 / Constitution Principle V).
+    #
+    # This service used to ingest the whole .env, which handed the application
+    # container every provider credential — CEREBRAS_API_KEY, GROQ_API_KEY,
+    # COHERE_API_KEY, OPENROUTER_API_KEY. The constitution requires those to
+    # stay in the gateway container and be unreadable through the application,
+    # so the wholesale import was a standing violation independent of any
+    # feature.
+    #
+    # The list below is explicit and enumerates exactly what internal/config
+    # reads. It is verbose on purpose: an allowlist that must be edited to add
+    # a variable is the only version of this that stays correct. When adding a
+    # config field, add it here too — and never add a provider API key.
     environment:
+      # --- infrastructure ---
       DATABASE_URL: postgresql://jobfinder:${DB_PASSWORD}@postgres:5432/jobfinder
       REDIS_URL: redis://redis:6379
       DOCUMENTS_DIR: /data/documents
+      PORT: ${PORT:-3000}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-documents}
       MINIO_USE_SSL: "false"
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:-}
+
+      # --- LLM access ---
+      # LITELLM_MASTER_KEY authenticates the app TO the gateway; it is not a
+      # provider credential. OLLAMA_KEY is the local-first path (Principle V),
+      # which the app must be able to reach with no gateway at all.
+      GATEWAY_URL: ${GATEWAY_URL:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_KEY: ${OLLAMA_KEY:-}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-}
+      EMBED_URL: ${EMBED_URL:-}
+      EMBED_MODEL: ${EMBED_MODEL:-}
+      EMBED_DIMS: ${EMBED_DIMS:-}
+      LLM_MAX_IDLE_CONNS_PER_HOST: ${LLM_MAX_IDLE_CONNS_PER_HOST:-}
+
+      # --- local model pinning (used only when GATEWAY_URL is empty) ---
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_MODEL_MATCH: ${LLM_MODEL_MATCH:-}
+      LLM_MODEL_GENERATION: ${LLM_MODEL_GENERATION:-}
+      LLM_MODEL_GENERATION_ANALYZE: ${LLM_MODEL_GENERATION_ANALYZE:-}
+      LLM_MODEL_GENERATION_SELECT: ${LLM_MODEL_GENERATION_SELECT:-}
+      LLM_MODEL_GENERATION_PREMIUM: ${LLM_MODEL_GENERATION_PREMIUM:-}
+      LLM_MODEL_GENERATION_SUMMARY: ${LLM_MODEL_GENERATION_SUMMARY:-}
+      LLM_MODEL_REPHRASE: ${LLM_MODEL_REPHRASE:-}
+      LLM_MODEL_GHOST: ${LLM_MODEL_GHOST:-}
+
+      # --- job sources (their own credentials, not inference credentials) ---
+      ADZUNA_APP_ID: ${ADZUNA_APP_ID:-}
+      ADZUNA_APP_KEY: ${ADZUNA_APP_KEY:-}
+      ADZUNA_COUNTRY: ${ADZUNA_COUNTRY:-}
+      JOOBLE_API_KEY: ${JOOBLE_API_KEY:-}
+      JOBLEADS_EMAIL: ${JOBLEADS_EMAIL:-}
+      JOBLEADS_PASSWORD: ${JOBLEADS_PASSWORD:-}
+      DJINNI_EMAIL: ${DJINNI_EMAIL:-}
+      DJINNI_PASSWORD: ${DJINNI_PASSWORD:-}
+      DJINNI_DETAIL_DELAY_MS: ${DJINNI_DETAIL_DELAY_MS:-}
+      DJINNI_RATE_OVERRIDE_RPS: ${DJINNI_RATE_OVERRIDE_RPS:-}
+      WORKUA_DETAIL_DELAY_MS: ${WORKUA_DETAIL_DELAY_MS:-}
+      LINKEDIN_SCRAPE_ENABLED: ${LINKEDIN_SCRAPE_ENABLED:-}
+      FLARESOLVERR_URL: ${FLARESOLVERR_URL:-}
+      JOBSPY_URL: ${JOBSPY_URL:-}
+      BROWSER_IDENTITY_VERSION: ${BROWSER_IDENTITY_VERSION:-}
+
+      # --- matching / generation tuning ---
+      MATCH_SIMILARITY_THRESHOLD: ${MATCH_SIMILARITY_THRESHOLD:-}
+      MATCH_NOTIFY_SCORE_THRESHOLD: ${MATCH_NOTIFY_SCORE_THRESHOLD:-}
+      MATCH_NOTIFY_RATE_LIMIT: ${MATCH_NOTIFY_RATE_LIMIT:-}
+      KEYWORD_REPHRASE_CACHE_TTL_SEC: ${KEYWORD_REPHRASE_CACHE_TTL_SEC:-}
+      RESUME_GROUNDING_LEVEL: ${RESUME_GROUNDING_LEVEL:-}
+      RESUME_MASTER_PATH: ${RESUME_MASTER_PATH:-}
+      RENDERCV_BIN: ${RENDERCV_BIN:-}
+      LEVELS_FYI_CSV: ${LEVELS_FYI_CSV:-}
+      SALARY_FLOOR_USD: ${SALARY_FLOOR_USD:-}
+
+      # --- concurrency, timeouts, pool ---
+      AI_CONCURRENCY_CLOUD: ${AI_CONCURRENCY_CLOUD:-}
+      AI_CONCURRENCY_LOCAL: ${AI_CONCURRENCY_LOCAL:-}
+      AI_TASK_TIMEOUT_MATCH: ${AI_TASK_TIMEOUT_MATCH:-}
+      AI_TASK_TIMEOUT_GENERATE: ${AI_TASK_TIMEOUT_GENERATE:-}
+      AI_TASK_TIMEOUT_SALARY: ${AI_TASK_TIMEOUT_SALARY:-}
+      AI_TASK_TIMEOUT_GHOST: ${AI_TASK_TIMEOUT_GHOST:-}
+      AI_TASK_TIMEOUT_ENRICH: ${AI_TASK_TIMEOUT_ENRICH:-}
+      AI_TASK_TIMEOUT_INGEST: ${AI_TASK_TIMEOUT_INGEST:-}
+      INGEST_CONCURRENCY: ${INGEST_CONCURRENCY:-}
+      INGEST_PERSIST_CHUNK_SIZE: ${INGEST_PERSIST_CHUNK_SIZE:-}
+      ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-}
+      COOLING_OFF_THRESHOLD: ${COOLING_OFF_THRESHOLD:-}
+      COOLING_OFF_BASE_DURATION: ${COOLING_OFF_BASE_DURATION:-}
+      CHEAP_RUNG_RETEST_INTERVAL: ${CHEAP_RUNG_RETEST_INTERVAL:-}
+      ACTIVITY_HEARTBEAT_INTERVAL: ${ACTIVITY_HEARTBEAT_INTERVAL:-}
+      ACTIVITY_STALE_AFTER: ${ACTIVITY_STALE_AFTER:-}
+      ACTIVITY_QUEUED_GRACE: ${ACTIVITY_QUEUED_GRACE:-}
+      ACTIVITY_SWEEP_INTERVAL: ${ACTIVITY_SWEEP_INTERVAL:-}
+      DB_MAX_CONNS: ${DB_MAX_CONNS:-}
+      DB_MIN_CONNS: ${DB_MIN_CONNS:-}
+      DB_SERVER_MAX_CONNS: ${DB_SERVER_MAX_CONNS:-}
+      DB_MAX_CONN_LIFETIME: ${DB_MAX_CONN_LIFETIME:-}
+      DB_MAX_CONN_IDLE_TIME: ${DB_MAX_CONN_IDLE_TIME:-}
+      DB_ACQUIRE_TIMEOUT: ${DB_ACQUIRE_TIMEOUT:-}
+      DB_INTERACTIVE_RESERVE: ${DB_INTERACTIVE_RESERVE:-}
+
+      # --- observability retention (036 FR-008) ---
+      # Not LANGFUSE_* — see the note on those names in .env.example. This is a
+      # collector API key so the platform can delete its own records, never a
+      # provider credential, and it is inert unless a collector is configured.
+      EVAL_PRUNE_COLLECTOR_URL: ${EVAL_PRUNE_COLLECTOR_URL:-}
+      EVAL_PRUNE_PUBLIC_KEY: ${EVAL_PRUNE_PUBLIC_KEY:-}
+      EVAL_PRUNE_SECRET_KEY: ${EVAL_PRUNE_SECRET_KEY:-}
+      EVAL_PRUNE_RETENTION_DAYS: ${EVAL_PRUNE_RETENTION_DAYS:-}
     depends_on:
       postgres:
         condition: service_healthy
