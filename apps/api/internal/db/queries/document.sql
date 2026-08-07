@@ -4,8 +4,11 @@ FROM "GeneratedDocument"
 WHERE "jobId" = $1 AND "type" = $2;
 
 -- name: InsertGeneratedDocument :one
-INSERT INTO "GeneratedDocument" ("jobId", "type", "version", "content", "pdfPath", "model", "company", "title", "vacancy")
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO "GeneratedDocument" (
+	"jobId", "type", "version", "content", "pdfPath", "model", "company", "title", "vacancy",
+	"summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd"
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 RETURNING *;
 
 -- name: ListDocumentsForJob :many
