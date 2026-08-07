@@ -49,7 +49,7 @@ func TestIntegration_ApplySectionTogglesRemovesCertificationsFromRenderedResume(
 		t.Fatalf("fixture setup: master certifications = %v, want 2 entries", masterCertsBefore)
 	}
 
-	merged, err := MergeTailored(master, TailoredSections{Summary: "New summary."})
+	merged, err := MergeTailored(master, TailoredSelection{}, &TailoredSummary{Summary: "New summary."})
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestIntegration_ApplySectionTogglesCertificationsEnabledRendersSection(t *t
 		t.Fatalf("ParseRendercv: %v", err)
 	}
 
-	merged, err := MergeTailored(master, TailoredSections{Summary: "New summary."})
+	merged, err := MergeTailored(master, TailoredSelection{}, &TailoredSummary{Summary: "New summary."})
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -118,7 +118,7 @@ cv:
 	if err != nil {
 		t.Fatalf("ParseRendercv: %v", err)
 	}
-	merged, err := MergeTailored(master, TailoredSections{Summary: "New summary."})
+	merged, err := MergeTailored(master, TailoredSelection{}, &TailoredSummary{Summary: "New summary."})
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}

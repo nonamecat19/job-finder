@@ -176,3 +176,81 @@ func TestStripUngroundedHighlightsReplacesDriftedBullet(t *testing.T) {
 		t.Errorf("replacement %q is not a master bullet for %s, master bullets: %v", hl[0], company, masterBullets)
 	}
 }
+func summaryGroundingMaster() RendercvMaster {
+	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"experience": []any{
+			map[string]any{
+				"company": "Northwind Systems", "position": "Backend Engineer",
+				"start_date": "2015-01", "end_date": "2021-01",
+				"highlights": []any{
+					"Cut checkout latency by 40% across the payments path",
+					"Led a team of 12 engineers through the storage migration",
+				},
+			},
+		},
+		"skills": []any{
+			map[string]any{"label": "Languages", "details": "Go, Python, SQL"},
+			map[string]any{"label": "Infrastructure", "details": "Docker, Kubernetes, PostgreSQL"},
+		},
+	}}}
+}
+
+func summaryGroundingBrief() SummaryBrief {
+	return SummaryBrief{
+		Analysis:         VacancyAnalysis{RequiredSkills: []string{"Rust", "Kafka"}},
+		TotalYears:       6,
+		Highlights:       []string{"Cut checkout latency by 40% across the payments path", "Led a team of 12 engineers through the storage migration"},
+		SkillGroupLabels: []string{"Languages", "Infrastructure"},
+	}
+}
+
+func TestVerifySummaryGroundingAcceptsGroundedSummary(t *testing.T) {
+	summary := TailoredSummary{Summary: "Backend engineer with 6 years of experience building payment systems in Go and Python. " +
+		"Cut checkout latency by 40% and led a team of 12 through a Kubernetes migration."}
+
+	if violations := VerifySummaryGrounding(summaryGroundingMaster(), summary, summaryGroundingBrief()); len(violations) != 0 {
+		t.Errorf("violations = %v, want none — every claim traces to the master", violations)
+	}
+}
+
+func TestVerifySummaryGroundingRejectsUngroundedSkillToken(t *testing.T) {
+	summary := TailoredSummary{Summary: "Backend engineer with 6 years of experience building services in Go, with deep expertise in Rust."}
+
+	violations := VerifySummaryGrounding(summaryGroundingMaster(), summary, summaryGroundingBrief())
+
+	if !hasViolationContaining(violations, `summary skill "Rust" not in master skill tokens`) {
+		t.Errorf("violations = %v, want one naming the fabricated skill", violations)
+	}
+	if hasViolationContaining(violations, `"Go"`) {
+		t.Errorf("violations = %v, master-backed skill Go must not be flagged", violations)
+	}
+}
+
+func TestVerifySummaryGroundingRejectsUnsupportedMetric(t *testing.T) {
+	summary := TailoredSummary{Summary: "Backend engineer with 6 years of experience who reduced infrastructure spend by 73% in a single quarter."}
+
+	violations := VerifySummaryGrounding(summaryGroundingMaster(), summary, summaryGroundingBrief())
+
+	if !hasViolationContaining(violations, `summary metric "73%" not supported by the selected highlights`) {
+		t.Errorf("violations = %v, want one naming the unsupported metric", violations)
+	}
+}
+
+func TestVerifySummaryGroundingRejectsContradictingYearsFigure(t *testing.T) {
+	summary := TailoredSummary{Summary: "Backend engineer with 9+ years of experience shipping services in Go and Python."}
+
+	violations := VerifySummaryGrounding(summaryGroundingMaster(), summary, summaryGroundingBrief())
+
+	if !hasViolationContaining(violations, "master's experience spans 6 years") {
+		t.Errorf("violations = %v, want one contradicting the derived years figure", violations)
+	}
+}
+
+func TestVerifySummaryGroundingIgnoresOrdinaryEnglish(t *testing.T) {
+	summary := TailoredSummary{Summary: "Pragmatic engineer who ships reliable services, mentors peers and keeps systems boring. " +
+		"Comfortable across Go, Docker and PostgreSQL, with a bias toward simple designs that survive contact with production."}
+
+	if violations := VerifySummaryGrounding(summaryGroundingMaster(), summary, summaryGroundingBrief()); len(violations) != 0 {
+		t.Errorf("violations = %v, want none — ordinary English is not a skill claim", violations)
+	}
+}
