@@ -79,16 +79,9 @@ model_list:
   # model that does its job. Measured 2026-08-07 on one vacancy, identical
   # prompt and strict schema: the economy model does the mechanical work
   # (ranking skills, picking highlights) as well as the premium one at 1/30th
-  # the price, and fails only at writing the summary. See
-  # specs/035-split-model-generation/research.md R1.
+  # the price, and fails only at writing the summary.
   #
-  # Every deployment declares how its model's deliberation is bounded. Without
-  # it a thinking model spends its whole output budget reasoning and returns
-  # empty content — reasoning tokens count against max_completion_tokens. That
-  # is not a tuning detail: it is what made every resume run fail before
-  # 2026-08-07. The switch differs by provider family (research.md R2):
-  # reasoning_effort for OpenAI/Anthropic/Google, reasoning.enabled for z-ai
-  # and deepseek-flash. deepseek-v4-pro honours neither and is not eligible.
+  # See specs/035-split-model-generation/research.md R1 for the measurement.
 
   - model_name: generation-analyze
     litellm_params:
@@ -203,13 +196,39 @@ model_list:
       api_key: os.environ/OPENROUTER_API_KEY
 
   # --- local (terminal tier, shared by every task, FR-008) ---
+  # model_info declares this deployment as free (036 FR-014). Without an
+  # explicit zero the proxy emits *no* cost for a model absent from its cost
+  # map, which makes a genuinely free call and an unpriced one indistinguishable
+  # in the observability record — so "local calls are recorded at cost 0" could
+  # not be asserted. Declaring it makes the claim true rather than hopeful.
   - model_name: local
     litellm_params:
       model: ollama_chat/gpt-oss:120b-cloud
       api_base: os.environ/OLLAMA_URL
       api_key: os.environ/OLLAMA_KEY
+    model_info:
+      input_cost_per_token: 0
+      output_cost_per_token: 0
 
 litellm_settings:
+  # --- observability (036-langfuse-llm-observability) ---
+  # Both lists, not just success. A call that exhausts every tier is exactly
+  # the call worth having a record of: a failure that produces no record is
+  # indistinguishable from a call that never happened (FR-002).
+  #
+  # Global, never per-deployment: a callback attached to individual deployments
+  # would produce coverage that silently depends on which tier answered.
+  #
+  # Delivery is best-effort and dispatched off the request path, so an
+  # unreachable collector cannot delay or fail inference (FR-004). That is
+  # verified with a stopped AND a paused collector, not assumed — this file's
+  # own history is why (see the request_timeout note below).
+  #
+  # Credentials arrive as environment variables on the litellm container only;
+  # the application container is never granted them (FR-007).
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+
   drop_params: true
   num_retries: 1
   # request_timeout is PER ATTEMPT, not per chain. The worst case is
