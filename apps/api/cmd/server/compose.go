@@ -42,6 +42,7 @@ import (
 	"github.com/job-finder/api/internal/outreach"
 	outreachhttp "github.com/job-finder/api/internal/outreach/interfaces/http"
 	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/platform/observability"
 	"github.com/job-finder/api/internal/platform/storage"
 	"github.com/job-finder/api/internal/postage"
 	postagehttp "github.com/job-finder/api/internal/postage/interfaces/http"
@@ -164,7 +165,17 @@ func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
 		worker.WithTxRunner(p.DB),
 		worker.WithChunkSize(p.Config.IngestPersistChunkSize),
 	)
-	scheduler := worker.NewScheduler(p.DB.Queries, ingestionSvc)
+	// The retention job for the LLM observability collector (036 FR-008) rides
+	// on the ingestion scheduler's tick, which is the platform's existing
+	// periodic-maintenance loop. It no-ops when the collector is unconfigured,
+	// which is the default.
+	pruner := observability.New(observability.Config{
+		BaseURL:       p.Config.EvalPruneCollectorURL,
+		PublicKey:     p.Config.EvalPrunePublicKey,
+		SecretKey:     p.Config.EvalPruneSecretKey,
+		RetentionDays: p.Config.EvalPruneRetentionDay,
+	}, nil)
+	scheduler := worker.NewScheduler(p.DB.Queries, ingestionSvc, pruner)
 	return &ingestionHandles{
 		Ingestion: ingestionSvc,
 		Handler:   ingestionHandler,
@@ -185,9 +196,9 @@ type llmHandles struct {
 	GenerationSelectRouter  *llm.Router
 	GenerationPremiumRouter *llm.Router
 	GenerationSummaryRouter *llm.Router
-	RephraseRouter   *llm.Router
-	GhostRouter      *llm.Router
-	DefaultRouter    *llm.Router
+	RephraseRouter          *llm.Router
+	GhostRouter             *llm.Router
+	DefaultRouter           *llm.Router
 }
 
 func composeLLM(p *Platform) (*llmHandles, error) {
@@ -201,16 +212,16 @@ func composeLLM(p *Platform) (*llmHandles, error) {
 	}
 	cfg := p.Config
 	return &llmHandles{
-		Ollama:           ollamaProvider,
-		MatchRouter:      llm.NewRouter("match", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelMatch)),
+		Ollama:                  ollamaProvider,
+		MatchRouter:             llm.NewRouter("match", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelMatch)),
 		GenerationRouter:        llm.NewRouter("generation", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
 		GenerationAnalyzeRouter: llm.NewRouter("generation-analyze", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
 		GenerationSelectRouter:  llm.NewRouter("generation-select", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
 		GenerationPremiumRouter: llm.NewRouter("generation-select-premium", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
 		GenerationSummaryRouter: llm.NewRouter("generation-summary", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
-		RephraseRouter:   llm.NewRouter("rephrase", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelRephrase)),
-		GhostRouter:      llm.NewRouter("ghost", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGhost)),
-		DefaultRouter:    llm.NewRouter("default", gatewayIface, ollamaProvider, cfg.LLMModel),
+		RephraseRouter:          llm.NewRouter("rephrase", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelRephrase)),
+		GhostRouter:             llm.NewRouter("ghost", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGhost)),
+		DefaultRouter:           llm.NewRouter("default", gatewayIface, ollamaProvider, cfg.LLMModel),
 	}, nil
 }
 

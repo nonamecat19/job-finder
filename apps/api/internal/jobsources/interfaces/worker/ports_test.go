@@ -21,7 +21,7 @@ func TestConstructorsAcceptPorts(t *testing.T) {
 	if worker.NewHandler(&fakeSearchRepo{}, nil, nil, &fakeEnqueuer{}) == nil {
 		t.Fatal("NewHandler returned nil")
 	}
-	if worker.NewScheduler(&fakeSearchRepo{}, searchSvc) == nil {
+	if worker.NewScheduler(&fakeSearchRepo{}, searchSvc, nil) == nil {
 		t.Fatal("NewScheduler returned nil")
 	}
 }

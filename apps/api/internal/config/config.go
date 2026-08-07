@@ -105,6 +105,20 @@ type Config struct {
 	OllamaKeepAlive        string `mapstructure:"OLLAMA_KEEP_ALIVE"`
 	LLMMaxIdleConnsPerHost int    `mapstructure:"LLM_MAX_IDLE_CONNS_PER_HOST"`
 
+	// LLM observability retention (036 FR-008, contracts C7-1). The platform
+	// prunes the collector itself because automated retention is not an OSS
+	// feature there.
+	//
+	// These are named EVAL_PRUNE_* rather than LANGFUSE_* deliberately: C2-2
+	// forbids granting the application container a LANGFUSE_* variable, and
+	// this is a different grant for a different reason — a collector API key
+	// so the platform can delete, never a provider credential — so it is
+	// separately named and separately revocable.
+	EvalPruneCollectorURL string `mapstructure:"EVAL_PRUNE_COLLECTOR_URL"`
+	EvalPrunePublicKey    string `mapstructure:"EVAL_PRUNE_PUBLIC_KEY"`
+	EvalPruneSecretKey    string `mapstructure:"EVAL_PRUNE_SECRET_KEY"`
+	EvalPruneRetentionDay int    `mapstructure:"EVAL_PRUNE_RETENTION_DAYS"`
+
 	DBMaxConns           int           `mapstructure:"DB_MAX_CONNS"`
 	DBMinConns           int           `mapstructure:"DB_MIN_CONNS"`
 	DBMaxConnLifetime    time.Duration `mapstructure:"DB_MAX_CONN_LIFETIME"`
