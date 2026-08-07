@@ -168,6 +168,139 @@ func TestGatewayCompleteJSONStrictSendsJsonSchema(t *testing.T) {
 	}
 }
 
+func TestGatewayCompleteJSONSendsMaxCompletionTokens(t *testing.T) {
+	var raw map[string]any
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&raw)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{}"}}]}`))
+	})
+	maxTokens := 8192
+	opts := &domain.CompleteOptions{Model: "generation-analyze", MaxTokens: &maxTokens}
+	if _, err := p.CompleteJSON(context.Background(), "hi", opts); err != nil {
+		t.Fatalf("CompleteJSON: %v", err)
+	}
+	got, ok := raw["max_completion_tokens"].(float64)
+	if !ok {
+		t.Fatalf("max_completion_tokens missing from request body: %v", raw)
+	}
+	if int(got) != maxTokens {
+		t.Errorf("max_completion_tokens = %d, want %d", int(got), maxTokens)
+	}
+}
+
+func TestGatewayOmitsMaxCompletionTokensWhenUnset(t *testing.T) {
+	var raw map[string]any
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&raw)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hi"}}]}`))
+	})
+	if _, err := p.Complete(context.Background(), "hi", nil); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if _, present := raw["max_completion_tokens"]; present {
+		t.Errorf("max_completion_tokens sent with no cap configured: %v", raw["max_completion_tokens"])
+	}
+}
+
+func TestGatewayCapturesUsage(t *testing.T) {
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"model":"openrouter/anthropic/claude-sonnet-5",
+			"choices":[{"message":{"content":"hi"}}],
+			"usage":{"cost":0.004213,"prompt_tokens":1820,"completion_tokens":355}}`))
+	})
+	ctx, usage := domain.WithUsageCapture(context.Background())
+	if _, err := p.Complete(ctx, "hi", nil); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if usage.CostUSD != 0.004213 {
+		t.Errorf("CostUSD = %v, want 0.004213", usage.CostUSD)
+	}
+	if usage.PromptTokens != 1820 {
+		t.Errorf("PromptTokens = %d, want 1820", usage.PromptTokens)
+	}
+	if usage.CompletionTokens != 355 {
+		t.Errorf("CompletionTokens = %d, want 355", usage.CompletionTokens)
+	}
+}
+
+func TestGatewayUsageZeroWhenResponseOmitsIt(t *testing.T) {
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hi"}}]}`))
+	})
+	ctx, usage := domain.WithUsageCapture(context.Background())
+	if _, err := p.Complete(ctx, "hi", nil); err != nil {
+		t.Fatalf("Complete: %v (an unpriced deployment must never fail the call)", err)
+	}
+	if *usage != (domain.Usage{}) {
+		t.Errorf("usage = %+v, want zero value", *usage)
+	}
+}
+
+func TestGatewayCapturesSubstitutionFromHeaders(t *testing.T) {
+	cases := []struct {
+		name            string
+		attemptedHeader string
+		wantAttempted   int
+		wantSubstituted bool
+	}{
+		{name: "tier 1 served", attemptedHeader: "0"},
+		{name: "chain advanced once", attemptedHeader: "1", wantAttempted: 1, wantSubstituted: true},
+		{name: "header absent", attemptedHeader: ""},
+		{name: "header malformed", attemptedHeader: "yes"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("x-litellm-model-group", "generation-analyze-cerebras")
+				if tc.attemptedHeader != "" {
+					w.Header().Set("x-litellm-attempted-fallbacks", tc.attemptedHeader)
+				}
+				w.Header().Set("x-litellm-response-cost", "3.615e-05")
+				_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hi"}}]}`))
+			})
+			ctx, usage := domain.WithUsageCapture(context.Background())
+			if _, err := p.Complete(ctx, "hi", nil); err != nil {
+				t.Fatalf("Complete: %v (a malformed provenance header must never fail the call)", err)
+			}
+			if usage.ServedGroup != "generation-analyze-cerebras" {
+				t.Errorf("ServedGroup = %q, want generation-analyze-cerebras", usage.ServedGroup)
+			}
+			if usage.AttemptedFallbacks != tc.wantAttempted {
+				t.Errorf("AttemptedFallbacks = %d, want %d", usage.AttemptedFallbacks, tc.wantAttempted)
+			}
+			if usage.Substituted != tc.wantSubstituted {
+				t.Errorf("Substituted = %v, want %v", usage.Substituted, tc.wantSubstituted)
+			}
+			if usage.CostUSD != 3.615e-05 {
+				t.Errorf("CostUSD = %v, want the header value 3.615e-05 when the body has no usage block", usage.CostUSD)
+			}
+		})
+	}
+}
+
+func TestGatewayBodyCostWinsOverHeader(t *testing.T) {
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-litellm-response-cost", "0.5")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hi"}}],"usage":{"cost":0.0042}}`))
+	})
+	ctx, usage := domain.WithUsageCapture(context.Background())
+	if _, err := p.Complete(ctx, "hi", nil); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if usage.CostUSD != 0.0042 {
+		t.Errorf("CostUSD = %v, want the body's usage.cost 0.0042", usage.CostUSD)
+	}
+}
+
+func TestGatewayUsageCaptureIsOptional(t *testing.T) {
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hi"}}],"usage":{"cost":0.01}}`))
+	})
+	if _, err := p.Complete(context.Background(), "hi", nil); err != nil {
+		t.Fatalf("Complete without capture sink: %v", err)
+	}
+}
+
 func TestGatewayCompleteEmptyChoices(t *testing.T) {
 	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(chatResponse{})

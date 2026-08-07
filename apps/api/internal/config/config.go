@@ -23,6 +23,11 @@ type Config struct {
 	LLMModelRephrase   string `mapstructure:"LLM_MODEL_REPHRASE"`
 	LLMModelGhost      string `mapstructure:"LLM_MODEL_GHOST"`
 
+	LLMModelGenerationAnalyze string `mapstructure:"LLM_MODEL_GENERATION_ANALYZE"`
+	LLMModelGenerationSelect  string `mapstructure:"LLM_MODEL_GENERATION_SELECT"`
+	LLMModelGenerationPremium string `mapstructure:"LLM_MODEL_GENERATION_PREMIUM"`
+	LLMModelGenerationSummary string `mapstructure:"LLM_MODEL_GENERATION_SUMMARY"`
+
 	GatewayURL       string `mapstructure:"GATEWAY_URL"`
 	LiteLLMMasterKey string `mapstructure:"LITELLM_MASTER_KEY"`
 
@@ -114,6 +119,17 @@ func (c *Config) ModelOr(m string) string {
 		return c.LLMModel
 	}
 	return m
+}
+
+// GenerationModelOr resolves a per-stage local model, falling back to the
+// generation-wide model and then to LLM_MODEL. It exists so pinning a stage is
+// optional: an operator who sets only LLM_MODEL_GENERATION still gets that
+// model for every stage.
+func (c *Config) GenerationModelOr(m string) string {
+	if m == "" {
+		m = c.LLMModelGeneration
+	}
+	return c.ModelOr(m)
 }
 
 func Load() (*Config, error) {

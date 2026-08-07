@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/job-finder/api/internal/platform/llm/domain"
@@ -47,19 +48,19 @@ type chatMessage struct {
 }
 
 type chatRequest struct {
-	Model               string            `json:"model"`
-	Stream              bool              `json:"stream"`
-	Messages            []chatMessage     `json:"messages"`
-	Temperature         float64           `json:"temperature"`
-	MaxCompletionTokens *int              `json:"max_completion_tokens,omitempty"`
-	ResponseFormat      *responseFormat   `json:"response_format,omitempty"`
+	Model               string          `json:"model"`
+	Stream              bool            `json:"stream"`
+	Messages            []chatMessage   `json:"messages"`
+	Temperature         float64         `json:"temperature"`
+	MaxCompletionTokens *int            `json:"max_completion_tokens,omitempty"`
+	ResponseFormat      *responseFormat `json:"response_format,omitempty"`
 }
 
 // responseFormat expresses the OpenAI response_format parameter in both its
 // forms: the legacy json_object mode and the strict json_schema mode (033
 // FR-005). The pointer is nil when no format is sent (plain-text Complete calls).
 type responseFormat struct {
-	Type       string      `json:"type"`                 // "json_object" | "json_schema"
+	Type       string      `json:"type"`                  // "json_object" | "json_schema"
 	JSONSchema *jsonSchema `json:"json_schema,omitempty"` // present only for json_schema
 }
 
@@ -80,6 +81,34 @@ type chatResponse struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
+	Usage struct {
+		Cost             float64 `json:"cost"`
+		PromptTokens     int     `json:"prompt_tokens"`
+		CompletionTokens int     `json:"completion_tokens"`
+	} `json:"usage"`
+}
+
+// usageFrom reads the economics of a call from the proxy's response headers,
+// falling back to the body's usage block for cost. Every field is optional: a
+// header the proxy did not send, or one it sent malformed, leaves its field
+// zero rather than failing a call that otherwise succeeded.
+func usageFrom(headers http.Header, body chatResponse) domain.Usage {
+	u := domain.Usage{
+		CostUSD:          body.Usage.Cost,
+		PromptTokens:     body.Usage.PromptTokens,
+		CompletionTokens: body.Usage.CompletionTokens,
+		ServedGroup:      headers.Get("x-litellm-model-group"),
+	}
+	if u.CostUSD == 0 {
+		if c, err := strconv.ParseFloat(headers.Get("x-litellm-response-cost"), 64); err == nil {
+			u.CostUSD = c
+		}
+	}
+	if n, err := strconv.Atoi(headers.Get("x-litellm-attempted-fallbacks")); err == nil && n > 0 {
+		u.AttemptedFallbacks = n
+		u.Substituted = true
+	}
+	return u
 }
 
 func servedModel(headers http.Header, body chatResponse) string {
@@ -134,6 +163,7 @@ func (g *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
 	served := servedModel(res.Header, parsed)
 	g.logServed(requestedGroup, served, time.Since(start), "ok", modelID)
 	domain.ReportServedModel(ctx, served)
+	domain.ReportUsage(ctx, usageFrom(res.Header, parsed))
 	return parsed.Choices[0].Message.Content, nil
 }
 

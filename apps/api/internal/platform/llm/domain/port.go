@@ -105,6 +105,43 @@ func ReportServedModel(ctx context.Context, model string) {
 	}
 }
 
+// Usage is the measured economics of a single provider call. CostUSD is the
+// provider's own reported figure — measured, not estimated — and stays 0 when
+// the deployment does not price the call (the local Ollama model, for instance).
+type Usage struct {
+	CostUSD          float64
+	PromptTokens     int
+	CompletionTokens int
+	// ServedGroup is the deployment tier that actually served the call, which
+	// differs from the requested task key once the fallback chain advances.
+	// It is a group name, not a model identity: the application still learns
+	// nothing about providers (030-FR-004).
+	ServedGroup string
+	// AttemptedFallbacks is how far down the chain the proxy had to go, 0 when
+	// tier 1 served. Substituted is the derived signal the dashboard marker
+	// keys off (035 FR-012).
+	AttemptedFallbacks int
+	Substituted        bool
+}
+
+type usageKey struct{}
+
+// WithUsageCapture is the cost-and-token counterpart of
+// WithServedModelCapture: callers that need the economics of a call pass the
+// returned context in, then read *ptr after the call returns.
+func WithUsageCapture(ctx context.Context) (context.Context, *Usage) {
+	ptr := new(Usage)
+	return context.WithValue(ctx, usageKey{}, ptr), ptr
+}
+
+// ReportUsage writes u into the capture pointer stashed in ctx by
+// WithUsageCapture, if any. A no-op when the caller didn't ask to capture it.
+func ReportUsage(ctx context.Context, u Usage) {
+	if ptr, ok := ctx.Value(usageKey{}).(*Usage); ok {
+		*ptr = u
+	}
+}
+
 // Provider is the interface the infrastructure/ollama and
 // infrastructure/cerebras adapters implement. CompleteJSON is the low-level
 // "ask for JSON, no retry" call; the retry loop (strip fences → parse →
