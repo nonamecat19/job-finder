@@ -54,6 +54,12 @@ var (
 	WithUsageCapture       = domain.WithUsageCapture
 	ReportUsage            = domain.ReportUsage
 	ReportServedModel      = domain.ReportServedModel
+
+	// 036: run correlation for observability. WithTraceID is stamped once per
+	// logical run; every LLM call made under that context joins the same trace,
+	// including retries and escalations emitted from helpers further down.
+	WithTraceID = domain.WithTraceID
+	TraceIDFrom = domain.TraceIDFrom
 )
 
 func CompleteStructured[T any](ctx context.Context, p Provider, prompt string, opts *CompleteOptions) (T, error) {

@@ -58,6 +58,16 @@ type CompleteOptions struct {
 	// adapter can embed it in the request without re-generating it. Empty
 	// for ResponseModeJSON calls.
 	JSONSchema string
+	// TraceID groups this call with the other calls of the same logical run
+	// (036). The value is the run's activity-run id, so an observability trace
+	// cross-references the platform's own history without a lookup table.
+	// Empty means uncorrelated — the pre-036 behaviour, and valid.
+	TraceID string
+	// TaskKey is the requested routing key, carried as request metadata so the
+	// collector can group by task rather than by serving deployment (036
+	// FR-012). Without it two stages served by the same model collapse into
+	// one reporting bucket. Empty means ungrouped.
+	TaskKey string
 }
 
 // ModelOr returns the per-call model override, or def if opts is nil/unset.
@@ -82,6 +92,54 @@ func (o *CompleteOptions) SystemPrompt() string {
 		return ""
 	}
 	return o.System
+}
+
+// Trace returns the correlation id grouping this call with its run, or "" if
+// opts is nil or unset (036 FR-009).
+func (o *CompleteOptions) Trace() string {
+	if o == nil {
+		return ""
+	}
+	return o.TraceID
+}
+
+// Task returns the requested routing key for observability grouping, or "" if
+// opts is nil or unset (036 FR-012).
+func (o *CompleteOptions) Task() string {
+	if o == nil {
+		return ""
+	}
+	return o.TaskKey
+}
+
+type traceIDKey struct{}
+
+// WithTraceID marks a context as belonging to one logical run, so every LLM
+// call made under it is grouped into a single observability trace (036 FR-009).
+// The value is the run's activity-run id, which makes the trace cross-reference
+// the platform's own history without a lookup table (FR-010).
+//
+// This is a context value rather than a parameter threaded through call sites
+// because the requirement is that *every* call of a run carries it — including
+// retries, re-prompts and escalations, which are emitted from inside helper
+// functions several frames below where the run id is known. A parameter would
+// make FR-009 depend on each of those remembering; a context makes it
+// structural. Concurrent runs are naturally isolated (FR-011), since each has
+// its own context.
+func WithTraceID(ctx context.Context, id string) context.Context {
+	if id == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, traceIDKey{}, id)
+}
+
+// TraceIDFrom returns the run id stamped by WithTraceID, or "" when the context
+// is not part of a correlated run.
+func TraceIDFrom(ctx context.Context) string {
+	if v, ok := ctx.Value(traceIDKey{}).(string); ok {
+		return v
+	}
+	return ""
 }
 
 type servedModelKey struct{}

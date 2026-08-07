@@ -11,17 +11,21 @@ import (
 type stubProvider struct {
 	name     string
 	gotModel string
+	lastOpts *domain.CompleteOptions
 }
 
 func (s *stubProvider) ModelName() string { return s.name }
 func (s *stubProvider) Complete(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
 	s.gotModel = opts.ModelOr("")
+	s.lastOpts = opts
 	return s.name, nil
 }
 func (s *stubProvider) CompleteJSON(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
 	s.gotModel = opts.ModelOr("")
+	s.lastOpts = opts
 	return s.name, nil
 }
+
 func (s *stubProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	return []float32{1}, nil
 }
@@ -158,5 +162,56 @@ func TestRouterModelNameLocalFallsBackToProviderDefault(t *testing.T) {
 	r := NewRouter("match", nil, local, "")
 	if got := r.ModelName(); got != "ollama-default-model" {
 		t.Errorf("ModelName() = %q, want ollama-default-model", got)
+	}
+}
+
+// 036 FR-012: the router stamps its task key onto every call, so the collector
+// can group by task rather than by serving deployment. Setting it here rather
+// than at each call site is what makes coverage complete by construction —
+// every task routed through a Router gets it, including ones added later.
+func TestRouterStampsTaskKey(t *testing.T) {
+	stub := &stubProvider{}
+	r := NewRouter("generation-summary", stub, nil, "")
+
+	if _, err := r.CompleteJSON(context.Background(), "p", nil); err != nil {
+		t.Fatalf("CompleteJSON: %v", err)
+	}
+	if got := stub.lastOpts.Task(); got != "generation-summary" {
+		t.Errorf("TaskKey = %q, want generation-summary", got)
+	}
+
+	if _, err := r.Complete(context.Background(), "p", nil); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if got := stub.lastOpts.Task(); got != "generation-summary" {
+		t.Errorf("TaskKey = %q, want generation-summary", got)
+	}
+}
+
+// An explicit TaskKey from the caller wins, matching how Model already behaves.
+func TestRouterDoesNotOverrideExplicitTaskKey(t *testing.T) {
+	stub := &stubProvider{}
+	r := NewRouter("generation-summary", stub, nil, "")
+
+	opts := &domain.CompleteOptions{TaskKey: "caller-supplied"}
+	if _, err := r.CompleteJSON(context.Background(), "p", opts); err != nil {
+		t.Fatalf("CompleteJSON: %v", err)
+	}
+	if got := stub.lastOpts.Task(); got != "caller-supplied" {
+		t.Errorf("TaskKey = %q, want caller-supplied", got)
+	}
+}
+
+// The caller's options must not be mutated — the router copies.
+func TestRouterDoesNotMutateCallerOptions(t *testing.T) {
+	stub := &stubProvider{}
+	r := NewRouter("match", stub, nil, "")
+
+	opts := &domain.CompleteOptions{}
+	if _, err := r.CompleteJSON(context.Background(), "p", opts); err != nil {
+		t.Fatalf("CompleteJSON: %v", err)
+	}
+	if opts.TaskKey != "" {
+		t.Errorf("caller's opts.TaskKey mutated to %q; router must copy", opts.TaskKey)
 	}
 }
