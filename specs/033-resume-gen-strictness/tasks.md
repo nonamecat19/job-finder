@@ -31,8 +31,8 @@ description: "Task list for resume generation strictness & model improvement"
 
 **Purpose**: No project initialization needed — this is an existing Go backend feature. The only setup is creating the feature branch and confirming the test baseline is green.
 
-- [ ] T001 Create feature branch `033-resume-gen-strictness` from `master` (per AGENTS.md branching rules — never commit to master)
-- [ ] T002 Run `make test-go` on `master` and record the baseline grounding test pass count, so post-feature regression is measurable
+- [X] T001 Create feature branch `033-resume-gen-strictness` from `master` (per AGENTS.md branching rules — never commit to master)
+- [X] T002 Run `make test-go` on `master` and record the baseline grounding test pass count, so post-feature regression is measurable
 
 ---
 
@@ -42,12 +42,12 @@ description: "Task list for resume generation strictness & model improvement"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Add `ResponseMode` enum and `ResponseMode` field to `CompleteOptions` in `apps/api/internal/platform/llm/domain/port.go` (zero value = `ResponseModeJSON`, preserving current behaviour). Contract C5.
-- [ ] T004 Upgrade `chatRequest.ResponseFormat` from `map[string]string` to a pointer-to-struct (`*responseFormat` with `Type` + optional `JSONSchema`) in `apps/api/internal/platform/llm/infrastructure/gateway/gateway.go`. Update `CompleteJSON` to build the format from `opts.ResponseMode`: `ResponseModeJSON` → `{"type":"json_object"}` (byte-identical to today), `ResponseModeStrict` → `{"type":"json_schema","json_schema":{...,"strict":true}}`. Contracts C5, C6.
-- [ ] T005 [P] Add unit test asserting `CompleteJSON` with `ResponseModeJSON` produces a byte-identical `response_format` to the current request shape, in `apps/api/internal/platform/llm/infrastructure/gateway/gateway_test.go`
-- [ ] T006 [P] Add unit test asserting `CompleteJSON` with `ResponseModeStrict` produces `response_format.type == "json_schema"` and `json_schema.strict == true`, in `apps/api/internal/platform/llm/infrastructure/gateway/gateway_test.go`
-- [ ] T007 Thread the JSON Schema from `CompleteStructured` (`schemaFor` in `port.go:84`) to the gateway adapter so `ResponseModeStrict` can attach it. Path: `CompleteStructured` sets `opts.ResponseMode = ResponseModeStrict` and attaches the schema string; the gateway parses it into `jsonSchema.Schema`. Contract C6.
-- [ ] T008 Run `make test-go` — foundational tests pass, no caller behaviour changed (every existing caller leaves `ResponseMode` at zero value = `ResponseModeJSON`)
+- [X] T003 Add `ResponseMode` enum and `ResponseMode` field to `CompleteOptions` in `apps/api/internal/platform/llm/domain/port.go` (zero value = `ResponseModeJSON`, preserving current behaviour). Contract C5.
+- [X] T004 Upgrade `chatRequest.ResponseFormat` from `map[string]string` to a pointer-to-struct (`*responseFormat` with `Type` + optional `JSONSchema`) in `apps/api/internal/platform/llm/infrastructure/gateway/gateway.go`. Update `CompleteJSON` to build the format from `opts.ResponseMode`: `ResponseModeJSON` → `{"type":"json_object"}` (byte-identical to today), `ResponseModeStrict` → `{"type":"json_schema","json_schema":{...,"strict":true}}`. Contracts C5, C6.
+- [X] T005 [P] Add unit test asserting `CompleteJSON` with `ResponseModeJSON` produces a byte-identical `response_format` to the current request shape, in `apps/api/internal/platform/llm/infrastructure/gateway/gateway_test.go`
+- [X] T006 [P] Add unit test asserting `CompleteJSON` with `ResponseModeStrict` produces `response_format.type == "json_schema"` and `json_schema.strict == true`, in `apps/api/internal/platform/llm/infrastructure/gateway/gateway_test.go`
+- [X] T007 Thread the JSON Schema from `CompleteStructured` (`schemaFor` in `port.go:84`) to the gateway adapter so `ResponseModeStrict` can attach it. Path: `CompleteStructured` sets `opts.ResponseMode = ResponseModeStrict` and attaches the schema string; the gateway parses it into `jsonSchema.Schema`. Contract C6.
+- [X] T008 Run `make test-go` — foundational tests pass, no caller behaviour changed (every existing caller leaves `ResponseMode` at zero value = `ResponseModeJSON`)
 
 **Checkpoint**: Foundation ready — `ResponseMode` is opt-in, existing callers unchanged, strict schema path is wired through the gateway.
 
@@ -63,20 +63,20 @@ description: "Task list for resume generation strictness & model improvement"
 
 > Write these FIRST, ensure they FAIL before implementation.
 
-- [ ] T009 [P] [US1] Add unit test in `apps/api/internal/generation/domain/rendercv_grounding_test.go`: a merged resume with a non-master skill token at `GroundingModerate` produces a `skill "..." not in master profile` violation. Today this passes (no violation) — the test must assert it fails first.
-- [ ] T010 [P] [US1] Add unit test in `apps/api/internal/generation/domain/rendercv_grounding_test.go`: a merged experience highlight with <50% word overlap against every master bullet for that company produces a `experience "..." highlight not grounded in master` violation at all three grounding levels.
-- [ ] T011 [P] [US1] Add unit test in `apps/api/internal/generation/domain/rendercv_structure_test.go`: `StripUngroundedHighlights` replaces a drifted highlight with the highest-overlap master bullet and leaves grounded highlights untouched.
+- [X] T009 [P] [US1] Add unit test in `apps/api/internal/generation/domain/rendercv_grounding_test.go`: a merged resume with a non-master skill token at `GroundingModerate` produces a `skill "..." not in master profile` violation. Today this passes (no violation) — the test must assert it fails first.
+- [X] T010 [P] [US1] Add unit test in `apps/api/internal/generation/domain/rendercv_grounding_test.go`: a merged experience highlight with <50% word overlap against every master bullet for that company produces a `experience "..." highlight not grounded in master` violation at all three grounding levels.
+- [X] T011 [P] [US1] Add unit test in `apps/api/internal/generation/domain/rendercv_structure_test.go`: `StripUngroundedHighlights` replaces a drifted highlight with the highest-overlap master bullet and leaves grounded highlights untouched.
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Extend `VerifyRendercvGrounding` in `apps/api/internal/generation/domain/rendercv_grounding.go` to check skill tokens at `GroundingModerate` and `GroundingAggressive`, not only `GroundingStrict`. Add the `analysis VacancyAnalysis` parameter (contract C1). Implement `AdjacentSkillAllowed(master, token, analysis)` for the moderate adjacency allowance (research.md R1, data-model.md §AdjacentSkillAllowed). Strict path unchanged (master tokens only, `analysis` ignored).
-- [ ] T013 [US1] Add highlight-drift detection to `VerifyRendercvGrounding` (same file): for every experience highlight, run `lcsCovered` against the master's highlights for that company at all grounding levels. Emit `experience "<company>" highlight not grounded in master: "<truncated>"`. Contract C1.
-- [ ] T014 [US1] Add `StripUngroundedHighlights(master, merged)` in `apps/api/internal/generation/domain/rendercv_structure.go`: for each highlight that fails `lcsCovered`, replace it with the highest-overlap master bullet for that company. Returns a new `RendercvMaster`. Contract C3. Add `StructureHighlightDrift` to the `StructureKind` constants.
-- [ ] T015 [US1] Wire `DropUngroundedSkillTokens(master, merged)` into the primary tailoring pass in `apps/api/internal/generation/application/service.go` — call it after `MergeTailored` + `ApplyHardLimits` at line ~232, before `VerifyRendercvGrounding`. Contract C2.
-- [ ] T016 [US1] Update the `VerifyRendercvGrounding` call site in `service.go` (~line 238) to pass `analysis` (the new parameter from T012).
-- [ ] T017 [US1] Extend `fixStructureIntegrity` in `service.go` (~line 419) to also call the highlight-drift check after the years-assertion check: verify → one re-prompt via `retailorForStructure` → verify → `StripUngroundedHighlights` if still drifted. Log each intervention on the activity row via `rec.Step`. Contract C3, FR-003, FR-010.
-- [ ] T018 [US1] Run `DropUngroundedSkillTokens` + the extended `VerifyRendercvGrounding` after the expand and condense merges in `service.go` (~lines 359, 398) so the page-fitting passes have the same strictness as the primary pass. FR-009.
-- [ ] T019 [US1] Run `make test-go` — all US1 tests pass, no regression in existing grounding/structure tests
+- [X] T012 [US1] Extend `VerifyRendercvGrounding` in `apps/api/internal/generation/domain/rendercv_grounding.go` to check skill tokens at `GroundingModerate` and `GroundingAggressive`, not only `GroundingStrict`. Add the `analysis VacancyAnalysis` parameter (contract C1). Implement `AdjacentSkillAllowed(master, token, analysis)` for the moderate adjacency allowance (research.md R1, data-model.md §AdjacentSkillAllowed). Strict path unchanged (master tokens only, `analysis` ignored).
+- [X] T013 [US1] Add highlight-drift detection to `VerifyRendercvGrounding` (same file): for every experience highlight, run `lcsCovered` against the master's highlights for that company at all grounding levels. Emit `experience "<company>" highlight not grounded in master: "<truncated>"`. Contract C1.
+- [X] T014 [US1] Add `StripUngroundedHighlights(master, merged)` in `apps/api/internal/generation/domain/rendercv_structure.go`: for each highlight that fails `lcsCovered`, replace it with the highest-overlap master bullet for that company. Returns a new `RendercvMaster`. Contract C3. Add `StructureHighlightDrift` to the `StructureKind` constants.
+- [X] T015 [US1] Wire `DropUngroundedSkillTokens(master, merged)` into the primary tailoring pass in `apps/api/internal/generation/application/service.go` — call it after `MergeTailored` + `ApplyHardLimits` at line ~232, before `VerifyRendercvGrounding`. Contract C2.
+- [X] T016 [US1] Update the `VerifyRendercvGrounding` call site in `service.go` (~line 238) to pass `analysis` (the new parameter from T012).
+- [X] T017 [US1] Extend `fixStructureIntegrity` in `service.go` (~line 419) to also call the highlight-drift check after the years-assertion check: verify → one re-prompt via `retailorForStructure` → verify → `StripUngroundedHighlights` if still drifted. Log each intervention on the activity row via `rec.Step`. Contract C3, FR-003, FR-010.
+- [X] T018 [US1] Run `DropUngroundedSkillTokens` + the extended `VerifyRendercvGrounding` after the expand and condense merges in `service.go` (~lines 359, 398) so the page-fitting passes have the same strictness as the primary pass. FR-009.
+- [X] T019 [US1] Run `make test-go` — all US1 tests pass, no regression in existing grounding/structure tests
 
 **Checkpoint**: User Story 1 is fully functional. A tailoring run at the default level now enforces skill tokens and highlight grounding end-to-end.
 
@@ -90,16 +90,16 @@ description: "Task list for resume generation strictness & model improvement"
 
 ### Tests for User Story 2
 
-- [ ] T020 [P] [US2] Add unit test in `apps/api/internal/generation/application/rendercv_llm_test.go`: `buildSelectPrompt` output contains no occurrence of `sectionsToDrop`, `ExperienceOrder`, or `Drop` as a field reference.
-- [ ] T021 [P] [US2] Add unit test in `apps/api/internal/platform/llm/infrastructure/gateway/gateway_test.go`: `CompleteJSON` with `ResponseModeStrict` sends a request whose `response_format.json_schema.schema` has `additionalProperties: false`.
+- [X] T020 [P] [US2] Add unit test in `apps/api/internal/generation/application/rendercv_llm_test.go`: `buildSelectPrompt` output contains no occurrence of `sectionsToDrop`, `ExperienceOrder`, or `Drop` as a field reference.
+- [X] T021 [P] [US2] Add unit test in `apps/api/internal/platform/llm/infrastructure/gateway/gateway_test.go`: `CompleteJSON` with `ResponseModeStrict` sends a request whose `response_format.json_schema.schema` has `additionalProperties: false`.
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] Clean `buildSelectPrompt` in `apps/api/internal/generation/application/rendercv_llm.go:109-218`: remove the `Do not populate sectionsToDrop.` line (line 173). Audit all other prompt builders (`buildExpandPrompt`, `buildCondensePrompt`) for references to removed `TailoredSections` fields and remove any found. Contract C4.
-- [ ] T023 [US2] Set `ResponseMode: ResponseModeStrict` on every generation structured call in `apps/api/internal/generation/application/rendercv_llm.go`: `selectAndTailor` (line 222), `retailorForStructure` (line 236), `expandContent` (line 244), `condenseContent` (line 321). Leave `analyzeVacancy` (line 55) on the default `ResponseModeJSON` for now — it is not the quality-critical path and its chain is not yet verified for `json_schema` (out of scope per research.md R4).
-- [ ] T024 [US2] Set `MaxTokens` to an explicit cap (~4096, tuned to the largest `TailoredSections` payload) on every generation structured call in `rendercv_llm.go` (same four call sites as T023). Also set a smaller cap on `analyzeVacancy` and `writeCoverLetter` in `service.go`. Contract C7, FR-012.
-- [ ] T025 [US2] Verify the `jsonschema.Reflector` config in `port.go:84-97` produces `additionalProperties: false` in the generated schema. If the `invopop/jsonschema` default does not, set the reflector option or post-process the schema map before sending. Contract C6.
-- [ ] T026 [US2] Run `make test-go` — all US2 tests pass; verify existing `CompleteStructured` callers (match, rephrase, ghost, default) are unchanged (they leave `ResponseMode` at zero value)
+- [X] T022 [US2] Clean `buildSelectPrompt` in `apps/api/internal/generation/application/rendercv_llm.go:109-218`: remove the `Do not populate sectionsToDrop.` line (line 173). Audit all other prompt builders (`buildExpandPrompt`, `buildCondensePrompt`) for references to removed `TailoredSections` fields and remove any found. Contract C4.
+- [X] T023 [US2] Set `ResponseMode: ResponseModeStrict` on every generation structured call in `apps/api/internal/generation/application/rendercv_llm.go`: `selectAndTailor` (line 222), `retailorForStructure` (line 236), `expandContent` (line 244), `condenseContent` (line 321). Leave `analyzeVacancy` (line 55) on the default `ResponseModeJSON` for now — it is not the quality-critical path and its chain is not yet verified for `json_schema` (out of scope per research.md R4).
+- [X] T024 [US2] Set `MaxTokens` to an explicit cap (~4096, tuned to the largest `TailoredSections` payload) on every generation structured call in `rendercv_llm.go` (same four call sites as T023). Also set a smaller cap on `analyzeVacancy` and `writeCoverLetter` in `service.go`. Contract C7, FR-012.
+- [X] T025 [US2] Verify the `jsonschema.Reflector` config in `port.go:84-97` produces `additionalProperties: false` in the generated schema. If the `invopop/jsonschema` default does not, set the reflector option or post-process the schema map before sending. Contract C6.
+- [X] T026 [US2] Run `make test-go` — all US2 tests pass; verify existing `CompleteStructured` callers (match, rephrase, ghost, default) are unchanged (they leave `ResponseMode` at zero value)
 
 **Checkpoint**: User Story 2 is functional. The generation task sends a strict schema; the prompt matches the data contract. Non-generation tasks are byte-identical to before.
 
@@ -113,7 +113,7 @@ description: "Task list for resume generation strictness & model improvement"
 
 ### Tests for User Story 3
 
-- [ ] T027 [P] [US3] Add a benchmark fixture in `apps/api/internal/generation/application/benchmark_test.go`: a Go test that runs `tailorRendercvResume` (or the grounding loop directly) for each model in the generation chain against a fixed set of master profiles × vacancies, recording grounding violations, structural violations, JSON-parse failures, and wall-clock time per model. This is a manual/long-running test (guard with `testing.Short()` skip or a build tag) — it calls live providers.
+- [X] T027 [P] [US3] Add a benchmark fixture in `apps/api/internal/generation/application/benchmark_test.go`: a Go test that runs `tailorRendercvResume` (or the grounding loop directly) for each model in the generation chain against a fixed set of master profiles × vacancies, recording grounding violations, structural violations, JSON-parse failures, and wall-clock time per model. This is a manual/long-running test (guard with `testing.Short()` skip or a build tag) — it calls live providers.
 
 ### Implementation for User Story 3
 
@@ -131,12 +131,12 @@ description: "Task list for resume generation strictness & model improvement"
 
 **Purpose**: Cross-story validation, docs, and the merge gate.
 
-- [ ] T033 [P] Run `make test-go` — full Go suite green
-- [ ] T034 [P] Run `make lint-go` — golangci-lint clean on touched packages (`generation`, `platform/llm`)
+- [X] T033 [P] Run `make test-go` — full Go suite green
+- [X] T034 [P] Run `make lint-go` — golangci-lint clean on touched packages (`generation`, `platform/llm`)
 - [ ] T035 Run `make test-lint` — the merge gate (lint-go + lint-web + test-go + test-react). Must pass before PR.
 - [ ] T036 [P] Run the full `quickstart.md` validation (all 7 scenarios) end-to-end against the live stack
-- [ ] T037 Verify no `make tygo-generate` is needed — confirm `packages/shared/src/generated.ts` is unchanged (contract C10, no DTO changes)
-- [ ] T038 Commit on the feature branch (conventional commit format, per AGENTS.md). Do NOT push to master — open a PR.
+- [X] T037 Verify no `make tygo-generate` is needed — confirm `packages/shared/src/generated.ts` is unchanged (contract C10, no DTO changes)
+- [X] T038 Commit on the feature branch (conventional commit format, per AGENTS.md). Do NOT push to master — open a PR.
 
 ---
 
@@ -235,8 +235,8 @@ Developer B (US2): rendercv_llm.go prompt cleanup + ResponseMode → gateway.go 
 
 **Purpose**: Remaining work found by assessing the codebase against spec.md, plan.md, and the existing tasks. These close gaps the original task generation missed.
 
-- [ ] T039 [US1] Rewrite the assertion in `apps/api/internal/generation/domain/rendercv_test.go:394-413` (`TestVerifyRendercvGrounding_StrictRejectsUnlistedSkill`) so the moderate-grounding branch asserts moderate now rejects the unlisted skill token (the old `if len(violationsModerate) != 0 { t.Fatalf("moderate grounding should not check skill tokens"...) }` assertion is inverted by T012). Also add a `VacancyAnalysis{}` argument to every `VerifyRendercvGrounding` call site in that test function. Per FR-001, T012 (missing)
-- [ ] T040 [US1] Update all remaining existing test call sites of `VerifyRendercvGrounding` to the new 4-argument signature `(master, merged, level, analysis)`: `apps/api/internal/generation/domain/rendercv_test.go:388,404,409,424` and `apps/api/internal/generation/domain/rendercv_grounding_test.go:41,54,68,80`. Pass `VacancyAnalysis{}` at non-moderate call sites; at moderate call sites, pass a `VacancyAnalysis` appropriate to the adjacency under test. Per T012 (missing)
-- [ ] T041 [US1] Log skill-token drops on the primary pass in `apps/api/internal/generation/application/service.go`: after `domain.DropUngroundedSkillTokens(master, merged)` (T015), emit a `rec.Step(ctx, "grounding: ungrounded skill tokens dropped", map[string]any{"tokens": [...]})` recording which tokens were removed. `DropUngroundedSkillTokens` mutates in place and is silent — capture the removed tokens before the call and log the diff. Per FR-010 (partial)
-- [ ] T042 [US2] Add runtime fallback to `ResponseModeJSON` in `apps/api/internal/platform/llm/infrastructure/gateway/gateway.go`: when a `ResponseModeStrict` call receives a 400/422 indicating the provider does not support `json_schema` (or that `response_format` was dropped), retry the same call once with `response_format: {"type":"json_object"}` and rely on the existing JSON-parse retry loop in `CompleteStructured`. This prevents the 030-C5 capability trap at runtime and satisfies quickstart Scenario 5. Per FR-006, US2/AC3 (missing)
+- [X] T039 [US1] Rewrite the assertion in `apps/api/internal/generation/domain/rendercv_test.go:394-413` (`TestVerifyRendercvGrounding_StrictRejectsUnlistedSkill`) so the moderate-grounding branch asserts moderate now rejects the unlisted skill token (the old `if len(violationsModerate) != 0 { t.Fatalf("moderate grounding should not check skill tokens"...) }` assertion is inverted by T012). Also add a `VacancyAnalysis{}` argument to every `VerifyRendercvGrounding` call site in that test function. Per FR-001, T012 (missing)
+- [X] T040 [US1] Update all remaining existing test call sites of `VerifyRendercvGrounding` to the new 4-argument signature `(master, merged, level, analysis)`: `apps/api/internal/generation/domain/rendercv_test.go:388,404,409,424` and `apps/api/internal/generation/domain/rendercv_grounding_test.go:41,54,68,80`. Pass `VacancyAnalysis{}` at non-moderate call sites; at moderate call sites, pass a `VacancyAnalysis` appropriate to the adjacency under test. Per T012 (missing)
+- [X] T041 [US1] Log skill-token drops on the primary pass in `apps/api/internal/generation/application/service.go`: after `domain.DropUngroundedSkillTokens(master, merged)` (T015), emit a `rec.Step(ctx, "grounding: ungrounded skill tokens dropped", map[string]any{"tokens": [...]})` recording which tokens were removed. `DropUngroundedSkillTokens` mutates in place and is silent — capture the removed tokens before the call and log the diff. Per FR-010 (partial)
+- [X] T042 [US2] Add runtime fallback to `ResponseModeJSON` in `apps/api/internal/platform/llm/infrastructure/gateway/gateway.go`: when a `ResponseModeStrict` call receives a 400/422 indicating the provider does not support `json_schema` (or that `response_format` was dropped), retry the same call once with `response_format: {"type":"json_object"}` and rely on the existing JSON-parse retry loop in `CompleteStructured`. This prevents the 030-C5 capability trap at runtime and satisfies quickstart Scenario 5. Per FR-006, US2/AC3 (missing)
 - [ ] T043 [US3] Run the benchmark fixture (T027) against the pre-feature `master` branch to record the "before" grounding/structural/JSON-parse violation rate per model, so the post-feature run can compute the ≥50% drop required by SC-001. Record the before-numbers alongside the T028 after-numbers in the `gateway/config.yaml` selection-rationale comment block. Per SC-001 (missing)
