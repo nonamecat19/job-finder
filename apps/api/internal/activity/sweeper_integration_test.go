@@ -32,9 +32,13 @@ func insertRun(ctx context.Context, t *testing.T, testDB *db.DB, state string, h
 	if err != nil {
 		t.Fatalf("insert activity run: %v", err)
 	}
+	// heartbeatAt is `timestamp without time zone` and production writes it in
+	// UTC (dbutil.TimestampAt). Storing a local wall clock here would make the
+	// row's staleness depend on the machine's offset — east of UTC a "stale"
+	// heartbeat lands in the future and the sweeper correctly leaves it alone.
 	var hb pgtype.Timestamp
 	if heartbeat != nil {
-		hb = pgtype.Timestamp{Time: *heartbeat, Valid: true}
+		hb = pgtype.Timestamp{Time: heartbeat.UTC(), Valid: true}
 	}
 	_, err = testDB.Pool.Exec(ctx, `UPDATE "ActivityRun" SET "state" = $2, "heartbeatAt" = $3 WHERE "id" = $1`, row.ID, state, hb)
 	if err != nil {
