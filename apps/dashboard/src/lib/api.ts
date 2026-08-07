@@ -137,10 +137,12 @@ export const api = {
       niceToHave?: string[];
       experienceLevel?: string;
     }) =>
-      request<{ resume: GeneratedDocumentDto; coverLetter: GeneratedDocumentDto }>('/documents/tailor', {
+      request<{ resume: GeneratedDocumentDto; coverLetter: GeneratedDocumentDto | null }>('/documents/tailor', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+    coverLetter: (resumeId: string) =>
+      request<GeneratedDocumentDto>(`/documents/${resumeId}/cover-letter`, { method: 'POST' }),
     listAdHoc: () => request<GeneratedDocumentDto[]>('/documents/ad-hoc'),
   },
   profiles: {

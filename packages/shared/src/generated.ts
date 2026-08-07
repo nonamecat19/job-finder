@@ -165,6 +165,16 @@ export interface GeneratedDocumentDto {
   title?: string;
   vacancy?: string;
   createdAt: string;
+  /**
+   * Which model wrote the summary, and whether it was the configured one.
+   * SummarySubstituted is what the review surface shows the user: a summary
+   * written by a fallback is still a summary, but they should know (035
+   * FR-012).
+   */
+  summaryModel?: string;
+  summarySubstituted: boolean;
+  selectionEscalated: boolean;
+  stageCostUsd?: number /* float64 */;
 }
 export interface DocumentStatusDto {
   id: string;

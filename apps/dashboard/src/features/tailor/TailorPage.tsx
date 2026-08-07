@@ -1,4 +1,4 @@
-import { FileDown } from 'lucide-react';
+import { AlertTriangle, FileDown } from 'lucide-react';
 import { useState } from 'react';
 import type { GeneratedDocumentDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
@@ -6,7 +6,12 @@ import { DashboardGrid, Tile } from '../../components/layout';
 import { Button, EmptyState, Field, Input, Select, Spinner, Surface, Textarea } from '../../components/ui';
 import { useToast } from '../../components/toast';
 import { api } from '../../lib/api';
-import { useAdHocDocuments, useSaveAdHocDocument, useTailorDocuments } from './hooks';
+import {
+  useAdHocDocuments,
+  useGenerateCoverLetter,
+  useSaveAdHocDocument,
+  useTailorDocuments,
+} from './hooks';
 
 const GROUNDING_LEVELS = ['strict', 'moderate', 'aggressive'] as const;
 
@@ -15,13 +20,15 @@ export default function TailorPage() {
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
   const [groundingLevel, setGroundingLevel] = useState<(typeof GROUNDING_LEVELS)[number]>('moderate');
-  const [result, setResult] = useState<{ resume: GeneratedDocumentDto; coverLetter: GeneratedDocumentDto } | null>(
-    null,
-  );
+  const [result, setResult] = useState<{
+    resume: GeneratedDocumentDto;
+    coverLetter: GeneratedDocumentDto | null;
+  } | null>(null);
   const [editingDoc, setEditingDoc] = useState<{ id: string; text: string } | null>(null);
 
   const { data: history } = useAdHocDocuments();
   const tailor = useTailorDocuments();
+  const coverLetter = useGenerateCoverLetter();
   const saveLetter = useSaveAdHocDocument(() => setEditingDoc(null));
   const { success } = useToast();
 
@@ -31,16 +38,26 @@ export default function TailorPage() {
       { vacancy, company: company || undefined, title: title || undefined, groundingLevel },
       {
         onSuccess: (data) => {
-          setResult(data);
-          success('Documents ready', 'Tailored resume and cover letter generated.');
+          setResult({ resume: data.resume, coverLetter: data.coverLetter ?? null });
+          success('Resume ready', 'Tailored resume generated.');
         },
       },
     );
   };
 
+  const requestCoverLetter = () => {
+    if (!result) return;
+    coverLetter.mutate(result.resume.id, {
+      onSuccess: (doc) => {
+        setResult((prev) => (prev ? { ...prev, coverLetter: doc } : prev));
+        success('Cover letter ready', 'Cover letter generated for this resume.');
+      },
+    });
+  };
+
   return (
     <div>
-      <PageHeader title="Tailor" description="Paste a vacancy to generate a tailored resume and cover letter." />
+      <PageHeader title="Tailor" description="Paste a vacancy to generate a tailored resume." />
 
       <DashboardGrid>
         <Tile span="full" title="Resume Tailor">
@@ -74,9 +91,9 @@ export default function TailorPage() {
         </Field>
         <div className="mt-3 flex items-center gap-2">
           <Button disabled={!vacancy.trim() || tailor.isPending} onClick={submit}>
-            Generate resume &amp; cover letter
+            Generate resume
           </Button>
-          {tailor.isPending ? <Spinner label="tailoring resume + writing cover letter… (local LLM, be patient)" /> : null}
+          {tailor.isPending ? <Spinner label="tailoring resume… (local LLM, be patient)" /> : null}
         </div>
         {tailor.isError ? <p className="mt-2 text-sm text-danger">{(tailor.error as Error).message}</p> : null}
       </Surface>
@@ -84,8 +101,29 @@ export default function TailorPage() {
       {result ? (
         <Surface>
           <SectionTitle>Result</SectionTitle>
+          {result.resume.summarySubstituted ? (
+            <SummarySubstitutionNotice model={result.resume.summaryModel} />
+          ) : null}
           <DocumentRow doc={result.resume} />
-          <DocumentRow doc={result.coverLetter} editingDoc={editingDoc} onEdit={setEditingDoc} onCancelEdit={() => setEditingDoc(null)} onSave={(doc) => saveLetter.mutate(doc)} />
+          {result.coverLetter ? (
+            <DocumentRow
+              doc={result.coverLetter}
+              editingDoc={editingDoc}
+              onEdit={setEditingDoc}
+              onCancelEdit={() => setEditingDoc(null)}
+              onSave={(doc) => saveLetter.mutate(doc)}
+            />
+          ) : (
+            <div className="mt-3 flex items-center gap-2">
+              <Button variant="secondary" disabled={coverLetter.isPending} onClick={requestCoverLetter}>
+                Generate cover letter
+              </Button>
+              {coverLetter.isPending ? <Spinner label="writing cover letter…" /> : null}
+            </div>
+          )}
+          {coverLetter.isError ? (
+            <p className="mt-2 text-sm text-danger">{(coverLetter.error as Error).message}</p>
+          ) : null}
         </Surface>
       ) : null}
 
@@ -118,6 +156,24 @@ export default function TailorPage() {
 
         </Tile>
       </DashboardGrid>
+    </div>
+  );
+}
+
+function SummarySubstitutionNotice({ model }: { model?: string }) {
+  return (
+    <div
+      className="mb-3 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm text-warning"
+      role="status"
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <div>
+        <span className="font-semibold">Summary written by a fallback model</span>
+        <p className="mt-1">
+          The configured summary model was unavailable, so the professional summary was written by
+          {model ? <> <b>{model}</b></> : ' a fallback'} instead. Review it before you send this resume.
+        </p>
+      </div>
     </div>
   );
 }
