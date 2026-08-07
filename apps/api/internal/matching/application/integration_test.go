@@ -24,6 +24,14 @@ func (noopLLM) Complete(ctx context.Context, prompt string, opts *llm.CompleteOp
 func (noopLLM) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
 	return "", nil
 }
+
+// CompleteChat satisfies the 037 Provider interface. This fake answers nothing
+// on every path, which is the point: matching's integration test asserts the
+// non-model paths.
+func (noopLLM) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
+	return llm.ChatResult{}, nil
+}
+
 func (noopLLM) Embed(ctx context.Context, text string) ([]float32, error) {
 	return nil, nil
 }

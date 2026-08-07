@@ -45,6 +45,33 @@ func (g *Provider) ModelName() string { return "gateway" }
 type chatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+	// Tool-call plumbing (037). Every field is omitempty so a conversation
+	// with no tools in it produces exactly the pre-037 message object.
+	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+	Name       string         `json:"name,omitempty"`
+}
+
+// wireToolCall is the OpenAI-compatible encoding of a tool call. Note
+// Function.Arguments is a **string** containing JSON, not an object — the
+// encoding that makes C2-12's decoding step necessary in the other direction.
+type wireToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+// wireTool is a tool declaration on the request.
+type wireTool struct {
+	Type     string `json:"type"`
+	Function struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description"`
+		Parameters  map[string]any `json:"parameters,omitempty"`
+	} `json:"function"`
 }
 
 type chatRequest struct {
@@ -54,6 +81,10 @@ type chatRequest struct {
 	Temperature         float64         `json:"temperature"`
 	MaxCompletionTokens *int            `json:"max_completion_tokens,omitempty"`
 	ResponseFormat      *responseFormat `json:"response_format,omitempty"`
+	// Tools and ToolChoice are absent — not null, not [] — when no tools are
+	// declared, so every pre-037 request stays byte-identical (C2-1).
+	Tools      []wireTool `json:"tools,omitempty"`
+	ToolChoice string     `json:"tool_choice,omitempty"`
 	// Metadata carries observability grouping keys to the proxy's collector
 	// callbacks (036). omitempty on a nil map keeps the body byte-identical to
 	// the pre-036 request when nothing is set — absent, not null, not {}.
@@ -115,14 +146,23 @@ type jsonSchema struct {
 	Strict bool           `json:"strict"`
 }
 
+// chatChoice and chatChoiceMessage are named rather than anonymous since 037:
+// once the response carries tool calls and a finish reason, an anonymous struct
+// has to be restated in full at every construction site, including tests.
+type chatChoiceMessage struct {
+	Content   string         `json:"content"`
+	ToolCalls []wireToolCall `json:"tool_calls"`
+}
+
+type chatChoice struct {
+	Message      chatChoiceMessage `json:"message"`
+	FinishReason string            `json:"finish_reason"`
+}
+
 type chatResponse struct {
-	Model   string `json:"model"`
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-	Usage struct {
+	Model   string       `json:"model"`
+	Choices []chatChoice `json:"choices"`
+	Usage   struct {
 		Cost             float64 `json:"cost"`
 		PromptTokens     int     `json:"prompt_tokens"`
 		CompletionTokens int     `json:"completion_tokens"`
@@ -162,50 +202,218 @@ func servedModel(headers http.Header, body chatResponse) string {
 	return "unknown"
 }
 
-func (g *Provider) chat(ctx context.Context, req chatRequest) (string, error) {
+// send performs one request and returns the parsed response.
+//
+// This is the lower half of what used to be `chat()`. Everything that must
+// happen on *every* path lives here — error classification, the served-model
+// log line, and both capture hooks — so that no caller can reach the proxy
+// without them. That matters more than it looks: the strict-schema retry calls
+// this twice for one logical CompleteJSON, and features 035 and 036 depend on
+// seeing both reports.
+func (g *Provider) send(ctx context.Context, req chatRequest) (chatResponse, error) {
 	requestedGroup := req.Model
 	start := time.Now()
 
+	var parsed chatResponse
 	body, err := json.Marshal(req)
 	if err != nil {
-		return "", err
+		return parsed, err
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return parsed, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+g.apiKey)
 	res, err := g.http.Do(httpReq)
 	if err != nil {
 		g.logServed(requestedGroup, "unknown", time.Since(start), "error", "")
-		return "", fmt.Errorf("%w: gateway: request failed: %s", shared.ErrProviderUnavailable, err)
+		return parsed, fmt.Errorf("%w: gateway: request failed: %s", shared.ErrProviderUnavailable, err)
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		g.logServed(requestedGroup, "unknown", time.Since(start), "error", "")
-		return "", fmt.Errorf("%w: gateway: read response: %s", shared.ErrProviderUnavailable, err)
+		return parsed, fmt.Errorf("%w: gateway: read response: %s", shared.ErrProviderUnavailable, err)
 	}
 	modelID := res.Header.Get("x-litellm-model-id")
 	if res.StatusCode >= 400 {
 		g.logServed(requestedGroup, servedModel(res.Header, chatResponse{}), time.Since(start), "error", modelID)
-		return "", shared.ClassifyProviderError("gateway", res.StatusCode, data)
+		return parsed, shared.ClassifyProviderError("gateway", res.StatusCode, data)
 	}
-	var parsed chatResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		g.logServed(requestedGroup, servedModel(res.Header, parsed), time.Since(start), "error", modelID)
-		return "", fmt.Errorf("%w: gateway: invalid response: %s", shared.ErrInvalidResponse, err)
+		return parsed, fmt.Errorf("%w: gateway: invalid response: %s", shared.ErrInvalidResponse, err)
 	}
 	if len(parsed.Choices) == 0 {
 		g.logServed(requestedGroup, servedModel(res.Header, parsed), time.Since(start), "error", modelID)
-		return "", fmt.Errorf("%w: gateway: no choices returned", shared.ErrInvalidResponse)
+		return parsed, fmt.Errorf("%w: gateway: no choices returned", shared.ErrInvalidResponse)
 	}
 	served := servedModel(res.Header, parsed)
 	g.logServed(requestedGroup, served, time.Since(start), "ok", modelID)
 	domain.ReportServedModel(ctx, served)
 	domain.ReportUsage(ctx, usageFrom(res.Header, parsed))
-	return parsed.Choices[0].Message.Content, nil
+	return parsed, nil
+}
+
+// There is deliberately no `chat() (string, error)` wrapper left here. 037
+// split it into send() plus CompleteChat, and Complete/CompleteJSON became
+// shims onto CompleteChat rather than onto a second content-only path — so a
+// wrapper would be a route to the proxy that skips the tool, response_format
+// and retry handling every caller now goes through.
+
+// decodeArguments turns the wire encoding of tool-call arguments into the
+// object the registry validates.
+//
+// The wire form is a JSON *string containing JSON*. Left alone it unmarshals to
+// a quoted string, and validating a quoted string against an object schema
+// refuses every well-formed call — a false refusal that looks exactly like the
+// refusal path working correctly (FR-009a, C2-12).
+//
+// When unquoting fails, the raw bytes are returned unchanged: genuinely
+// malformed arguments must still reach the refusal path rather than being
+// smoothed over here.
+func decodeArguments(raw string) json.RawMessage {
+	var inner string
+	if err := json.Unmarshal([]byte(raw), &inner); err == nil {
+		return json.RawMessage(inner)
+	}
+	return json.RawMessage(raw)
+}
+
+func toolCallsFrom(wire []wireToolCall) []domain.ToolCall {
+	if len(wire) == 0 {
+		return nil
+	}
+	out := make([]domain.ToolCall, 0, len(wire))
+	for _, w := range wire {
+		out = append(out, domain.ToolCall{
+			ID:   w.ID,
+			Name: w.Function.Name,
+			// The provider-assigned id is preserved verbatim: it is what the
+			// tool message carrying the result must quote back (C1-7).
+			Arguments: decodeArguments(w.Function.Arguments),
+		})
+	}
+	return out
+}
+
+func wireMessages(msgs []domain.Message) []chatMessage {
+	out := make([]chatMessage, 0, len(msgs))
+	for _, m := range msgs {
+		wm := chatMessage{
+			Role:       m.Role,
+			Content:    m.Content,
+			ToolCallID: m.ToolCallID,
+			Name:       m.Name,
+		}
+		for _, tc := range m.ToolCalls {
+			var w wireToolCall
+			w.ID = tc.ID
+			w.Type = "function"
+			w.Function.Name = tc.Name
+			w.Function.Arguments = string(tc.Arguments)
+			wm.ToolCalls = append(wm.ToolCalls, w)
+		}
+		out = append(out, wm)
+	}
+	return out
+}
+
+func wireTools(tools []domain.ToolDef) []wireTool {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]wireTool, 0, len(tools))
+	for _, t := range tools {
+		var w wireTool
+		w.Type = "function"
+		w.Function.Name = t.Name
+		w.Function.Description = t.Description
+		// The schema is already the strict dialect the structured path
+		// produces; it is unmarshalled rather than embedded as a string
+		// because `parameters` is an object on the wire.
+		var params map[string]any
+		if err := json.Unmarshal([]byte(t.ArgsSchema), &params); err == nil {
+			w.Function.Parameters = params
+		}
+		out = append(out, w)
+	}
+	return out
+}
+
+// CompleteChat is the single implementation every entry point now goes through.
+//
+// Complete and CompleteJSON are shims onto it, which is why the JSON-output and
+// strict-schema handling lives here rather than in CompleteJSON: the structured
+// terminal of a tool exchange needs exactly the same treatment, and two copies
+// of this logic would drift the way two schema generators would.
+func (g *Provider) CompleteChat(ctx context.Context, msgs []domain.Message, opts *domain.CompleteOptions) (domain.ChatResult, error) {
+	req := chatRequest{
+		Model:       opts.ModelOr(g.ModelName()),
+		Stream:      false,
+		Messages:    wireMessages(msgs),
+		Temperature: opts.Temp(0.3),
+	}
+	if opts != nil && opts.MaxTokens != nil {
+		req.MaxCompletionTokens = opts.MaxTokens
+	}
+	req.Metadata = observabilityMetadata(ctx, opts)
+	if opts != nil {
+		req.Tools = wireTools(opts.Tools)
+		if len(req.Tools) > 0 {
+			req.ToolChoice = opts.ToolChoice
+		}
+	}
+
+	strictMode := false
+	if opts != nil && opts.JSONOutput {
+		strictMode = opts.ResponseMode == domain.ResponseModeStrict && opts.JSONSchema != ""
+		if strictMode {
+			var schemaMap map[string]any
+			if err := json.Unmarshal([]byte(opts.JSONSchema), &schemaMap); err == nil {
+				req.ResponseFormat = &responseFormat{
+					Type: "json_schema",
+					JSONSchema: &jsonSchema{
+						Name:   "tailored_output",
+						Schema: schemaMap,
+						Strict: true,
+					},
+				}
+			} else {
+				// Schema parse failure — fall back to json_object so the call
+				// still goes through with the prompt-appended schema text. The
+				// retry below is skipped in this case: there is nothing to fall
+				// back *from*, so repeating the request would repeat an
+				// identical failure.
+				strictMode = false
+				req.ResponseFormat = &responseFormat{Type: "json_object"}
+			}
+		} else {
+			req.ResponseFormat = &responseFormat{Type: "json_object"}
+		}
+	}
+
+	parsed, err := g.send(ctx, req)
+	if err != nil && strictMode && isResponseFormatRejection(err) {
+		// 033 FR-006: the provider rejected the strict schema — often a sign
+		// response_format was unsupported or dropped — so retry once in
+		// json_object mode before propagating. This is the runtime guard for
+		// the 030-C5 capability trap. It re-enters send(), so one logical call
+		// deliberately logs and reports twice.
+		req.ResponseFormat = &responseFormat{Type: "json_object"}
+		parsed, err = g.send(ctx, req)
+	}
+	if err != nil {
+		return domain.ChatResult{}, err
+	}
+
+	choice := parsed.Choices[0]
+	return domain.ChatResult{
+		Content:      choice.Message.Content,
+		ToolCalls:    toolCallsFrom(choice.Message.ToolCalls),
+		FinishReason: choice.FinishReason,
+	}, nil
 }
 
 func (g *Provider) logServed(requestedGroup, served string, dur time.Duration, outcome, modelID string) {
@@ -222,75 +430,26 @@ func (g *Provider) logServed(requestedGroup, served string, dur time.Duration, o
 	slog.Info("gateway request", attrs...)
 }
 
+// Complete is a shim onto CompleteChat: [system?, user] at temperature 0.3 with
+// no response_format. It has never set one and must not start.
 func (g *Provider) Complete(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
-	messages := []chatMessage{}
-	if sys := opts.SystemPrompt(); sys != "" {
-		messages = append(messages, chatMessage{Role: "system", Content: sys})
+	res, err := g.CompleteChat(ctx, domain.PromptMessages(opts.SystemPrompt(), prompt), opts.ShimOptions(0.3, false))
+	if err != nil {
+		return "", err
 	}
-	messages = append(messages, chatMessage{Role: "user", Content: prompt})
-
-	req := chatRequest{Model: opts.ModelOr(g.ModelName()), Stream: false, Messages: messages, Temperature: opts.Temp(0.3)}
-	if opts != nil && opts.MaxTokens != nil {
-		req.MaxCompletionTokens = opts.MaxTokens
-	}
-	req.Metadata = observabilityMetadata(ctx, opts)
-	return g.chat(ctx, req)
+	return res.Content, nil
 }
 
+// CompleteJSON is a shim onto CompleteChat with JSON output requested, at
+// temperature 0.1. Requesting JSON is unconditional — including when opts is
+// nil, which cmd/llmsmoke does — and the strict-schema handling and its retry
+// live in CompleteChat so the loop's structured terminal gets them too.
 func (g *Provider) CompleteJSON(ctx context.Context, prompt string, opts *domain.CompleteOptions) (string, error) {
-	messages := []chatMessage{}
-	if sys := opts.SystemPrompt(); sys != "" {
-		messages = append(messages, chatMessage{Role: "system", Content: sys})
-	}
-	messages = append(messages, chatMessage{Role: "user", Content: prompt})
-
-	req := chatRequest{
-		Model:       opts.ModelOr(g.ModelName()),
-		Stream:      false,
-		Messages:    messages,
-		Temperature: opts.Temp(0.1),
-	}
-	if opts != nil && opts.MaxTokens != nil {
-		req.MaxCompletionTokens = opts.MaxTokens
-	}
-	req.Metadata = observabilityMetadata(ctx, opts)
-
-	strictMode := opts != nil && opts.ResponseMode == domain.ResponseModeStrict && opts.JSONSchema != ""
-	if strictMode {
-		var schemaMap map[string]any
-		if err := json.Unmarshal([]byte(opts.JSONSchema), &schemaMap); err == nil {
-			req.ResponseFormat = &responseFormat{
-				Type: "json_schema",
-				JSONSchema: &jsonSchema{
-					Name:   "tailored_output",
-					Schema: schemaMap,
-					Strict: true,
-				},
-			}
-		} else {
-			// Schema parse failure — fall back to json_object so the call
-			// still goes through with the prompt-appended schema text.
-			strictMode = false
-			req.ResponseFormat = &responseFormat{Type: "json_object"}
-		}
-	} else {
-		req.ResponseFormat = &responseFormat{Type: "json_object"}
-	}
-
-	text, err := g.chat(ctx, req)
+	res, err := g.CompleteChat(ctx, domain.PromptMessages(opts.SystemPrompt(), prompt), opts.ShimOptions(0.1, true))
 	if err != nil {
-		// 033 FR-006: if the provider rejected the strict schema (a 400/422
-		// that often signals response_format is unsupported or dropped),
-		// retry once with json_object mode before propagating the error.
-		// This prevents the 030-C5 capability trap at runtime — the
-		// existing JSON-parse retry loop in CompleteStructured handles
-		// any malformed output from the fallback.
-		if strictMode && isResponseFormatRejection(err) {
-			req.ResponseFormat = &responseFormat{Type: "json_object"}
-			return g.chat(ctx, req)
-		}
+		return "", err
 	}
-	return text, err
+	return res.Content, nil
 }
 
 // isResponseFormatRejection returns true when the error suggests the provider
