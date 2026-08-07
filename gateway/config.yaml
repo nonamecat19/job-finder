@@ -76,12 +76,32 @@ model_list:
 
   # --- generation stages (035-split-model-generation) ---
   # The generation task is split into stages so each is served by the cheapest
-  # model that does its job. Measured 2026-08-07 on one vacancy, identical
-  # prompt and strict schema: the economy model does the mechanical work
-  # (ranking skills, picking highlights) as well as the premium one at 1/30th
-  # the price, and fails only at writing the summary.
+  # model that does its job. The economy model does the mechanical work (ranking
+  # skills, picking highlights) as well as the premium one at a fraction of the
+  # price, and fails only at writing the summary.
   #
-  # See specs/035-split-model-generation/research.md R1 for the measurement.
+  # WHERE THE EVIDENCE LIVES (038). Do not record measurements in this comment.
+  # The evaluation harness produces a durable comparison artifact — per model,
+  # per case, per stage, with cost, latency, served model and the request
+  # parameters it ran under — and that artifact is the record a model swap is
+  # decided on:
+  #
+  #   go test -tags eval_live ./internal/generation/application/ \
+  #     -run TestLiveComparison -eval.models generation-select,generation-summary
+  #
+  # A figure typed into a YAML comment drifts from the moment it is written and
+  # cannot be reproduced by the next reader. The original 2026-08-07 measurement
+  # (one vacancy, identical prompt and strict schema) is recorded in
+  # specs/035-split-model-generation/research.md R1; everything after it belongs
+  # in an artifact.
+  #
+  # Every deployment declares how its model's deliberation is bounded. Without
+  # it a thinking model spends its whole output budget reasoning and returns
+  # empty content — reasoning tokens count against max_completion_tokens. That
+  # is not a tuning detail: it is what made every resume run fail before
+  # 2026-08-07. The switch differs by provider family (research.md R2):
+  # reasoning_effort for OpenAI/Anthropic/Google, reasoning.enabled for z-ai
+  # and deepseek-flash. deepseek-v4-pro honours neither and is not eligible.
 
   - model_name: generation-analyze
     litellm_params:
