@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -156,10 +157,19 @@ func VerifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel
 	for k := range masterSections {
 		masterSectionKeys[k] = true
 	}
+	// Sorted, not map-ordered: these strings are fed back into the retry prompt
+	// (service.go tailorRendercvResume -> prevViolations -> buildSelectPrompt),
+	// so map iteration order would make the retry request text differ between
+	// runs on identical input. That breaks request-hash-keyed replay.
+	var addedSections []string
 	for k := range mergedSections {
 		if !masterSectionKeys[k] {
-			violations = append(violations, `unexpected section "`+k+`" added to merged resume`)
+			addedSections = append(addedSections, k)
 		}
+	}
+	sort.Strings(addedSections)
+	for _, k := range addedSections {
+		violations = append(violations, `unexpected section "`+k+`" added to merged resume`)
 	}
 
 	// 3. Check project names in merged are all from master. Projects gained a
@@ -232,10 +242,18 @@ func VerifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel
 			if !ok {
 				continue // already reported as an unknown project above
 			}
+			// Sorted for the same reason as the added-section check above:
+			// these violations reach the retry prompt, so map order would make
+			// the retry request non-reproducible on identical input.
+			var ungrounded []string
 			for t := range wordTokens(StringSliceField(p, "highlights")) {
 				if !projectAllowed[t] {
-					violations = append(violations, `project highlight token "`+t+`" (`+name+`) not in master profile (strict grounding)`)
+					ungrounded = append(ungrounded, t)
 				}
+			}
+			sort.Strings(ungrounded)
+			for _, t := range ungrounded {
+				violations = append(violations, `project highlight token "`+t+`" (`+name+`) not in master profile (strict grounding)`)
 			}
 		}
 	}
