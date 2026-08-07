@@ -16,6 +16,7 @@ type (
 	Validator       = domain.Validator
 	CompleteOptions = domain.CompleteOptions
 	ResponseMode    = domain.ResponseMode
+	Usage           = domain.Usage
 
 	Router        = application.Router
 	ProviderClass = application.ProviderClass
@@ -50,6 +51,9 @@ var (
 	Retryable = shared.Retryable
 
 	WithServedModelCapture = domain.WithServedModelCapture
+	WithUsageCapture       = domain.WithUsageCapture
+	ReportUsage            = domain.ReportUsage
+	ReportServedModel      = domain.ReportServedModel
 )
 
 func CompleteStructured[T any](ctx context.Context, p Provider, prompt string, opts *CompleteOptions) (T, error) {

@@ -47,14 +47,19 @@ model_list:
       model: openrouter/deepseek/deepseek-v4-pro
       api_key: os.environ/OPENROUTER_API_KEY
 
-  # --- generation ---
-  # Resume generation is the one task whose tier 1 is OpenRouter, not Cerebras:
-  # the tailoring passes are long structured-output calls where output quality
-  # decides whether the document is usable, so the aggregator (which may be
-  # paid) leads and the free tiers become the fallbacks behind it.
+  # --- generation (cover letters) ---
+  # Since 035 this key serves the cover letter only; the resume is produced by
+  # the staged keys below. Tier 1 is OpenRouter because the letter is prose the
+  # user sends to an employer, so output quality decides whether it is usable.
+  #
+  # It was deepseek-v4-pro until 2026-08-07. That model honours neither
+  # reasoning_effort nor reasoning.enabled, so its deliberation cannot be
+  # bounded, and an unbounded thinking model spends the whole output budget
+  # reasoning and returns empty content (research.md R2).
   - model_name: generation
     litellm_params:
-      model: openrouter/deepseek/deepseek-v4-pro
+      model: openrouter/anthropic/claude-haiku-4.5
+      reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
   - model_name: generation-cerebras
     litellm_params:
@@ -68,6 +73,80 @@ model_list:
     litellm_params:
       model: cohere_chat/command-r-08-2024
       api_key: os.environ/COHERE_API_KEY
+
+  # --- generation stages (035-split-model-generation) ---
+  # The generation task is split into stages so each is served by the cheapest
+  # model that does its job. Measured 2026-08-07 on one vacancy, identical
+  # prompt and strict schema: the economy model does the mechanical work
+  # (ranking skills, picking highlights) as well as the premium one at 1/30th
+  # the price, and fails only at writing the summary. See
+  # specs/035-split-model-generation/research.md R1.
+  #
+  # Every deployment declares how its model's deliberation is bounded. Without
+  # it a thinking model spends its whole output budget reasoning and returns
+  # empty content — reasoning tokens count against max_completion_tokens. That
+  # is not a tuning detail: it is what made every resume run fail before
+  # 2026-08-07. The switch differs by provider family (research.md R2):
+  # reasoning_effort for OpenAI/Anthropic/Google, reasoning.enabled for z-ai
+  # and deepseek-flash. deepseek-v4-pro honours neither and is not eligible.
+
+  - model_name: generation-analyze
+    litellm_params:
+      model: openrouter/google/gemini-2.5-flash-lite
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-analyze-cerebras
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: generation-analyze-cohere
+    litellm_params:
+      model: cohere_chat/command-r-08-2024
+      api_key: os.environ/COHERE_API_KEY
+
+  - model_name: generation-select
+    litellm_params:
+      model: openrouter/google/gemini-2.5-flash-lite
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-select-cerebras
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: generation-select-cohere
+    litellm_params:
+      model: cohere_chat/command-r-08-2024
+      api_key: os.environ/COHERE_API_KEY
+
+  # Escalation target: reached only when the economy model returns incomplete
+  # selection output twice (FR-007). It needs its own chain for the same reason
+  # every other key does — an escalation during an Anthropic outage must still
+  # land on the local model.
+  - model_name: generation-select-premium
+    litellm_params:
+      model: openrouter/anthropic/claude-sonnet-5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-select-premium-haiku
+    litellm_params:
+      model: openrouter/anthropic/claude-haiku-4.5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: generation-summary
+    litellm_params:
+      model: openrouter/anthropic/claude-sonnet-5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-summary-haiku
+    litellm_params:
+      model: openrouter/anthropic/claude-haiku-4.5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-summary-cerebras
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
 
   # --- rephrase ---
   - model_name: rephrase
@@ -162,6 +241,10 @@ litellm_settings:
   fallbacks:
     - match: [match-groq, match-cohere, match-openrouter, local]
     - generation: [generation-cerebras, generation-groq, generation-cohere, local]
+    - generation-analyze: [generation-analyze-cerebras, generation-analyze-cohere, local]
+    - generation-select: [generation-select-cerebras, generation-select-cohere, local]
+    - generation-select-premium: [generation-select-premium-haiku, local]
+    - generation-summary: [generation-summary-haiku, generation-summary-cerebras, local]
     - rephrase: [rephrase-groq, rephrase-cohere, rephrase-openrouter, local]
     - ghost: [ghost-groq, ghost-cohere, ghost-openrouter, local]
     - default: [default-groq, default-cohere, default-openrouter, local]
