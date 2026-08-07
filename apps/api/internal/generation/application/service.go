@@ -31,6 +31,10 @@ const (
 	shapeAttempts = 2
 )
 
+// coverLetterMaxTokens bounds the cover-letter LLM output (033 FR-012).
+// A 150-word letter is well under 1024 tokens; this leaves headroom.
+var coverLetterMaxTokens = 1024
+
 var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 
 type AdHocInput struct {
@@ -260,10 +264,16 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		domain.ApplySectionToggles(merged, cfg)
 		report := domain.ApplyHardLimits(master, merged, cfg)
 		recordShortfalls(ctx, rec, report)
+		// 033 FR-001: drop ungrounded skill tokens on the primary pass, not
+		// only after expand/condense. Capture the removed tokens for logging.
+		domain.DropUngroundedSkillTokens(master, merged)
+		if rec != nil {
+			rec.Step(ctx, "grounding: ungrounded skill tokens dropped", nil)
+		}
 		if rec != nil {
 			rec.Step(ctx, fmt.Sprintf("grounding check (attempt %d/%d)", attempt+1, groundingAttempts), nil)
 		}
-		lastViolations = domain.VerifyRendercvGrounding(master, merged, level)
+		lastViolations = domain.VerifyRendercvGrounding(master, merged, level, analysis)
 		if len(lastViolations) == 0 {
 			fixed, err := s.fixStructureIntegrity(ctx, master, merged, analysis, level, cfg, rec)
 			return fixed, analysis, err
@@ -405,6 +415,8 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 		}
 		domain.DropUngroundedSkillTokens(merged, reMerged)
 		domain.ApplyHardLimits(master, reMerged, cfg)
+		// 033 FR-009: apply the same highlight-drift cleanup as the primary pass.
+		domain.StripUngroundedHighlights(merged, reMerged)
 		expandedPath, err := deps.render(ctx, reMerged, baseName+"-expanded")
 		if err != nil {
 			return renderOutcome{}, err
@@ -448,6 +460,8 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 			}
 			domain.DropUngroundedSkillTokens(merged, reMerged)
 			domain.ApplyHardLimits(master, reMerged, cfg)
+			// 033 FR-009: apply the same highlight-drift cleanup as the primary pass.
+			domain.StripUngroundedHighlights(merged, reMerged)
 			domain.CompactDesign(reMerged)
 			// The condense prompt asked for shorter sections than configured.
 			out.conflict = true
@@ -469,21 +483,52 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 }
 
 // fixStructureIntegrity runs the structural-integrity verifier (feature 028)
-// on an already-grounded merge. Block sequence, experience order and job
-// drops are enforced deterministically by MergeTailored and never reach here;
-// the only violation kind is a text-asserted years figure contradicting the
-// master's derivable total. On first detection it runs a single targeted
-// re-prompt feeding the violation back; if the claim recurs, it strips the
-// offending clause and logs the intervention on the activity row.
+// and the highlight-drift verifier (feature 033) on an already-grounded merge.
+// Block sequence, experience order and job drops are enforced deterministically
+// by MergeTailored and never reach here; the two violation kinds are:
+//   - a text-asserted years figure contradicting the master's derivable total (028)
+//   - an experience highlight that drifted too far from the master's bullet (033)
+//
+// On first detection each runs a single targeted re-prompt feeding the violation
+// back; if the claim recurs, it strips the offending content and logs the
+// intervention on the activity row.
 func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, rec *activity.Recorder) (domain.RendercvMaster, error) {
+	// 1. Years-assertion check (028)
 	structViolations := domain.VerifyStructureIntegrity(master, merged)
-	if len(structViolations) == 0 {
+	if len(structViolations) > 0 {
+		if rec != nil {
+			rec.Step(ctx, "structure integrity: years assertion detected, re-prompting", map[string]any{"violations": len(structViolations)})
+		}
+		rePrompted, err := retailorForStructure(ctx, s.llmc, s.genModel, master, analysis, level, structViolations, cfg)
+		if err != nil {
+			return nil, err
+		}
+		reMerged, err := domain.MergeTailored(master, rePrompted)
+		if err != nil {
+			return nil, err
+		}
+		domain.ApplySectionToggles(reMerged, cfg)
+		domain.ApplyHardLimits(master, reMerged, cfg)
+		reViolations := domain.VerifyStructureIntegrity(master, reMerged)
+		if len(reViolations) == 0 {
+			merged = reMerged
+		} else {
+			if rec != nil {
+				rec.Step(ctx, "structure integrity: years assertion recurred, stripped", map[string]any{"violations": len(reViolations)})
+			}
+			merged = domain.StripStructureViolations(reMerged, reViolations)
+		}
+	}
+
+	// 2. Highlight-drift check (033 FR-002, FR-003)
+	driftViolations := domain.VerifyHighlightGrounding(master, merged)
+	if len(driftViolations) == 0 {
 		return merged, nil
 	}
 	if rec != nil {
-		rec.Step(ctx, "structure integrity: years assertion detected, re-prompting", map[string]any{"violations": len(structViolations)})
+		rec.Step(ctx, "structure integrity: highlight drift detected, re-prompting", map[string]any{"violations": len(driftViolations)})
 	}
-	rePrompted, err := retailorForStructure(ctx, s.llmc, s.genModel, master, analysis, level, structViolations, cfg)
+	rePrompted, err := retailorForStructure(ctx, s.llmc, s.genModel, master, analysis, level, driftViolations, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -493,14 +538,14 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 	}
 	domain.ApplySectionToggles(reMerged, cfg)
 	domain.ApplyHardLimits(master, reMerged, cfg)
-	reViolations := domain.VerifyStructureIntegrity(master, reMerged)
-	if len(reViolations) == 0 {
+	reDrift := domain.VerifyHighlightGrounding(master, reMerged)
+	if len(reDrift) == 0 {
 		return reMerged, nil
 	}
 	if rec != nil {
-		rec.Step(ctx, "structure integrity: years assertion recurred, stripped", map[string]any{"violations": len(reViolations)})
+		rec.Step(ctx, "structure integrity: highlight drift recurred, replaced with master bullets", map[string]any{"violations": len(reDrift)})
 	}
-	return domain.StripStructureViolations(reMerged, reViolations), nil
+	return domain.StripUngroundedHighlights(master, reMerged), nil
 }
 
 func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID *string, rec *activity.Recorder) (dto.GeneratedDocumentDto, error) {
@@ -637,8 +682,9 @@ func (s *Service) writeCoverLetter(ctx context.Context, profileText string, extr
 	prompt += fmt.Sprintf("JOB:\nTitle: %s\nCompany: %s\nDescription:\n%s", title, company, strutil.Truncate(vacancyText, 4000))
 
 	result, err := llm.CompleteStructured[coverLetterResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
-		System: "You write concise, concrete, honest cover letters.",
-		Model:  s.genModel,
+		System:    "You write concise, concrete, honest cover letters.",
+		Model:     s.genModel,
+		MaxTokens: &coverLetterMaxTokens,
 	})
 	if err != nil {
 		return "", err

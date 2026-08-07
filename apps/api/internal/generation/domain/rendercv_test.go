@@ -414,7 +414,7 @@ func TestVerifyRendercvGrounding_RejectsFabricatedCompany(t *testing.T) {
 	exp := AsSliceOfMaps(sections["experience"])
 	exp[0]["company"] = "Fabricated Co"
 
-	violations := VerifyRendercvGrounding(master, merged, GroundingModerate)
+	violations := VerifyRendercvGrounding(master, merged, GroundingModerate, VacancyAnalysis{})
 	if len(violations) == 0 {
 		t.Fatal("expected a violation for a fabricated company")
 	}
@@ -430,14 +430,17 @@ func TestVerifyRendercvGrounding_StrictRejectsUnlistedSkill(t *testing.T) {
 	skills := AsSliceOfMaps(sections["skills"])
 	skills[0]["details"] = "Go, Rust, Kubernetes"
 
-	violations := VerifyRendercvGrounding(master, merged, GroundingStrict)
+	violations := VerifyRendercvGrounding(master, merged, GroundingStrict, VacancyAnalysis{})
 	if len(violations) == 0 {
 		t.Fatal("expected strict grounding to reject a skill token not in the master")
 	}
 
-	violationsModerate := VerifyRendercvGrounding(master, merged, GroundingModerate)
-	if len(violationsModerate) != 0 {
-		t.Fatalf("moderate grounding should not check skill tokens, got %v", violationsModerate)
+	// 033 FR-001: moderate grounding now also rejects unlisted skill tokens
+	// (when not adjacency-allowed via the vacancy analysis). The previous
+	// assertion that moderate "should not check skill tokens" is inverted.
+	violationsModerate := VerifyRendercvGrounding(master, merged, GroundingModerate, VacancyAnalysis{})
+	if len(violationsModerate) == 0 {
+		t.Fatal("moderate grounding should now reject unlisted skill tokens (033 FR-001), got none")
 	}
 }
 
@@ -450,7 +453,7 @@ func TestVerifyRendercvGrounding_RejectsAddedSection(t *testing.T) {
 	sections := CvSections(merged)
 	sections["custom_section"] = []any{"some content"}
 
-	violations := VerifyRendercvGrounding(master, merged, GroundingModerate)
+	violations := VerifyRendercvGrounding(master, merged, GroundingModerate, VacancyAnalysis{})
 	if len(violations) == 0 {
 		t.Fatal("expected a violation for an added section not in master")
 	}
