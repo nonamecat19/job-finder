@@ -494,3 +494,109 @@ enforcement is mechanical rather than statistical:
   stored setting.**
 - 032-SC-007: a minimum the profile cannot meet produces a resume **plus a recorded shortfall**
   in 100% of such runs — never a failed generation, and never an invented certification.
+
+## The evaluation harness (038)
+
+Resume quality had no regression gate: every check in the pipeline verified one run against
+itself, and nothing compared today's output to what the same input produced last week. The
+harness is that comparison, and it runs on every change.
+
+### Two modes, and only one of them gates
+
+**Deterministic mode** is the gate. `TestEvalCorpus` runs in the ordinary suite — no build tag,
+no environment variable, no credentials, no network, no database, and no PDF toolchain. Every
+model response comes from a committed fixture keyed by a hash over the request, so the same
+input produces the same scores on any machine. It fails the build on a regression, on an
+improvement, and on a case with no baseline.
+
+**Live mode** is behind `//go:build eval_live` and reports rather than gates. It runs the corpus
+against several candidate task keys and writes a durable comparison artifact — per model, per
+case, per stage, with cost, latency, served model, substitution and escalation flags, the
+request parameters and the corpus revision. That artifact is what a model swap is decided on;
+`gateway/config.yaml` points at it rather than carrying figures that drift.
+
+Live mode never writes a baseline. A live run's scores depend on which upstream answered that
+day, and gating future changes on that would make the weather a build failure.
+
+### What the gate does not measure
+
+**The PDF renderer.** `render` and `countPages` are stubbed: a case declares a `page_counts`
+sequence and the stub returns it in order, which is what makes the page-fit loop deterministic
+and runnable with no Python and no Typst installed. The *LLM* half of page fitting is measured —
+`expand` and `condense` keep their production implementations and go through the replay
+provider — but nothing here proves a PDF comes out. That stays covered by the infrastructure
+tests and by live mode.
+
+Two measures specified for the harness are also absent, deliberately: `json_parse_failures`
+(the structured retry loop discards its attempt count) and `empty_output` (no zero-content
+check exists in the domain). Adding either would mean writing the production instrumentation
+here, which would make the harness the author of a quality rule it then grades. They return as
+scorers once that instrumentation lands in production on its own justification.
+
+### The six scorers
+
+Every scorer delegates to a check production already enforces, so a green harness means
+something about production rather than about the harness. There is no LLM judge.
+
+| Scorer | Delegates to | Direction |
+|---|---|---|
+| `grounding_violations` | `VerifyRendercvGrounding` | lower |
+| `structural_violations` | `VerifyStructureIntegrity` | lower |
+| `highlight_drift` | `VerifyHighlightGrounding` | lower |
+| `required_skills_missing` | `CompletenessReport.RequiredMissing` | lower |
+| `nice_to_have_retention` | `CompletenessReport.NiceToHaveRetained` | higher |
+| `bullet_shortfalls` | `CompletenessReport.BulletShortfalls` | lower |
+
+`grounding_violations` and `highlight_drift` move on the same defect — the grounding verifier
+performs the drift comparison inline — so the comparator reports a co-moving pair as **one
+defect seen by two instruments** and never sums scores.
+
+Two committed tripwires keep this honest: `TestScorerDelegationIsExact` calls each named domain
+function independently and asserts equality, and `TestScorersDetectInjectedDefects` injects a
+known defect and asserts the relevant scorer moves the wrong way. Without them, "scorers must
+delegate" is a rule with no detector.
+
+### Adding a case
+
+Add a directory under `internal/generation/application/evaldata/cases/` with `case.yaml`,
+`master.yaml` and `vacancy.txt`. Cases are discovered by walking that directory — no case name
+appears in any Go file — so a case cannot be added without the gate running it, or quietly
+dropped from a list.
+
+`case.yaml` requires a `why` naming a concrete failure mode, and a `page_counts` sequence. Every
+fixture must be **synthetic** and must use **closed date ranges only**: a role ending in
+`present` makes the derived experience figure, and therefore every replay fixture for that case,
+change on 1 January.
+
+Then record the fixtures and the baseline:
+
+```bash
+go test -tags eval_live ./internal/generation/application/ \
+  -run TestEvalRecord -eval.record -eval.case <name>
+go test ./internal/generation/application/ -run TestEvalCorpus \
+  -eval.update-baseline -eval.case <name> -eval.reason "initial baseline"
+```
+
+Fixtures are recorder-produced. Hand-editing one turns the corpus from a record of what a model
+did into a record of what somebody wished it had done.
+
+### Updating a baseline
+
+Never automatically, and never for the whole corpus at once:
+
+```bash
+go test ./internal/generation/application/ -run TestEvalCorpus \
+  -eval.update-baseline -eval.case <name> -eval.reason "<what changed and why>"
+```
+
+The reason is required and is written into the baseline file, so the diff a reviewer sees says
+what moved and why. A baseline recorded under a different `ScorerSetVersion` is refused rather
+than compared — a delta measured across two instruments is not a quality signal.
+
+### The standing rule
+
+**A production failure fixed from now on arrives with a corpus case that would have caught it,
+in the same change.** A fix without a case is a fix that can regress silently, and the corpus
+exists precisely so that the second occurrence of a failure is impossible rather than merely
+unlikely. This is the rule the corpus is built on: every case in it names a failure this
+repository actually recorded.
