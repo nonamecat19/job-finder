@@ -91,13 +91,13 @@ litellm_settings:
     # … one line per task key
 ```
 
-The five task keys and what they serve: `match` (job scoring), `generation` (resume and
-cover letter), `rephrase` (keyword suggestions), `ghost` (ghost-job detection), `default`
-(salary, outreach, recruiter extraction).
+The task keys and what they serve: `match` (job scoring), `generation` (cover letter — resume
+generation split into the stage keys of §2.2), `rephrase` (keyword suggestions), `ghost`
+(ghost-job detection), `default` (salary, outreach, recruiter extraction).
 
 **Request contract.** `POST {GATEWAY_URL}/chat/completions` with
-`Authorization: Bearer {LITELLM_MASTER_KEY}`. `model` is always one of the five task keys —
-never a provider or upstream model name. The app sends `temperature`, an optional
+`Authorization: Bearer {LITELLM_MASTER_KEY}`. `model` is always one of the task keys (§2.2 adds
+the generation stage keys) — never a provider or upstream model name. The app sends `temperature`, an optional
 `max_completion_tokens`, and `response_format: {"type":"json_object"}` for structured calls;
 `stream` is always false. **The proxy must fail loudly (4xx) on an unknown group, never
 silently route it to a default.**
@@ -136,7 +136,106 @@ action.
 Config can also be hot-reloaded without a restart where the admin API is enabled:
 `curl -X POST http://litellm:4000/config/reload -H "Authorization: Bearer $LITELLM_MASTER_KEY"`.
 
-### 2.2 `Router` — the internal Go seam
+### 2.2 Generation stage keys (035-split-model-generation)
+
+Resume generation is not one call but four, and they do not want the same model. The task key
+`generation` therefore split into one key per stage, so each stage is served by the cheapest
+option that does its job. `generation` itself is **retained**, now serving only the on-demand
+cover letter.
+
+| Task key | Stage | Why this tier |
+|---|---|---|
+| `generation-analyze` | Vacancy analysis | Mechanical extraction. Economy model; short output. |
+| `generation-select` | Skill and highlight selection | Ranking and picking, not writing. Economy model; the largest structured output of the four. |
+| `generation-select-premium` | Selection escalation (035-FR-007) | Reached only when the economy model returns incomplete selection output twice. Premium model. |
+| `generation-summary` | Professional summary | The one stage where writing quality decides whether the document is usable. Premium model. |
+
+Measured 2026-08-07 on one vacancy with an identical prompt and strict schema: the economy model
+does the mechanical work as well as the premium one at 1/30th the price, and fails only at the
+summary (035-research.md R1).
+
+**Every chain still terminates at `local`** — including `generation-select-premium`. An escalation
+key is the easiest one to forget, because it looks like a variant of `generation-select` rather
+than a group the application requests, and it is requested directly (`compose.go`
+`GenerationPremiumRouter`). A key declared without a chain terminates on its own hosted provider,
+so an escalation fired during an Anthropic outage would fail the run instead of falling through to
+Ollama. That is 030-FR-008 and Constitution V, and it is not weakened by the split (035-FR-011).
+
+**The reasoning switch (035-FR-014).** Every stage deployment must declare how that model's
+deliberation is bounded. Reasoning tokens count against `max_completion_tokens`, so a thinking
+model left to deliberate freely spends its entire output budget reasoning and returns **empty
+content** — a 200 response with nothing in it, which no fallback rescues because the request
+succeeded. This is the same shape of trap as the JSON-capability trap above, and it is not
+hypothetical: it is what made every resume run fail before 2026-08-07. The switch differs by
+provider family (035-research.md R2):
+
+| Provider family | Switch |
+|---|---|
+| OpenAI, Anthropic, Google | `reasoning_effort: low` |
+| z-ai, deepseek-flash | `reasoning: {enabled: false}` |
+| deepseek-v4-pro | Honours neither — **not eligible** as a stage deployment |
+
+Adding a stage candidate therefore includes declaring its switch. A deployment without one is a
+configuration error, not a default.
+
+**Guardrail.** `internal/platform/llm/gateway_config_test.go` parses `gateway/config.yaml` and
+fails the build when a requested `generation-*` group has no chain, a chain does not end at
+`local`, a chain names an undeclared tier, an `openrouter/*` stage deployment omits its reasoning
+switch, or an `api_key` is a literal. The file is not compiled into the binary, so this test is
+the only thing that makes a forgotten chain fail loudly rather than silently at request time.
+
+**Retune procedure (035-FR-016).** Unchanged from 030-C6 and it must stay that way: edit
+`gateway/config.yaml` → `docker compose restart litellm`. Repointing a stage at a different model,
+or adding a candidate to a chain, is a configuration edit and a restart of the routing service —
+no application rebuild, no migration, no code change, no dashboard action.
+
+**Local pinning.** When `GATEWAY_URL` is empty the gateway is bypassed and each stage uses its
+`LLM_MODEL_GENERATION_*` value: `LLM_MODEL_GENERATION_ANALYZE`, `_SELECT`, `_PREMIUM`, `_SUMMARY`.
+Each resolves through `Config.GenerationModelOr` — empty falls back to `LLM_MODEL_GENERATION`, then
+to `LLM_MODEL` — so an operator who pins nothing per stage keeps today's behaviour.
+
+### 2.3 No LLM framework — the port is kept (2026-08-07 decision)
+
+**Decision: `domain.Provider` stays hand-owned. `langchaingo` is not adopted, and no Go LangGraph
+port is adopted.** This is recorded here rather than in a feature directory because it is a standing
+constraint that must survive those directories being removed on ship.
+
+The comparison was made against what is actually in the tree, not against the idea of a framework.
+`langchaingo`'s `llms.Model` is a downgrade on every axis this codebase depends on:
+
+| In `domain.Provider` today | `langchaingo` equivalent |
+|---|---|
+| `ResponseModeStrict` + marshalled JSON Schema per call (033) | no strict-schema abstraction; per-provider JSON-mode flags at best |
+| `strictifySchema` / `makeNullable` — `additionalProperties:false`, nullable optionals | none |
+| `CompleteStructured[T]` — typed generic, schema cache, parse-and-retry, `Validator` hook | `outputparser`, string-typed and weaker |
+| `WithServedModelCapture` reading `x-litellm-model-name` | no hook; the fallback-tier visibility § 2.1 and § 2.2 depend on would be lost |
+| `Router` with `ProviderClass`, gateway ↔ local | no routing concept |
+
+Adopting it would mean discarding features 033 and 035 to gain a message slice, and pulling a wide
+transitive dependency tree into a deliberately tight `go.mod`.
+
+The Go LangGraph ports are smaller again — a message-state graph with conditional edges, without the
+durable checkpointer, interrupt/resume or time-travel that make the Python original worth having.
+The durability they lack, this platform already has and better: asynq on Redis, Postgres, and the
+per-task deadline and heartbeat middleware in § 4.
+
+**What is built instead**, when the need is real rather than anticipated:
+
+- Multi-turn and tool calling: extend this port (`CompleteChat`, a bounded typed tool loop). Owned
+  here, no new module requirement.
+- Provider abstraction, failover, retry, model swap without rebuild: already the LiteLLM proxy's job
+  (§ 2.1). A framework would duplicate it, worse.
+- Durable multi-step orchestration: already asynq (§ 4).
+- Observability of cost, latency and served tier: proxy callbacks, not client instrumentation.
+
+**The one exception worth revisiting**: `langchaingo`'s `textsplitter` is a genuinely useful leaf and
+could be vendored on its own merits for retrieval work. Vendoring a leaf is not adopting a framework.
+
+**Guardrail.** Any change adding an agent or LLM-orchestration framework to `apps/api/go.mod`
+contradicts this section and requires amending it in the same change, with the reasoning above
+rebutted rather than ignored.
+
+### 2.4 `Router` — the internal Go seam
 
 `internal/platform/llm/application`, re-exported by `internal/platform/llm`. It replaced the
 `SnapshotHolder` / `RouterSnapshot` / `TaskSetting` machinery that 001 introduced.

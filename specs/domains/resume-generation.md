@@ -1,7 +1,8 @@
 # Domain: Resume Generation & Tailoring
 
 Consolidates **020** constrained AI resume tailoring, **028** structure preservation,
-**031** configurable generation shape, **032** certifications as a configurable category.
+**031** configurable generation shape, **032** certifications as a configurable category,
+**035** split-model generation.
 
 Implementation: `apps/api/internal/generation/`, `internal/tailoring/`,
 `internal/resumeshape/`. How it works:
@@ -10,6 +11,62 @@ Implementation: `apps/api/internal/generation/`, `internal/tailoring/`,
 This domain implements Constitution II (Grounded Generation). Every rule below exists
 because a resume is used in a real hiring decision, and a fabricated one damages the user in
 a way they cannot easily detect or undo.
+
+---
+
+## 0. The staged pipeline (035)
+
+A resume is not produced by one model call. It is produced by three, each addressed by its
+own gateway task key, because the four jobs inside a tailoring pass have different
+requirements and only one of them is worth a premium model.
+
+| Stage | Task key | What it does | Verified for |
+|---|---|---|---|
+| Analysis | `generation-analyze` | vacancy text → required/nice-to-have skills, keywords | — |
+| Selection | `generation-select` | which skills, in what order; which achievements per job; their rewording | grounding + **completeness** |
+| Summary | `generation-summary` | writes the 2-4 sentence summary | grounding, independently |
+| Page fit | `generation-select` | expand/condense to hit the page target | grounding |
+
+**The summary is the only part that is written rather than selected**, and it is the only
+part where a cheap model was measured fabricating (2026-08-07: glm-4.7 invented a summary
+while producing perfectly grounded skills and bullets). Selection and page fitting run on an
+economy model at roughly 1/30th the price with no measured loss in grounding.
+
+**The split is enforced by types, not by prompt wording.** `TailoredSelection` has no summary
+field and `TailoredSummary` has nothing else, so a page-fit response that tries to reword the
+summary has nowhere to put it and is discarded at unmarshal. Once written, the summary is
+immutable for the rest of the run — the structure re-prompt and the page fitter both carry it
+through rather than rebuilding it from the master (035-FR-010).
+
+**Completeness gate (035-FR-006/FR-007).** A cheap model's characteristic failure is not
+malformed output — it is well-formed output with content quietly missing, which nothing
+downstream would notice. Three of seven candidates measured did exactly this. So selection
+output is checked against what the vacancy asked for before anything renders:
+
+- every master skill matching a **required** vacancy skill must survive — exact, no tolerance
+- master skills matching **nice-to-have** vacancy skills must survive at 80% or above
+- per-job achievement counts must meet the configured minimum
+
+A shortfall retries once on the economy model; a second shortfall escalates that stage to the
+premium model and marks the run. A shortfall that survives escalation fails the run rather
+than rendering a hollowed-out resume. When the analysis lists no required skills at all the
+weighted checks would be vacuously true, so the gate falls back to a structural check (group
+count equals the master's) and records that it did.
+
+Note what is *not* a shortfall: a group the model omits entirely. The merge keys skills by
+index and leaves an unmentioned group at its master value, so omission is absorbed. Only
+content returned in truncated form reaches the document.
+
+**Provenance (035-FR-012/FR-017).** Each run records, per stage, which model served it,
+whether the chain fell back, the duration and the measured cost — the last from the proxy's
+own `usage.cost`, not an estimate. A summary served by a fallback is marked on the document
+and shown on the review surface: a user who was told they get the strict model must not
+silently receive the cheap one. Substitution is detected from the proxy's
+`x-litellm-attempted-fallbacks` header, so the application still never learns which upstream
+model was configured for a key.
+
+**Cover letters are on demand** (035-FR-013). A tailoring run produces a resume only; the
+letter is requested against a finished resume via `POST /documents/{id}/cover-letter`.
 
 ---
 
