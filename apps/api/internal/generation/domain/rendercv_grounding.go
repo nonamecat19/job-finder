@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -100,19 +102,19 @@ func truncateStr(s string, n int) string {
 
 // VerifyRendercvGrounding is the post-merge grounding check for the RenderCV
 // path. It verifies:
-// - No fabricated companies (experience entries must exist in master)
-// - No added sections (merged sections are a subset of master sections)
-// - No fabricated project names
-// - Skill tokens outside the master skill pool — at ALL grounding levels
-//   (033 FR-001). Under strict, every non-master token is a violation. Under
-//   moderate/aggressive, a non-master token is allowed only when it appears in
-//   the vacancy analysis AND the master already has a skill in the same group
-//   (adjacency); otherwise it is a violation.
-// - Experience highlights that have drifted too far from the master's bullets
-//   — at ALL grounding levels (033 FR-002), via the lcsCovered ≥50% word-overlap
-//   check.
-// - On strict grounding, project highlight tokens must come from that same
-//   project's own master bullets.
+//   - No fabricated companies (experience entries must exist in master)
+//   - No added sections (merged sections are a subset of master sections)
+//   - No fabricated project names
+//   - Skill tokens outside the master skill pool — at ALL grounding levels
+//     (033 FR-001). Under strict, every non-master token is a violation. Under
+//     moderate/aggressive, a non-master token is allowed only when it appears in
+//     the vacancy analysis AND the master already has a skill in the same group
+//     (adjacency); otherwise it is a violation.
+//   - Experience highlights that have drifted too far from the master's bullets
+//     — at ALL grounding levels (033 FR-002), via the lcsCovered ≥50% word-overlap
+//     check.
+//   - On strict grounding, project highlight tokens must come from that same
+//     project's own master bullets.
 //
 // It does not check structural invariants (block sequence, experience order,
 // total experience years) — those are enforced by MergeTailored and
@@ -241,6 +243,245 @@ func VerifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel
 	return violations
 }
 
+// VerifySummaryGrounding checks a summary written by its own stage against the
+// master profile and the brief it was written from (035 FR-008). Because the
+// summary now arrives alone rather than buried in a combined response, all
+// three of its failure modes can be checked precisely:
+//   - a skill the master does not list,
+//   - a numeric achievement metric none of the selected highlights supports,
+//   - a years-of-experience figure contradicting DeriveTotalExperienceYears.
+//
+// It returns one violation string per problem; an empty slice means the summary
+// is grounded. The caller re-prompts once and strips on a second failure
+// (035 FR-009).
+func VerifySummaryGrounding(master RendercvMaster, summary TailoredSummary, brief SummaryBrief) []string {
+	var violations []string
+	text := strings.TrimSpace(summary.Summary)
+	if text == "" {
+		return violations
+	}
+
+	// The years figure is asserted with numbers too, so both checks below need
+	// to know where those assertions sit: check 3 owns them, check 2 skips them.
+	yearsAssertions := findYearsAssertions(text)
+
+	// 1. Skill tokens. A summary is prose, not a comma-separated details
+	// field, so the candidate terms are picked out by shape first (acronym,
+	// dotted or symbol-bearing name, or a mid-sentence proper noun) and only
+	// then checked against the master. Anything the master mentions anywhere —
+	// skill tokens, group labels, companies, projects, education, the selected
+	// highlights — counts as grounded, which is the same judgement
+	// DropUngroundedSkillTokens and VerifyRendercvGrounding make: grounded
+	// means traceable to the master, not absent from a curated list.
+	allowed := MasterSkillTokens(master)
+	grounded := summaryGroundedVocabulary(master, brief)
+	for _, c := range summarySkillCandidates(text) {
+		if allowed[norm(c)] || grounded[normSkillWord(c)] {
+			continue
+		}
+		violations = append(violations, `summary skill "`+c+`" not in master skill tokens`)
+	}
+
+	// 2. Numeric metrics. Every achievement number the summary asserts must
+	// come from an achievement the selection stage actually kept.
+	briefNumbers := map[string]bool{}
+	for _, h := range brief.Highlights {
+		for _, n := range numberLiterals(h) {
+			briefNumbers[n] = true
+		}
+	}
+	for _, m := range metricClaims(text) {
+		if withinYearsAssertion(m.start, yearsAssertions) || briefNumbers[m.value] {
+			continue
+		}
+		violations = append(violations, `summary metric "`+m.text+`" not supported by the selected highlights`)
+	}
+
+	// 3. Years figure, against the same derivation the merged document is held
+	// to (feature 028), using its parser rather than a second regex.
+	total := DeriveTotalExperienceYears(master)
+	for _, a := range yearsAssertions {
+		if a.number != total {
+			violations = append(violations, fmt.Sprintf("summary asserts %q but master's experience spans %d years", a.text, total))
+		}
+	}
+
+	return violations
+}
+
+// summarySkillCandidates picks the terms in a prose summary that assert a
+// technology or skill. Ordinary English is lower-case mid-sentence and carries
+// none of the shapes below, so it is never a candidate — the guard against
+// flagging "delivered", "platform" or a capitalised first word.
+func summarySkillCandidates(text string) []string {
+	var out []string
+	seen := map[string]bool{}
+	sentenceStart := true
+	for _, raw := range strings.Fields(text) {
+		word := strings.Trim(raw, `.,;:!?()[]{}"'`)
+		endsSentence := strings.HasSuffix(raw, ".") || strings.HasSuffix(raw, "!") || strings.HasSuffix(raw, "?")
+		if isSkillShaped(word, sentenceStart) && !seen[normSkillWord(word)] {
+			seen[normSkillWord(word)] = true
+			out = append(out, word)
+		}
+		sentenceStart = endsSentence
+	}
+	return out
+}
+
+func isSkillShaped(word string, sentenceStart bool) bool {
+	if len([]rune(word)) < 2 {
+		return false
+	}
+	// A numeric token is an assertion, not a skill: "8+" is the years figure,
+	// which check 3 owns. Without this, every summary that opens with the
+	// years figure the prompt *requires* is flagged as an ungrounded skill.
+	if strings.IndexFunc(word, unicode.IsDigit) >= 0 && !hasLetter(word) {
+		return false
+	}
+	if strings.ContainsAny(word, "+#") {
+		return true // C++, C#, F#
+	}
+	letters, uppers := 0, 0
+	for _, r := range word {
+		if unicode.IsLetter(r) {
+			letters++
+			if unicode.IsUpper(r) {
+				uppers++
+			}
+		}
+	}
+	if letters == 0 {
+		return false
+	}
+	if letters == uppers && letters >= 2 {
+		return true // AWS, SQL, CI, GCP
+	}
+	if i := strings.Index(word, "."); i > 0 && i < len(word)-1 {
+		return true // Node.js, Vue.js
+	}
+	return !sentenceStart && unicode.IsUpper([]rune(word)[0])
+}
+
+// summaryGroundedVocabulary is every word the master profile and the brief's
+// selected material already contain. The vacancy analysis is deliberately left
+// out: a skill the vacancy asks for but the master never demonstrates is
+// precisely the fabrication this check exists to catch.
+func summaryGroundedVocabulary(master RendercvMaster, brief SummaryBrief) map[string]bool {
+	set := map[string]bool{}
+	var walk func(v any)
+	walk = func(v any) {
+		switch t := v.(type) {
+		case string:
+			addVocabWords(t, set)
+		case []any:
+			for _, e := range t {
+				walk(e)
+			}
+		case map[string]any:
+			for _, e := range t {
+				walk(e)
+			}
+		}
+	}
+	walk(map[string]any(master))
+	for _, h := range brief.Highlights {
+		addVocabWords(h, set)
+	}
+	for _, l := range brief.SkillGroupLabels {
+		addVocabWords(l, set)
+	}
+	return set
+}
+
+func addVocabWords(s string, set map[string]bool) {
+	set[norm(s)] = true
+	for _, w := range strings.FieldsFunc(s, isSkillWordSeparator) {
+		if n := normSkillWord(w); n != "" {
+			set[n] = true
+		}
+	}
+}
+
+func isSkillWordSeparator(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsNumber(r) && r != '.' && r != '+' && r != '#'
+}
+
+func normSkillWord(w string) string {
+	return strings.ToLower(strings.Trim(w, ".'"))
+}
+
+// numberRe matches a number with its optional currency prefix and unit suffix:
+// "40%", "$2M", "3x", "12".
+var numberRe = regexp.MustCompile(`(?i)(\$?)(\d[\d,]*(?:\.\d+)?)\s?(%|[xkmb]\b)?`)
+
+// metricCues are the words that turn a bare number into an achievement claim
+// ("a team of 12", "cut build time by half"). Without a cue or a unit a number
+// is a version or an incidental count, not a metric.
+var metricCues = map[string]bool{
+	"by": true, "of": true, "to": true, "from": true, "over": true, "under": true,
+	"across": true, "than": true, "serving": true, "handling": true, "saving": true,
+	"supporting": true, "processing": true,
+}
+
+type metricClaim struct {
+	start int
+	text  string
+	value string
+}
+
+// numberLiterals is every number in a string, normalised to its digits. Used
+// on the brief's highlights, where any number present is support enough.
+func numberLiterals(s string) []string {
+	var out []string
+	for _, m := range numberRe.FindAllStringSubmatch(s, -1) {
+		out = append(out, strings.ReplaceAll(m[2], ",", ""))
+	}
+	return out
+}
+
+// metricClaims is the subset of numbers in a string that assert an achievement
+// metric — those carrying a unit or currency marker, or preceded by a cue word.
+func metricClaims(s string) []metricClaim {
+	var out []metricClaim
+	for _, m := range numberRe.FindAllStringSubmatchIndex(s, -1) {
+		start, end := m[0], m[1]
+		if start > 0 {
+			prev := rune(s[start-1])
+			if unicode.IsLetter(prev) || unicode.IsNumber(prev) {
+				continue // part of a token like "S3" or "p95"
+			}
+		}
+		hasUnit := m[2] != m[3] || m[6] != m[7]
+		if !hasUnit && !metricCues[lastWord(s[:start])] {
+			continue
+		}
+		out = append(out, metricClaim{
+			start: start,
+			text:  strings.TrimSpace(s[start:end]),
+			value: strings.ReplaceAll(s[m[4]:m[5]], ",", ""),
+		})
+	}
+	return out
+}
+
+func lastWord(s string) string {
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return ""
+	}
+	return normSkillWord(fields[len(fields)-1])
+}
+
+func withinYearsAssertion(pos int, assertions []yearsAssertion) bool {
+	for _, a := range assertions {
+		if pos >= a.start && pos < a.end {
+			return true
+		}
+	}
+	return false
+}
+
 // wordTokens is the set of normalised words across a project's bullets, used
 // as the strict-grounding pool for that project's highlights. Words shorter
 // than four characters are ignored: connectives ("and", "the", "for") carry no
@@ -257,4 +498,81 @@ func wordTokens(bullets []string) map[string]bool {
 		}
 	}
 	return set
+}
+
+// StripSummaryViolations removes the sentences carrying ungrounded claims from
+// a summary that failed verification twice. Stripping keeps the run alive with
+// a shorter but honest summary — the same "strip and log" contract the
+// years-assertion check uses, rather than failing the whole document or
+// shipping a fabricated claim (035 FR-009).
+func StripSummaryViolations(summary TailoredSummary, violations []string) TailoredSummary {
+	if len(violations) == 0 {
+		return summary
+	}
+	offending := map[string]bool{}
+	for _, v := range violations {
+		if q := quotedTerm(v); q != "" {
+			offending[strings.ToLower(q)] = true
+		}
+	}
+	if len(offending) == 0 {
+		return TailoredSummary{}
+	}
+	var kept []string
+	for _, sentence := range splitSentences(summary.Summary) {
+		lower := strings.ToLower(sentence)
+		clean := true
+		for term := range offending {
+			if strings.Contains(lower, term) {
+				clean = false
+				break
+			}
+		}
+		if clean {
+			kept = append(kept, sentence)
+		}
+	}
+	return TailoredSummary{Summary: strings.TrimSpace(strings.Join(kept, " "))}
+}
+
+// quotedTerm pulls the offending term out of a violation string, which this
+// package formats with the term in double quotes.
+func quotedTerm(violation string) string {
+	first := strings.Index(violation, `"`)
+	if first < 0 {
+		return ""
+	}
+	rest := violation[first+1:]
+	last := strings.Index(rest, `"`)
+	if last < 0 {
+		return ""
+	}
+	return rest[:last]
+}
+
+func splitSentences(text string) []string {
+	var out []string
+	start := 0
+	for i, r := range text {
+		if r == '.' || r == '!' || r == '?' {
+			s := strings.TrimSpace(text[start : i+1])
+			if s != "" {
+				out = append(out, s)
+			}
+			start = i + 1
+		}
+	}
+	if tail := strings.TrimSpace(text[start:]); tail != "" {
+		out = append(out, tail)
+	}
+	return out
+}
+
+func hasLetter(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
 }

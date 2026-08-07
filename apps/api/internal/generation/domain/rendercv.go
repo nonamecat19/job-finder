@@ -69,8 +69,13 @@ type SkillChange struct {
 	ReplaceDetails *string `json:"replaceDetails,omitempty" jsonschema_description:"full replacement details string; when set, AddTokens/RemoveTokens are ignored"`
 }
 
-type TailoredSections struct {
-	Summary    string               `json:"summary" jsonschema_description:"2-3 sentence professional summary targeting the vacancy"`
+// TailoredSelection is what the selection stage returns: the mechanical work
+// of choosing and reordering master content. It deliberately has no summary
+// field. The summary is written by a separate, more expensive stage, and the
+// page-fitting passes reuse this same type — so a page-fit response that tries
+// to reword the summary has nowhere to put it and is discarded at unmarshal
+// rather than merged (035 FR-005/FR-010).
+type TailoredSelection struct {
 	Skills     []TailoredSkillGroup `json:"skills" jsonschema_description:"one entry per master skill group, same indexes, vacancy-required skills first"`
 	Experience []TailoredExperience `json:"experience" jsonschema_description:"one entry per master experience entry, keyed by company"`
 	Projects   []TailoredProject    `json:"projects" jsonschema_description:"the most vacancy-relevant master projects, keyed by name; empty unless a project limit is configured"`
@@ -78,6 +83,83 @@ type TailoredSections struct {
 	SkillGroupsToAdd    []TailoredSkillGroupAdd `json:"skillGroupsToAdd,omitempty" jsonschema_description:"new skill groups to propose adding, populated from master skill tokens"`
 	SkillGroupsToRemove []string                `json:"skillGroupsToRemove,omitempty" jsonschema_description:"existing group labels to propose removing"`
 	SkillChanges        []SkillChange           `json:"skillChanges,omitempty" jsonschema_description:"per-token add/remove within existing groups"`
+}
+
+// TailoredSummary is what the summary stage returns — the one part of a
+// tailored resume that is written rather than selected, and the only part
+// worth a premium model.
+type TailoredSummary struct {
+	Summary string `json:"summary" jsonschema_description:"2-3 sentence professional summary targeting the vacancy"`
+}
+
+// TailoredSections is the merged shape the render path consumes, assembled
+// from a TailoredSelection plus a TailoredSummary. It is no longer any single
+// model's response type.
+type TailoredSections struct {
+	Summary string `json:"summary" jsonschema_description:"2-3 sentence professional summary targeting the vacancy"`
+	TailoredSelection
+}
+
+// CurrentSummary reads the summary already on a document. The structure and
+// page-fit re-prompts merge a fresh selection onto the master, which would
+// otherwise drop the premium-written summary and silently replace it with the
+// master's — carrying it through is what keeps it immutable (035 FR-010).
+func CurrentSummary(doc RendercvMaster) *TailoredSummary {
+	sections := CvSections(doc)
+	if sections == nil {
+		return nil
+	}
+	items, ok := sections["summary"].([]any)
+	if !ok || len(items) == 0 {
+		return nil
+	}
+	s, ok := items[0].(string)
+	if !ok || s == "" {
+		return nil
+	}
+	return &TailoredSummary{Summary: s}
+}
+
+// SelectedHighlights flattens the achievements the selection stage kept, in
+// document order. It is what lets the summary reference a real achievement
+// without being handed the master profile.
+func SelectedHighlights(sel TailoredSelection) []string {
+	var out []string
+	for _, e := range sel.Experience {
+		out = append(out, e.Highlights...)
+	}
+	for _, p := range sel.Projects {
+		out = append(out, p.Highlights...)
+	}
+	return out
+}
+
+// SkillGroupLabels lists the master's skill group labels — the candidate's
+// areas of competence, without the token-level detail the summary cannot use.
+func SkillGroupLabels(master RendercvMaster) []string {
+	var out []string
+	for _, g := range AsSliceOfMaps(CvSections(master)["skills"]) {
+		if label := StringField(g, "label"); label != "" {
+			out = append(out, label)
+		}
+	}
+	return out
+}
+
+// SummaryBrief is the premium stage's entire input. It carries what a summary
+// needs to reference and nothing else — notably not the master profile, which
+// is ~5k tokens and would triple the cost of the one call priced at premium
+// rates (035 FR-004, research R3).
+type SummaryBrief struct {
+	Analysis         VacancyAnalysis
+	TotalYears       int
+	Highlights       []string
+	SkillGroupLabels []string
+	SentenceMin      int
+	SentenceMax      int
+	// PreviousViolations feeds a failed attempt's grounding violations back
+	// into the re-prompt.
+	PreviousViolations []string
 }
 
 var LevelRules = map[GroundingLevel]string{
@@ -247,7 +329,11 @@ func toStringKey(k any) string {
 	}
 }
 
-func MergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMaster, error) {
+// MergeTailored applies a selection onto the master, and a summary only when
+// one is supplied. A nil summary means "leave what is already there" — that is
+// the page-fitting case, where the premium-written summary must survive
+// untouched (035 FR-010).
+func MergeTailored(master RendercvMaster, payload TailoredSelection, summary *TailoredSummary) (RendercvMaster, error) {
 	merged, err := DeepCloneYAML(master)
 	if err != nil {
 		return nil, err
@@ -257,7 +343,9 @@ func MergeTailored(master RendercvMaster, payload TailoredSections) (RendercvMas
 		return merged, nil
 	}
 
-	sections["summary"] = []any{strings.TrimSpace(payload.Summary)}
+	if summary != nil {
+		sections["summary"] = []any{strings.TrimSpace(summary.Summary)}
+	}
 
 	skills := AsSliceOfMaps(sections["skills"])
 	for _, s := range payload.Skills {
@@ -297,4 +385,12 @@ func cleanHighlights(in []string) []any {
 		}
 	}
 	return out
+}
+
+// WithViolations returns a copy of the brief carrying the grounding violations
+// a previous attempt produced, so the re-prompt is told what it got wrong
+// rather than being asked the same question twice (035 FR-009).
+func (b SummaryBrief) WithViolations(violations []string) SummaryBrief {
+	b.PreviousViolations = violations
+	return b
 }
