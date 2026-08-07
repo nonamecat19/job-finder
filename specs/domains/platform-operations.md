@@ -522,3 +522,95 @@ exists for operators who disagree. An existing `.env` keeps working unchanged.
   request — against zero automated runs before 023.
 - 023-SC-012: the trunk can be restored from a broken state within an hour using the override,
   so the gate never makes the repository unrecoverable.
+
+## 9. LLM observability collector (036)
+
+A self-hosted Langfuse group — `langfuse-web`, `langfuse-worker` and `clickhouse` — records every
+AI call the gateway routes. It reuses the platform's Postgres (separate logical database), Redis and
+MinIO; ClickHouse is the one genuinely new stateful service.
+
+The wiring, the callback contract and the coverage table live in
+[`llm-routing.md` §7](llm-routing.md). This section is the operational half: what it holds, how to
+stand it up, and what the retention promise actually is.
+
+### 9.1 What it stores — read this before turning it on
+
+**It stores prompt and response bodies.** For this platform that means the user's master profile:
+legal name, employers, dates, achievements, contact details — in plain text, in a service with its
+own database, its own UI and its own login.
+
+Consequences that follow, and are enforced rather than advised:
+
+- The operator UI is bound to **loopback only** (`127.0.0.1:3100`), in development as much as in
+  production. Asserted by `TestCollectorUIIsBoundToLoopback`.
+- Signup is **disabled** (`AUTH_DISABLE_SIGNUP=true`). An instance that accepts new accounts from
+  anyone who can reach it is not inside any trust boundary worth the name. Enable signup only for
+  the one-time creation of the first account, then disable it again.
+- Telemetry is **off**. Nothing about this deployment leaves it.
+- `LANGFUSE_HOST` is a **container-network** address (`http://langfuse-web:3000`). The published
+  loopback port is for host-side verification only — the same trap `GATEWAY_URL` documents.
+- The application container receives **no** `LANGFUSE_*` variable. Those live in the `litellm`
+  container. Asserted by `TestApiContainerHoldsNoProviderCredentials`.
+
+### 9.2 One-time setup
+
+The collector's metadata needs its own logical database on the existing Postgres server — a separate
+database, never a shared schema, and **never managed by goose**. Langfuse runs its own migrations,
+and entangling them with the platform's sequential goose versions is a mess that only becomes
+visible at the worst moment.
+
+Creating it is a manual step, on purpose:
+
+```bash
+docker compose exec -T postgres createdb -U jobfinder langfuse
+```
+
+**An `docker-entrypoint-initdb.d` script will not do this for you.** The `pgdata` volume already
+exists on every deployment that has ever run, and Postgres executes init scripts only on first
+initialisation. A script added now would run on exactly the machines that do not need it.
+
+Then set `LANGFUSE_DB_URL`, `LANGFUSE_CLICKHOUSE_URL`, `LANGFUSE_REDIS_URL`, the
+`LANGFUSE_S3_*` group, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` and `SALT` (see `.env.example`, where every
+variable states what leaving it empty costs), bring the group up, create the first account, disable
+signup again, and copy the project's API keys into `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` for
+the `litellm` container.
+
+### 9.3 Retention — enforced, not configured
+
+Records older than `EVAL_PRUNE_RETENTION_DAYS` (default **30**) are deleted by a pruning job the
+platform owns, running on the existing scheduler tick
+(`internal/platform/observability`, driven from `jobsources/interfaces/worker/scheduler.go`).
+
+It is a job rather than a setting because **automated retention is not available to an OSS
+self-host** — the collector will keep everything forever unless something deletes it. Each run logs
+what it deleted and a failure is logged as a failure, because a retention guarantee nobody can check
+is how a window quietly stops being enforced while the documentation still claims it.
+
+The job needs `EVAL_PRUNE_COLLECTOR_URL`, `EVAL_PRUNE_PUBLIC_KEY` and `EVAL_PRUNE_SECRET_KEY`.
+These are deliberately **not** named `LANGFUSE_*`: the application must not be granted the
+collector's ingestion variables, and this is a separate grant — a key so the platform can delete its
+own records — that can be revoked on its own. It is still a real grant, and leaving these empty
+while collection is on means **nothing is ever deleted**.
+
+**Deleting a job or resetting a profile in the platform does not propagate to the collector.** The
+prompt bodies of past runs survive in it until the window expires. There is no cascade, and building
+one would mean the collector holding a foreign key into the platform's data. If a specific record
+must go now, delete it in the collector's own UI.
+
+### 9.4 The three standing questions (036-FR-012)
+
+All three are answered in the collector's UI without running a benchmark, and all three depend on
+`generation_name` being set to the task key — grouping by the `model` field instead groups by
+serving deployment and collapses two stages that share a model into one bucket.
+
+| Question | How it is answered |
+|---|---|
+| **What does a task cost over a period?** | Sum cost, grouped by `generation_name`, filtered to the date range. Read a *missing* cost as unpriced, never as free — an unpriced deployment yields no cost rather than zero. |
+| **Where does the time go?** | Latency distribution (p50/p95) grouped by `generation_name`. Per-task, not per-model: `generation-summary` and `generation-select-premium` share a model and must stay separate buckets. |
+| **How often is a task served by a fallback?** | Compare `metadata.model_group` (what was asked for) with `model` (what answered); the rate at which they differ is the non-primary-tier rate. **This needs no additional recorded field** — the two values are already on every record, which is why no degradation flag was added. |
+
+### 9.5 Adding a new AI call path
+
+Any change that adds one arrives with a coverage decision in the same change, recorded in
+[`llm-routing.md` §7.3](llm-routing.md). A path added without one is a defect against 036-FR-013,
+not a follow-up: "is this recorded?" is unanswerable after the fact without reading every call site.
