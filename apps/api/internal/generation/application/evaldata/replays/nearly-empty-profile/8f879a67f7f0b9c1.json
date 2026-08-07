@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:8f879a67f7f0b9c165c2de37451d36899b341a095d876202522778a94cca6dec",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: Go, Postgres, Docker NICE-TO-HAVE: database migration, L",
+    "prompt_len": 4852,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Small Studio\",\n      \"highlights\": [\n        \"Owned the end-to-end development of the REST API for a scheduling product.\",\n        \"Migrated the service from SQLite to Postgres, ensuring zero downtime.\",\n        \"Worked on the scheduling API, contributing to its development and maintenance.\"\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": [],\n  \"skills\": [\n    {\n      \"details\": \"Go, Postgres, Docker\",\n      \"index\": 0\n    },\n    {\n      \"details\": \"Linux, Git\",\n      \"index\": 1\n    }\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

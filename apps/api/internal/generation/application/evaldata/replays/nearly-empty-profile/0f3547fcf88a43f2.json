@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:0f3547fcf88a43f27d2424e6d8b2b6bad77d4b445d285644782e9fc659ab987b",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "The resume below is too short (only 1 page). Expand it to fill TWO pages with more detail.  RULES: - Leave the summary alone. It is written by a separate step a",
+    "prompt_len": 4625,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Small Studio\",\n      \"highlights\": [\n        \"Owned the end-to-end development of the REST API for a scheduling product, ensuring robust functionality and scalability.\",\n        \"Successfully migrated the service from SQLite to Postgres with zero downtime, maintaining continuous operation and data integrity.\",\n        \"Developed and maintained the core backend logic for a scheduling product, focusing on performance and reliability.\",\n        \"Implemented new features and enhancements for the scheduling API based on product requirements and user feedback.\",\n        \"Collaborated with cross-functional teams to define and deliver backend solutions for the scheduling platform.\"\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": [],\n  \"skills\": [\n    {\n      \"details\": \"Go, Postgres, Docker\",\n      \"index\": 0\n    },\n    {\n      \"details\": \"Linux, Git\",\n      \"index\": 1\n    }\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

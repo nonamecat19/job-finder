@@ -1,0 +1,20 @@
+Senior Machine Learning Engineer — Inference Platform
+
+We are building the serving layer for large language models and need an engineer who has
+done this before at scale. You will own the inference path end to end: kernel-level
+performance work, distributed serving, and the platform the research team deploys onto.
+
+Required:
+- Strong Python and C++; comfortable in CUDA
+- Deep experience with PyTorch and production model serving
+- Distributed systems and Kubernetes in production
+- A track record of measurable latency or throughput improvements
+
+Nice to have:
+- JAX or Triton
+- Model compression, quantization or pruning
+- Published research in efficient inference
+- Experience scaling an engineering team
+
+You will work with a small senior team and are expected to make architectural decisions
+independently.

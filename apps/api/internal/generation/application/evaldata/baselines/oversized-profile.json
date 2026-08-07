@@ -1,0 +1,14 @@
+{
+  "case": "oversized-profile",
+  "scorer_set_version": 1,
+  "recorded_at": "2026-08-07",
+  "reason": "initial baseline",
+  "scores": {
+    "bullet_shortfalls": 0,
+    "grounding_violations": 0,
+    "highlight_drift": 0,
+    "nice_to_have_retention": 0.5,
+    "required_skills_missing": 0,
+    "structural_violations": 0
+  }
+}

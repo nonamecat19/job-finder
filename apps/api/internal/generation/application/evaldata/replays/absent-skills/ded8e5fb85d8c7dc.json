@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:ded8e5fb85d8c7dc2460ae94a2b68a4f3a28f37081f2e944dbcccc61653d8ce4",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: 5+ years of production Rust, unsafe Rust, async Rust run",
+    "prompt_len": 6955,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2751,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Nexus AI (Co-Founder \u0026 CTO) | San Francisco, CA\",\n      \"highlights\": [\n        \"Developed proprietary inference optimization reducing latency by 73% compared to baseline\",\n        \"Built foundation model infrastructure serving 2M+ monthly API requests with 99.97% uptime\",\n        \"Scaled engineering team from 3 to 28 across ML research, platform, and applied AI divisions\"\n      ]\n    },\n    {\n      \"company\": \"NVIDIA Research (Research Intern) | Santa Clara, CA\",\n      \"highlights\": [\n        \"Designed sparse attention mechanism reducing transformer memory footprint by 4.2x\",\n        \"Co-authored paper accepted at NeurIPS 2022 (spotlight presentation, top 5% of submissions)\"\n      ]\n    },\n    {\n      \"company\": \"Google DeepMind (Research Intern) | London, UK\",\n      \"highlights\": [\n        \"Developed reinforcement learning algorithms for multi-agent coordination\",\n        \"Published research at top-tier venues with significant academic impact - ICML 2022 main conference paper, cited 340+ times within two years\"\n      ]\n    },\n    {\n      \"company\": \"Apple ML Research (Research Intern) | Cupertino, CA\",\n      \"highlights\": [\n        \"Created on-device neural network compression pipeline deployed across 50M+ devices\",\n        \"Filed 2 patents on efficient model quantization techniques for edge inference\"\n      ]\n    },\n    {\n      \"company\": \"Microsoft Research (Research Intern) | Redmond, WA\",\n      \"highlights\": [\n        \"Implemented novel self-supervised learning framework for low-resource language modeling\",\n        \"Research integrated into Azure Cognitive Services, reducing training data requirements by 60%\"\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [\n    {\n      \"addTokens\": \"Rust,unsafe Rust,async Rust runtimes\",\n      \"groupLabel\": \"Languages\",\n      \"removeTokens\": \"\"\n    ,\n      \"replaceDetails\": null\n    },\n    {\n      \"addTokens\": \"FPGA,kernel-bypass networking,DPDK,io_uring\",\n      \"groupLabel\": \"Infrastructure\",\n      \"removeTokens\": \"\"\n    ,\n      \"replaceDetails\": null\n    }\n  ],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": [\n    \"ML Frameworks\",\n    \"Research Areas\"\n  ],\n  \"skills\": [\n    {\n      \"details\": \"Rust,Python,C++,Julia,CUDA\",\n      \"index\": 0\n    },\n    {\n      \"details\": \"FPGA,kernel-bypass networking,DPDK,io_uring,Kubernetes,Ray,distributed training,AWS,GCP\",\n      \"index\": 2\n    },\n    {\n      \"details\": \"Exchange connectivity protocols,FIX,ITCH,OUCH\",\n      \"index\": 1\n    },\n    {\n      \"details\": \"Formal verification,model checking\",\n      \"index\": 3\n    }\n  ]\n}",
+  "recorded_at": "2026-08-07",
+  "recorded_from": "generation-select"
+}

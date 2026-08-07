@@ -1,0 +1,15 @@
+name: vague-vacancy
+why: >
+  A posting with no stated requirements at all. With no required skills, the naive
+  reading of "every required skill retained" is vacuously true, which would silently
+  disable the completeness gate on exactly the postings where it matters least to the
+  candidate and most to the check. This case exercises the structural-fallback path
+  VerifyCompleteness takes when the analysis lists nothing required — a path that must
+  keep verifying bullets rather than passing everything.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 2
+  experience_bullets_max: 3
+  skills_max_groups: 3
+  summary_lines: 2
+page_counts: [1]

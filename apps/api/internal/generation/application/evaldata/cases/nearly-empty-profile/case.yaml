@@ -1,0 +1,14 @@
+name: nearly-empty-profile
+why: >
+  A small but complete profile against a well-matched vacancy. The completeness check
+  must NOT report a shortfall merely because the profile is small: a two-role candidate
+  who genuinely has every required skill is not a failing run, and a check that fires
+  here would make the shortfall gate useless on every junior profile. This is the
+  false-positive edge case 035 found while tuning the bullet minimum.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 2
+  experience_bullets_max: 3
+  skills_max_groups: 3
+  summary_lines: 2
+page_counts: [1]
