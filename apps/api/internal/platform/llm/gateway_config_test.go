@@ -25,9 +25,16 @@ type gatewayConfig struct {
 	ModelList []struct {
 		ModelName string         `yaml:"model_name"`
 		Params    map[string]any `yaml:"litellm_params"`
+		ModelInfo map[string]any `yaml:"model_info"`
 	} `yaml:"model_list"`
 	LiteLLMSettings struct {
-		Fallbacks []map[string][]string `yaml:"fallbacks"`
+		Fallbacks       []map[string][]string `yaml:"fallbacks"`
+		SuccessCallback []string              `yaml:"success_callback"`
+		FailureCallback []string              `yaml:"failure_callback"`
+		RequestTimeout  int                   `yaml:"request_timeout"`
+		NumRetries      int                   `yaml:"num_retries"`
+		AllowedFails    int                   `yaml:"allowed_fails"`
+		CooldownTime    int                   `yaml:"cooldown_time"`
 	} `yaml:"litellm_settings"`
 }
 
@@ -254,6 +261,93 @@ var gatewayInvariants = []struct {
 	{"every chain tier is declared in model_list", checkChainTiersAreDeclared},
 	{"every generation-* openrouter deployment bounds reasoning", checkGenerationReasoningBounds},
 	{"no literal api keys", checkNoLiteralAPIKeys},
+	{"observability callbacks are declared globally", checkObservabilityCallbacks},
+	{"036 did not disturb the failover timing arithmetic", checkTimingArithmeticUnchanged},
+	{"the local terminal tier declares a zero cost", checkLocalTierIsPricedFree},
+}
+
+// Invariant 6: both callbacks declared, and declared globally (036-C1-1/C1-2).
+//
+// Success-only would hide the failures FR-002 requires, and a call that
+// exhausts every tier is exactly the one worth a record — a failure that
+// produces nothing is indistinguishable from a call that never happened.
+func checkObservabilityCallbacks(c *gatewayConfig) []string {
+	var violations []string
+	has := func(list []string) bool {
+		for _, v := range list {
+			if v == "langfuse" {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(c.LiteLLMSettings.SuccessCallback) {
+		violations = append(violations, "litellm_settings.success_callback does not list langfuse (036-C1-1)")
+	}
+	if !has(c.LiteLLMSettings.FailureCallback) {
+		violations = append(violations, "litellm_settings.failure_callback does not list langfuse; failures must be recorded too (036-C1-1)")
+	}
+	// Per-deployment callbacks would make coverage depend on which tier
+	// answered, which is the opposite of what an observability layer is for.
+	for _, d := range c.ModelList {
+		for _, k := range []string{"success_callback", "failure_callback", "callbacks"} {
+			if _, present := d.Params[k]; present {
+				violations = append(violations, fmt.Sprintf(
+					"deployment %q declares %s; callbacks are global only (036-C1-2)", d.ModelName, k))
+			}
+		}
+	}
+	return violations
+}
+
+// Invariant 7: the worst-case failover arithmetic is unchanged (036-C1-4).
+//
+// tiers x (1 + num_retries) x request_timeout must stay under the Go adapter's
+// 15-minute safety net so the proxy is always what times out first. Adding
+// observability must not perturb any term. These literals are pinned
+// deliberately: a silent change here is how the 830-second hang came back.
+func checkTimingArithmeticUnchanged(c *gatewayConfig) []string {
+	var violations []string
+	for _, want := range []struct {
+		name string
+		got  int
+		want int
+	}{
+		{"request_timeout", c.LiteLLMSettings.RequestTimeout, 60},
+		{"num_retries", c.LiteLLMSettings.NumRetries, 1},
+		{"allowed_fails", c.LiteLLMSettings.AllowedFails, 3},
+		{"cooldown_time", c.LiteLLMSettings.CooldownTime, 60},
+	} {
+		if want.got != want.want {
+			violations = append(violations, fmt.Sprintf(
+				"litellm_settings.%s is %d, want %d; changing it requires redoing the worst-case timing arithmetic (036-C1-4)",
+				want.name, want.got, want.want))
+		}
+	}
+	return violations
+}
+
+// Invariant 8: local declares an explicit zero cost (036-FR-014).
+//
+// Without it the proxy emits no cost for a deployment absent from its cost
+// map, making a free call and an unpriced one indistinguishable in the record.
+func checkLocalTierIsPricedFree(c *gatewayConfig) []string {
+	for _, d := range c.ModelList {
+		if d.ModelName != terminalTier {
+			continue
+		}
+		for _, k := range []string{"input_cost_per_token", "output_cost_per_token"} {
+			v, ok := d.ModelInfo[k]
+			if !ok {
+				return []string{fmt.Sprintf("deployment %q declares no model_info.%s; a free call and an unpriced one would be indistinguishable (036-FR-014)", terminalTier, k)}
+			}
+			if n, isInt := v.(int); !isInt || n != 0 {
+				return []string{fmt.Sprintf("deployment %q has model_info.%s = %v, want 0", terminalTier, k, v)}
+			}
+		}
+		return nil
+	}
+	return []string{fmt.Sprintf("no %q deployment found", terminalTier)}
 }
 
 func TestGatewayConfigHonoursRoutingContract(t *testing.T) {
@@ -285,7 +379,14 @@ model_list:
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: local
     litellm_params: {model: ollama_chat/gpt-oss:120b-cloud, api_key: os.environ/OLLAMA_KEY}
+    model_info: {input_cost_per_token: 0, output_cost_per_token: 0}
 litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  request_timeout: 60
+  num_retries: 1
+  allowed_fails: 3
+  cooldown_time: 60
   fallbacks:
     - generation: [generation-cerebras, local]
     - generation-analyze: [local]
@@ -326,22 +427,28 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			wantSub: `"generation-select-premium" has no litellm_settings.fallbacks chain`,
 		},
 		{
-			name:   "chain stops at a hosted provider",
-			check:  checkChainsTerminateAtLocal,
-			mutate: func(s string) string { return strings.Replace(s, "generation-summary: [local]", "generation-summary: [generation-cerebras]", 1) },
+			name:  "chain stops at a hosted provider",
+			check: checkChainsTerminateAtLocal,
+			mutate: func(s string) string {
+				return strings.Replace(s, "generation-summary: [local]", "generation-summary: [generation-cerebras]", 1)
+			},
 			// This is the defect the whole file exists to catch.
 			wantSub: `ends at "generation-cerebras", not "local"`,
 		},
 		{
-			name:    "chain names an undeclared tier",
-			check:   checkChainTiersAreDeclared,
-			mutate:  func(s string) string { return strings.Replace(s, "generation-analyze: [local]", "generation-analyze: [generation-analyze-typo, local]", 1) },
+			name:  "chain names an undeclared tier",
+			check: checkChainTiersAreDeclared,
+			mutate: func(s string) string {
+				return strings.Replace(s, "generation-analyze: [local]", "generation-analyze: [generation-analyze-typo, local]", 1)
+			},
 			wantSub: `names tier "generation-analyze-typo"`,
 		},
 		{
-			name:    "stage deployment left unbounded",
-			check:   checkGenerationReasoningBounds,
-			mutate:  func(s string) string { return strings.Replace(s, "model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low", "model: openrouter/anthropic/claude-sonnet-5", 2) },
+			name:  "stage deployment left unbounded",
+			check: checkGenerationReasoningBounds,
+			mutate: func(s string) string {
+				return strings.Replace(s, "model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low", "model: openrouter/anthropic/claude-sonnet-5", 2)
+			},
 			wantSub: "declares neither reasoning_effort nor a reasoning block",
 		},
 		{
@@ -349,6 +456,46 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			check:   checkNoLiteralAPIKeys,
 			mutate:  func(s string) string { return strings.Replace(s, "os.environ/OLLAMA_KEY", "sk-real-secret", 1) },
 			wantSub: "has a literal api_key",
+		},
+		{
+			name:    "success callback dropped",
+			check:   checkObservabilityCallbacks,
+			mutate:  func(s string) string { return strings.Replace(s, "  success_callback: [\"langfuse\"]\n", "", 1) },
+			wantSub: "success_callback does not list langfuse",
+		},
+		{
+			// Recording only successes hides the calls most worth a record.
+			name:    "failure callback dropped",
+			check:   checkObservabilityCallbacks,
+			mutate:  func(s string) string { return strings.Replace(s, "  failure_callback: [\"langfuse\"]\n", "", 1) },
+			wantSub: "failure_callback does not list langfuse",
+		},
+		{
+			name:  "callback attached to a single deployment",
+			check: checkObservabilityCallbacks,
+			mutate: func(s string) string {
+				return strings.Replace(s,
+					"litellm_params: {model: ollama_chat/gpt-oss:120b-cloud, api_key: os.environ/OLLAMA_KEY}",
+					"litellm_params: {model: ollama_chat/gpt-oss:120b-cloud, api_key: os.environ/OLLAMA_KEY, success_callback: [langfuse]}", 1)
+			},
+			wantSub: "callbacks are global only",
+		},
+		{
+			// The failure mode this pins: raising a timeout silently pushes the
+			// worst case past the Go adapter's safety net, which is how a call
+			// once hung for 830 seconds.
+			name:    "request_timeout quietly raised",
+			check:   checkTimingArithmeticUnchanged,
+			mutate:  func(s string) string { return strings.Replace(s, "request_timeout: 60", "request_timeout: 300", 1) },
+			wantSub: "request_timeout is 300, want 60",
+		},
+		{
+			name:  "local tier loses its zero cost",
+			check: checkLocalTierIsPricedFree,
+			mutate: func(s string) string {
+				return strings.Replace(s, "    model_info: {input_cost_per_token: 0, output_cost_per_token: 0}\n", "", 1)
+			},
+			wantSub: "declares no model_info.input_cost_per_token",
 		},
 	}
 
