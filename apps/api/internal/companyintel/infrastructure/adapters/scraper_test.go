@@ -1,11 +1,5 @@
 package adapters
 
-// Fixtures under testdata/ are hand-authored, minimal reproductions of the
-// selectors each parser targets (crunchbase_org.html, layoffs_fyi.html,
-// glassdoor_reviews.html, company_about.html, builtwith_lookup.html, plus
-// each source's degraded-input sibling) — no live network access is used
-// in this package's tests.
-
 import (
 	"os"
 	"strings"

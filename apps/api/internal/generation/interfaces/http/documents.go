@@ -16,14 +16,8 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// tailorTimeout bounds one ad-hoc tailoring request. It has to cover the whole
-// pipeline — analyze, select, optional expand/condense re-passes, each walking
-// the gateway's fallback chain (worst case 5 tiers x 2 attempts x
-// request_timeout 60s), plus the RenderCV PDF render — so it is well above the
-// single-call budget the ghost-score route uses.
 const tailorTimeout = 14 * time.Minute
 
-// DocumentGenerator is the interface DocumentsHandler needs from the generation service.
 type DocumentGenerator interface {
 	GenerateAdHoc(ctx context.Context, in generation.AdHocInput) (resume, coverLetter dto.GeneratedDocumentDto, err error)
 	ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocumentDto, error)
@@ -32,7 +26,6 @@ type DocumentGenerator interface {
 	GetDocumentDownload(ctx context.Context, id string) (path *string, filename string, err error)
 }
 
-// DocumentsHandler wires /api/documents, mirroring documents.controller.ts.
 type DocumentsHandler struct {
 	Generation DocumentGenerator
 }
@@ -52,11 +45,9 @@ type tailorBody struct {
 	GroundingLevel  *string  `json:"groundingLevel"`
 	RequiredSkills  []string `json:"requiredSkills,omitempty"`
 	NiceToHave      []string `json:"niceToHave,omitempty"`
-	ExperienceLevel *string  `json:"experienceLevel,omitempty"` // junior|mid|senior|lead|staff|principal
+	ExperienceLevel *string  `json:"experienceLevel,omitempty"`
 }
 
-// tailor is the ad-hoc RenderCV tailoring endpoint from a pasted vacancy (no
-// DB job) — the entry point the `/tailor-resume` command calls.
 func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 	var body tailorBody
 	if err := httpx.DecodeJSON(r, &body); err != nil || body.Vacancy == "" {
@@ -78,13 +69,6 @@ func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 			hints.ExperienceLevel = *body.ExperienceLevel
 		}
 	}
-	// acquireDeadline (httpapi) caps every route's context at
-	// DB_ACQUIRE_TIMEOUT (default 5s) for DB-pool-capacity reasons
-	// (026-db-pool-capacity). Ad-hoc tailoring is a multi-pass LLM pipeline
-	// plus a PDF render, so under that cap it could never finish — every call
-	// died at 5s with "context deadline exceeded". Detach from the inherited
-	// deadline and apply this handler's own bound, the same way the ghost-score
-	// route does.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), tailorTimeout)
 	defer cancel()
 
@@ -139,12 +123,6 @@ func (h *DocumentsHandler) update(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
-// downloadDisposition builds the Content-Disposition value for a PDF.
-// filename= carries only ASCII, since anything else is undefined there; a name
-// with non-ASCII characters (a Cyrillic or accented surname) additionally gets
-// an RFC 5987 filename*, which every current browser prefers. When stripping
-// leaves nothing usable, the ASCII parameter degrades to a generic name rather
-// than an empty one, and filename* still carries the real spelling.
 func downloadDisposition(filename string) string {
 	var ascii strings.Builder
 	for _, r := range filename {

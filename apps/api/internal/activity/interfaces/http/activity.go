@@ -21,8 +21,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// ActivityProvider is the inbound port the activity handler reads through.
-// *sqlcgen.Queries satisfies it structurally.
 type ActivityProvider interface {
 	activity.Store
 	GetActivityRun(ctx context.Context, id pgtype.UUID) (sqlcgen.ActivityRun, error)
@@ -31,30 +29,21 @@ type ActivityProvider interface {
 	ListFailedActivityRuns(ctx context.Context, op *string) ([]sqlcgen.ActivityRun, error)
 }
 
-// ActivityEnqueuer re-enqueues asynq tasks for retry. *asynq.Client satisfies it.
 type ActivityEnqueuer interface {
 	EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error)
 }
 
-// ActivityInspector cancels an in-flight or still-queued asynq task.
-// *asynq.Inspector satisfies it. Every enqueue call across the codebase sets
-// asynq.TaskID(<activity run id>), so the ActivityRun's own id doubles as the
-// asynq task id — no extra column lookup needed.
 type ActivityInspector interface {
 	CancelProcessing(id string) error
 	DeleteTask(queue, id string) error
 	GetQueueInfo(queue string) (*asynq.QueueInfo, error)
 }
 
-// queueOrder is the fixed display order for GET /activity/queues
-// (contracts/activity-api.md §2).
 var queueOrder = []string{
 	queue.QueueIngest, queue.QueueMatch, queue.QueueGenerate,
 	queue.QueueEnrich, queue.QueueSalaryInfer, queue.QueueGhostScore,
 }
 
-// queueForOp maps an ActivityRun.Op back to the asynq queue it was enqueued
-// on, so a pending (not yet running) task can be found and deleted.
 var queueForOp = map[string]string{
 	"ingest":       queue.QueueIngest,
 	"match":        queue.QueueMatch,
@@ -69,7 +58,7 @@ type ActivityHandler struct {
 	client    ActivityEnqueuer
 	inspector ActivityInspector
 	policies  []queue.TaskPolicy
-	resolvers map[string]queue.ClassResolver // keyed by queue name; nil for non-LLM queues
+	resolvers map[string]queue.ClassResolver
 }
 
 func NewActivityHandler(q ActivityProvider, client ActivityEnqueuer, inspector ActivityInspector, policies []queue.TaskPolicy, resolvers map[string]queue.ClassResolver) *ActivityHandler {
@@ -84,11 +73,6 @@ func (h *ActivityHandler) Mount(r chi.Router) {
 	r.Post("/activity/{id}/cancel", h.cancel)
 }
 
-// cancel stops an active (queued or running) run: it asks asynq to cancel a
-// running task via its context (best-effort — the handler must still notice
-// ctx.Done() and return), or deletes a still-pending one outright, then marks
-// the ActivityRun row "cancelled" regardless of whether asynq's side
-// succeeded, so the UI reflects the user's intent immediately.
 func (h *ActivityHandler) cancel(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	uid, err := dbutil.ParseUUID(id)
@@ -111,8 +95,6 @@ func (h *ActivityHandler) cancel(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"cancelled": true})
 }
 
-// cancelAll stops every currently active (queued or running) run in one
-// batch request, rather than making the client fire one cancel call per row.
 func (h *ActivityHandler) cancelAll(w http.ResponseWriter, r *http.Request) {
 	active, err := h.q.ListActiveActivityRuns(r.Context())
 	if err != nil {
@@ -127,17 +109,6 @@ func (h *ActivityHandler) cancelAll(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]int{"cancelled": len(active)})
 }
 
-// cancelOne asks asynq to stop the run's task (best-effort) and marks the
-// ActivityRun row "cancelled" regardless of whether asynq's side succeeded,
-// so the UI reflects the user's intent immediately.
-//
-// It tries both CancelProcessing (running) and DeleteTask (still queued)
-// unconditionally rather than branching on a state snapshot: a queued row
-// can flip to running between being listed and being cancelled here (the
-// worker may grab it in that window), and gating on the stale state left
-// the task to run to completion untouched while the row was marked
-// cancelled underneath it. Each call is a no-op/logged-warning when it
-// doesn't apply to the task's actual current state.
 func (h *ActivityHandler) cancelOne(ctx context.Context, id string, op string) {
 	if h.inspector != nil {
 		if err := h.inspector.CancelProcessing(id); err != nil {
@@ -190,12 +161,6 @@ func (h *ActivityHandler) list(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
-// queues reports a per-queue backlog snapshot (019-ai-job-throughput,
-// contracts/activity-api.md §2): pending/active/scheduled/retry/archived
-// counts, the effective admission concurrency for the currently resolved
-// provider class, and a throughput-derived ETA. An Inspector failure for one
-// queue is reported per-entry rather than failing the whole response; total
-// Inspector unavailability (nil inspector) yields 503.
 func (h *ActivityHandler) queues(w http.ResponseWriter, r *http.Request) {
 	if h.inspector == nil {
 		httpx.WriteError(w, http.StatusServiceUnavailable, "queue inspector unavailable")
@@ -260,8 +225,6 @@ func (h *ActivityHandler) policyFor(qname string) (queue.TaskPolicy, bool) {
 	return queue.TaskPolicy{}, false
 }
 
-// effectiveConcurrency is the admission capacity for the currently resolved
-// provider class, not the pool size (contracts/activity-api.md §2).
 func (h *ActivityHandler) effectiveConcurrency(qname string, policy queue.TaskPolicy) int {
 	resolver := h.resolvers[qname]
 	if resolver == nil {
@@ -282,12 +245,6 @@ func (h *ActivityHandler) providerClass(qname string) *string {
 	return &class
 }
 
-// retry re-enqueues every failed ActivityRun, or only those matching
-// ?op=<op> when given. Each retry creates a fresh ActivityRun for tracking —
-// the original failed row is left as-is for history. Rows that carry no
-// jobId, or a "generate" row from before docType/profileId started being
-// persisted to meta (jobs.Service.EnqueueGeneration), are skipped and
-// counted separately.
 func (h *ActivityHandler) retry(w http.ResponseWriter, r *http.Request) {
 	var opFilter *string
 	if op := r.URL.Query().Get("op"); op != "" {
@@ -312,8 +269,6 @@ func (h *ActivityHandler) retry(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]int{"retried": retried, "skipped": skipped})
 }
 
-// retryOne re-enqueues a single failed run based on its op. Returns false
-// when the op/row doesn't carry enough data to retry (e.g. no jobId).
 func (h *ActivityHandler) retryOne(ctx context.Context, row sqlcgen.ActivityRun) bool {
 	jobID := dbutil.UUIDStringPtr(row.JobId)
 
@@ -339,9 +294,6 @@ func (h *ActivityHandler) retryOne(ctx context.Context, row sqlcgen.ActivityRun)
 		}
 		docType, _ := meta["docType"].(string)
 		if docType == "" {
-			// Older run, from before docType/profileId started being
-			// persisted (see jobs.Service.EnqueueGeneration) — nothing to
-			// rebuild the payload from.
 			return false
 		}
 		var profileID *string

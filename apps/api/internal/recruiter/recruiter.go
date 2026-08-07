@@ -1,9 +1,3 @@
-// Package recruiter is the facade for the Recruiter Resolution bounded
-// context (spec 007): the ResolvedContact model and outbound ports live in
-// domain/, orchestration across the posting/company-page/linkedin sources
-// in application/. This file re-exports the shape callers already depend
-// on (compose.go) so relocating the package required no changes at call
-// sites beyond the import path.
 package recruiter
 
 import (

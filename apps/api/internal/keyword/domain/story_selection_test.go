@@ -76,7 +76,6 @@ func TestSelectStories(t *testing.T) {
 	})
 
 	t.Run("cap at 3 stories per question", func(t *testing.T) {
-		// Add 5 stories that all match the same question
 		var manyStories []domain.StarStory
 		for i := 0; i < 5; i++ {
 			manyStories = append(manyStories, domain.StarStory{
@@ -144,8 +143,8 @@ func TestSelectStories(t *testing.T) {
 			SourceExcerpt: "Lead cross-functional teams",
 		}
 		stories := []domain.StarStory{
-			matchingStory,  // technical, should not match behavioral
-			unrelatedStory, // leadership+conflict, should match behavioral
+			matchingStory,
+			unrelatedStory,
 		}
 		result := domain.SelectStories([]domain.InterviewQuestion{bq}, stories, nil)
 		mq := result.MappedQuestions[0]
@@ -161,8 +160,6 @@ func TestSelectStories(t *testing.T) {
 	})
 
 	t.Run("score below threshold yields uncovered", func(t *testing.T) {
-		// Story with non-matching category (StoryTeamwork vs CategoryTechnical)
-		// and no skill overlap → score = 0.0 < 0.15
 		veryWeakMatch := domain.StarStory{
 			ID:         "weak",
 			Title:      "Team collaboration",
@@ -233,7 +230,6 @@ func TestSelectStoriesUncoveredQuestion(t *testing.T) {
 		Categories: []domain.StoryCategory{domain.StoryMentoring},
 	}
 
-	// Test 1: uncovered behavioral question — only technical stories available
 	t.Run("behavioral question uncovered with only technical stories", func(t *testing.T) {
 		result := domain.SelectStories(
 			[]domain.InterviewQuestion{behavioralQuestion},
@@ -251,7 +247,6 @@ func TestSelectStoriesUncoveredQuestion(t *testing.T) {
 		}
 	})
 
-	// Test 2: uncovered technical question — only behavioral stories available
 	t.Run("technical question uncovered with only behavioral stories", func(t *testing.T) {
 		result := domain.SelectStories(
 			[]domain.InterviewQuestion{uncoveredTechnical},
@@ -266,9 +261,6 @@ func TestSelectStoriesUncoveredQuestion(t *testing.T) {
 		}
 	})
 
-	// Test 3: mixed — one covered (technical with technical story), two uncovered
-	// (behavioral with no behavioral story, technical with Rust and no technical
-	// stories)
 	t.Run("mixed covered and uncovered", func(t *testing.T) {
 		result := domain.SelectStories(
 			[]domain.InterviewQuestion{coveredTechnical, uncoveredBehavioral},
@@ -288,7 +280,6 @@ func TestSelectStoriesUncoveredQuestion(t *testing.T) {
 }
 
 func TestJaccardSimilarity(t *testing.T) {
-	// Jaccard is unexported, so we test through SelectStories as a proxy
 	q := domain.InterviewQuestion{
 		Text:     "The role requires Python and Docker.",
 		Category: domain.CategoryTechnical,
@@ -348,20 +339,7 @@ func TestJaccardSimilarity(t *testing.T) {
 	if mq.MappedStories[2].StoryID != "no" {
 		t.Errorf("rank 3 = %q, want %q", mq.MappedStories[2].StoryID, "no")
 	}
-	// Topics from "The role requires Python and Docker.":
-	//   filterStopwords → ["Python", "Docker"]  ("the" and "and" are stopwords;
-	//   "role" and "requires" are not stopwords but get dropped during alias
-	//   resolution since they have no canonical form → resolveAlias returns
-	//   them as-is)
 
-	// Actually extractQuestionTopics returns ["Python", "Docker"] because
-	// "role" and "requires" are kept as-is via resolveAlias. Let's verify:
-	// hi:  skills=[Python,Docker], Jaccard=2/(4+2-2)=0.5, category=1.0
-	//      → score = 0.5*0.5 + 0.3*1.0 = 0.55
-	// lo:  skills=[Python,Rust,Go], Jaccard=1/(4+3-1)=0.167, category=1.0
-	//      → score = 0.5*0.167 + 0.3*1.0 = 0.383
-	// no:  skills=[React,TypeScript], Jaccard=0/(4+2-0)=0, category=1.0
-	//      → score = 0.5*0.0 + 0.3*1.0 = 0.3
 	if mq.MappedStories[0].StoryID != "hi" {
 		t.Errorf("rank 1 = %q, want %q", mq.MappedStories[0].StoryID, "hi")
 	}
@@ -398,7 +376,7 @@ func TestStoryExcerpt(t *testing.T) {
 
 	result := domain.SelectStories([]domain.InterviewQuestion{q}, []domain.StarStory{story}, nil)
 	excerpt := result.MappedQuestions[0].MappedStories[0].Excerpt
-	if len([]rune(excerpt)) > 201 { // 200 chars + "…"
+	if len([]rune(excerpt)) > 201 {
 		t.Errorf("excerpt length = %d, want <= 201", len([]rune(excerpt)))
 	}
 	if len(excerpt) >= len(story.Situation) {

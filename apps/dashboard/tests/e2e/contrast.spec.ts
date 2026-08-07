@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { ROUTES, mockAllRoutes } from './support/mockRoutes';
 
-// SC-006: axe's color-contrast rule over all nine routes in both `data-theme` values.
 const THEMES = ['dark', 'light'] as const;
 
 test.describe('Colour contrast (T6, SC-006)', () => {

@@ -38,7 +38,7 @@ func (f *fakeSweeperStore) FinishActivityRunInterrupted(ctx context.Context, arg
 }
 
 type fakeInspector struct {
-	exists map[string]bool // keyed "queue/id"
+	exists map[string]bool
 }
 
 func (f *fakeInspector) GetTaskInfo(queue, id string) (*asynq.TaskInfo, error) {
@@ -55,10 +55,6 @@ func idFor(n byte) pgtype.UUID {
 	return u
 }
 
-// TestSweeper_MarksStaleRunningInterrupted: the DB-side filtering (only
-// 'running' rows past the cutoff or with a null heartbeat) is exercised by
-// the integration test; this unit test verifies the sweeper issues the
-// query with the right cutoff/reason and reacts to whatever rows come back.
 func TestSweeper_SweepsRunningWithCorrectCutoffAndReason(t *testing.T) {
 	store := &fakeSweeperStore{sweptRows: []sqlcgen.ActivityRun{{ID: idFor(1)}}}
 	insp := &fakeInspector{}
@@ -99,7 +95,7 @@ func TestSweeper_QueuedTaskGoneIsInterrupted(t *testing.T) {
 	store := &fakeSweeperStore{
 		staleQueued: []sqlcgen.ActivityRun{{ID: idFor(3), Op: "match", QueueTaskId: &taskID}},
 	}
-	insp := &fakeInspector{} // no tasks exist
+	insp := &fakeInspector{}
 	sweeper := NewSweeper(store, insp, 2*time.Minute, time.Minute, 30*time.Minute)
 
 	sweeper.sweepOnce(context.Background())
@@ -156,7 +152,6 @@ func TestSweeper_RunSweepsOnceImmediatelyThenStopsOnCtxDone(t *testing.T) {
 		close(done)
 	}()
 
-	// Give it time for the immediate sweep plus a tick or two, then cancel.
 	time.Sleep(20 * time.Millisecond)
 	cancel()
 
@@ -167,10 +162,6 @@ func TestSweeper_RunSweepsOnceImmediatelyThenStopsOnCtxDone(t *testing.T) {
 	}
 }
 
-// Both cutoffs go into naive `timestamp` columns whose values are written by
-// a DB-side now() on a UTC server, so the wall clock sent must be UTC. Under
-// a local zone ahead of UTC an unconverted cutoff reads as a future wall
-// clock and sweeps every running row the instant it starts.
 func TestSweeper_CutoffsAreUTCWallClock(t *testing.T) {
 	store := &fakeSweeperStore{}
 	sweeper := NewSweeper(store, &fakeInspector{}, 2*time.Minute, time.Minute, 30*time.Minute)

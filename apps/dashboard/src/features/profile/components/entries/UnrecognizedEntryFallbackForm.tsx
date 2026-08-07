@@ -6,10 +6,6 @@ interface EntryFormProps {
   onChange: (entry: Entry) => void;
 }
 
-// Raw key/value editor for entries whose section entryType didn't match any
-// of the 9 known RenderCV shapes, or for fields an imported config carried
-// that no typed form recognizes. Never drops the data (FR-009) — every key
-// found under `unrecognized` stays editable as plain text.
 export function UnrecognizedEntryFallbackForm({ entry, onChange }: EntryFormProps) {
   const data = entry.unrecognized ?? {};
   const keys = Object.keys(data);

@@ -66,7 +66,6 @@ var documents = []docSeed{
 }
 
 func seedDocuments(ctx context.Context, pool *pgxpool.Pool, q *sqlcgen.Queries) error {
-	// Idempotency: check if any seed documents already exist.
 	jobID1, err := dbutil.ParseUUID(uuidJob1)
 	if err != nil {
 		return err
@@ -98,7 +97,7 @@ func seedDocuments(ctx context.Context, pool *pgxpool.Pool, q *sqlcgen.Queries) 
 		}
 	}
 
-	_ = pool // available for future use
+	_ = pool
 	slog.Info("seed: created documents", "count", len(documents))
 	return nil
 }

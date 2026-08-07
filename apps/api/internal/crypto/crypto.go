@@ -1,7 +1,3 @@
-// Package crypto implements AES-256-GCM encryption byte-compatible with
-// apps/api/src/common/crypto.ts. Node lays out ciphertext as
-// base64(iv(12) ‖ tag(16) ‖ ciphertext); Go's cipher.AEAD.Seal appends the
-// tag *after* the ciphertext, so we must manually slice and reassemble.
 package crypto
 
 import (
@@ -21,8 +17,6 @@ const (
 	tagLen = 16
 )
 
-// keyFromHex parses a 32-byte hex-encoded key, matching Node's
-// `Buffer.from(hex, 'hex')` with the same 64-hex-char length check.
 func keyFromHex(hexKey string) ([]byte, error) {
 	if len(hexKey) != 64 {
 		return nil, errors.New("CONFIG_ENCRYPTION_KEY must be a 32-byte hex string (openssl rand -hex 32)")
@@ -34,13 +28,10 @@ func keyFromHex(hexKey string) ([]byte, error) {
 	return key, nil
 }
 
-// HasEncryptionKey mirrors hasEncryptionKey() in crypto.ts.
 func HasEncryptionKey(hexKey string) bool {
 	return len(hexKey) == 64
 }
 
-// EncryptJSON marshals value to JSON, encrypts it with AES-256-GCM and returns
-// base64(iv ‖ tag ‖ ciphertext) — the exact layout Node's encryptJson produces.
 func EncryptJSON(hexKey string, value any) (string, error) {
 	key, err := keyFromHex(hexKey)
 	if err != nil {
@@ -62,8 +53,6 @@ func EncryptJSON(hexKey string, value any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Go's Seal appends dst ‖ ciphertext ‖ tag. Slice tag off the end and
-	// reorder to iv ‖ tag ‖ ciphertext to match Node's Buffer.concat order.
 	sealed := gcm.Seal(nil, iv, plaintext, nil)
 	ct := sealed[:len(sealed)-tagLen]
 	tag := sealed[len(sealed)-tagLen:]
@@ -75,8 +64,6 @@ func EncryptJSON(hexKey string, value any) (string, error) {
 	return base64.StdEncoding.EncodeToString(out), nil
 }
 
-// DecryptJSON reverses EncryptJSON / Node's decryptJson: parse
-// base64(iv(12) ‖ tag(16) ‖ ciphertext), decrypt, unmarshal into out.
 func DecryptJSON(hexKey string, payload string, out any) error {
 	key, err := keyFromHex(hexKey)
 	if err != nil {
@@ -101,7 +88,6 @@ func DecryptJSON(hexKey string, payload string, out any) error {
 	if err != nil {
 		return err
 	}
-	// Go expects ciphertext ‖ tag for Open; Node stored tag before ciphertext.
 	sealed := make([]byte, 0, len(ct)+tagLen)
 	sealed = append(sealed, ct...)
 	sealed = append(sealed, tag...)

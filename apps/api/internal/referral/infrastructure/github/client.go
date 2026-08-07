@@ -32,9 +32,6 @@ func NewGitHubCrossReferencer() *GitHubCrossReferencer {
 	}
 }
 
-// NewWithClient builds a GitHubCrossReferencer against an arbitrary client
-// and base URL — the test seam for pointing at an httptest.Server instead
-// of the real GitHub API.
 func NewWithClient(client *http.Client, baseURL string) *GitHubCrossReferencer {
 	return &GitHubCrossReferencer{client: client, baseURL: baseURL}
 }

@@ -17,11 +17,8 @@ func TestSanitize(t *testing.T) {
 	}
 }
 
-// fakeRenderer stands in for the RenderCV toolchain and the LLM: each render
-// call returns the next queued page count, so a test can describe the shape of
-// a run ("first render is 1 page, the expanded one is 2") declaratively.
 type fakeRenderer struct {
-	pages     []int // page count per render call, in order
+	pages     []int
 	renders   []string
 	expands   int
 	condenses int
@@ -94,7 +91,7 @@ func TestRenderStopsWhenTargetIsMetOnFirstRender(t *testing.T) {
 }
 
 func TestRenderExpandsWhenUnderTarget(t *testing.T) {
-	cfg := domain.DefaultShapeConfig() // target 2
+	cfg := domain.DefaultShapeConfig()
 	f := &fakeRenderer{pages: []int{1, 2}}
 
 	out := renderWith(t, f, cfg)
@@ -117,8 +114,7 @@ func TestRenderExpandsWhenUnderTarget(t *testing.T) {
 }
 
 func TestRenderCompactsThenCondensesWhenOverTarget(t *testing.T) {
-	cfg := domain.DefaultShapeConfig() // target 2
-	// first render 3 pages, compact still 3, condensed 2.
+	cfg := domain.DefaultShapeConfig()
 	f := &fakeRenderer{pages: []int{3, 3, 2}}
 
 	out := renderWith(t, f, cfg)
@@ -160,12 +156,10 @@ func TestRenderCompactAloneCanMeetTarget(t *testing.T) {
 func TestRenderReturnsBestResultWhenTargetIsUnreachable(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.TargetPages = 1
-	// Nothing ever gets it down to one page.
 	f := &fakeRenderer{pages: []int{4, 3, 3}}
 
 	out := renderWith(t, f, cfg)
 
-	// Bounded: compact + condense, and then it stops rather than spinning.
 	if len(f.renders) != 3 {
 		t.Errorf("renders = %v, want 3 (initial + %d bounded attempts)", f.renders, shapeAttempts)
 	}

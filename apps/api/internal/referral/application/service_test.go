@@ -114,8 +114,6 @@ func TestService_SyncGithub_CreatesConnectionsForKnownContacts(t *testing.T) {
 	if result.FollowersScanned != 2 || result.FollowingScanned != 1 {
 		t.Errorf("scanned = followers:%d following:%d, want 2/1", result.FollowersScanned, result.FollowingScanned)
 	}
-	// alice appears in both followers and following (mutual) — one connection,
-	// deduped, not one per list.
 	if result.ConnectionsMade != 1 {
 		t.Errorf("ConnectionsMade = %d, want 1 (deduped mutual match)", result.ConnectionsMade)
 	}

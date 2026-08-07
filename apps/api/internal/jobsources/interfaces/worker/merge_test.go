@@ -19,8 +19,6 @@ func setupMergeTest(t *testing.T) (context.Context, *sqlcgen.Queries, func()) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-	// Own database per test (internal/dbtest): no shared tables, so no
-	// truncation and no cross-package coordination. dbtest drops it on cleanup.
 	testDB := dbtest.New(t)
 	cleanup := cancel
 

@@ -70,9 +70,6 @@ func TestOutreachGenerate_NoBody(t *testing.T) {
 	h := &outreachhttp.OutreachHandler{Outreach: &fakeOutreachProvider{draft: sampleDraft()}}
 	r := testutil.SetupRouter(h.Mount)
 
-	// Contact/tone are optional (empty contactId picks the sole contact or
-	// requires a choice; empty tone defaults) — a body-less POST must not
-	// 400.
 	w := testutil.DoRequest(r, "POST", "/api/jobs/job-1/outreach/generate", nil, map[string]string{"id": "job-1"})
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())

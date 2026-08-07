@@ -1,13 +1,5 @@
 //go:build integration
 
-// Package dbtest holds shared helpers for the integration test suites. It is
-// compiled only under the `integration` build tag and is never linked into the
-// production binary.
-//
-// Every suite gets its own physical database, cloned from a migrated template.
-// That is what lets `go test ./...` keep running packages in parallel: suites
-// no longer share tables, so one package's TRUNCATE or fixture cannot disturb
-// another's, and no cross-package locking is needed.
 package dbtest
 
 import (
@@ -29,17 +21,10 @@ import (
 	"github.com/job-finder/api/internal/db"
 )
 
-// defaultDSN matches the compose development database, so a suite run without
-// DATABASE_URL behaves the way the rest of the repo's tooling does.
 const defaultDSN = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
 
-// templateLockKey serialises template creation and cloning across the parallel
-// package binaries `go test ./...` starts. It is held for milliseconds, not for
-// the duration of a suite.
 const templateLockKey = 0x104B_F1DE
 
-// setupTimeout bounds template creation and the clone, which are local
-// operations on a small schema.
 const setupTimeout = 2 * time.Minute
 
 var (
@@ -51,20 +36,12 @@ var (
 	templateErr  error
 )
 
-// New returns a *db.DB backed by a fresh database of its own, migrated to the
-// current schema and empty of rows. The database is dropped when the test ends.
-//
-// Suites should call this instead of db.Open: an isolated database removes the
-// need to TRUNCATE shared tables, which is what used to make parallel packages
-// clobber each other.
 func New(t *testing.T) *db.DB {
 	t.Helper()
 	database, _ := NewWithDSN(t)
 	return database
 }
 
-// NewWithDSN is New for the few suites that also need the connection string,
-// for example to hand it to code that opens its own pool.
 func NewWithDSN(t *testing.T) (*db.DB, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
@@ -78,10 +55,6 @@ func NewWithDSN(t *testing.T) (*db.DB, string) {
 	return database, dsn
 }
 
-// NewForMain is New for suites whose fixtures are shared by every test in the
-// package and are therefore built in TestMain, where no *testing.T exists. The
-// returned release function closes the pool and drops the database; callers
-// that end in os.Exit must run it before exiting, since os.Exit skips defers.
 func NewForMain(label string) (*db.DB, func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
 	defer cancel()
@@ -122,10 +95,6 @@ func newDatabase(ctx context.Context, label string) (*db.DB, string, func(), err
 	}, nil
 }
 
-// ensureTemplate creates the migrated template database once per process, and
-// once per database across processes: parallel package binaries race here, so
-// the work happens under an advisory lock and every loser of the race finds the
-// template already present.
 func ensureTemplate(ctx context.Context) error {
 	templateOnce.Do(func() {
 		pool, err := maintenance()
@@ -161,8 +130,6 @@ func ensureTemplate(ctx context.Context) error {
 			templateErr = err
 			return
 		}
-		// Migrate opens and closes its own connection, so the template is left
-		// with no sessions attached — CREATE DATABASE ... TEMPLATE requires that.
 		if err := db.Migrate(dsn); err != nil {
 			templateErr = fmt.Errorf("migrate template %s: %w", name, err)
 			return
@@ -171,10 +138,6 @@ func ensureTemplate(ctx context.Context) error {
 	return templateErr
 }
 
-// cloneTemplate copies the template into a new database. Postgres rejects a
-// clone while another session is connected to the source, and a concurrent
-// clone counts, so the copies take turns on the same advisory lock the template
-// bootstrap uses.
 func cloneTemplate(ctx context.Context, name string) error {
 	template, err := templateName()
 	if err != nil {
@@ -199,9 +162,6 @@ func cloneTemplate(ctx context.Context, name string) error {
 	return err
 }
 
-// dropDatabase removes a suite's database. FORCE terminates any connection the
-// suite leaked, so a stray session cannot keep the database (and its disk)
-// around for the rest of the run.
 func dropDatabase(name string) {
 	pool, err := maintenance()
 	if err != nil {
@@ -212,9 +172,6 @@ func dropDatabase(name string) {
 	_, _ = pool.Exec(ctx, `DROP DATABASE IF EXISTS "`+name+`" WITH (FORCE)`)
 }
 
-// maintenance returns the pool used for CREATE/DROP DATABASE, which cannot run
-// against the database being created. It points at the DATABASE_URL database,
-// which exists for the whole run and is never a clone target.
 func maintenance() (*pgxpool.Pool, error) {
 	maintenanceOnce.Do(func() {
 		cfg, err := pgxpool.ParseConfig(baseDSN())
@@ -237,9 +194,6 @@ func baseDSN() string {
 	return defaultDSN
 }
 
-// templateName derives the template's name from the base database, so parallel
-// runs against different databases (a developer's and CI's, say) do not share
-// one template.
 func templateName() (string, error) {
 	u, err := url.Parse(baseDSN())
 	if err != nil {
@@ -261,8 +215,6 @@ func dsnFor(name string) (string, error) {
 	return u.String(), nil
 }
 
-// databaseName builds a unique, legal identifier from the caller's label. The
-// label is only there to make a leftover database traceable to its suite.
 func databaseName(label string) (string, error) {
 	var suffix [4]byte
 	if _, err := rand.Read(suffix[:]); err != nil {
@@ -281,8 +233,6 @@ func databaseName(label string) (string, error) {
 	return truncateName("it_" + slug + "_" + hex.EncodeToString(suffix[:])), nil
 }
 
-// truncateName keeps identifiers inside Postgres's 63-byte limit, trimming the
-// front so the random suffix — the part that makes the name unique — survives.
 func truncateName(name string) string {
 	const maxIdentifier = 63
 	if len(name) <= maxIdentifier {

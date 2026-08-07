@@ -1,5 +1,3 @@
-// Package jobs ports modules/jobs/*: list/filter/get/shortlist/hide, and
-// enqueueing async document generation.
 package jobs
 
 import (
@@ -19,30 +17,20 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// Service is the jobs use-case. It depends on the Repository and Enqueuer
-// ports (see ports.go), not on concrete infrastructure.
 type Service struct {
 	q              Repository
 	client         Enqueuer
 	salaryFloorUsd int
 }
 
-// NewService wires the use-case to its ports. The concrete *sqlcgen.Queries and
-// *asynq.Client satisfy the interfaces, so callers pass them directly.
-// salaryFloorUsd is SALARY_FLOOR_USD (spec 006, US2); 0 disables the floor
-// filter entirely (FR-018).
 func NewService(q Repository, client Enqueuer, salaryFloorUsd int) *Service {
 	return &Service{q: q, client: client, salaryFloorUsd: salaryFloorUsd}
 }
 
-// ghostSignalKind mirrors ghostjob.Kind. Kept as a local literal rather than
-// importing the ghostjob package, matching the existing house style where
-// jobs/service.go maps sqlcgen.MatchResult independently of matching's own
-// mapping (see matchResultDto here vs matching.toDto there).
 const ghostSignalKind = "ghost"
 
 type ListParams struct {
-	Sort           string // "score" | "date"
+	Sort           string
 	Source         *string
 	SubscriptionID *string
 	MinScore       *int
@@ -53,14 +41,12 @@ type ListParams struct {
 	Q              *string
 	Page           int
 	PageSize       int
-	// ShowBelowFloor, when true, omits the salary-floor predicate so jobs
-	// below SALARY_FLOOR_USD are included (FR-016). Default (false) hides
-	// them, matching the "filter defaults to on" assumption.
 	ShowBelowFloor bool
+	OnlyHidden     bool
+	OnlyApplied    bool
+	OnlyBelowFloor bool
 }
 
-// jobRow is the common shape of ListJobsByScoreRow / ListJobsByDateRow (the
-// two sqlc queries only differ in ORDER BY, so their columns are identical).
 type jobRow struct {
 	Job             sqlcgen.Job
 	MrID            pgtype.UUID
@@ -104,20 +90,22 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		}
 	}
 
-	// Floor 0 or the reveal toggle both mean "no predicate" — nil omits it
-	// entirely rather than evaluating ">= 0" (FR-018).
 	var salaryFloor *int32
-	if s.salaryFloorUsd > 0 && !params.ShowBelowFloor {
+	if s.salaryFloorUsd > 0 && (!params.ShowBelowFloor || params.OnlyBelowFloor) {
 		v := int32(s.salaryFloorUsd)
 		salaryFloor = &v
 	}
 
+	onlyBelowFloor := &params.OnlyBelowFloor
+	onlyHidden := &params.OnlyHidden
+	onlyApplied := &params.OnlyApplied
 	includeHidden := &params.IncludeHidden
 	includeApplied := &params.IncludeApplied
 
 	count, err := s.q.CountJobs(ctx, sqlcgen.CountJobsParams{
 		Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
 		SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
+		OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor,
 	})
 	if err != nil {
 		return dto.JobListResponse{}, err
@@ -130,7 +118,8 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	if params.Sort == "date" {
 		r, err := s.q.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{
 			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
-			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied, Offset: offset, Limit: limit,
+			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
+			OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, Offset: offset, Limit: limit,
 		})
 		if err != nil {
 			return dto.JobListResponse{}, err
@@ -153,7 +142,8 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	} else {
 		r, err := s.q.ListJobsByScore(ctx, sqlcgen.ListJobsByScoreParams{
 			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
-			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied, Offset: offset, Limit: limit,
+			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
+			OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, Offset: offset, Limit: limit,
 		})
 		if err != nil {
 			return dto.JobListResponse{}, err
@@ -182,9 +172,6 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		items = append(items, item)
 	}
 
-	// Ghost-job signal (005): one batch query for the whole page, not one
-	// per job (FR-012's badge is informational only — see GhostSignal doc on
-	// dto.JobDto; nothing here filters or reorders `items`).
 	if len(items) > 0 {
 		jobIDs := make([]pgtype.UUID, len(rows))
 		for i, row := range rows {
@@ -209,9 +196,6 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	return dto.JobListResponse{Items: items, Total: count, Page: page, PageSize: pageSize}, nil
 }
 
-// markBelowFloor sets SalaryBelowFloor when the job's band is entirely below
-// SALARY_FLOOR_USD. Only USD bands are evaluated — a currency the system
-// cannot convert must never be filtered or marked (FR-020 fails open).
 func (s *Service) markBelowFloor(d *dto.JobDto) {
 	if s.salaryFloorUsd <= 0 || d.SalaryMax == nil || d.SalaryCurrency == nil || *d.SalaryCurrency != "USD" {
 		return
@@ -244,8 +228,6 @@ func (s *Service) Get(ctx context.Context, id string) (dto.JobDto, error) {
 		ad := applicationDto(app)
 		out.Application = &ad
 	}
-	// A job with no ghost result renders exactly as it does today: GhostSignal
-	// simply stays nil rather than an empty/zero-valued panel (FR-017, SC-008).
 	if gs, err := s.q.GetJobSignal(ctx, sqlcgen.GetJobSignalParams{JobId: uid, Kind: ghostSignalKind}); err == nil {
 		gsd := jobSignalDto(gs)
 		out.GhostSignal = &gsd
@@ -288,8 +270,6 @@ func (s *Service) Hide(ctx context.Context, id string) (dto.JobDto, error) {
 	return out, nil
 }
 
-// Unhide reverses Hide, restoring a job marked "not fit" back to its default
-// unreviewed state.
 func (s *Service) Unhide(ctx context.Context, id string) (dto.JobDto, error) {
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
@@ -307,15 +287,10 @@ func (s *Service) Unhide(ctx context.Context, id string) (dto.JobDto, error) {
 	return out, nil
 }
 
-// DeleteAll wipes every job (and, via ON DELETE cascade, its applications,
-// documents, match results, and activity). Returns the number of jobs removed.
 func (s *Service) DeleteAll(ctx context.Context) (int64, error) {
 	return s.q.DeleteAllJobs(ctx)
 }
 
-// EnqueueGeneration enqueues a "generate" asynq task and returns a
-// 202-style payload; the dashboard polls documents. Matches
-// JobsService.enqueueGeneration.
 func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, profileID *string) (map[string]any, error) {
 	jobDto, err := s.Get(ctx, id)
 	if err != nil {
@@ -350,10 +325,6 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	if rec != nil {
 		idStr := dbutil.UUIDString(rec.ID())
 		actID = &idStr
-		// Persist docType/profileID on the run so a later retry (POST
-		// /activity/retry) can rebuild the exact same GeneratePayload —
-		// unlike match/enrich/ghost_score/salary_infer, "generate" needs
-		// more than just the jobId.
 		meta := map[string]any{"docType": docType}
 		if profileID != nil {
 			meta["profileId"] = *profileID
@@ -376,10 +347,6 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	return map[string]any{"queued": true, "queueJobId": info.ID, "type": docType}, nil
 }
 
-// EnqueueSalaryInfer enqueues a "salary_infer" asynq task for a job, mirroring
-// enrichment.Handler.enqueueSalaryInfer (used there right after scraping;
-// used here for the on-demand/auto-generate-style trigger from matching once
-// a job's score is known).
 func (s *Service) EnqueueSalaryInfer(ctx context.Context, jobID string) error {
 	jobDto, err := s.Get(ctx, jobID)
 	if err != nil {

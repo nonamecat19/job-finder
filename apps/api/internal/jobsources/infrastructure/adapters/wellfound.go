@@ -1,14 +1,3 @@
-// Package adapters — Wellfound (formerly AngelList/angel.co), direct scrape
-// of public search-results and job-detail pages (no login/session), matching
-// the GlassdoorAdapter precedent exactly (specs/010-wellfound-job-provider/
-// research.md R1-R3). Search only supports an operator-pasted search URL
-// (query.SubscriptionURL) — no keyword search. Selectors target `data-test`
-// attributes, following the Glassdoor convention for stability; field
-// mapping is provisional pending real markup capture (research.md R4) and
-// may need adjustment once live Wellfound pages are observed. A bot-
-// challenge/rate-limit response is treated as a distinct, reported failure
-// mode (FR-011) rather than a crash or silent empty result, never retried
-// aggressively or bypassed (FR-013).
 package adapters
 
 import (
@@ -25,28 +14,19 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources"
-	"github.com/job-finder/api/internal/retrieval"
 	"github.com/job-finder/api/internal/platform/scraping"
+	"github.com/job-finder/api/internal/retrieval"
 )
 
 const (
-	// wellfoundMaxSubscriptionPages caps pagination so a redirect loop or an
-	// unbounded feed can't run forever, mirroring glassdoorMaxSubscriptionPages
-	// (research.md R7).
 	wellfoundMaxSubscriptionPages = 50
-	// wellfoundRequestDelay is the floor between paginated requests (FR-010,
-	// research.md R7).
-	wellfoundRequestDelay = 500 * time.Millisecond
+	wellfoundRequestDelay         = 500 * time.Millisecond
 )
 
 var wellfoundRemoteRe = regexp.MustCompile(`(?i)\bremote\b|work from home`)
 
-// wellfoundAgeRe matches Wellfound's relative "posted" text, e.g. "3d ago",
-// "8d ago", "12h ago".
 var wellfoundAgeRe = regexp.MustCompile(`(?i)^(\d+)\s*([hd])\b`)
 
-// WellfoundAdapter — wellfound.com (and the legacy angel.co host), public
-// search-results pages, no credentials (FR-013).
 type WellfoundAdapter struct {
 	Scraping  *scraping.Service
 	Retrieval retrieval.Service
@@ -55,8 +35,6 @@ type WellfoundAdapter struct {
 func (WellfoundAdapter) Key() string          { return "wellfound" }
 func (WellfoundAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
-// NeedsDetail reports true: the results page carries a snippet only;
-// FetchDetail fills in the full description.
 func (WellfoundAdapter) NeedsDetail() bool { return true }
 
 func (d WellfoundAdapter) HealthCheck(ctx context.Context, _ map[string]any) (bool, error) {
@@ -94,8 +72,6 @@ func (d WellfoundAdapter) fetchPage(ctx context.Context, url string, headers map
 	return html, nil
 }
 
-// Search only supports the pasted-subscription-URL flow (FR-014); keyword
-// search is out of scope, matching GlassdoorAdapter.Search's stance exactly.
 func (d WellfoundAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
 	if query.SubscriptionURL == "" {
 		return nil, fmt.Errorf("wellfound keyword search not implemented — use subscription URL instead")
@@ -107,14 +83,6 @@ func (d WellfoundAdapter) Search(ctx context.Context, query dto.SearchQuery, _ m
 	return jobs, err
 }
 
-// scrapeSubscription pages through a pasted Wellfound search URL by
-// incrementing its "page" query parameter. Stops at a hard page cap
-// (wellfoundMaxSubscriptionPages, FR-010/research.md R7) regardless of
-// upstream "has more" signals, an empty page, or the page repeating the
-// previous page's first card (loop guard). A later page failing ends
-// pagination with whatever was collected; only page 1 failing is fatal
-// (mirrors GlassdoorAdapter.scrapeSubscription). A blocked response on page
-// 1 is a distinct, reported failure (FR-011).
 func (d WellfoundAdapter) scrapeSubscription(ctx context.Context, subURL string) ([]dto.NormalizedJob, error) {
 	base, err := url.Parse(subURL)
 	if err != nil {
@@ -169,12 +137,6 @@ func (d WellfoundAdapter) scrapeSubscription(ctx context.Context, subURL string)
 	return jobs, nil
 }
 
-// parseWellfoundCards extracts job cards from a Wellfound search-results
-// page using its `data-test` attributes (research.md R4, provisional
-// pending real markup capture). Title and URL are required (card skipped
-// without them, protects SC-004); every other field degrades to empty/nil
-// rather than erroring. Salary and/or equity text is captured verbatim into
-// SalaryRaw, with an equity-vs-salary distinction stashed in Raw.
 func parseWellfoundCards(doc *goquery.Document, pageURL string) []dto.NormalizedJob {
 	var results []dto.NormalizedJob
 
@@ -227,16 +189,10 @@ func parseWellfoundCards(doc *goquery.Document, pageURL string) []dto.Normalized
 	return results
 }
 
-// wellfoundTextHasEquity reports whether a compensation string mentions an
-// equity range (a "%" sign), as distinct from a pure salary range
-// (research.md R4).
 func wellfoundTextHasEquity(comp string) bool {
 	return strings.Contains(comp, "%")
 }
 
-// wellfoundPostedAtFromAge resolves Wellfound's relative "posted" text
-// (e.g. "3d ago", "12h ago") into an approximate RFC3339 timestamp, or nil
-// when it doesn't match a recognizable shape.
 func wellfoundPostedAtFromAge(age string) *string {
 	m := wellfoundAgeRe.FindStringSubmatch(strings.ToLower(strings.TrimSpace(age)))
 	if m == nil {
@@ -259,10 +215,6 @@ func wellfoundPostedAtFromAge(age string) *string {
 	return &t
 }
 
-// WellfoundDetailPatch is the parsed subset of a Wellfound job-detail page
-// used to fill in a shallow (list-only) Job row. Not part of the Adapter
-// interface — Wellfound-specific, called directly by the enrichment handler,
-// mirroring GlassdoorDetailPatch's shape (research.md R5).
 type WellfoundDetailPatch struct {
 	Description string
 	SalaryRaw   *string
@@ -271,14 +223,6 @@ type WellfoundDetailPatch struct {
 	Raw         map[string]any
 }
 
-// FetchDetail fetches a single Wellfound job-detail page and parses the full
-// description (folding in qualifications), compensation text, and resolved
-// posting date. Returns Available: false with a nil error when the detail
-// page has no recognizable description — a 404, removed-listing page, or a
-// page requiring a signed-in session this feature can't read (FR-009 edge
-// case) — so the caller leaves the job's existing summary data untouched
-// rather than overwriting it with nothing. Returns a non-nil error only on
-// fetch failure or a blocked/challenge response.
 func (d WellfoundAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (WellfoundDetailPatch, error) {
 	htmlStr, err := d.fetchPage(ctx, jobURL, nil)
 	if err != nil {

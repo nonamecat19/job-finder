@@ -27,11 +27,6 @@ function FeatureRow({ setting }: { setting: AiFeatureSettingDto }) {
   const [threshold, setThreshold] = useState(setting.threshold);
 
   useEffect(() => {
-    // Re-syncs local editable state when the server-confirmed setting
-    // changes (e.g. after a save round-trip) — reacting to an external
-    // query resolving, not state derivable from props alone during render.
-    // Reviewed as safe (spec 023-workflow-quality-gates FR-012 lint
-    // adoption).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnabled(setting.enabled);
     setThreshold(setting.threshold);

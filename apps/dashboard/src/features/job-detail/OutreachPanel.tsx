@@ -5,14 +5,6 @@ import { Button, Chip, ErrorState, Field, Select, Spinner, Textarea } from '../.
 import { emitToast, toErrorMessage } from '../../lib/toastBus';
 import { useGenerateOutreachDraft, useJobContacts, useOutreachTones } from './hooks';
 
-/**
- * OutreachPanel is the post-apply outreach draft generator (spec 012): pick
- * a contact and a tone, generate a short grounded draft, copy it out by
- * hand. This is the entire surface of the feature — the only actions on a
- * generated draft are edit, copy, and regenerate. There is no send,
- * schedule, or deliver action anywhere here, by design (FR-002, FR-003):
- * the system drafts, the user sends it themselves.
- */
 export default function OutreachPanel({ jobId }: { jobId: string | undefined }) {
   const { data: contacts } = useJobContacts(jobId);
   const { data: tones } = useOutreachTones(jobId);
@@ -26,10 +18,6 @@ export default function OutreachPanel({ jobId }: { jobId: string | undefined }) 
 
   useEffect(() => {
     if (!tone && tones && tones.length > 0) {
-      // Defaults the tone once the async tones list arrives — reacting to
-      // an external query resolving, not state derivable from props alone
-      // during render. Reviewed as safe (spec 023-workflow-quality-gates
-      // FR-012 lint adoption).
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTone(tones.find((t) => t.default)?.value ?? tones[0].value);
     }

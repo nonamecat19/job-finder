@@ -2,11 +2,6 @@
 
 package infrastructure
 
-// Manual smoke test for the real `rendercv` CLI + os/exec plumbing (not part
-// of `go test ./...` — requires the rendercv binary on PATH). Run with:
-//
-//	go test -tags live ./internal/generation/... -run Live -v
-
 import (
 	"context"
 	"os"

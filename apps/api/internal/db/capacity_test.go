@@ -54,16 +54,12 @@ func TestRequiredRisesWithCloudConcurrency(t *testing.T) {
 	if got <= baseline {
 		t.Errorf("Required() = %d after raising AI_CONCURRENCY_CLOUD, want > baseline %d", got, baseline)
 	}
-	// Four LLM task types move from 3 to 10.
 	if want := baseline + 4*(10-3); got != want {
 		t.Errorf("Required() = %d, want %d", got, want)
 	}
 }
 
 func TestBudgetUsesPoolSizeCeiling(t *testing.T) {
-	// A policy set whose local concurrency exceeds hosted must be budgeted at
-	// the local value: PoolSize() is max(local, hosted), and the pool must fit
-	// whichever provider class the task resolves to at run time (FR-013).
 	policies := []queue.TaskPolicy{
 		{TaskType: "a", LocalConcurrency: 9, HostedConcurrency: 2},
 		{TaskType: "b", LocalConcurrency: 1, HostedConcurrency: 4},
@@ -78,18 +74,10 @@ func TestBudgetUsesPoolSizeCeiling(t *testing.T) {
 	}
 }
 
-// TestBackgroundSlotsMatchesRunServers guards the constant against a future
-// edit that launches another long-lived goroutine in runServers without
-// raising the budget. A comment on the constant would not survive that edit;
-// this test will not compile past it silently.
 func TestBackgroundSlotsMatchesRunServers(t *testing.T) {
 	const (
-		// Of the goroutines runServers launches outside the worker loop, these
-		// hold a database connection for the process lifetime.
 		connectionHolding = 2
-		// The saturation sampler also runs there but only calls Pool.Stat(),
-		// which acquires nothing.
-		nonHolding = 1
+		nonHolding        = 1
 	)
 
 	fset := token.NewFileSet()
@@ -112,8 +100,6 @@ func TestBackgroundSlotsMatchesRunServers(t *testing.T) {
 		})
 	}
 
-	// The worker fan-out loop contributes one `go` statement, and the HTTP
-	// listener one more.
 	const workerLoopAndHTTP = 2
 	if want := connectionHolding + nonHolding + workerLoopAndHTTP; launched != want {
 		t.Fatalf("runServers launches %d goroutines, expected %d. A goroutine was added or removed: "+

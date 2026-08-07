@@ -8,8 +8,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// Repository is the outbound persistence port for the employer roster.
-// *sqlcgen.Queries satisfies it structurally.
 type Repository interface {
 	ListEmployerBoards(ctx context.Context) ([]sqlcgen.EmployerBoard, error)
 	ListEmployerBoardsByVendor(ctx context.Context, vendor string) ([]sqlcgen.EmployerBoard, error)

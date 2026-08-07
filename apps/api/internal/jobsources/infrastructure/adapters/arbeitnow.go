@@ -31,8 +31,6 @@ type arbeitnowResponse struct {
 	} `json:"links"`
 }
 
-// ArbeitnowAdapter mirrors arbeitnow.adapter.ts. The API has no keyword
-// param, so we fetch the first few pages and filter locally.
 type ArbeitnowAdapter struct{}
 
 func (ArbeitnowAdapter) Key() string          { return "arbeitnow" }

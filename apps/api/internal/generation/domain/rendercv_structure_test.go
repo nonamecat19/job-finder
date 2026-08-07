@@ -2,8 +2,6 @@ package domain
 
 import "testing"
 
-// The structure verifier only inspects summary and experience — neither of
-// which can be disabled — so removing an optional section cannot trip it.
 func TestVerifyStructureIntegrityIgnoresRemovedOptionalSections(t *testing.T) {
 	master := loadSampleMaster(t)
 	merged := loadSampleMaster(t)

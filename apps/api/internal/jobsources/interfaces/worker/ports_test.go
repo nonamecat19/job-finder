@@ -16,7 +16,6 @@ type fakeEnqueuer struct {
 	application.Enqueuer
 }
 
-// The constructors accept the ports, not concrete infra values.
 func TestConstructorsAcceptPorts(t *testing.T) {
 	searchSvc := application.NewSearchService(&fakeSearchRepo{}, nil, nil, &fakeEnqueuer{})
 	if worker.NewHandler(&fakeSearchRepo{}, nil, nil, &fakeEnqueuer{}) == nil {

@@ -23,7 +23,6 @@ var defaults = map[string]any{
 	"CHEAP_RUNG_RETEST_INTERVAL":     "24h",
 	"DJINNI_RATE_OVERRIDE_RPS":       0.5,
 
-	// 019-ai-job-throughput: concurrency, deadlines, liveness, local perf.
 	"AI_CONCURRENCY_CLOUD":        3,
 	"AI_CONCURRENCY_LOCAL":        1,
 	"INGEST_CONCURRENCY":          2,
@@ -42,7 +41,6 @@ var defaults = map[string]any{
 	"OLLAMA_KEEP_ALIVE":           "30m",
 	"LLM_MAX_IDLE_CONNS_PER_HOST": 4,
 
-	// 026-db-pool-capacity: explicit database connection capacity.
 	"DB_MAX_CONNS":           0,
 	"DB_MIN_CONNS":           2,
 	"DB_MAX_CONN_LIFETIME":   "1h",

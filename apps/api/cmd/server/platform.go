@@ -14,10 +14,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// Platform holds the process-wide shared infrastructure that every feature
-// composer draws on: the database pool, logger, Redis/asynq client, the
-// headless-scraping service, and the djinni session shared by pointer across
-// the adapter registry and the enrichment handler.
 type Platform struct {
 	Config         *config.Config
 	DB             *db.DB
@@ -27,26 +23,14 @@ type Platform struct {
 	AsynqInspector *asynq.Inspector
 	Scraping       *scraping.Service
 
-	// Policies is the resolved per-task-type concurrency/deadline
-	// configuration (019-ai-job-throughput), looked up by policyFor.
 	Policies []queue.TaskPolicy
 
-	// Sweeper reclaims activity runs stuck "running" past their deadline
-	// (019-ai-job-throughput).
 	Sweeper *activity.Sweeper
 
-	// DjinniSession is shared by pointer with every DjinniAdapter copy
-	// (registry + enrichment handler); its Sources back-reference is wired once
-	// jobsources.Service exists (see composeJobSources), breaking the
-	// adapter<->service construction cycle.
 	DjinniSession *adapters.DjinniSession
 }
 
-// buildPlatform opens the shared infrastructure. Callers own the lifecycle:
-// close DB, Scraping, and AsynqClient once buildPlatform returns nil error.
 func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
-	// Policies come first: they size both the asynq worker pools and the
-	// connection budget, so the two cannot drift apart (026-db-pool-capacity).
 	policies, err := queue.PoliciesFromConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -89,9 +73,6 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 	}, nil
 }
 
-// poolConfigFor derives and validates the connection-capacity policy, then
-// states it in one log line so the effective policy is visible without reading
-// configuration (026-db-pool-capacity, contracts/config.md).
 func poolConfigFor(cfg *config.Config, policies []queue.TaskPolicy) (db.PoolConfig, error) {
 	budget := db.BudgetFromPolicies(policies, cfg.DBInteractiveReserve, cfg.DBServerMaxConns)
 	required := budget.Required()

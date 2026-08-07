@@ -104,7 +104,6 @@ func TestValidateDBCapacityRejectsUnderCapacity(t *testing.T) {
 }
 
 func TestValidateDBCapacityRejectsMinAboveEffectiveMax(t *testing.T) {
-	// DB_MAX_CONNS unset, so the comparison is against the derived value.
 	cfg := poolConfig()
 	cfg.DBMinConns = 99
 
@@ -125,8 +124,6 @@ func TestValidateDBCapacityAcceptsExactAndOverDeclaredCapacity(t *testing.T) {
 		{"derived", 0},
 		{"exactly required", 25},
 		{"above required", 40},
-		// Exceeds DB_SERVER_MAX_CONNS: a warning, not a failure, because the
-		// server limit is operator-declared and may be stale (research.md R4).
 		{"above declared server max", 250},
 	}
 	for _, tc := range cases {

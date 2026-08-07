@@ -75,26 +75,16 @@ func titlesOverlap(a, b string) bool {
 	return shared >= 2 || (minLen == 1 && shared >= 1)
 }
 
-// CanonicalURL strips the query string and trailing slashes from a job URL,
-// matching `newJob.url.split('?')[0].replace(/\/+$/, ”)` in
-// ingestion.processor.ts:74 exactly.
 func CanonicalURL(rawURL string) string {
 	return strings.TrimRight(strings.SplitN(rawURL, "?", 2)[0], "/")
 }
 
-// DedupeKey computes sha256(lower(company)|lower(title)|canonicalUrl) —
-// must match ingestion.processor.ts:74 byte-for-byte or duplicate jobs flood in.
 func DedupeKey(company, title, rawURL string) string {
 	canonical := CanonicalURL(rawURL)
 	sum := sha256.Sum256([]byte(strings.ToLower(company) + "|" + strings.ToLower(title) + "|" + canonical))
 	return hex.EncodeToString(sum[:])
 }
 
-// FindMergeCandidate checks whether a new job from a board vendor can be
-// merged into an existing job from a different source (typically an aggregator).
-// It matches by normalized company name (case-insensitive) + similar title
-// (significant word overlap). Embedding similarity is deferred to the match
-// stage since jobs typically have no embedding at ingestion time.
 func FindMergeCandidate(ctx context.Context, q domain.SearchRepository, j dto.NormalizedJob) (pgtype.UUID, error) {
 	if !IsBoardVendor(j.SourceKey) {
 		return pgtype.UUID{}, nil
@@ -118,18 +108,6 @@ func FindMergeCandidate(ctx context.Context, q domain.SearchRepository, j dto.No
 	return pgtype.UUID{}, nil
 }
 
-// FindMergeCandidates is the batch form of FindMergeCandidate: one query per
-// distinct board-vendor source key in the chunk instead of one per posting.
-// It returns the resolved targets keyed by dedupe key, plus the number of
-// statements issued.
-//
-// titlesOverlap stays in Go, applied to the batch result: it has existing unit
-// coverage and reimplementing its word-overlap heuristic in SQL would
-// duplicate tested logic in an untested place.
-//
-// Unlike the per-posting form, a lookup failure here is fatal rather than
-// logged-and-skipped — the caller runs inside a transaction, where a failed
-// statement aborts everything that follows anyway.
 func FindMergeCandidates(ctx context.Context, q domain.BatchRepository, postings []dto.NormalizedJob) (map[string]pgtype.UUID, int, error) {
 	bySource := map[string][]dto.NormalizedJob{}
 	for _, j := range postings {
@@ -164,8 +142,6 @@ func FindMergeCandidates(ctx context.Context, q domain.BatchRepository, postings
 		}
 		statements++
 
-		// Correlate by the lowercased company the query returns, not by
-		// position: companies with no candidate are simply absent.
 		byCompany := make(map[string]sqlcgen.FindJobsByCompaniesRow, len(rows))
 		for _, row := range rows {
 			byCompany[row.CompanyKey] = row

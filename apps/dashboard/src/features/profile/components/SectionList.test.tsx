@@ -9,8 +9,6 @@ const baseSections: Section[] = [
   { name: 'experience', entryType: 'experience', entries: [{ company: 'Acme' }] },
 ]
 
-// FR-006: up/down buttons must reorder sections (the accessible fallback to
-// drag reordering — spec 009 research.md #5), and persist through onChange.
 describe('SectionList', () => {
   it('moves a section down via the move-down button and calls onChange with new order', async () => {
     const onChange = vi.fn()
@@ -22,7 +20,6 @@ describe('SectionList', () => {
     expect(onChange).toHaveBeenCalledWith([baseSections[1], baseSections[0]])
   })
 
-  // FR-011: deleting a section must require confirmation before it's removed.
   it('requires confirmation before deleting a section', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
@@ -36,8 +33,6 @@ describe('SectionList', () => {
     expect(onChange).toHaveBeenCalledWith([baseSections[1]])
   })
 
-  // FR-005: arbitrary custom section names must be accepted, not just a
-  // fixed preset list.
   it('adds a custom-named section with the chosen entry type', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()

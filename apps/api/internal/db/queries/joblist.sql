@@ -11,8 +11,16 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
     OR (
       sqlc.narg('status')::text IS NULL
-      AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
-      AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+      AND (
+        (COALESCE(sqlc.narg('only_hidden')::bool, false) AND j."status" = 'hidden')
+        OR (COALESCE(sqlc.narg('only_applied')::bool, false) AND j."status" = 'applied')
+        OR (
+          NOT COALESCE(sqlc.narg('only_hidden')::bool, false)
+          AND NOT COALESCE(sqlc.narg('only_applied')::bool, false)
+          AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
+          AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+        )
+      )
     )
   )
   AND (sqlc.narg('remote')::bool IS NULL OR j."remote" = sqlc.narg('remote'))
@@ -24,10 +32,19 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   )
   AND (sqlc.narg('min_score')::int IS NULL OR mr."score" >= sqlc.narg('min_score'))
   AND (
-    sqlc.narg('salary_floor')::int IS NULL
-    OR j."salaryMax" IS NULL
-    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= sqlc.narg('salary_floor')
+    (COALESCE(sqlc.narg('only_below_floor')::bool, false)
+      AND j."salaryMax" IS NOT NULL
+      AND j."salaryCurrency" = 'USD'
+      AND j."salaryMax" < sqlc.narg('salary_floor'))
+    OR (
+      NOT COALESCE(sqlc.narg('only_below_floor')::bool, false)
+      AND (
+        sqlc.narg('salary_floor')::int IS NULL
+        OR j."salaryMax" IS NULL
+        OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+        OR j."salaryMax" >= sqlc.narg('salary_floor')
+      )
+    )
   )
 ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
 OFFSET sqlc.arg('offset')
@@ -46,8 +63,16 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
     OR (
       sqlc.narg('status')::text IS NULL
-      AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
-      AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+      AND (
+        (COALESCE(sqlc.narg('only_hidden')::bool, false) AND j."status" = 'hidden')
+        OR (COALESCE(sqlc.narg('only_applied')::bool, false) AND j."status" = 'applied')
+        OR (
+          NOT COALESCE(sqlc.narg('only_hidden')::bool, false)
+          AND NOT COALESCE(sqlc.narg('only_applied')::bool, false)
+          AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
+          AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+        )
+      )
     )
   )
   AND (sqlc.narg('remote')::bool IS NULL OR j."remote" = sqlc.narg('remote'))
@@ -59,10 +84,19 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   )
   AND (sqlc.narg('min_score')::int IS NULL OR mr."score" >= sqlc.narg('min_score'))
   AND (
-    sqlc.narg('salary_floor')::int IS NULL
-    OR j."salaryMax" IS NULL
-    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= sqlc.narg('salary_floor')
+    (COALESCE(sqlc.narg('only_below_floor')::bool, false)
+      AND j."salaryMax" IS NOT NULL
+      AND j."salaryCurrency" = 'USD'
+      AND j."salaryMax" < sqlc.narg('salary_floor'))
+    OR (
+      NOT COALESCE(sqlc.narg('only_below_floor')::bool, false)
+      AND (
+        sqlc.narg('salary_floor')::int IS NULL
+        OR j."salaryMax" IS NULL
+        OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+        OR j."salaryMax" >= sqlc.narg('salary_floor')
+      )
+    )
   )
 ORDER BY j."ingestedAt" DESC
 OFFSET sqlc.arg('offset')
@@ -78,8 +112,16 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
     (sqlc.narg('status')::text IS NOT NULL AND j."status" = sqlc.narg('status'))
     OR (
       sqlc.narg('status')::text IS NULL
-      AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
-      AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+      AND (
+        (COALESCE(sqlc.narg('only_hidden')::bool, false) AND j."status" = 'hidden')
+        OR (COALESCE(sqlc.narg('only_applied')::bool, false) AND j."status" = 'applied')
+        OR (
+          NOT COALESCE(sqlc.narg('only_hidden')::bool, false)
+          AND NOT COALESCE(sqlc.narg('only_applied')::bool, false)
+          AND (COALESCE(sqlc.narg('include_hidden')::bool, false) OR j."status" != 'hidden')
+          AND (COALESCE(sqlc.narg('include_applied')::bool, false) OR j."status" != 'applied')
+        )
+      )
     )
   )
   AND (sqlc.narg('remote')::bool IS NULL OR j."remote" = sqlc.narg('remote'))
@@ -91,10 +133,19 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   )
   AND (sqlc.narg('min_score')::int IS NULL OR mr."score" >= sqlc.narg('min_score'))
   AND (
-    sqlc.narg('salary_floor')::int IS NULL
-    OR j."salaryMax" IS NULL
-    OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-    OR j."salaryMax" >= sqlc.narg('salary_floor')
+    (COALESCE(sqlc.narg('only_below_floor')::bool, false)
+      AND j."salaryMax" IS NOT NULL
+      AND j."salaryCurrency" = 'USD'
+      AND j."salaryMax" < sqlc.narg('salary_floor'))
+    OR (
+      NOT COALESCE(sqlc.narg('only_below_floor')::bool, false)
+      AND (
+        sqlc.narg('salary_floor')::int IS NULL
+        OR j."salaryMax" IS NULL
+        OR j."salaryCurrency" IS DISTINCT FROM 'USD'
+        OR j."salaryMax" >= sqlc.narg('salary_floor')
+      )
+    )
   );
 
 -- name: GetJobDocuments :many

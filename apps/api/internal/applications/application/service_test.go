@@ -15,7 +15,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// fakeRepo embeds the Repository port; the test overrides only what it needs.
 type fakeRepo struct {
 	domain.Repository
 	rows    []sqlcgen.ListApplicationsRow
@@ -35,7 +34,6 @@ func TestListEmpty(t *testing.T) {
 	if len(out) != 0 {
 		t.Errorf("len = %d, want 0", len(out))
 	}
-	// non-nil empty slice (JSON serializes as [], not null)
 	if out == nil {
 		t.Error("expected non-nil empty slice")
 	}
@@ -49,12 +47,8 @@ func TestListError(t *testing.T) {
 	}
 }
 
-// --------------- outcome capture on status change ---------------
-
 const testAppID = "11111111-1111-1111-1111-111111111111"
 
-// fakeWriteRepo records the writes Update performs so the outcome-capture path
-// can be asserted without a database.
 type fakeWriteRepo struct {
 	domain.Repository
 	existing sqlcgen.Application
@@ -106,14 +100,12 @@ func newWriteRepo(status string) *fakeWriteRepo {
 
 func statusPtr(s dto.ApplicationStatus) *dto.ApplicationStatus { return &s }
 
-// TestUpdateRecordsOutcomeEvent covers the status→event mapping: submission and
-// post-submission transitions record an outcome, pre-submission ones do not.
 func TestUpdateRecordsOutcomeEvent(t *testing.T) {
 	tests := []struct {
 		name      string
 		from      string
 		to        dto.ApplicationStatus
-		wantEvent dto.OutcomeEventType // "" = no event recorded
+		wantEvent dto.OutcomeEventType
 	}{
 		{"applied records applied", "shortlisted", dto.StatusApplied, dto.OutcomeApplied},
 		{"interview records screen", "applied", dto.StatusInterview, dto.OutcomeScreen},
@@ -148,8 +140,6 @@ func TestUpdateRecordsOutcomeEvent(t *testing.T) {
 	}
 }
 
-// TestUpdateAppliedAtMatchesEventTimestamp locks in the invariant the post-age
-// signal depends on: "appliedAt" is the same instant as the `applied` event.
 func TestUpdateAppliedAtMatchesEventTimestamp(t *testing.T) {
 	repo := newWriteRepo("shortlisted")
 	svc := application.NewService(repo)
@@ -167,8 +157,6 @@ func TestUpdateAppliedAtMatchesEventTimestamp(t *testing.T) {
 	}
 }
 
-// TestUpdateNoStatusChangeRecordsNothing: a no-op transition (same status) must
-// not append to the log, and a notes-only edit must not either.
 func TestUpdateNoStatusChangeRecordsNothing(t *testing.T) {
 	notes := "just a note"
 	for _, tt := range []struct {
@@ -191,9 +179,6 @@ func TestUpdateNoStatusChangeRecordsNothing(t *testing.T) {
 	}
 }
 
-// TestUpdateDuplicateTerminalEventIsNotAnError: the partial unique index drops a
-// duplicate terminal-once event and returns no row; Update must treat that as
-// the specified idempotent no-op rather than failing the request.
 func TestUpdateDuplicateTerminalEventIsNotAnError(t *testing.T) {
 	repo := newWriteRepo("interview")
 	repo.outcomeErr = pgx.ErrNoRows
@@ -207,7 +192,6 @@ func TestUpdateDuplicateTerminalEventIsNotAnError(t *testing.T) {
 	}
 }
 
-// TestUpdateOutcomeWriteErrorFails: a real insert failure must not be swallowed.
 func TestUpdateOutcomeWriteErrorFails(t *testing.T) {
 	repo := newWriteRepo("shortlisted")
 	repo.outcomeErr = errors.New("db down")
@@ -216,8 +200,6 @@ func TestUpdateOutcomeWriteErrorFails(t *testing.T) {
 		t.Fatal("expected outcome insert failure to fail the update")
 	}
 }
-
-// --------------- timeline read-back ---------------
 
 type fakeTimelineRepo struct {
 	domain.Repository
@@ -255,7 +237,6 @@ func TestTimelineEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Timeline: %v", err)
 	}
-	// non-nil empty slice so JSON serializes as [], not null
 	if out == nil || len(out) != 0 {
 		t.Fatalf("expected non-nil empty slice, got %v", out)
 	}

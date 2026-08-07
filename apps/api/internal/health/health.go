@@ -11,37 +11,20 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// readinessTimeout bounds each individual dependency ping so a hung
-// dependency cannot hang the whole /health/ready response (spec FR-004).
 const readinessTimeout = 2 * time.Second
 
-// Pinger is the structural interface HealthHandler needs from each
-// dependency client. *pgxpool.Pool, redis.UniversalClient, and *minio.Client
-// (via a small adapter) all satisfy this with their existing Ping/BucketExists
-// methods — see cmd/server/compose.go for the concrete wiring.
 type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
-// HealthHandler serves liveness/readiness. Postgres and Redis are always
-// checked; Minio is optional — Minio == nil means uploads are disabled
-// (mirrors internal/storage's "MinioEndpoint unset" convention) and is
-// reported as "disabled" rather than failing readiness.
 type HealthHandler struct {
 	Postgres Pinger
 	Redis    Pinger
-	Minio    Pinger // nil if MinIO is not configured
+	Minio    Pinger
 
-	// Pool reports connection-pool capacity (026-db-pool-capacity). Nil-able:
-	// when nil the `pool` key is omitted entirely, since a zero-valued block
-	// is indistinguishable from a genuinely idle pool and would misreport
-	// max_conns as 0.
 	Pool PoolStatter
 }
 
-// PoolStatter is implemented by the Postgres pool only. Redis and MinIO have
-// no equivalent, so this is deliberately not folded into Pinger — widening
-// Pinger would force meaningless implementations on the other two.
 type PoolStatter interface {
 	PoolStats() db.PoolStats
 }
@@ -87,9 +70,6 @@ func (h *HealthHandler) ready(w http.ResponseWriter, r *http.Request) {
 	checkOne("redis", h.Redis)
 	checkOne("minio", h.Minio)
 
-	// Saturation deliberately does not affect ok: a saturated pool is still
-	// serving, and flipping readiness to false would pull the process out of
-	// rotation for a load condition, making it worse (contracts/readiness.md).
 	if h.Pool != nil {
 		stats := h.Pool.PoolStats()
 		report.Pool = &stats

@@ -67,12 +67,10 @@ describe('KeywordDiffPanel', () => {
       ).toBeInTheDocument()
     })
     expect(screen.getByText(/Set up CI pipelines/)).toBeInTheDocument()
-    // The no-honest-rephrase term shows the advisory note instead of text.
     expect(screen.getByText(/No honest rephrase available/i)).toBeInTheDocument()
   })
 
   it('copies the suggestion to the clipboard', async () => {
-    // userEvent.setup() installs a clipboard stub on navigator; spy on it.
     const user = userEvent.setup()
     const writeText = vi.spyOn(navigator.clipboard, 'writeText')
 

@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// fakeProvider lets tests script a sequence of CompleteJSON responses,
-// exactly like stubbing cerebras.provider.ts in a Jest test.
 type fakeProvider struct {
 	responses []string
 	calls     int
@@ -58,7 +56,6 @@ func TestCompleteStructured_MalformedThenValid(t *testing.T) {
 	if p.calls != 2 {
 		t.Fatalf("expected 2 calls, got %d", p.calls)
 	}
-	// second prompt must include the "previous answer was invalid" retry hint
 	if !strings.Contains(p.prompts[1], "previous answer was invalid") {
 		t.Fatalf("retry prompt missing validation-error hint: %s", p.prompts[1])
 	}
@@ -70,14 +67,12 @@ func TestCompleteStructured_FailsAfterMaxRetries(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error after exhausting retries")
 	}
-	if p.calls != 3 { // 1 initial + 2 retries, matching structuredRetries=2
+	if p.calls != 3 {
 		t.Fatalf("expected 3 attempts, got %d", p.calls)
 	}
 }
 
 func TestCompleteStructured_SemanticValidationRetries(t *testing.T) {
-	// First response is valid JSON but fails the Validate() semantic check
-	// (score out of range) — must retry, same as zod's schema.safeParse failing.
 	p := &fakeProvider{responses: []string{
 		`{"score": 150, "summary": "x", "skills": []}`,
 		`{"score": 50, "summary": "x", "skills": []}`,

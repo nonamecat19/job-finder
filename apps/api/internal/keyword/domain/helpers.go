@@ -2,9 +2,6 @@ package domain
 
 import "strings"
 
-// lowerASCII lowercases ASCII letters only. We avoid strings.ToLower because it
-// would case-fold non-ASCII scripts in JD text we don't want to mutate
-// (e.g. Cyrillic employer names); alias matching is intentionally ASCII-only.
 func lowerASCII(s string) string {
 	b := []byte(s)
 	for i := 0; i < len(b); i++ {
@@ -15,12 +12,6 @@ func lowerASCII(s string) string {
 	return string(b)
 }
 
-// titleCaseWords upper-cases the first ASCII letter of each space-separated
-// word, leaving the rest untouched. This exists in place of the deprecated
-// strings.Title (removed guidance: golang.org/x/text/cases) because we only
-// ever call it on already-lowercased, space-joined ASCII synonym-map keys —
-// the Unicode word-boundary subtleties strings.Title mishandles don't apply
-// here, so pulling in x/text/cases would be one dependency for zero benefit.
 func titleCaseWords(s string) string {
 	words := strings.Fields(s)
 	for i, w := range words {
@@ -36,14 +27,10 @@ func titleCaseWords(s string) string {
 	return strings.Join(words, " ")
 }
 
-// collapseSpace turns runs of whitespace into a single space.
 func collapseSpace(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// stopwords are dropped from candidate phrases so "experience with Kubernetes"
-// yields "Kubernetes", not the filler words. These are connector words, not
-// JD skills, so removing them cannot change polarity classification.
 var stopwords = map[string]bool{
 	"a": true, "an": true, "the": true, "and": true, "or": true, "of": true,
 	"to": true, "with": true, "in": true, "on": true, "for": true, "is": true,
@@ -67,11 +54,6 @@ func filterStopwords(tokens []string) []string {
 	return out
 }
 
-// noiseWords are common English verbs/nouns that appear in responsibility
-// prose ("build", "deploy", "manage") but are not themselves JD skills. The
-// extractor is recall-biased by design, so this is a small, deliberately
-// conservative denylist — we only drop words that would never be a meaningful
-// required/preferred term in a keyword diff.
 var noiseWords = map[string]bool{
 	"build": true, "deploy": true, "develop": true, "create": true, "manage": true,
 	"design": true, "implement": true, "maintain": true, "support": true, "lead": true,
@@ -84,23 +66,15 @@ var noiseWords = map[string]bool{
 	"provide": true, "drive": true, "own": true, "deliver": true, "improve": true,
 }
 
-// isNoise reports whether a single lowercase token is non-skill prose.
 func isNoise(t string) bool {
 	return noiseWords[lowerASCII(t)]
 }
 
-// stem is a small, deterministic English stemmer. We deliberately avoid pulling
-// in a full Porter2 dependency for this task; the rules below cover the
-// inflectional endings that matter for JD/resume term matching (spec §2.1):
-// plurals and common suffix variation. It is conservative — it only strips a
-// suffix when the remainder is still a plausible word — so "docker" never
-// collapses to "dock".
 func stem(s string) string {
 	w := lowerASCII(strings.TrimSpace(s))
 	if w == "" {
 		return w
 	}
-	// Preserve known acronyms / casing-sensitive canonicals verbatim.
 	if _, ok := canonicalByAlias[w]; ok && len(w) <= 5 {
 		return w
 	}

@@ -65,7 +65,7 @@ func TestPoliciesFromConfig_PoolSize(t *testing.T) {
 	}
 	for _, p := range policies {
 		if p.LLMTaskKey == "" {
-			continue // non-LLM: local == hosted by construction
+			continue
 		}
 		if got, want := p.PoolSize(), 3; got != want {
 			t.Errorf("%s: PoolSize() = %d, want %d", p.TaskType, got, want)
@@ -102,7 +102,7 @@ func TestPoliciesFromConfig_RejectsZeroDuration(t *testing.T) {
 
 func TestPoliciesFromConfig_RejectsStaleAfterBelowTwiceHeartbeat(t *testing.T) {
 	cfg := validConfig()
-	cfg.ActivityStaleAfter = cfg.ActivityHeartbeatInterval // exactly 1x, not 2x
+	cfg.ActivityStaleAfter = cfg.ActivityHeartbeatInterval
 	_, err := PoliciesFromConfig(cfg)
 	if err == nil || !strings.Contains(err.Error(), "ACTIVITY_STALE_AFTER") {
 		t.Fatalf("expected stale-after error, got %v", err)
@@ -112,7 +112,7 @@ func TestPoliciesFromConfig_RejectsStaleAfterBelowTwiceHeartbeat(t *testing.T) {
 func TestPoliciesFromConfig_RejectsStaleAfterPlusSweepAtOrOverFiveMinutes(t *testing.T) {
 	cfg := validConfig()
 	cfg.ActivityStaleAfter = 4 * time.Minute
-	cfg.ActivitySweepInterval = 1 * time.Minute // sums to exactly 5m
+	cfg.ActivitySweepInterval = 1 * time.Minute
 	_, err := PoliciesFromConfig(cfg)
 	if err == nil || !strings.Contains(err.Error(), "must be < 5m") {
 		t.Fatalf("expected 5m bound error, got %v", err)
@@ -122,7 +122,7 @@ func TestPoliciesFromConfig_RejectsStaleAfterPlusSweepAtOrOverFiveMinutes(t *tes
 func TestPoliciesFromConfig_AcceptsBoundaryUnderFiveMinutes(t *testing.T) {
 	cfg := validConfig()
 	cfg.ActivityStaleAfter = 3*time.Minute + 59*time.Second
-	cfg.ActivitySweepInterval = 1 * time.Minute // sums to 4m59s, just under 5m
+	cfg.ActivitySweepInterval = 1 * time.Minute
 	if _, err := PoliciesFromConfig(cfg); err != nil {
 		t.Fatalf("unexpected error at boundary: %v", err)
 	}

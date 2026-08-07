@@ -1,5 +1,3 @@
-// Package adapters implements one JobSourceAdapter per job board, mirroring
-// modules/job-sources/adapters/*.adapter.ts.
 package adapters
 
 import (
@@ -28,9 +26,6 @@ type joobleResponse struct {
 	Jobs       []joobleJob `json:"jobs"`
 }
 
-// JoobleAdapter mirrors the Jooble API adapter. APIKey is an env-sourced
-// default injected at construction (config.Config), used when the per-source
-// runtime config omits it.
 type JoobleAdapter struct {
 	APIKey string
 }
@@ -38,21 +33,18 @@ type JoobleAdapter struct {
 func (JoobleAdapter) Key() string          { return "jooble" }
 func (JoobleAdapter) Kind() dto.SourceKind { return dto.SourceKindAPI }
 
-// keywordsFromURL extracts search keywords from a Jooble subscription URL
-// like "https://ua.jooble.org/Робота-full-stack-developer" → "Робота full-stack developer".
 func keywordsFromURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return ""
 	}
-	// Path is "/{keywords}" — strip leading slash and decode
 	path := strings.TrimPrefix(u.Path, "/")
 	if path == "" {
 		return ""
 	}
 	decoded, err := url.PathUnescape(path)
 	if err != nil {
-		return path // best-effort: return raw
+		return path
 	}
 	return decoded
 }

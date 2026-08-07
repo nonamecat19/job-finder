@@ -12,16 +12,11 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// CompanyIntelProvider is the interface CompaniesHandler needs from the
-// companyintel service.
 type CompanyIntelProvider interface {
 	GetIntel(ctx context.Context, jobID string) (*dto.CompanyIntelDto, error)
 	Refresh(ctx context.Context, jobID string) (*dto.CompanyIntelDto, error)
 }
 
-// CompaniesHandler wires /api/companies/{jobId}/intel and
-// /api/companies/{jobId}/intel/refresh, mirroring the dashboard's
-// api.companies client (spec 004).
 type CompaniesHandler struct {
 	CompanyIntel CompanyIntelProvider
 }
@@ -38,9 +33,6 @@ func (h *CompaniesHandler) intel(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// out is nil when the company has never been probed (or the job has no
-	// parseable company name) — serialized as JSON null, which the
-	// dashboard's `!intel` check renders as the "no data yet" state.
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 

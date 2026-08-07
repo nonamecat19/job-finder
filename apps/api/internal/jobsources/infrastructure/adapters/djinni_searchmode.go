@@ -1,13 +1,3 @@
-// Package adapters — djinni.co job-source adapter.
-//
-// This file defines the Djinni URL-shape discriminator used by both the
-// subscription validator (save-time acceptance) and the adapter Search() path
-// (run-time mode selection), per spec FR-002, research.md R2, and
-// contracts/djinni-url-shapes.md.
-//
-// Shape A — Dashboard:  /my/dashboard/subs/<id>/
-// Shape B — BasicSearch: /jobs/?search_type=basic-search&...
-// Everything else → Unknown (rejected at save time).
 package adapters
 
 import (
@@ -17,7 +7,6 @@ import (
 	"strings"
 )
 
-// DjinniSearchMode encodes the subscription-URL shape.
 type DjinniSearchMode int
 
 const (
@@ -25,11 +14,6 @@ const (
 	DjinniModeBasicSearch
 )
 
-// DjinniDetect returns the Djinni search mode a saved subscription URL maps to
-// by inspecting host, path, and query parameters (pure net/url — no HTTP,
-// no goquery). When the URL does not match either the dashboard shape or the
-// basic-search shape, the caller (validator or run path) treats the result as
-// Unknown and produces the appropriate human-readable reason.
 func DjinniDetect(rawURL string) DjinniSearchMode {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -42,9 +26,6 @@ func DjinniDetect(rawURL string) DjinniSearchMode {
 	return djinniDetectShape(parsed)
 }
 
-// djinniDetectShape performs the path/query shape check (no host check) so the
-// run-time Search() path can route subscriptions without re-validating the
-// host (which was already validated at save time). Called by DjinniDetect.
 func djinniDetectShape(parsed *url.URL) DjinniSearchMode {
 	if (parsed.Path == "/jobs" || parsed.Path == "/jobs/") &&
 		parsed.Query().Get("search_type") == "basic-search" {
@@ -54,8 +35,6 @@ func djinniDetectShape(parsed *url.URL) DjinniSearchMode {
 	return DjinniModeUnknown
 }
 
-// BasicSearchFilters is the non-persisted parse of a basic-search URL's query
-// parameters, used for logging clarity (Go) and display (TS).
 type BasicSearchFilters struct {
 	PrimaryKeyword string
 	Salary         string
@@ -63,10 +42,6 @@ type BasicSearchFilters struct {
 	Employment     string
 }
 
-// ParseBasicSearch extracts basic-search filter values from the query string
-// when the URL matches the basic-search shape. Returns (filters, true) in that
-// case and zero-value / false otherwise. Parsed values are preserved as-is —
-// no normalization, no currency conversion.
 func ParseBasicSearch(rawURL string) (BasicSearchFilters, bool) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -85,11 +60,6 @@ func ParseBasicSearch(rawURL string) (BasicSearchFilters, bool) {
 	return f, true
 }
 
-// summarizeExpLevels renders a deduplicated, sorted set of Djinni exp_level
-// "Ny" tokens as a human-readable string per contracts/djinni-url-shapes.md
-// §4. Consecutive integer years collapse to "min–max years", non-consecutive
-// to "a, b years", and any non-parseable token forces a safe list fallback
-// (never mis-collapse).
 func summarizeExpLevels(values []string) string {
 	if len(values) == 0 {
 		return ""

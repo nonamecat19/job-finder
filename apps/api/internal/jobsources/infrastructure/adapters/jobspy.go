@@ -37,11 +37,6 @@ type jobspyHealthResponse struct {
 	OK bool `json:"ok"`
 }
 
-// JobSpyAdapter delegates LinkedIn/Indeed/Glassdoor to the python jobspy
-// sidecar (apps/jobspy-sidecar). Best-effort: upstream scrapers break
-// periodically. Mirrors jobspy.adapter.ts. URL is an env-sourced default
-// injected at construction (config.Config), used when the per-source runtime
-// config omits it.
 type JobSpyAdapter struct {
 	URL string
 }
@@ -117,4 +112,3 @@ func (a JobSpyAdapter) HealthCheck(ctx context.Context, config map[string]any) (
 	}
 	return res.OK, nil
 }
-

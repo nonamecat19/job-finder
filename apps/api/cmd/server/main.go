@@ -1,6 +1,3 @@
-// Command server is the single-binary entrypoint: it runs the HTTP API,
-// the asynq worker, and the ingestion scheduler as goroutines in one
-// process, mirroring the NestJS app's single-process model.
 package main
 
 import (

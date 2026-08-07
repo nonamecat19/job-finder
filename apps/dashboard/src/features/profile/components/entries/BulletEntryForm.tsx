@@ -7,7 +7,6 @@ interface EntryFormProps {
   onChange: (entry: Entry) => void;
 }
 
-// "bullet" entries are single-line items (e.g. honors, awards).
 export function BulletEntryForm({ entry, onChange }: EntryFormProps) {
   const set = makeEntrySetter(entry, onChange);
   return (

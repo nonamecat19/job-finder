@@ -15,14 +15,6 @@ import (
 	"github.com/job-finder/api/internal/jobsources/domain"
 )
 
-// Scheduler replicates ingestion.scheduler.ts: every 5 minutes, for each
-// enabled SavedSearch, run it if its cron slot has passed since lastRunAt.
-//
-// due = !lastRunAt || lastRunAt < prev(cron slot before now)
-//
-// We compute this as due = !lastRunAt || Next(lastRunAt) <= now, which is
-// mathematically equivalent (Next() is the only primitive robfig/cron
-// exposes) — see the derivation in internal/ingestion doc comments.
 type Scheduler struct {
 	q       domain.SearchRepository
 	service *application.SearchService
@@ -32,7 +24,6 @@ func NewScheduler(q domain.SearchRepository, service *application.SearchService)
 	return &Scheduler{q: q, service: service}
 }
 
-// Tick runs one due-check pass. Call this every 5 minutes from main.
 func (s *Scheduler) Tick(ctx context.Context) {
 	searches, err := s.q.ListEnabledSavedSearches(ctx)
 	if err != nil {
@@ -50,10 +41,6 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		if !due {
 			continue
 		}
-		// Claim the slot before enqueueing anything. The CAS fails for a
-		// second scheduler racing on the same search (and for this one if the
-		// search ran between the list and now), so a due search is scraped
-		// once per slot no matter how many API replicas are running.
 		if _, err := s.q.ClaimSavedSearchRun(ctx, sqlcgen.ClaimSavedSearchRunParams{
 			ID:                search.ID,
 			ExpectedLastRunAt: search.LastRunAt,
@@ -81,12 +68,6 @@ func (s *Scheduler) Tick(ctx context.Context) {
 	}
 }
 
-// tickSubscriptions runs the due-and-claim pass over enabled subscriptions.
-// Subscriptions have carried a "lastRunAt" since they were introduced, but
-// nothing ever set it on a schedule — only a manual Run did — so a
-// subscription silently stayed as stale as the last time someone pressed the
-// button. Same rules as saved searches: parse its cron, compare against
-// lastRunAt, claim the slot by CAS, then enqueue.
 func (s *Scheduler) tickSubscriptions(ctx context.Context, now time.Time) {
 	subs, err := s.q.ListEnabledSubscriptions(ctx)
 	if err != nil {
@@ -118,8 +99,6 @@ func (s *Scheduler) tickSubscriptions(ctx context.Context, now time.Time) {
 	}
 }
 
-// Run starts a ticker that calls Tick every 5 minutes until ctx is done,
-// mirroring @Cron('*/5 * * * *').
 func (s *Scheduler) Run(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()

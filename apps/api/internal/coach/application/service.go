@@ -1,6 +1,3 @@
-// Package application computes fit-gap assessments: for each missing
-// must-have, find up to 3 adjacent profile entries, each with a grounded
-// rephrase suggestion (spec 009 §1).
 package application
 
 import (
@@ -13,19 +10,15 @@ import (
 	"github.com/job-finder/api/internal/keyword"
 )
 
-// Service computes fit-gap assessments: for each missing must-have, find up to
-// 3 adjacent profile entries, each with a grounded rephrase suggestion.
 type Service struct {
 	model RephraseModel
 	log   *slog.Logger
 }
 
-// RephraseModel is the minimal LLM port for generating grounded rephrases.
 type RephraseModel interface {
 	Rephrase(ctx context.Context, prompt string) (string, error)
 }
 
-// NewService returns a coach service backed by the given rephrase model.
 func NewService(model RephraseModel) *Service {
 	return &Service{
 		model: model,
@@ -33,7 +26,6 @@ func NewService(model RephraseModel) *Service {
 	}
 }
 
-// WithLogger sets the logger used for rejected-generation observability.
 func (s *Service) WithLogger(l *slog.Logger) *Service {
 	if l != nil {
 		s.log = l
@@ -41,11 +33,6 @@ func (s *Service) WithLogger(l *slog.Logger) *Service {
 	return s
 }
 
-// Assess computes the fit-gap assessment for a job+profile pair. jobID is for
-// traceability only; the actual diff comes from diffResult (the output of
-// keyword.Differ.Diff). profileEntries are all the user's profile bullets with
-// their source metadata. roleContext is the job role hint for adjacency lookup
-// (e.g. "backend", "systems", "frontend"); pass "" for context-agnostic.
 func (s *Service) Assess(ctx context.Context, jobID string, diffResult *keyword.DiffResult, profileEntries []domain.ProfileEntry, roleContext string) *domain.FitGapAssessment {
 	if diffResult == nil {
 		return &domain.FitGapAssessment{
@@ -76,7 +63,6 @@ func (s *Service) Assess(ctx context.Context, jobID string, diffResult *keyword.
 	}
 }
 
-// assessGap finds up to 3 adjacent profile entries for one missing term.
 func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileEntries []domain.ProfileEntry, roleContext string) domain.GapItem {
 	gap := domain.GapItem{
 		Term:             term.Term,
@@ -84,26 +70,22 @@ func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileE
 		AdjacentEvidence: []domain.EvidenceItem{},
 	}
 
-	// Lookup adjacency for the missing term
 	adjacencies := keyword.Adjacent(term.Canonical, roleContext)
 	if len(adjacencies) == 0 {
 		gap.NoAdjacentEvidence = true
 		return gap
 	}
 
-	// Build a map of adjacent term stems for matching
 	adjacentStems := make(map[string]keyword.Proximity)
 	for _, adj := range adjacencies {
 		stemmed := domain.Stem(domain.LowerASCII(adj.Term))
 		if stemmed != "" {
-			// Keep closest proximity if duplicate stems
 			if prev, ok := adjacentStems[stemmed]; !ok || domain.ProximityRank(adj.Proximity) < domain.ProximityRank(prev) {
 				adjacentStems[stemmed] = adj.Proximity
 			}
 		}
 	}
 
-	// Find profile entries that mention adjacent terms
 	type match struct {
 		entry     domain.ProfileEntry
 		proximity keyword.Proximity
@@ -115,7 +97,7 @@ func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileE
 			stemmed := domain.Stem(domain.LowerASCII(tok))
 			if prox, ok := adjacentStems[stemmed]; ok {
 				matches = append(matches, match{entry: entry, proximity: prox})
-				break // One match per entry
+				break
 			}
 		}
 	}
@@ -125,12 +107,10 @@ func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileE
 		return gap
 	}
 
-	// Sort by proximity (closest first), take up to 3
 	sort.Slice(matches, func(i, j int) bool {
 		if domain.ProximityRank(matches[i].proximity) != domain.ProximityRank(matches[j].proximity) {
 			return domain.ProximityRank(matches[i].proximity) < domain.ProximityRank(matches[j].proximity)
 		}
-		// Stable tie-breaker
 		return matches[i].entry.SourceLabel < matches[j].entry.SourceLabel
 	})
 
@@ -139,12 +119,10 @@ func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileE
 		limit = len(matches)
 	}
 
-	// Generate grounded rephrases for the top matches
 	for i := 0; i < limit; i++ {
 		m := matches[i]
 		rephrase := s.generateGroundedRephrase(ctx, term, m.entry)
 		if rephrase == "" {
-			// Grounding failed after retries; skip this evidence
 			continue
 		}
 		gap.AdjacentEvidence = append(gap.AdjacentEvidence, domain.EvidenceItem{
@@ -162,17 +140,12 @@ func (s *Service) assessGap(ctx context.Context, term keyword.DiffTerm, profileE
 	return gap
 }
 
-// generateGroundedRephrase attempts to generate a truthful rephrase for the
-// source entry, with grounding post-check retry. Returns empty string on
-// failure (all attempts violated grounding).
 func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.DiffTerm, entry domain.ProfileEntry) string {
 	const maxAttempts = 2
 
-	// Build allowed proper noun set from the source bullet only (spec 009 §4.3)
 	allowedProper := domain.PropernounSet([]string{entry.Bullet})
 	sourceNums := domain.NumberSet(entry.Bullet)
 
-	// Extract seniority and date range from the source label for grounding
 	sourceSeniority := domain.ExtractSeniority(entry.SourceLabel)
 	sourceDateRange := domain.ExtractDateRange(entry.SourceLabel)
 
@@ -187,13 +160,11 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 		}
 		out := strings.TrimSpace(raw)
 
-		// Grounding post-check (spec 009 §4.3)
 		lastViol = domain.VerifyRephraseGrounding(entry.Bullet, allowedProper, sourceNums, out, sourceSeniority, sourceDateRange)
 		if len(lastViol) == 0 {
 			return out
 		}
 
-		// Log rejection
 		s.log.WarnContext(ctx, "coach: rejected rephrase generation (grounding violation)",
 			"term", term.Term,
 			"attempt", attempt+1,
@@ -204,9 +175,6 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 	return ""
 }
 
-// buildRephrasePrompt mirrors keyword.buildRephrasePrompt (spec 009 §4.3).
-// sourceLabel provides the entry header (e.g. "DevOps Engineer, Acme Corp (2022–2024)")
-// which grounds seniority, employer, and duration claims.
 func buildRephrasePrompt(term keyword.DiffTerm, sourceBullet string, sourceLabel string, priorViolations []string) string {
 	want := term.Term
 	if term.Canonical != "" {

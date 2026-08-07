@@ -1,8 +1,3 @@
-// Package shared holds the error taxonomy shared by every remote chat
-// provider adapter (the gateway, and formerly the direct Cerebras adapter).
-// Extracted from infrastructure/cerebras so a second OpenAI-compatible
-// provider could reuse the same classification without duplicating it
-// (029-litellm-proxy-gateway).
 package shared
 
 import (
@@ -14,25 +9,7 @@ import (
 	"time"
 )
 
-// The error taxonomy every remote chat provider (Cerebras, gateway) maps
-// its HTTP failures onto, so callers can decide what to do without knowing
-// which provider produced the error:
-//
-//	ErrRateLimited         — quota exhausted; a later attempt may work, but
-//	                         not now. Callers cancel rather than retry.
-//	ErrCredentialRejected  — bad/revoked API key. Terminal: retrying burns
-//	                         requests and can never succeed.
-//	ErrInsufficientCredits — account out of credit. Terminal.
-//	ErrModelUnavailable    — the selected model id is unknown/withdrawn, or
-//	                         the request was malformed. Terminal.
-//	ErrProviderUnavailable — 5xx or a transport failure. Retryable.
-//	ErrInvalidResponse     — 2xx whose body wasn't the expected shape.
-//	                         Retryable (usually a transient upstream glitch).
 var (
-	// ErrRateLimited is returned (wrapped) whenever a provider responds 429,
-	// or while that provider's breaker is tripped from a prior 429. Callers
-	// (the asynq task handlers) treat it as "skip this task" rather than
-	// "retry it" — see rateLimitCooldown.
 	ErrRateLimited         = errors.New("llm: rate limited")
 	ErrCredentialRejected  = errors.New("llm: provider credential rejected")
 	ErrInsufficientCredits = errors.New("llm: provider account out of credits")
@@ -41,29 +18,16 @@ var (
 	ErrInvalidResponse     = errors.New("llm: invalid provider response")
 )
 
-// Terminal reports whether err can never succeed on a retry with the same
-// settings, so the operator has to change something (key, model, plan).
-// Handlers use it to fail a task outright instead of handing it back to
-// asynq for a retry that is guaranteed to fail the same way.
 func Terminal(err error) bool {
 	return errors.Is(err, ErrCredentialRejected) ||
 		errors.Is(err, ErrInsufficientCredits) ||
 		errors.Is(err, ErrModelUnavailable)
 }
 
-// Retryable reports whether a later attempt could plausibly succeed without
-// any operator action. Rate limiting is deliberately NOT retryable here: the
-// breaker already holds the whole process off, and handlers cancel those
-// tasks rather than re-queueing them against an exhausted quota.
 func Retryable(err error) bool {
 	return errors.Is(err, ErrProviderUnavailable) || errors.Is(err, ErrInvalidResponse)
 }
 
-// ProviderErrMessage extracts a human-readable message from an OpenAI-style
-// {"error":{"message":...}} body, or Ollama's simpler {"error":"..."} string
-// form, falling back to the raw body. It reads only the response, so an API
-// key (sent solely in the Authorization header) can never leak into an error
-// string derived from it.
 func ProviderErrMessage(body []byte) string {
 	var obj struct {
 		Error struct {
@@ -84,10 +48,6 @@ func ProviderErrMessage(body []byte) string {
 	return string(body)
 }
 
-// ClassifyProviderError maps one provider's HTTP status + body onto the
-// taxonomy above. provider is the short name used in the message ("cerebras",
-// "gateway"). status 0 means the failure was reported in the
-// body rather than the status line and carried no usable code.
 func ClassifyProviderError(provider string, status int, body []byte) error {
 	msg := ProviderErrMessage(body)
 	switch {
@@ -107,20 +67,10 @@ func ClassifyProviderError(provider string, status int, body []byte) error {
 	}
 }
 
-// RateLimitCooldown is the fallback cooldown after a 429 that carries no
-// usable reset hint, matching a typical per-minute free-tier quota window.
 const RateLimitCooldown = 60 * time.Second
 
-// MaxRateLimitCooldown caps whatever a provider asks for, so one hostile or
-// mistaken header cannot park a task queue for hours.
 const MaxRateLimitCooldown = 15 * time.Minute
 
-// RetryAfter reads how long a provider wants us to wait before the next
-// request, from (in order) RFC 7231's Retry-After — both the delta-seconds
-// and the HTTP-date form — then the de-facto X-RateLimit-Reset header, which
-// providers send as either a unix timestamp (seconds or milliseconds) or a
-// duration in seconds. Returns 0 when no usable hint is present, which makes
-// callers fall back to RateLimitCooldown.
 func RetryAfter(h http.Header) time.Duration {
 	if v := h.Get("Retry-After"); v != "" {
 		if secs, err := strconv.Atoi(v); err == nil {
@@ -141,11 +91,11 @@ func RetryAfter(h http.Header) time.Duration {
 		}
 		now := time.Now()
 		switch {
-		case n > 1e12: // unix milliseconds
+		case n > 1e12:
 			return time.Until(time.UnixMilli(n))
-		case n > 1e9: // unix seconds
+		case n > 1e9:
 			return time.Until(time.Unix(n, 0))
-		default: // a plain duration in seconds
+		default:
 			_ = now
 			return time.Duration(n) * time.Second
 		}

@@ -15,10 +15,6 @@ import (
 
 const builtwithDomain = "builtwith.com"
 
-// knownTechKeywords is the fallback keyword list used to infer a tech
-// stack straight from a job posting's description when BuiltWith is
-// unreachable (FR-015). Not exhaustive — a curated set of common
-// languages, frameworks, datastores, and infra tools.
 var knownTechKeywords = []string{
 	"React", "Angular", "Vue", "Svelte", "Next.js", "Nuxt",
 	"TypeScript", "JavaScript", "Python", "Go", "Golang", "Java", "Kotlin",
@@ -45,10 +41,6 @@ func compileTechKeywordRes(keywords []string) map[string]*regexp.Regexp {
 	return out
 }
 
-// TechStackScraper reads a BuiltWith public lookup page for the company's
-// detected technologies, falling back to keyword-matching the job
-// posting's own description when BuiltWith is unreachable or empty
-// (FR-015). If both sources are empty, the signal is omitted entirely.
 type TechStackScraper struct {
 	Scraping scraping.Scraper
 }
@@ -72,9 +64,6 @@ func (s TechStackScraper) Scrape(ctx context.Context, in domain.Input) (*domain.
 	return nil, fmt.Errorf("techstack: no BuiltWith result and no keywords matched in job description")
 }
 
-// tryBuiltWith attempts the primary source and returns nil (not an error)
-// on any failure — the caller falls through to the description keyword
-// fallback, matching FR-015 exactly.
 func (s TechStackScraper) tryBuiltWith(ctx context.Context, website string) *domain.SignalResult {
 	domain := hostOf(website)
 	if domain == "" {
@@ -104,9 +93,6 @@ func hostOf(website string) string {
 	return u.Host
 }
 
-// parseBuiltWith collects every `.tech-item` label on the lookup page.
-// Returns nil (no error) when the page has no matches — the caller treats
-// that identically to a fetch failure and falls back to keyword matching.
 func parseBuiltWith(doc *goquery.Document, sourceURL string) *domain.SignalResult {
 	var techs []string
 	doc.Find(".tech-item").Each(func(_ int, sel *goquery.Selection) {
@@ -124,8 +110,6 @@ func parseBuiltWith(doc *goquery.Document, sourceURL string) *domain.SignalResul
 	}
 }
 
-// matchKnownTech scans description against knownTechKeywords, returning
-// matches in the list's canonical order and casing, deduplicated.
 func matchKnownTech(description string) []string {
 	if description == "" {
 		return nil

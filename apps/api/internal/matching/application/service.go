@@ -35,14 +35,10 @@ func NewService(q domain.Repository, profiles *profile.Service, llmc llm.Provide
 	return &Service{q: q, profiles: profiles, llmc: llmc, threshold: threshold, matchModel: matchModel}
 }
 
-// Store exposes the repository as an activity.Store so the worker handler
-// can resume an activity record for a task's ActivityID.
 func (s *Service) Store() activity.Store {
 	return s.q
 }
 
-// fitModel returns the model used for fit scoring, falling back to the
-// provider default when no task-specific model is configured.
 func (s *Service) fitModel() string {
 	if s.matchModel != "" {
 		return s.matchModel
@@ -50,8 +46,6 @@ func (s *Service) fitModel() string {
 	return s.llmc.ModelName()
 }
 
-// MatchJob runs stage 1 (embedding prefilter) + stage 2 (LLM analysis) for
-// one job, mirroring MatchingService.matchJob.
 func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Recorder) (dto.MatchResultDto, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
@@ -207,10 +201,6 @@ func (s *Service) saveResult(
 	return toDto(row), nil
 }
 
-// jsonOrNull encodes a possibly-nil string slice to JSON, or to the jsonb
-// literal "null" when nil — matching the TS `matchedSkills: data.matchedSkills
-// ?? undefined` (column stays NULL when the LLM didn't produce a value, e.g.
-// the prefiltered-out path).
 func jsonOrNull(v []string) ([]byte, error) {
 	if v == nil {
 		return []byte("null"), nil

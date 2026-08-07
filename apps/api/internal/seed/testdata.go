@@ -2,7 +2,6 @@ package seed
 
 import "time"
 
-// Fixed UUIDs for deterministic seeding.
 const (
 	uuidProfile = "a0000000-0000-0000-0000-000000000001"
 	uuidJob1    = "b0000000-0000-0000-0000-000000000001"
@@ -80,7 +79,6 @@ const (
 	uuidSub3    = "ab000000-0000-0000-0000-000000000003"
 )
 
-// jobSeed is the fixture data for a single seed job.
 type jobSeed struct {
 	UUID      string
 	SourceKey string
@@ -280,7 +278,6 @@ var jobs = []jobSeed{
 	},
 }
 
-// daysAgo returns a time.Time that is n days before now.
 func now() time.Time { return time.Now().UTC() }
 
 func daysAgo(n int) time.Time { return now().AddDate(0, 0, -n) }

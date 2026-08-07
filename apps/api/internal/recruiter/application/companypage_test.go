@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-// TestCompanyPageParse covers T016: the saved Team-page fixture yields at
-// least one grounded contact with Source=="company-page"; a fixture with
-// no People/Team section yields zero contacts and no error (spec.md edge
-// case "Company page has no People/Team section").
 func TestCompanyPageParse(t *testing.T) {
 	html, err := os.ReadFile("testdata/company_team.html")
 	if err != nil {
@@ -66,7 +62,6 @@ func TestCompanyPageParseNoTeamSection(t *testing.T) {
 }
 
 func TestCompanyPageParseUngroundedContactDropped(t *testing.T) {
-	// Adversarial: the LLM hallucinates a person absent from the page text.
 	llmc := &fakeLLM{json: `{"contacts":[{"name":"Fabricated Person","title":"","email":"","phone":"","linkedInUrl":""}]}`}
 
 	contacts, err := ExtractCompanyPageContacts(context.Background(), llmc, "", "About Acme Corp. We build software.")

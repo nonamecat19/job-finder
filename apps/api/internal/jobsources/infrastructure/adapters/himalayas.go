@@ -1,21 +1,3 @@
-// Package adapters — Himalayas, backed by Himalayas's own undocumented but
-// functional public JSON feed (https://himalayas.app/jobs/api), following
-// the RemoteOK pattern: a public, unauthenticated API fetched via
-// scraping.Service.FetchHTML (not raw jobsources.GetJSON) with a descriptive
-// User-Agent (FR-017), no login/session of any kind. Unlike RemoteOK, the
-// upstream feed ignores every filter query parameter tried against it
-// (research.md R3), so Search pages through the raw firehose and filters
-// each page's jobs locally against the operator's saved category/timezone
-// subscription — mirroring ArbeitnowAdapter's "fetch bounded pages, filter
-// client-side" shape rather than RemoteOK's "pass the filter through as a
-// query param" shape.
-//
-// Himalayas has no FetchDetail method and is intentionally absent from
-// ingestion.Handler's enrich-eligible source list and enrichment.Handler's
-// dispatch switch (both read-only, no code change needed there): the feed's
-// description field is already the full posting body at ingestion time, and
-// there is no working per-listing detail endpoint to enrich from anyway
-// (research.md R6).
 package adapters
 
 import (
@@ -34,27 +16,13 @@ import (
 )
 
 const (
-	// himalayasAPIURL is Himalayas's undocumented but functional,
-	// unauthenticated JSON feed backing its own /jobs search page.
-	himalayasAPIURL = "https://himalayas.app/jobs/api"
-	// himalayasUserAgent identifies this app to Himalayas (FR-017),
-	// mirroring remoteokUserAgent's exact format/tone.
-	himalayasUserAgent = "job-finder/1.0 (+https://github.com/job-finder; job discovery bot)"
-	// himalayasRequestDelay is the floor between paginated requests
-	// (FR-010, research.md R7).
-	himalayasRequestDelay = 500 * time.Millisecond
-	// himalayasMaxSubscriptionPages caps pagination so a narrow/rare
-	// category can't sweep unbounded across Himalayas's ~96k-listing feed
-	// (research.md R7).
+	himalayasAPIURL               = "https://himalayas.app/jobs/api"
+	himalayasUserAgent            = "job-finder/1.0 (+https://github.com/job-finder; job discovery bot)"
+	himalayasRequestDelay         = 500 * time.Millisecond
 	himalayasMaxSubscriptionPages = 50
-	// himalayasPageLimit is the page size requested per call; Himalayas
-	// server-caps this at 20 regardless of the requested value.
-	himalayasPageLimit = 20
+	himalayasPageLimit            = 20
 )
 
-// HimalayasAdapter — himalayas.app public JSON API, no credentials. APIURL
-// overrides himalayasAPIURL when set, letting tests point at an httptest
-// server instead of the real host; production code leaves it empty.
 type HimalayasAdapter struct {
 	Scraping *scraping.Service
 	APIURL   string
@@ -70,7 +38,6 @@ func (d HimalayasAdapter) apiURL() string {
 	return himalayasAPIURL
 }
 
-// himalayasResponse is the raw decode shape of a /jobs/api page.
 type himalayasResponse struct {
 	Offset     int            `json:"offset"`
 	Limit      int            `json:"limit"`
@@ -78,8 +45,6 @@ type himalayasResponse struct {
 	Jobs       []himalayasJob `json:"jobs"`
 }
 
-// himalayasJob is the raw decode shape of a single job record within a
-// /jobs/api page's "jobs" array — see research.md#r5-job-field-mapping.
 type himalayasJob struct {
 	GUID                 string   `json:"guid"`
 	Title                string   `json:"title"`
@@ -98,8 +63,6 @@ type himalayasJob struct {
 	EmploymentType       string   `json:"employmentType"`
 }
 
-// himalayasJobFromRaw maps a raw Himalayas job record to the shared
-// NormalizedJob DTO per research.md#r5-job-field-mapping.
 func himalayasJobFromRaw(raw himalayasJob) dto.NormalizedJob {
 	var location *string
 	if len(raw.LocationRestrictions) > 0 {
@@ -132,9 +95,6 @@ func himalayasJobFromRaw(raw himalayasJob) dto.NormalizedJob {
 	}
 }
 
-// himalayasSalaryRaw formats minSalary/maxSalary/currency/salaryPeriod into
-// a display string, or nil when both bounds are absent/zero (spec's "no
-// salary range published" edge case).
 func himalayasSalaryRaw(raw himalayasJob) *string {
 	if raw.MinSalary == 0 && raw.MaxSalary == 0 {
 		return nil
@@ -159,10 +119,6 @@ func himalayasSalaryRaw(raw himalayasJob) *string {
 	return jobsources.Ptr(amount)
 }
 
-// himalayasTimezoneText folds timezoneRestrictions (UTC-offset ints, empty =
-// unrestricted) into descriptive text (spec's "listing restricts applicants
-// to a specific timezone band" edge case) — captured for display, never used
-// to exclude the listing from the feed itself.
 func himalayasTimezoneText(offsets []int) string {
 	if len(offsets) == 0 {
 		return "no timezone restriction"
@@ -181,18 +137,11 @@ func formatUTCOffset(o int) string {
 	return fmt.Sprintf("UTC%d", o)
 }
 
-// himalayasSubscriptionFilter is the parsed shape of an operator-saved
-// Himalayas /jobs?categories=<slug>[,<slug>...][&timezones=<a,b>] search-page
-// URL (research.md R4).
 type himalayasSubscriptionFilter struct {
 	categories map[string]struct{}
-	timezones  map[int]struct{} // empty means "no timezone restriction requested"
+	timezones  map[int]struct{}
 }
 
-// matches reports whether a raw job satisfies the filter: at least one of
-// its categories/parentCategories is in the filter's category set, and —
-// when timezones were requested — its timezoneRestrictions is empty
-// (unrestricted) or overlaps the requested set.
 func (f himalayasSubscriptionFilter) matches(raw himalayasJob) bool {
 	categoryMatch := false
 	for _, c := range raw.Categories {
@@ -227,11 +176,6 @@ func (f himalayasSubscriptionFilter) matches(raw himalayasJob) bool {
 	return false
 }
 
-// parseHimalayasSubscriptionFilter parses a Himalayas /jobs search-page URL
-// into a category-slug set and optional timezone-offset set (research.md
-// R4). Returns a distinguishable error when the URL doesn't parse or its
-// "categories" query parameter is empty (contracts/himalayas-adapter.md's
-// Search precondition).
 func parseHimalayasSubscriptionFilter(subURL string) (himalayasSubscriptionFilter, error) {
 	parsed, err := url.Parse(subURL)
 	if err != nil {
@@ -263,9 +207,6 @@ func parseHimalayasSubscriptionFilter(subURL string) (himalayasSubscriptionFilte
 	return himalayasSubscriptionFilter{categories: categories, timezones: timezones}, nil
 }
 
-// parseUTCOffset parses a "UTC-5", "UTC+8", or "UTC" style token into its
-// integer offset. Returns false for anything else, so a malformed timezone
-// token is skipped rather than rejecting the whole subscription.
 func parseUTCOffset(s string) (int, bool) {
 	s = strings.ToUpper(strings.TrimSpace(s))
 	s = strings.TrimPrefix(s, "UTC")
@@ -279,8 +220,6 @@ func parseUTCOffset(s string) (int, bool) {
 	return n, true
 }
 
-// Search only supports the saved-subscription flow (FR-014); keyword search
-// is out of scope, matching RemoteOKAdapter.Search's stance exactly.
 func (d HimalayasAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
 	if query.SubscriptionURL == "" {
 		return nil, fmt.Errorf("himalayas keyword search not implemented — use subscription URL instead")
@@ -335,10 +274,6 @@ func (d HimalayasAdapter) Search(ctx context.Context, query dto.SearchQuery, _ m
 	return results, nil
 }
 
-// HealthCheck fetches a single page and reports whether the feed is
-// reachable and returns the expected shape — never a non-nil error for the
-// normal "unreachable"/"unparseable" case, mirroring
-// RemoteOKAdapter.HealthCheck's convention exactly.
 func (d HimalayasAdapter) HealthCheck(ctx context.Context, _ map[string]any) (bool, error) {
 	reqURL := fmt.Sprintf("%s?limit=1&offset=0", d.apiURL())
 	body, err := d.Scraping.FetchHTML(ctx, reqURL, map[string]string{"User-Agent": himalayasUserAgent})

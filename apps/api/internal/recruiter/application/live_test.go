@@ -12,12 +12,6 @@ import (
 	"github.com/job-finder/api/internal/platform/scraping"
 )
 
-// TestLive_CompanyPage hits a real company website's About/Team page and
-// runs the actual local LLM over it. This is the only test that catches
-// real-world markup drift in the company-page source; it needs a running
-// Ollama and network access, so it's excluded from the default `go test`
-// run (build tag "live") and skips cleanly when the prerequisites aren't
-// present.
 func TestLive_CompanyPage(t *testing.T) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -35,8 +29,6 @@ func TestLive_CompanyPage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// A stable, real company About page — swap for a target of your choice
-	// when investigating a specific site's markup.
 	const aboutURL = "https://www.ycombinator.com/about"
 
 	html, err := scrapingSvc.FetchHTML(ctx, aboutURL, nil)
@@ -58,11 +50,6 @@ func TestLive_CompanyPage(t *testing.T) {
 	}
 }
 
-// TestLive_LinkedIn hits the real public LinkedIn People page for a
-// company. Skips unless the operator has explicitly opted in via
-// LINKEDIN_SCRAPE_ENABLED=true (FR-004) — running this test at all is a
-// LinkedIn request, so it must never fire from a default `go test -tags
-// live` run.
 func TestLive_LinkedIn(t *testing.T) {
 	cfg, err := config.Load()
 	if err != nil {

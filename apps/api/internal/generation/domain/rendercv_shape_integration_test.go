@@ -6,13 +6,6 @@ import (
 	"testing"
 )
 
-// certificationsIntegrationMasterYAML is a full RenderCV master document —
-// parsed the same way a real master profile is (ParseRendercv), so the
-// synthetic `_order` section list is derived from the YAML itself rather
-// than hand-built — with a certifications section among several others, for
-// US1's end-to-end assertion that disabling certifications removes it from
-// both cv.sections and the enforced order while leaving the remaining
-// sections' relative order intact (FR-004).
 const certificationsIntegrationMasterYAML = `
 cv:
   name: Jane Doe
@@ -44,12 +37,6 @@ design:
   theme: sb2nov
 `
 
-// TestIntegration_ApplySectionTogglesRemovesCertificationsFromRenderedResume
-// exercises the real parse → merge → toggle pipeline (ParseRendercv,
-// MergeTailored, ApplySectionToggles) end to end, standing in for the render
-// step: rendercv renders exactly what cv.sections + _order describe, so
-// asserting on those after the pipeline is equivalent to asserting on the
-// rendered document's section list for this feature's purposes (T016).
 func TestIntegration_ApplySectionTogglesRemovesCertificationsFromRenderedResume(t *testing.T) {
 	master, err := ParseRendercv(certificationsIntegrationMasterYAML)
 	if err != nil {
@@ -71,8 +58,6 @@ func TestIntegration_ApplySectionTogglesRemovesCertificationsFromRenderedResume(
 	cfg.CertificationsEnabled = false
 	ApplySectionToggles(merged, cfg)
 
-	// The rendered resume (merged) must have no certifications section left,
-	// in either cv.sections or the enforced _order list.
 	if _, present := CvSections(merged)["certifications"]; present {
 		t.Error("merged certifications section still present, want it removed from the rendered resume")
 	}
@@ -81,8 +66,6 @@ func TestIntegration_ApplySectionTogglesRemovesCertificationsFromRenderedResume(
 		t.Errorf("merged _order = %v, want %v with relative order of remaining sections preserved", got, wantOrder)
 	}
 
-	// FR-004: the source master profile must be untouched by disabling the
-	// section on the generated resume.
 	if got := certificationLabels(master); !equalStringSlices(got, masterCertsBefore) {
 		t.Errorf("master certifications = %v, want unchanged %v", got, masterCertsBefore)
 	}
@@ -94,10 +77,6 @@ func TestIntegration_ApplySectionTogglesRemovesCertificationsFromRenderedResume(
 	}
 }
 
-// TestIntegration_ApplySectionTogglesCertificationsEnabledRendersSection
-// covers the toggle-back-on side of US1's independent test: with the
-// default config (certifications enabled), the rendered resume keeps the
-// certifications section and its authored order.
 func TestIntegration_ApplySectionTogglesCertificationsEnabledRendersSection(t *testing.T) {
 	master, err := ParseRendercv(certificationsIntegrationMasterYAML)
 	if err != nil {
@@ -120,10 +99,6 @@ func TestIntegration_ApplySectionTogglesCertificationsEnabledRendersSection(t *t
 	}
 }
 
-// TestIntegration_ApplySectionTogglesNoCertificationsSectionRendersCleanly
-// covers FR-004's "no panic or error" clause end to end: a master profile
-// authored before this feature existed, with no certifications section at
-// all, must generate successfully under both toggle states.
 func TestIntegration_ApplySectionTogglesNoCertificationsSectionRendersCleanly(t *testing.T) {
 	const noCertsYAML = `
 cv:

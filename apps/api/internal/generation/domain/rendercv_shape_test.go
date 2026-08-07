@@ -6,9 +6,6 @@ import (
 	"testing"
 )
 
-// masterWithBullets builds a minimal merged document with one experience
-// entry per company/bullet-count pair, so limit behaviour can be asserted
-// without the full sample master.
 func masterWithBullets(counts map[string]int, order ...string) RendercvMaster {
 	experience := make([]any, 0, len(order))
 	for _, company := range order {
@@ -37,7 +34,7 @@ func highlightsOf(t *testing.T, m RendercvMaster, company string) []string {
 
 func TestApplyHardLimitsClampsExperienceBullets(t *testing.T) {
 	m := masterWithBullets(map[string]int{"Acme": 12}, "Acme")
-	cfg := DefaultShapeConfig() // max 10
+	cfg := DefaultShapeConfig()
 
 	report := ApplyHardLimits(m, m, cfg)
 
@@ -45,8 +42,6 @@ func TestApplyHardLimitsClampsExperienceBullets(t *testing.T) {
 	if len(got) != 10 {
 		t.Fatalf("kept %d bullets, want 10 (the configured max)", len(got))
 	}
-	// Truncation keeps the first N, in order — the model returns them in
-	// relevance order and the merge preserves it.
 	for i, h := range got {
 		if want := fmt.Sprintf("Acme bullet %d", i); h != want {
 			t.Errorf("bullet %d = %q, want %q", i, h, want)
@@ -60,7 +55,7 @@ func TestApplyHardLimitsClampsExperienceBullets(t *testing.T) {
 func TestApplyHardLimitsUnlimitedMaxLeavesContentUntouched(t *testing.T) {
 	m := masterWithBullets(map[string]int{"Acme": 15}, "Acme")
 	cfg := DefaultShapeConfig()
-	cfg.ExperienceBulletsMax = 0 // unlimited
+	cfg.ExperienceBulletsMax = 0
 	cfg.ExperienceBulletsMin = 1
 
 	ApplyHardLimits(m, m, cfg)
@@ -72,7 +67,7 @@ func TestApplyHardLimitsUnlimitedMaxLeavesContentUntouched(t *testing.T) {
 
 func TestApplyHardLimitsReportsShortfallWithoutPadding(t *testing.T) {
 	m := masterWithBullets(map[string]int{"Acme": 3, "StartupX": 9}, "Acme", "StartupX")
-	cfg := DefaultShapeConfig() // min 8, max 10
+	cfg := DefaultShapeConfig()
 
 	report := ApplyHardLimits(m, m, cfg)
 
@@ -93,9 +88,8 @@ func TestApplyHardLimitsReportsShortfallWithoutPadding(t *testing.T) {
 
 func TestApplyHardLimitsPadsFromMasterWhenModelUnderselected(t *testing.T) {
 	master := masterWithBullets(map[string]int{"Acme": 9}, "Acme")
-	cfg := DefaultShapeConfig() // min 8, max 10
+	cfg := DefaultShapeConfig()
 
-	// The model only selected 3 of the master's 9 available bullets.
 	merged := masterWithBullets(map[string]int{"Acme": 3}, "Acme")
 
 	report := ApplyHardLimits(master, merged, cfg)
@@ -116,9 +110,8 @@ func TestApplyHardLimitsPadsFromMasterWhenModelUnderselected(t *testing.T) {
 
 func TestApplyHardLimitsPadDoesNotDuplicateAlreadySelectedBullets(t *testing.T) {
 	master := masterWithBullets(map[string]int{"Acme": 9}, "Acme")
-	cfg := DefaultShapeConfig() // min 8, max 10
+	cfg := DefaultShapeConfig()
 
-	// The model kept 3 bullets, but reordered/repeated one already in the pool.
 	merged := RendercvMaster{"cv": map[string]any{"sections": map[string]any{"experience": []any{
 		map[string]any{"company": "Acme", "highlights": []any{"Acme bullet 2", "Acme bullet 0", "Acme bullet 5"}},
 	}}}}
@@ -197,7 +190,6 @@ func TestDefaultShapeConfig(t *testing.T) {
 }
 
 func TestShapeConfigValidate(t *testing.T) {
-	// Each case mutates the defaults so only the rule under test can fail.
 	with := func(mutate func(*ShapeConfig)) ShapeConfig {
 		c := DefaultShapeConfig()
 		mutate(&c)
@@ -207,7 +199,7 @@ func TestShapeConfigValidate(t *testing.T) {
 	tests := []struct {
 		name    string
 		cfg     ShapeConfig
-		wantErr string // substring; "" means the config must validate
+		wantErr string
 	}{
 		{"defaults", DefaultShapeConfig(), ""},
 		{"summaryLines too low", with(func(c *ShapeConfig) { c.SummaryLines = 0 }), "summaryLines must be between 1 and 12"},
@@ -318,8 +310,6 @@ func TestShapeConfigProjectsLimited(t *testing.T) {
 	}
 }
 
-// masterWithProjects builds a projects section with the given per-project
-// bullet counts, in the given order.
 func masterWithProjects(bullets map[string]int, order ...string) RendercvMaster {
 	projects := make([]any, 0, len(order))
 	for _, name := range order {
@@ -348,11 +338,6 @@ func masterWithSkillGroups(labels ...string) RendercvMaster {
 	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{"skills": skills}}}
 }
 
-// masterWithCertifications builds a certifications section with the given
-// labels, in the given order — the certifications analogue of
-// masterWithSkillGroups. Certifications are one_line entries with no bullet
-// list (research D2: no per-certification detail cap), so there is no
-// per-entry count to vary the way masterWithBullets varies highlights.
 func masterWithCertifications(labels ...string) RendercvMaster {
 	certifications := make([]any, 0, len(labels))
 	for _, label := range labels {
@@ -369,9 +354,6 @@ func certificationLabels(m RendercvMaster) []string {
 	return out
 }
 
-// certificationsFixtureMaster is the shared 8-entry fixture referenced by
-// tasks.md T013: enough entries for truncation tests (e.g. CertificationsMax
-// below the available count) without every test hand-rolling its own labels.
 func certificationsFixtureMaster() RendercvMaster {
 	return masterWithCertifications(
 		"AWS Certified Solutions Architect",
@@ -385,11 +367,6 @@ func certificationsFixtureMaster() RendercvMaster {
 	)
 }
 
-// TestCertificationsFixtureMasterHasEightEntries guards the T013 fixture
-// itself: US1/US2/US3 truncation and toggle tests all lean on
-// certificationsFixtureMaster() having at least 8 entries in a known,
-// stable order, so a regression here would silently weaken every test built
-// on top of it.
 func TestCertificationsFixtureMasterHasEightEntries(t *testing.T) {
 	labels := certificationLabels(certificationsFixtureMaster())
 	if len(labels) < 8 {
@@ -408,9 +385,6 @@ func skillLabels(m RendercvMaster) []string {
 	return out
 }
 
-// The prompt asks the model for fewer groups, but only this clamp makes the
-// configured cap binding — a model that returns every group anyway must not
-// be able to overshoot it (FR-008).
 func TestApplyHardLimitsClampsSkillGroupsInMasterOrder(t *testing.T) {
 	m := masterWithSkillGroups("Languages", "Backend", "Frontend", "Databases")
 	cfg := DefaultShapeConfig()
@@ -424,8 +398,6 @@ func TestApplyHardLimitsClampsSkillGroupsInMasterOrder(t *testing.T) {
 	}
 }
 
-// The spoken-languages group is pinned: the cap may drop other groups around
-// it, but never it, and the surviving groups keep the master's order.
 func TestApplyHardLimitsKeepsSpokenLanguagesGroupUnderCap(t *testing.T) {
 	m := masterWithSkillGroups("Backend", "Frontend", "Databases", "Spoken Languages")
 	cfg := DefaultShapeConfig()
@@ -442,7 +414,7 @@ func TestApplyHardLimitsKeepsSpokenLanguagesGroupUnderCap(t *testing.T) {
 func TestApplyHardLimitsUnlimitedSkillGroupsKeepsAll(t *testing.T) {
 	m := masterWithSkillGroups("Languages", "Backend", "Frontend")
 
-	ApplyHardLimits(m, m, DefaultShapeConfig()) // SkillsMaxGroups 0 = unlimited
+	ApplyHardLimits(m, m, DefaultShapeConfig())
 
 	if got := skillLabels(m); len(got) != 3 {
 		t.Errorf("skill groups = %v, want all three kept", got)
@@ -465,7 +437,7 @@ func TestApplyHardLimitsTruncatesProjectsInMasterOrder(t *testing.T) {
 func TestApplyHardLimitsUnlimitedProjectsKeepsAll(t *testing.T) {
 	m := masterWithProjects(map[string]int{"Orbit": 2, "Beacon": 2, "Comet": 2}, "Orbit", "Beacon", "Comet")
 
-	ApplyHardLimits(m, m, DefaultShapeConfig()) // ProjectsMax 0 = unlimited
+	ApplyHardLimits(m, m, DefaultShapeConfig())
 
 	if got := projectNames(m); len(got) != 3 {
 		t.Errorf("projects = %v, want all three kept", got)
@@ -538,7 +510,7 @@ func TestApplyHardLimitsUnlimitedCertificationsKeepsAll(t *testing.T) {
 	m := certificationsFixtureMaster()
 	want := len(certificationLabels(m))
 
-	ApplyHardLimits(m, m, DefaultShapeConfig()) // CertificationsMax 0 = unlimited
+	ApplyHardLimits(m, m, DefaultShapeConfig())
 
 	if got := certificationLabels(m); len(got) != want {
 		t.Errorf("certifications = %v, want all %d kept", got, want)
@@ -549,7 +521,7 @@ func TestApplyHardLimitsCertificationsCapAboveAvailableKeepsAllInventsNothing(t 
 	m := certificationsFixtureMaster()
 	available := len(certificationLabels(m))
 	cfg := DefaultShapeConfig()
-	cfg.CertificationsMax = available + 5 // cap larger than what exists
+	cfg.CertificationsMax = available + 5
 
 	ApplyHardLimits(m, m, cfg)
 
@@ -577,7 +549,6 @@ func TestApplyHardLimitsReportsCertificationsShortfallWithoutPadding(t *testing.
 	}
 }
 
-// toggleMaster carries both optional sections plus an authored order.
 func toggleMaster() RendercvMaster {
 	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		SectionOrderKey: []any{"summary", "skills", "experience", "projects", "education"},
@@ -701,10 +672,6 @@ func TestApplySectionTogglesKeepsMasterOrderForRemainingSections(t *testing.T) {
 	}
 }
 
-// toggleMasterWithCertifications is toggleMaster plus a certifications
-// section, for US1 toggle tests that need it alongside the other optional
-// sections without perturbing toggleMaster's existing callers' expected
-// _order slices.
 func toggleMasterWithCertifications() RendercvMaster {
 	m := toggleMaster()
 	sections := CvSections(m)
@@ -744,13 +711,8 @@ func TestApplySectionTogglesCertificationsEnabledIsANoOp(t *testing.T) {
 	}
 }
 
-// TestApplySectionTogglesDisablingCertificationsWithoutSectionIsNoop guards
-// FR-004's "no panic or error" clause: a master that never had a
-// certifications section (e.g. authored before this feature) must disable
-// cleanly, not because the code special-cases absence but because
-// RemoveSection is naturally a no-op on a missing key.
 func TestApplySectionTogglesDisablingCertificationsWithoutSectionIsNoop(t *testing.T) {
-	m := toggleMaster() // no certifications section at all
+	m := toggleMaster()
 	cfg := DefaultShapeConfig()
 	cfg.CertificationsEnabled = false
 

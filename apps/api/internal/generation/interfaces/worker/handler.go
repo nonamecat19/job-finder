@@ -1,5 +1,3 @@
-// Package worker holds the document-generation bounded context's inbound
-// worker adapter: the asynq "generate" task handler.
 package worker
 
 import (
@@ -17,7 +15,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// Handler processes "generate" asynq tasks, mirroring generation.processor.ts.
 type Handler struct {
 	svc   *application.Service
 	store activity.Store

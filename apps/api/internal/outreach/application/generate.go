@@ -5,15 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/outreach/domain"
+	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// generateGrounded asks the local LLM for a tone-appropriate draft that
-// only cites the given facts, verifies every declared specific claim
-// actually traces to one of them, and retries on violation. After
-// maxAttempts it falls back to the deterministic generic opener — a
-// generation that cannot be grounded is never presented (FR-006).
 func (s *Service) generateGrounded(ctx context.Context, tone domain.Tone, contactName, companyName string, facts []domain.Fact) (string, []domain.GroundingTrace) {
 	var lastViolation string
 	for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -48,8 +43,5 @@ func (s *Service) generateGrounded(ctx context.Context, tone domain.Tone, contac
 		return text, traces
 	}
 
-	// Every attempt either fabricated a claim or violated a hard
-	// constraint: fall back to the guaranteed-safe generic opener rather
-	// than ever presenting an ungrounded or over-length draft.
 	return domain.GenericOpener(tone, contactName, companyName), []domain.GroundingTrace{}
 }

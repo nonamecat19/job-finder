@@ -18,8 +18,6 @@ import (
 var itDB *db.DB
 
 func TestMain(m *testing.M) {
-	// This suite owns its database (internal/dbtest), so seedApplication can
-	// TRUNCATE between tests without disturbing packages running in parallel.
 	database, release, err := dbtest.NewForMain("applications")
 	if err != nil {
 		panic("dbtest: " + err.Error())
@@ -31,8 +29,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// seedApplication creates the job source / job / application chain the service
-// needs and returns the application's id as a string.
 func seedApplication(t *testing.T, key string) string {
 	t.Helper()
 	ctx := context.Background()
@@ -67,9 +63,6 @@ func seedApplication(t *testing.T, key string) string {
 
 func statusOf(s dto.ApplicationStatus) *dto.ApplicationStatus { return &s }
 
-// TestUpdateWritesOutcomeLogThroughTx drives the real service against Postgres
-// with *db.DB as the TxRunner, proving the status write and the outcome event
-// commit together and read back in order.
 func TestUpdateWritesOutcomeLogThroughTx(t *testing.T) {
 	ctx := context.Background()
 	id := seedApplication(t, "svc-outcome")
@@ -95,8 +88,6 @@ func TestUpdateWritesOutcomeLogThroughTx(t *testing.T) {
 		}
 	}
 
-	// The log is additive: "Application"."status" still holds the latest state
-	// and "appliedAt" is set from the applied transition.
 	uid, err := dbutil.ParseUUID(id)
 	if err != nil {
 		t.Fatalf("parse uuid: %v", err)
@@ -111,8 +102,6 @@ func TestUpdateWritesOutcomeLogThroughTx(t *testing.T) {
 	if !app.AppliedAt.Valid {
 		t.Fatal("expected appliedAt to be set by the applied transition")
 	}
-	// The post-age signal reads "appliedAt" and joins it against the applied
-	// event, so the two timestamps must be the same instant.
 	rows, err := itDB.Queries.ListApplicationOutcomes(ctx, uid)
 	if err != nil {
 		t.Fatalf("list outcomes: %v", err)
@@ -122,16 +111,11 @@ func TestUpdateWritesOutcomeLogThroughTx(t *testing.T) {
 	}
 }
 
-// TestUpdateAppliedIsIdempotentEndToEnd: re-submitting a transition that has
-// already been recorded must not duplicate its terminal-once event.
 func TestUpdateAppliedIsIdempotentEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	id := seedApplication(t, "svc-idempotent")
 	svc := application.NewService(itDB.Queries, itDB)
 
-	// applied -> shortlisted -> applied: the second `applied` transition is a
-	// real status change (so it reaches the insert) but the partial unique index
-	// drops the duplicate event.
 	for _, st := range []dto.ApplicationStatus{dto.StatusApplied, dto.StatusShortlisted, dto.StatusApplied} {
 		if _, err := svc.Update(ctx, id, application.UpdateInput{Status: statusOf(st)}); err != nil {
 			t.Fatalf("update to %s: %v", st, err)

@@ -10,11 +10,6 @@ import (
 	"time"
 )
 
-// TestPoolSaturationFailsFast is the behaviour SC-001 and FR-008a depend on:
-// with every connection held, a further acquire must fail on its own deadline
-// rather than blocking indefinitely, and must succeed again as soon as one is
-// returned. Run against real Postgres — a mocked pool would only prove that
-// the mock was written to agree.
 func TestPoolSaturationFailsFast(t *testing.T) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -70,13 +65,10 @@ func TestPoolSaturationFailsFast(t *testing.T) {
 		second.Release()
 		t.Fatalf("third acquire failed with %v, want context.DeadlineExceeded", err)
 	}
-	// The point of the bound is that the wait ends; a generous ceiling here
-	// keeps the assertion about "bounded", not about scheduler precision.
 	if elapsed > 5*acquireTimeout {
 		t.Errorf("third acquire blocked for %s, want ~%s", elapsed, acquireTimeout)
 	}
 
-	// Releasing one connection must make the pool usable again.
 	second.Release()
 	recoverCtx, cancelRecover := context.WithTimeout(ctx, 2*time.Second)
 	defer cancelRecover()

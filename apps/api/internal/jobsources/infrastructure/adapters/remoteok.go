@@ -1,10 +1,3 @@
-// Package adapters — RemoteOK, backed by RemoteOK's public JSON API
-// (https://remoteok.com/api) rather than HTML scraping. Search only supports
-// an operator-saved tag/category subscription (query.SubscriptionURL) — no
-// keyword search, matching indeed.go's stance. The API's first array element
-// is a legal-notice object, not a job (see specs/003-remoteok-job-provider/
-// research.md R3); every job record is looked up defensively so a malformed
-// or reshaped element degrades to being skipped, never a panic.
 package adapters
 
 import (
@@ -23,16 +16,10 @@ import (
 )
 
 const (
-	// remoteokAPIURL is RemoteOK's public, unauthenticated JSON feed.
-	remoteokAPIURL = "https://remoteok.com/api"
-	// remoteokUserAgent identifies this app to RemoteOK per its documented
-	// API etiquette (FR-017).
+	remoteokAPIURL    = "https://remoteok.com/api"
 	remoteokUserAgent = "job-finder/1.0 (+https://github.com/job-finder; job discovery bot)"
 )
 
-// RemoteOKAdapter — remoteok.com public JSON API, no credentials. APIURL
-// overrides remoteokAPIURL when set, letting tests point at an httptest
-// server instead of the real host; production code leaves it empty.
 type RemoteOKAdapter struct {
 	Scraping *scraping.Service
 	APIURL   string
@@ -41,9 +28,6 @@ type RemoteOKAdapter struct {
 func (RemoteOKAdapter) Key() string          { return "remoteok" }
 func (RemoteOKAdapter) Kind() dto.SourceKind { return dto.SourceKindAPI }
 
-// NeedsDetail reports true: the feed endpoint truncates the description;
-// FetchDetail re-reads the full entry, so ingestion defers match/ghost
-// scoring until enrichment has run.
 func (RemoteOKAdapter) NeedsDetail() bool { return true }
 
 func (d RemoteOKAdapter) apiURL() string {
@@ -65,17 +49,12 @@ func (d RemoteOKAdapter) HealthCheck(ctx context.Context, config map[string]any)
 	return len(raw) > 0, nil
 }
 
-// remoteokIsJobRecord reports whether a decoded API array element looks like
-// a job listing rather than the leading legal-notice element (research.md
-// R3): the legal-notice object has neither an "id" nor a "position" key.
 func remoteokIsJobRecord(raw map[string]any) bool {
 	_, hasID := raw["id"]
 	_, hasPosition := raw["position"]
 	return hasID && hasPosition
 }
 
-// Search only supports the saved-subscription flow (FR-014); keyword search
-// is out of scope, matching IndeedAdapter.Search's stance exactly.
 func (d RemoteOKAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
 	if query.SubscriptionURL == "" {
 		return nil, fmt.Errorf("remoteok keyword search not implemented — use subscription URL instead")
@@ -98,9 +77,6 @@ func (d RemoteOKAdapter) Search(ctx context.Context, query dto.SearchQuery, _ ma
 	return jobs, nil
 }
 
-// requestURL resolves a saved subscription URL (a
-// remoteok.com/remote-<tag>-jobs listing URL, or the bare API root) to the
-// concrete API URL to fetch, per research.md R6.
 func (d RemoteOKAdapter) requestURL(subURL string) string {
 	tag := remoteokTagFromURL(subURL)
 	if tag == "" {
@@ -109,9 +85,6 @@ func (d RemoteOKAdapter) requestURL(subURL string) string {
 	return d.apiURL() + "?tags=" + url.QueryEscape(tag)
 }
 
-// remoteokTagFromURL extracts "<tag>" out of a
-// "https://remoteok.com/remote-<tag>-jobs" path. Returns "" when the URL is
-// the bare API root or doesn't match that shape.
 func remoteokTagFromURL(subURL string) string {
 	parsed, err := url.Parse(subURL)
 	if err != nil {
@@ -128,11 +101,6 @@ func remoteokTagFromURL(subURL string) string {
 	return tag
 }
 
-// parseRemoteOKJobs decodes a RemoteOK API response body into normalized
-// jobs, skipping the leading legal-notice element (research.md R3) and any
-// other element that doesn't look like a job record. A non-nil error means
-// the body itself wasn't valid JSON — distinct from a valid-but-empty
-// listing set (FR-011).
 func parseRemoteOKJobs(body []byte) ([]dto.NormalizedJob, error) {
 	var raws []map[string]any
 	if err := json.Unmarshal(body, &raws); err != nil {
@@ -201,8 +169,6 @@ func remoteokJobFromRaw(raw map[string]any) dto.NormalizedJob {
 	}
 }
 
-// remoteokStringField reads a string field defensively — RemoteOK's API is
-// not strictly typed, so a missing or wrong-typed field degrades to "".
 func remoteokStringField(raw map[string]any, key string) string {
 	v, ok := raw[key]
 	if !ok {
@@ -215,8 +181,6 @@ func remoteokStringField(raw map[string]any, key string) string {
 	return strings.TrimSpace(s)
 }
 
-// remoteokSalaryRaw formats salary_min/salary_max (both commonly absent)
-// into a display string, or nil when neither is present.
 func remoteokSalaryRaw(raw map[string]any) *string {
 	min := remoteokNumberField(raw, "salary_min")
 	max := remoteokNumberField(raw, "salary_max")
@@ -250,10 +214,6 @@ func remoteokNumberField(raw map[string]any, key string) string {
 	}
 }
 
-// RemoteOKDetailPatch is the result of re-confirming a single RemoteOK
-// listing is still present in the current API feed and refreshing its
-// detail fields. Not part of the Adapter interface — RemoteOK-specific,
-// called directly by the enrichment handler.
 type RemoteOKDetailPatch struct {
 	Description string
 	Tags        []string
@@ -263,12 +223,6 @@ type RemoteOKDetailPatch struct {
 	Raw         map[string]any
 }
 
-// FetchDetail re-fetches the RemoteOK API (there is no per-listing detail
-// endpoint — research.md R5) and locates the record matching jobURL. When no
-// record matches (the listing has rotated out of RemoteOK's current feed),
-// it returns Available: false with a nil error so the caller can leave the
-// job's existing summary data untouched (FR-009 edge case) rather than
-// treating it as a fetch failure.
 func (d RemoteOKAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (RemoteOKDetailPatch, error) {
 	body, err := d.Scraping.FetchHTML(ctx, d.apiURL(), map[string]string{"User-Agent": remoteokUserAgent})
 	if err != nil {

@@ -14,21 +14,16 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 )
 
-// Inspector is the subset of *asynq.Inspector the sweeper needs to confirm
-// whether a queued row's task still exists before closing it out.
 type Inspector interface {
 	GetTaskInfo(queue, id string) (*asynq.TaskInfo, error)
 }
 
-// SweeperStore is the persistence port the sweeper depends on.
 type SweeperStore interface {
 	SweepStaleRunningActivityRuns(ctx context.Context, arg sqlcgen.SweepStaleRunningActivityRunsParams) ([]sqlcgen.ActivityRun, error)
 	ListStaleQueuedActivityRuns(ctx context.Context, cutoff pgtype.Timestamp) ([]sqlcgen.ActivityRun, error)
 	FinishActivityRunInterrupted(ctx context.Context, arg sqlcgen.FinishActivityRunInterruptedParams) error
 }
 
-// queueForOp maps an ActivityRun.Op back to its asynq queue, mirroring
-// httpapi.queueForOp — needed here to look up a queued row's task by id.
 var queueForOp = map[string]string{
 	"ingest":       "ingest",
 	"match":        "match",
@@ -38,12 +33,6 @@ var queueForOp = map[string]string{
 	"salary_infer": "salary:infer",
 }
 
-// Sweeper runs once at startup then every interval (019-ai-job-throughput,
-// research.md R4): closes out ActivityRun rows whose worker vanished
-// (stale/null heartbeat while running) or whose queued task no longer
-// exists, as "interrupted". Never touches a terminal row — the underlying
-// queries filter to 'running'/'queued' — so a run that finished between
-// sweep read and write is never re-opened.
 type Sweeper struct {
 	store         SweeperStore
 	inspector     Inspector
@@ -62,7 +51,6 @@ func NewSweeper(store SweeperStore, inspector Inspector, staleAfter, sweepInterv
 	}
 }
 
-// Run sweeps once immediately, then every s.sweepInterval, until ctx is done.
 func (s *Sweeper) Run(ctx context.Context) {
 	s.sweepOnce(ctx)
 	ticker := time.NewTicker(s.sweepInterval)
@@ -132,8 +120,6 @@ func (s *Sweeper) queuedTaskStillExists(row sqlcgen.ActivityRun) bool {
 		if errors.Is(err, asynq.ErrTaskNotFound) || errors.Is(err, asynq.ErrQueueNotFound) {
 			return false
 		}
-		// Unexpected Inspector error (e.g. Redis hiccup): assume the task is
-		// still live rather than closing out a run on flaky infrastructure.
 		slog.Warn("activity: inspector lookup failed, assuming task still live", "queue", qname, "id", *row.QueueTaskId, "error", err)
 		return true
 	}

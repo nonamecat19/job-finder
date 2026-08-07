@@ -60,10 +60,7 @@ import (
 	subscriptionshttp "github.com/job-finder/api/internal/subscriptions/interfaces/http"
 )
 
-// App is the fully wired set of HTTP and worker handlers plus the scheduler,
-// consumed by buildServers (router mounting + worker muxes) and runServers.
 type App struct {
-	// HTTP handlers (each exposes Mount).
 	Sources       *jobsourceshttp.SourcesHandler
 	Roster        *jobsourceshttp.RosterHandler
 	Searches      *jobsourceshttp.SearchesHandler
@@ -88,7 +85,6 @@ type App struct {
 	Health        *health.HealthHandler
 	Hosts         *jobsourceshttp.HostsHandler
 
-	// Worker handlers (each exposes ProcessTask).
 	Ingestion  *worker.Handler
 	Matching   *matching.Handler
 	Generation *generation.Handler
@@ -96,8 +92,6 @@ type App struct {
 	Salary     *salary.Handler
 	Ghost      *ghostjob.Handler
 
-	// Per-task-type LLM routers, reused by buildServers to resolve each
-	// worker's admission-gate provider class (019-ai-job-throughput).
 	MatchRouter      *llm.Router
 	GenerationRouter *llm.Router
 	DefaultRouter    *llm.Router
@@ -115,11 +109,6 @@ type sourcesHandles struct {
 	Roster   *roster.Service
 }
 
-// composeJobSources builds the adapter registry and application.Service, then
-// wires the djinni session's Sources back-reference now that the service
-// exists (closing the adapter<->service cycle). The five ATS board vendor
-// adapters (013) share one roster.Service, health-checked via the checkers
-// map NewBoardAdapters returns.
 func composeJobSources(p *Platform) *sourcesHandles {
 	djinniAdapter := adapters.DjinniAdapter{Scraping: p.Scraping, Session: p.DjinniSession}
 	douAdapter := adapters.DouAdapter{Scraping: p.Scraping}
@@ -194,11 +183,6 @@ type llmHandles struct {
 	DefaultRouter    *llm.Router
 }
 
-// composeLLM builds the shared providers and one llm.Router per named chat
-// task (030-litellm-model-routing). Each Router routes to the gateway when
-// configured (sending its task key as the model) or Ollama directly with the
-// task's LLM_MODEL_* value; there is no persisted setting to read, so every
-// Router is fixed for the lifetime of the process.
 func composeLLM(p *Platform) (*llmHandles, error) {
 	ollamaProvider, gatewayProvider, err := llm.NewProviders(p.Config)
 	if err != nil {
@@ -224,8 +208,6 @@ type profileHandles struct {
 	Handler *profilehttp.ProfilesHandler
 }
 
-// composeProfile wires profile.Service to Ollama directly (it only ever
-// embeds, never chats, so it needs no task Router).
 func composeProfile(p *Platform, ollama *llm.OllamaProvider) *profileHandles {
 	profileSvc := profile.NewService(p.DB.Queries, ollama, p.Config.EmbedModel, p.Config.RendercvBin)
 	return &profileHandles{
@@ -242,18 +224,12 @@ type matchingHandles struct {
 	Handler          *matching.Handler
 }
 
-// resumeAutoGenerateGate adapts aifeature.Service's per-feature ShouldRun to
-// matching's AutoGenerateGate, pinned to the resume feature (the only one
-// matching's post-score hook auto-enqueues).
 type resumeAutoGenerateGate struct{ svc *aifeature.Service }
 
 func (g resumeAutoGenerateGate) ShouldGenerate(score int) bool {
 	return g.svc.ShouldRun(aifeature.Resume, score)
 }
 
-// composeMatching also owns jobs.Service: matchingHandler auto-enqueues a
-// resume via it when a job's score crosses the aifeature threshold, so it
-// must exist before the matching handler.
 func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Service, matchRouter *llm.Router) (*matchingHandles, error) {
 	matchingSvc := matching.NewService(p.DB.Queries, profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
 	notifierSvc := notifier.NewService(p.DB.Queries,
@@ -279,8 +255,6 @@ type ghostHandles struct {
 	HTTPHandler *ghostjobhttp.GhostJobHandler
 }
 
-// composeGhostJob builds the ghost-job detector, kept separate from
-// matching/fit scoring end-to-end.
 func composeGhostJob(p *Platform, ghostRouter *llm.Router) *ghostHandles {
 	ghostSvc := ghostjob.NewService(p.DB.Queries, ghostRouter, "")
 	return &ghostHandles{
@@ -296,9 +270,6 @@ type generationHandles struct {
 	ResumeShape *resumeshapehttp.ResumeShapeHandler
 }
 
-// composeGeneration wires the renderers (and their optional MinIO blob store),
-// the resume shape settings service (read once per generation run through the
-// ShapeProvider port) and generation.Service.
 func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Service, generationRouter *llm.Router) (*generationHandles, error) {
 	cfg := p.Config
 
@@ -339,8 +310,6 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 }
 
 func composeApplications(p *Platform) *applicationshttp.ApplicationsHandler {
-	// p.DB (not p.DB.Queries) is passed as the TxRunner so a status change and
-	// its "ApplicationOutcome" event commit atomically.
 	applicationsSvc := applications.NewService(p.DB.Queries, p.DB)
 	return &applicationshttp.ApplicationsHandler{Applications: applicationsSvc}
 }
@@ -350,8 +319,6 @@ func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestio
 	return &subscriptionshttp.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
 }
 
-// composeEnrichment builds the enrichment worker handler, reusing the same
-// adapter values as the registry so it hits the shared djinni session.
 func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc retrieval.Service) *enrichment.Handler {
 	cfg := p.Config
 	enrichDelay := time.Duration(cfg.DjinniDetailDelayMs) * time.Millisecond
@@ -373,8 +340,6 @@ type salaryHandles struct {
 	LevelsLoader *salary.LevelsFyiLoader
 }
 
-// composeSalary builds the salary inference worker and loads the levels.fyi
-// CSV when configured (a warn-only side effect, unchanged from the original).
 func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) *salaryHandles {
 	cfg := p.Config
 	levelsFyiLoader := salary.NewLevelsFyiLoader(p.DB.Queries)
@@ -399,9 +364,6 @@ type keywordHandles struct {
 	RephraseModel *keyword.ProviderRephraseModel
 }
 
-// composeKeyword builds the keyword-diff endpoint with its async, TTL'd
-// rephrase cache. RephraseModel is returned so the fit-gap coach can reuse the
-// identical truthful-reframing port.
 func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile.Service) *keywordHandles {
 	rephraseModel := keyword.NewProviderRephraseModel(rephraseRouter, "")
 	cachedRephraser := keyword.NewCachedRephraser(
@@ -415,8 +377,6 @@ func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile
 	}
 }
 
-// composeCoach builds the fit-gap coach. ProfileEntries closes over profileSvc
-// rather than coach importing internal/profile, keeping that edge one-directional.
 func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, profileSvc *profile.Service) *coachhttp.CoachHandler {
 	coachSvc := coach.NewService(rephraseModel)
 	coachAssessSvc := coach.NewAssessmentService(coachSvc, p.DB.Queries, func(ctx context.Context) ([]coach.ProfileEntry, error) {
@@ -468,8 +428,6 @@ type recruiterHandles struct {
 	Handler *recruiterhttp.ContactsHandler
 }
 
-// composeRecruiter builds recruiter/hiring-manager resolution. LinkedIn only
-// runs when the operator has opted in via LINKEDIN_SCRAPE_ENABLED.
 func composeRecruiter(p *Platform, defaultRouter *llm.Router) *recruiterHandles {
 	recruiterSvc := recruiter.NewService(p.DB.Queries, defaultRouter, "", p.Scraping, p.Config.LinkedInScrapeEnabled)
 	return &recruiterHandles{
@@ -483,17 +441,11 @@ func composeReferral(p *Platform) *referralhttp.ReferralHandler {
 	return &referralhttp.ReferralHandler{Referral: referralSvc}
 }
 
-// composeOutreach builds the post-apply outreach draft generator. It consumes
-// 007's resolved contacts and 004's company-intel signals as its sole sources,
-// re-resolving neither. Draft-only: no send path exists.
 func composeOutreach(p *Platform, recruiterSvc *recruiter.Service, companyIntelSvc *companyintel.Service, defaultRouter *llm.Router) *outreachhttp.OutreachHandler {
 	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, defaultRouter, "")
 	return &outreachhttp.OutreachHandler{Outreach: outreachSvc}
 }
 
-// composeInterviewPrep builds the interview-prep pack (013): derived
-// questions + gap summary (008 keyword diff) + STAR stories from the default
-// profile + a company-news briefing reshaped from company-intel (004).
 func composeInterviewPrep(p *Platform, profileSvc *profile.Service, companyIntelSvc *companyintel.Service) *interviewprephttp.InterviewPrepHandler {
 	stories := func(ctx context.Context) ([]keyword.StarStory, error) {
 		prof, err := profileSvc.GetDefault(ctx)
@@ -528,17 +480,12 @@ func composeInterviewPrep(p *Platform, profileSvc *profile.Service, companyIntel
 	return &interviewprephttp.InterviewPrepHandler{InterviewPrep: prepSvc}
 }
 
-// redisPinger adapts redis.UniversalClient's Ping (which returns a command,
-// not a bare error) to httpapi.Pinger.
 type redisPinger struct{ client redis.UniversalClient }
 
 func (p redisPinger) Ping(ctx context.Context) error {
 	return p.client.Ping(ctx).Err()
 }
 
-// composeHealth wires /health/ready's dependency pings (FR-004): Postgres and
-// Redis are always checked; Minio stays disabled here since object storage is
-// optional and its client isn't shared on Platform.
 func composeHealth(p *Platform) *health.HealthHandler {
 	redisClient, _ := p.RedisOpt.MakeRedisClient().(redis.UniversalClient)
 	return &health.HealthHandler{
@@ -548,9 +495,6 @@ func composeHealth(p *Platform) *health.HealthHandler {
 	}
 }
 
-// hostRetrievalAdapter maps retrieval.Service's HostStatus (package-local
-// type) to dto.HostRetrievalStatusDto, so HostsHandler never needs to import
-// internal/retrieval.
 type hostRetrievalAdapter struct{ svc retrieval.Service }
 
 func (a hostRetrievalAdapter) HostStatus(ctx context.Context, host string) (dto.HostRetrievalStatusDto, error) {
@@ -590,9 +534,6 @@ func (a hostRetrievalAdapter) OverrideCoolingOff(ctx context.Context, host strin
 	return a.svc.OverrideCoolingOff(ctx, host)
 }
 
-// composeRetrieval builds the rung-aware (direct/browser/flaresolverr)
-// fetch service that backs both the Hosts introspection endpoints and the
-// scrape-heavy jobsources adapters that declare a Retrieval field.
 func composeRetrieval(p *Platform) (retrieval.Service, error) {
 	identity, err := retrieval.NewBrowserIdentity(p.Config.BrowserIdentityVersion)
 	if err != nil {
@@ -602,15 +543,10 @@ func composeRetrieval(p *Platform) (retrieval.Service, error) {
 	return retrieval.NewServiceImpl(identity, store, p.Config)
 }
 
-// composeHosts builds the host-retrieval introspection/debug endpoints
-// (rung, cooling-off, cookies).
 func composeHosts(retrievalSvc retrieval.Service) *jobsourceshttp.HostsHandler {
 	return &jobsourceshttp.HostsHandler{Retrieval: hostRetrievalAdapter{svc: retrievalSvc}}
 }
 
-// queueClassResolvers maps each LLM task policy's queue name to the router
-// that resolves its live provider class (019-ai-job-throughput), for the
-// GET /activity/queues admission-gate readout.
 func queueClassResolvers(policies []queue.TaskPolicy, llmH *llmHandles) map[string]queue.ClassResolver {
 	resolvers := make(map[string]queue.ClassResolver, len(policies))
 	for _, p := range policies {
@@ -628,10 +564,6 @@ func queueClassResolvers(policies []queue.TaskPolicy, llmH *llmHandles) map[stri
 	return resolvers
 }
 
-// buildContexts runs every feature composer in construction order and performs
-// the two cross-composer wires that cannot live inside a single composer:
-// jobsHandler (jobs.Service from matching + generation.Service) and the
-// SourcesHandler.Enrichment back-reference.
 func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	sources := composeJobSources(p)
 	ingestionH := composeIngestion(p, sources)

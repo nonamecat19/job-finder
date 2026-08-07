@@ -1,6 +1,3 @@
-// Package application orchestrates the company-intel scrapers and the
-// Company/CompanySignal persistence, serving the two card endpoints (GET
-// intel, POST refresh).
 package application
 
 import (
@@ -22,18 +19,11 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// ErrNoCompany re-exports domain.ErrNoCompany for callers that only import
-// application (e.g. the httpapi handler).
 var ErrNoCompany = domain.ErrNoCompany
 
-// Service orchestrates the company-intel scrapers and the Company /
-// CompanySignal persistence, serving the two card endpoints (GET intel,
-// POST refresh).
 type Service struct {
-	q        domain.Repository
-	registry *domain.Registry
-	// domainPace is the minimum interval between two requests to the same
-	// external domain (FR-012), defaulting to 2s in NewService.
+	q          domain.Repository
+	registry   *domain.Registry
 	domainPace time.Duration
 }
 
@@ -44,10 +34,6 @@ func NewService(q domain.Repository, registry *domain.Registry, domainPace time.
 	return &Service{q: q, registry: registry, domainPace: domainPace}
 }
 
-// GetIntel returns the currently-cached signal set for the job's company,
-// or (nil, nil) when the company has never been probed (or the job has no
-// parseable company name) — the handler renders that as the card's
-// "no data yet" state rather than an error.
 func (s *Service) GetIntel(ctx context.Context, jobID string) (*dto.CompanyIntelDto, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
@@ -83,12 +69,6 @@ func (s *Service) GetIntel(ctx context.Context, jobID string) (*dto.CompanyIntel
 	return &out, nil
 }
 
-// Refresh re-scrapes every registered signal source for the job's company
-// and upserts the results, then returns the (now-fresh, or partially
-// fresh) signal set. Each source fails independently (FR-006): a failed
-// source leaves its previously-cached CompanySignal row untouched. If
-// every source fails, the returned Dto still carries any previously-cached
-// values plus a top-level Error (FR-007).
 func (s *Service) Refresh(ctx context.Context, jobID string) (*dto.CompanyIntelDto, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
@@ -156,11 +136,6 @@ func (s *Service) Refresh(ctx context.Context, jobID string) (*dto.CompanyIntelD
 	return &out, nil
 }
 
-// runScrapers runs every registered scraper, one domain-group per
-// goroutine (so distinct domains run concurrently) with domainPace
-// enforced between requests within a domain group (FR-012). It returns the
-// count of scrapers that produced a signal (success or deliberate
-// zero-result) that was persisted.
 func (s *Service) runScrapers(ctx context.Context, companyID pgtype.UUID, in domain.Input) int {
 	var succeeded int32
 	var wg sync.WaitGroup
@@ -186,8 +161,6 @@ func (s *Service) runScrapers(ctx context.Context, companyID pgtype.UUID, in dom
 					continue
 				}
 				if result == nil {
-					// Deliberate skip (e.g. no website known yet) — not a
-					// failure, nothing to persist.
 					continue
 				}
 
@@ -235,8 +208,6 @@ func (s *Service) persistSignal(ctx context.Context, companyID pgtype.UUID, resu
 	return err
 }
 
-// buildDto flattens a Company row and its CompanySignal rows into the wire
-// DTO. FetchedAt is the most recent of the individual signal timestamps.
 func buildDto(company sqlcgen.Company, signals []sqlcgen.CompanySignal) dto.CompanyIntelDto {
 	out := dto.CompanyIntelDto{
 		CompanyName: company.Name,

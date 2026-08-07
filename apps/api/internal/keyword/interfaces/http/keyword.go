@@ -12,13 +12,10 @@ import (
 	"github.com/job-finder/api/internal/keyword/application"
 )
 
-// KeywordDiffProvider is the interface KeywordHandler needs from the keyword
-// diff service.
 type KeywordDiffProvider interface {
 	KeywordDiff(ctx context.Context, jobID string) (dto.KeywordDiffDto, error)
 }
 
-// KeywordHandler wires the JD-ATS keyword-diff endpoint (008-6).
 type KeywordHandler struct {
 	Diff KeywordDiffProvider
 }

@@ -14,28 +14,12 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// Kind is the "JobSignal"."kind" value this feature writes. The column
-// exists so future signal kinds (salary-realism, seniority-mismatch, ...)
-// reuse the same table without a migration.
 const Kind = "ghost"
 
-// confidenceCapWhenUnknown bounds an overconfident model result: when any
-// optional signal could not be measured, the persisted confidence never
-// exceeds this, regardless of what the model reported (FR-011, SC-005).
-// The prompt also instructs the model to lower confidence itself; this is a
-// deterministic backstop, not a replacement for that instruction.
 const confidenceCapWhenUnknown = 0.6
 
-// ErrDeclinedToScore is returned when every signal is unknown (spec edge
-// case: no postedAt, one-off company, empty description, first appearance).
-// No LLM call is made and no row is written — the system declines rather
-// than emitting a confident 0 or a confident 50 (SC-003).
 var ErrDeclinedToScore = errors.New("ghostjob: insufficient signal to score this job")
 
-// Service is the ghost-job use-case: measure signals -> build the prompt ->
-// llm.CompleteStructured -> upsert. Principle I: nothing here hides,
-// filters, reorders, or auto-rejects a job — the result is purely
-// informational.
 type Service struct {
 	q          domain.Repository
 	llmc       llm.Provider
@@ -53,11 +37,6 @@ func (s *Service) modelName() string {
 	return s.llmc.ModelName()
 }
 
-// ScoreJob measures signals for jobID, scores it with the local LLM, and
-// upserts the result. Returns ErrDeclinedToScore (no row written, no LLM
-// call) when every signal is unknown. A validation failure past the retry
-// budget, or any other scoring error, returns the error and persists
-// nothing — any prior row survives untouched (FR-010, FR-018, SC-009).
 func (s *Service) ScoreJob(ctx context.Context, jobID string) (dto.JobSignalDto, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
@@ -119,11 +98,6 @@ func (s *Service) ScoreJob(ctx context.Context, jobID string) (dto.JobSignalDto,
 	return toDto(row), nil
 }
 
-// buildPrompt hands the model the four measured numbers and forbids
-// asserting anything the signals do not support (FR-019, Principle II). It
-// explicitly states that an always-hiring count of 1 is no evidence
-// (SC-004) and that cross-board duplication alone never justifies the red
-// band (legitimate agency cross-post edge case).
 func buildPrompt(job sqlcgen.Job, s domain.GhostSignals) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Rate how likely this job posting is a \"ghost job\" — a posting the "+

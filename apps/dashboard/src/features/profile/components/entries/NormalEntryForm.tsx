@@ -8,7 +8,6 @@ interface EntryFormProps {
   onChange: (entry: Entry) => void;
 }
 
-// "normal" entries are used for projects and similar name+url+dates items.
 export function NormalEntryForm({ entry, onChange }: EntryFormProps) {
   const set = makeEntrySetter(entry, onChange);
   return (

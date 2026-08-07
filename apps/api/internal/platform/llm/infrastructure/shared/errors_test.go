@@ -59,8 +59,6 @@ func TestTerminalAndRetryable(t *testing.T) {
 			t.Errorf("Terminal(%v) = true, want false", e)
 		}
 	}
-	// Rate limiting is neither: the caller cancels rather than retrying or
-	// giving up permanently.
 	if Terminal(ErrRateLimited) || Retryable(ErrRateLimited) {
 		t.Error("ErrRateLimited should be neither Terminal nor Retryable")
 	}
@@ -71,9 +69,9 @@ func TestTerminalAndRetryable(t *testing.T) {
 
 func TestProviderErrMessageForms(t *testing.T) {
 	cases := []struct{ body, want string }{
-		{`{"error":{"message":"structured"}}`, "structured"}, // OpenAI-style
-		{`{"error":"plain string"}`, "plain string"},         // Ollama-style
-		{`not json at all`, "not json at all"},               // raw fallback
+		{`{"error":{"message":"structured"}}`, "structured"},
+		{`{"error":"plain string"}`, "plain string"},
+		{`not json at all`, "not json at all"},
 	}
 	for _, tc := range cases {
 		if got := ProviderErrMessage([]byte(tc.body)); got != tc.want {

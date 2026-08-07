@@ -78,11 +78,6 @@ export default function JobDetailPage() {
       return;
     }
     if (generating && statuses && generatingStatusCount > countAtGenerate) {
-      // Clears the "generating" flag once the lightweight status poll
-      // reflects the new document — genuinely reacting to an external
-      // system (the document-status query) settling, not state derivable
-      // from props/state during render. Reviewed as safe (spec
-      // 023-workflow-quality-gates FR-012 lint adoption).
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setGenerating(null);
     }

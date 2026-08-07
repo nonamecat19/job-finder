@@ -26,8 +26,6 @@ beforeEach(() => {
 })
 
 describe('ProfilePage', () => {
-  // FR-012: a profile with no config/sections yet must render as editable,
-  // not as an error or blank screen (spec 009 quickstart.md Scenario 1).
   it('renders an empty resume as editable, not an error state', async () => {
     vi.mocked(api.profiles.list).mockResolvedValue([
       { id: 'p1', name: 'Jane Doe', hasConfig: false, extraNotes: null, updatedAt: new Date().toISOString() },
@@ -43,9 +41,6 @@ describe('ProfilePage', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('Jane Doe')
   })
 
-  // FR-001/FR-012: a brand-new user must land directly on the full editable
-  // form + import button, never gated behind a "name it first" step — a
-  // blank profile is created silently in the background.
   it('auto-creates a blank profile and lands directly on the editable form when none exists', async () => {
     vi.mocked(api.profiles.list).mockResolvedValueOnce([]).mockResolvedValue([
       { id: 'p1', name: 'My Profile', hasConfig: false, extraNotes: null, updatedAt: new Date().toISOString() },
@@ -68,8 +63,6 @@ describe('ProfilePage', () => {
     expect(screen.getByLabelText('Name')).toBeInTheDocument()
   })
 
-  // FR-010: uploading a new config over a profile that already has resume
-  // content must be gated behind an explicit confirmation.
   it('requires confirmation before a config upload overwrites existing content', async () => {
     vi.mocked(api.profiles.list).mockResolvedValue([
       { id: 'p1', name: 'Jane Doe', hasConfig: true, extraNotes: null, updatedAt: new Date().toISOString() },

@@ -1,23 +1,8 @@
-// ---------------------------------------------------------------------------
-// @job-finder/shared — single entry point
-//
-// Generated types flow from Go DTOs via tygo. This file re-exports and
-// narrows; it never restates a shape. Hand-written types with no backend
-// counterpart live in consumer-only.ts.
-//
-// Adding a Go DTO field: edit the struct in apps/api/internal/dto/,
-// run `make tygo-generate`, done. Only a nullability change touches this file.
-// ---------------------------------------------------------------------------
 
 import * as Gen from './generated';
 import type { Nullable } from './nullable';
 
-// Re-export the Nullable generic for consumers that need it.
 export type { Nullable } from './nullable';
-
-// ---------------------------------------------------------------------------
-// Consumer-only types (no Go DTO counterpart)
-// ---------------------------------------------------------------------------
 
 export {
   ACTIVITY_OPS,
@@ -35,11 +20,6 @@ export {
   type QuestionSource,
   type SubscriptionInput,
 } from './consumer-only';
-
-// ---------------------------------------------------------------------------
-// Enum literal unions — keep const arrays only where generation cannot
-// express the union (tygo emits `string` for these Go const groups).
-// ---------------------------------------------------------------------------
 
 export const APPLICATION_STATUSES = [
   'found',
@@ -65,16 +45,10 @@ export const ENTRY_TYPES = [
 ] as const;
 export type EntryType = (typeof ENTRY_TYPES)[number];
 
-// SourceKind and DocumentType are already unions in generated.ts (enum_style: union).
 export type SourceKind = Gen.SourceKind;
 export type DocumentType = Gen.DocumentType;
 
-// PostAgeBucketState: generated has `string`; keep the union.
 export type PostAgeBucketState = 'observed' | 'prior' | 'insufficient';
-
-// ---------------------------------------------------------------------------
-// Identical shapes — re-export directly from generated
-// ---------------------------------------------------------------------------
 
 export type ActivityListResponse = Omit<Gen.ActivityListResponse, 'active' | 'recent'> & {
   active: ActivityRunDto[];
@@ -113,10 +87,6 @@ export type Section = Omit<Gen.Section, 'entryType' | 'entries'> & {
 export type SocialNetwork = Gen.SocialNetwork;
 export type TailorResumeRequestDto = Gen.TailorResumeRequestDto;
 export type TraceabilityDto = Gen.TraceabilityDto;
-
-// ---------------------------------------------------------------------------
-// Nullability + alias narrowings
-// ---------------------------------------------------------------------------
 
 export type ActivityRunDto = Nullable<Gen.ActivityRunDto, 'elapsedMs' | 'error' | 'finishedAt' | 'heartbeatAt' | 'jobId' | 'refId' | 'sourceKey' | 'startedAt' | 'step' | 'timeoutMs'> & {
     op: import('./consumer-only').ActivityOp;
@@ -236,11 +206,6 @@ export type TailoredDraftDto = Nullable<Gen.TailoredDraftDto,
 export type Entry = Omit<Gen.Entry, 'unrecognized'> & {
   unrecognized?: Record<string, unknown>;
 };
-
-// ---------------------------------------------------------------------------
-// Dto-suffixed generated types re-exported with non-Dto names
-// (hand-written index.ts used shorter names; consumers import those)
-// ---------------------------------------------------------------------------
 
 export type CompanyNewsItem = Gen.CompanyNewsItemDto;
 export type FitGapAssessment = Omit<Gen.FitGapAssessmentDto, 'gaps'> & { gaps: FitGapItem[] };

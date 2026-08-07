@@ -1,5 +1,3 @@
-// design-sync library entry — the dashboard is a private app with no library build,
-// so this barrel is the synthetic package entry the converter bundles.
 export {
   Button,
   Chip,

@@ -1,10 +1,3 @@
-// Package adapters — Indeed, direct scrape of public search-results and job
-// pages (no login/session). Search only supports an operator-pasted search
-// URL (query.SubscriptionURL) — no keyword search, matching dou.go's stance.
-// Selectors are defensive/best-effort: Indeed's markup is non-semantic and
-// known to churn, and the site may intermittently block scraping (see
-// specs/002-indeed-job-source/research.md R3/R4) — a missing field or a
-// blocked request degrades to an empty/partial result, never a panic.
 package adapters
 
 import (
@@ -25,19 +18,13 @@ import (
 )
 
 const (
-	// indeedMaxSubscriptionPages caps pagination so a redirect loop or an
-	// unbounded feed can't run forever, mirroring douMaxSubscriptionPages.
 	indeedMaxSubscriptionPages = 50
-	// indeedRequestDelay is the floor between paginated requests (FR-010).
-	indeedRequestDelay = 500 * time.Millisecond
-	// indeedPageSize is Indeed's own per-page result count; the "start"
-	// query param advances by this amount per page.
-	indeedPageSize = 10
+	indeedRequestDelay         = 500 * time.Millisecond
+	indeedPageSize             = 10
 )
 
 var indeedRemoteRe = regexp.MustCompile(`(?i)\bremote\b|work from home`)
 
-// IndeedAdapter — indeed.com, public search-results pages, no credentials.
 type IndeedAdapter struct {
 	Scraping *scraping.Service
 }
@@ -45,9 +32,6 @@ type IndeedAdapter struct {
 func (IndeedAdapter) Key() string          { return "indeed" }
 func (IndeedAdapter) Kind() dto.SourceKind { return dto.SourceKindScrape }
 
-// NeedsDetail reports true: the results page carries a snippet only;
-// FetchDetail fetches the posting body, so ingestion defers match/ghost
-// scoring until enrichment has run.
 func (IndeedAdapter) NeedsDetail() bool { return true }
 
 func (d IndeedAdapter) HealthCheck(ctx context.Context, config map[string]any) (bool, error) {
@@ -58,8 +42,6 @@ func (d IndeedAdapter) HealthCheck(ctx context.Context, config map[string]any) (
 	return strings.Contains(strings.ToLower(html), "indeed"), nil
 }
 
-// Search only supports the pasted-subscription-URL flow (FR-015); keyword
-// search is out of scope, matching DouAdapter.Search's stance exactly.
 func (d IndeedAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[string]any) ([]dto.NormalizedJob, error) {
 	if query.SubscriptionURL == "" {
 		return nil, fmt.Errorf("indeed keyword search not implemented — use subscription URL instead")
@@ -71,12 +53,6 @@ func (d IndeedAdapter) Search(ctx context.Context, query dto.SearchQuery, _ map[
 	return jobs, err
 }
 
-// scrapeSubscription pages through a pasted Indeed search URL by
-// incrementing its "start" query parameter (Indeed's own offset-based
-// pagination — see research.md R3). Stops on an empty page, a hard page
-// cap, or the page repeating the previous page's first card (loop guard).
-// A later page failing ends pagination with whatever was collected; only
-// page 1 failing is fatal (mirrors DjinniAdapter.scrapeSubscription).
 func (d IndeedAdapter) scrapeSubscription(ctx context.Context, subURL string) ([]dto.NormalizedJob, error) {
 	base, err := url.Parse(subURL)
 	if err != nil {
@@ -127,9 +103,6 @@ func (d IndeedAdapter) scrapeSubscription(ctx context.Context, subURL string) ([
 	return jobs, nil
 }
 
-// parseIndeedCards extracts job cards from an Indeed search-results page.
-// Selectors are defensive: title is required (card skipped without it),
-// every other field degrades to empty/nil rather than erroring.
 func parseIndeedCards(doc *goquery.Document, pageURL string) []dto.NormalizedJob {
 	var results []dto.NormalizedJob
 
@@ -187,8 +160,6 @@ func parseIndeedCards(doc *goquery.Document, pageURL string) []dto.NormalizedJob
 	return results
 }
 
-// extractIndeedJK pulls the "jk" query parameter (Indeed's stable per-
-// listing job-key id) out of a card href, e.g. "/rc/clk?jk=abc123".
 func extractIndeedJK(href string) string {
 	parsed, err := url.Parse(href)
 	if err != nil {
@@ -197,9 +168,6 @@ func extractIndeedJK(href string) string {
 	return parsed.Query().Get("jk")
 }
 
-// IndeedDetailPatch is the parsed subset of an Indeed job-detail page used
-// to fill in a shallow (list-only) Job row. Not part of the Adapter
-// interface — Indeed-specific, called directly by the enrichment handler.
 type IndeedDetailPatch struct {
 	Description string
 	SalaryRaw   *string
@@ -209,11 +177,6 @@ type IndeedDetailPatch struct {
 	Raw         map[string]string
 }
 
-// FetchDetail fetches a single Indeed job page and parses the full
-// description/location/remote flag/posted-date. Returns a non-nil error on
-// fetch failure (e.g. the listing is gone) so the caller can leave the
-// job's existing summary data untouched rather than overwriting it with
-// nothing (FR-009 edge case).
 func (d IndeedAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[string]any) (IndeedDetailPatch, error) {
 	htmlStr, err := d.Scraping.FetchHTML(ctx, jobURL, nil)
 	if err != nil {

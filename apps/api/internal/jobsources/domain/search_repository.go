@@ -9,12 +9,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// SearchRepository is the outbound persistence port for the SavedSearch/
-// SourceRun/Job ingestion use-cases (application.SearchService, the
-// interfaces/worker Handler and Scheduler). *sqlcgen.Queries satisfies it
-// structurally. It embeds activity.Store because the worker handler
-// starts/resumes an activity record from the same value (activity.New,
-// activity.FromID).
 type SearchRepository interface {
 	activity.Store
 	BatchRepository

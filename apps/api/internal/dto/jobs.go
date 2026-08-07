@@ -15,60 +15,60 @@ type NormalizedJob struct {
 	PostedAt    *string `json:"postedAt,omitempty"`
 	Raw         any     `json:"raw"`
 
-	ExperienceLevel       *string `json:"experienceLevel,omitempty"`
-	ExperienceMinYears    *int    `json:"experienceMinYears,omitempty"`
-	EnglishLevel          *string `json:"englishLevel,omitempty"`
-	SalaryEstimateRaw     *string `json:"salaryEstimateRaw,omitempty"`
-	SalaryEstimateMin     *int    `json:"salaryEstimateMin,omitempty"`
-	SalaryEstimateMax     *int    `json:"salaryEstimateMax,omitempty"`
+	ExperienceLevel        *string `json:"experienceLevel,omitempty"`
+	ExperienceMinYears     *int    `json:"experienceMinYears,omitempty"`
+	EnglishLevel           *string `json:"englishLevel,omitempty"`
+	SalaryEstimateRaw      *string `json:"salaryEstimateRaw,omitempty"`
+	SalaryEstimateMin      *int    `json:"salaryEstimateMin,omitempty"`
+	SalaryEstimateMax      *int    `json:"salaryEstimateMax,omitempty"`
 	SalaryEstimateCurrency *string `json:"salaryEstimateCurrency,omitempty"`
 }
 
 type SearchQuery struct {
-	Keywords  string   `json:"keywords"`
-	Location  *string  `json:"location,omitempty"`
-	Remote    *bool    `json:"remote,omitempty"`
-	SalaryMin *float64 `json:"salaryMin,omitempty"`
-	Country   *string  `json:"country,omitempty"`
-	Sources   []string `json:"sources,omitempty"`
-	SubscriptionURL string `json:"subscriptionUrl,omitempty"`
+	Keywords        string   `json:"keywords"`
+	Location        *string  `json:"location,omitempty"`
+	Remote          *bool    `json:"remote,omitempty"`
+	SalaryMin       *float64 `json:"salaryMin,omitempty"`
+	Country         *string  `json:"country,omitempty"`
+	Sources         []string `json:"sources,omitempty"`
+	SubscriptionURL string   `json:"subscriptionUrl,omitempty"`
 }
 
 type JobDto struct {
-	ID              string                 `json:"id"`
-	DedupeKey       string                 `json:"dedupeKey"`
-	SourceKey       string                 `json:"sourceKey"`
-	SubscriptionID  *string                `json:"subscriptionId"`
-	Title           string                 `json:"title"`
-	Company         string                 `json:"company"`
-	Location        *string                `json:"location"`
-	Remote          bool                   `json:"remote"`
-	SalaryRaw       *string                `json:"salaryRaw"`
-	URL             string                 `json:"url"`
-	Description     string                 `json:"description"`
-	DescriptionHtml *string                `json:"descriptionHtml,omitempty"`
-	PostedAt        *string                `json:"postedAt"`
-	IngestedAt      string                 `json:"ingestedAt"`
-	Status          string                 `json:"status"`
-	MatchResult     *MatchResultDto        `json:"matchResult,omitempty"`
-	Documents       []GeneratedDocumentDto `json:"documents,omitempty"`
-	Application     *ApplicationDto        `json:"application,omitempty"`
-	SalaryMin        *int     `json:"salaryMin"`
-	SalaryMax        *int     `json:"salaryMax"`
-	SalaryCurrency   *string  `json:"salaryCurrency"`
-	SalaryConfidence *float64 `json:"salaryConfidence"`
-	SalarySource     *string  `json:"salarySource"`
-	SalaryBelowFloor bool     `json:"salaryBelowFloor"`
-	GhostSignal *JobSignalDto `json:"ghostSignal,omitempty"`
+	ID               string                 `json:"id"`
+	DedupeKey        string                 `json:"dedupeKey"`
+	SourceKey        string                 `json:"sourceKey"`
+	SubscriptionID   *string                `json:"subscriptionId"`
+	Title            string                 `json:"title"`
+	Company          string                 `json:"company"`
+	Location         *string                `json:"location"`
+	Remote           bool                   `json:"remote"`
+	SalaryRaw        *string                `json:"salaryRaw"`
+	URL              string                 `json:"url"`
+	Description      string                 `json:"description"`
+	DescriptionHtml  *string                `json:"descriptionHtml,omitempty"`
+	PostedAt         *string                `json:"postedAt"`
+	IngestedAt       string                 `json:"ingestedAt"`
+	Status           string                 `json:"status"`
+	MatchResult      *MatchResultDto        `json:"matchResult,omitempty"`
+	Documents        []GeneratedDocumentDto `json:"documents,omitempty"`
+	Application      *ApplicationDto        `json:"application,omitempty"`
+	SalaryMin        *int                   `json:"salaryMin"`
+	SalaryMax        *int                   `json:"salaryMax"`
+	SalaryCurrency   *string                `json:"salaryCurrency"`
+	SalaryConfidence *float64               `json:"salaryConfidence"`
+	SalarySource     *string                `json:"salarySource"`
+	SalaryBelowFloor bool                   `json:"salaryBelowFloor"`
+	GhostSignal      *JobSignalDto          `json:"ghostSignal,omitempty"`
 
-	ExperienceLevel       *string `json:"experienceLevel"`
-	ExperienceMinYears    *int    `json:"experienceMinYears"`
-	EnglishLevel          *string `json:"englishLevel"`
-	SalaryEstimateRaw     *string `json:"salaryEstimateRaw"`
-	SalaryEstimateMin     *int    `json:"salaryEstimateMin"`
-	SalaryEstimateMax     *int    `json:"salaryEstimateMax"`
+	ExperienceLevel        *string `json:"experienceLevel"`
+	ExperienceMinYears     *int    `json:"experienceMinYears"`
+	EnglishLevel           *string `json:"englishLevel"`
+	SalaryEstimateRaw      *string `json:"salaryEstimateRaw"`
+	SalaryEstimateMin      *int    `json:"salaryEstimateMin"`
+	SalaryEstimateMax      *int    `json:"salaryEstimateMax"`
 	SalaryEstimateCurrency *string `json:"salaryEstimateCurrency"`
-	SalaryIsEstimated     bool    `json:"salaryIsEstimated"`
+	SalaryIsEstimated      bool    `json:"salaryIsEstimated"`
 }
 
 type JobListResponse struct {
@@ -141,13 +141,13 @@ type RunVerdictDto struct {
 }
 
 type HostRetrievalStatusDto struct {
-	Host              string     `json:"host"`
-	IdentityVersion   string     `json:"identityVersion"`
-	CurrentRung       string     `json:"currentRung"`
-	LastBlockAt       *time.Time `json:"lastBlockAt,omitempty"`
-	LastBlockReason   *string    `json:"lastBlockReason,omitempty"`
-	CoolingOffUntil   *time.Time `json:"coolingOffUntil,omitempty"`
-	CrawlDelaySeconds *int       `json:"crawlDelaySeconds,omitempty"`
+	Host              string        `json:"host"`
+	IdentityVersion   string        `json:"identityVersion"`
+	CurrentRung       string        `json:"currentRung"`
+	LastBlockAt       *time.Time    `json:"lastBlockAt,omitempty"`
+	LastBlockReason   *string       `json:"lastBlockReason,omitempty"`
+	CoolingOffUntil   *time.Time    `json:"coolingOffUntil,omitempty"`
+	CrawlDelaySeconds *int          `json:"crawlDelaySeconds,omitempty"`
 	Pacing            HostPacingDto `json:"pacing"`
 }
 

@@ -6,22 +6,14 @@ import (
 	"strings"
 )
 
-// RegexExtractor is the deterministic, dependency-free implementation of the
-// Extractor port. It follows the spec 008-1 §1.4 algorithm: split the JD into
-// sections by headers, classify each section's default polarity, extract
-// skill-like tokens, normalize them, and tag each with polarity + section.
 type RegexExtractor struct{}
 
-// NewExtractor returns the production extractor. (NewService-style constructor
-// kept for symmetry with sibling packages and future dependency injection.)
 func NewExtractor() *RegexExtractor {
 	return &RegexExtractor{}
 }
 
-// Compile-time check that RegexExtractor satisfies the port.
 var _ Extractor = (*RegexExtractor)(nil)
 
-// Section headers and the polarity they imply by default (spec 008-1 §1.3).
 var (
 	requiredHeaders = []string{
 		"requirements", "qualifications", "what you'll need", "what you need",
@@ -35,20 +27,14 @@ var (
 	}
 )
 
-// headerRe matches a section header: a line that is short, possibly bolded
-// (markdown **...** or leading #), and ends before a blank line.
 var headerRe = regexp.MustCompile(`(?m)^(?:\s*(?:#{1,3}\s*|\*\*)?)([A-Z][A-Za-z0-9 /&+'.()-]{2,60}?)(?:\s*\*\*)?\s*[:\s]*$`)
 
-// bulletRe matches list items ("- ", "* ", "• ", "1. ").
 var bulletRe = regexp.MustCompile(`(?m)^\s*(?:[-*•]|\d+[.)])\s+(.*)$`)
 
-// stripPunctRe removes punctuation except hyphens inside known compounds.
 var stripPunctRe = regexp.MustCompile(`[^\w\s/-]`)
 
-// tokenRe splits a phrase into word tokens, keeping hyphenated compounds.
 var tokenRe = regexp.MustCompile(`[A-Za-z0-9]+(?:[./-][A-Za-z0-9]+)*`)
 
-// Extract implements Extractor.
 func (e *RegexExtractor) Extract(jd string) (*ExtractResult, error) {
 	if strings.TrimSpace(jd) == "" {
 		return nil, fmt.Errorf("keyword: empty job description")
@@ -64,10 +50,6 @@ func (e *RegexExtractor) Extract(jd string) (*ExtractResult, error) {
 			term.Polarity = sec.polarity
 			term.Section = sec.header
 			term.Evidence = hit.evidence
-			// Dedup by canonical term: a skill required somewhere in the JD
-			// outranks a preferred-only mention, so required wins on conflict
-			// (the diff should not hide a hard requirement behind a "nice to
-			// have" repeat). First sighting keeps its section for traceability.
 			if prev, ok := seen[term.Canonical]; ok {
 				if prev.Polarity != PolarityRequired && term.Polarity == PolarityRequired {
 					prev.Polarity = PolarityRequired
@@ -85,16 +67,12 @@ func (e *RegexExtractor) Extract(jd string) (*ExtractResult, error) {
 	return &ExtractResult{Terms: terms}, nil
 }
 
-// section is a slice of the JD with its inferred default polarity.
 type section struct {
 	header   string
 	body     string
 	polarity Polarity
 }
 
-// splitSections partitions the JD by headers and assigns each section a default
-// polarity from its header (spec 008-1 §1.3). Text before the first header
-// defaults to required.
 func splitSections(jd string) []section {
 	locs := headerRe.FindAllStringIndex(jd, -1)
 	if len(locs) == 0 {
@@ -129,7 +107,6 @@ func splitSections(jd string) []section {
 	return out
 }
 
-// classifyHeader returns the default polarity implied by a header string.
 func classifyHeader(h string) Polarity {
 	hl := lowerASCII(h)
 	for _, p := range preferredHeaders {
@@ -145,19 +122,11 @@ func classifyHeader(h string) Polarity {
 	return PolarityRequired
 }
 
-// phraseHit is a single extracted phrase paired with the raw candidate
-// line/bullet it came from, so downstream steps (the must-have classifier)
-// can inspect the surrounding phrasing.
 type phraseHit struct {
 	phrase   string
 	evidence string
 }
 
-// extractPhrases pulls skill-like phrases out of a section body. It collects
-// bullet items and falls back to sentence fragments, then merges adjacent
-// single tokens into known multi-word terms (synonym map keys) so
-// "machine learning" is not split into "machine" + "learning" (spec §1.4.4).
-// Each phrase keeps a reference to the candidate line it originated from.
 func extractPhrases(body string) []phraseHit {
 	var candidates []string
 	for _, m := range bulletRe.FindAllStringSubmatch(body, -1) {
@@ -182,8 +151,6 @@ func extractPhrases(body string) []phraseHit {
 	return hits
 }
 
-// mergeMultiWord splits a candidate into word tokens, then greedily folds
-// consecutive tokens into a known canonical multi-word term when one exists.
 func mergeMultiWord(candidate string) []string {
 	clean := stripPunctRe.ReplaceAllString(candidate, " ")
 	clean = collapseSpace(clean)
@@ -217,8 +184,6 @@ func mergeMultiWord(candidate string) []string {
 		}
 		phrase := strings.Join(tokens[i:i+best], " ")
 		i += best
-		// Drop single-token non-skill prose so the diff isn't polluted with
-		// generic verbs; keep multi-word phrases (they may be real skills).
 		if best == 1 && isNoise(phrase) {
 			continue
 		}
@@ -230,9 +195,6 @@ func mergeMultiWord(candidate string) []string {
 	return out
 }
 
-// normalizeTerm runs a single term through the normalization sequence
-// (spec 008-1 §2.4): lowercase, strip punctuation, acronym/synonym expansion
-// to canonical, then stem.
 func normalizeTerm(raw string) ExtractedTerm {
 	clean := stripPunctRe.ReplaceAllString(raw, " ")
 	clean = collapseSpace(strings.TrimSpace(clean))
@@ -245,6 +207,5 @@ func normalizeTerm(raw string) ExtractedTerm {
 		Term:      clean,
 		Canonical: canonical,
 		Stemmed:   stemmed,
-		// Polarity is assigned by the caller (depends on section context).
 	}
 }

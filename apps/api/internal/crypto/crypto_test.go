@@ -6,12 +6,6 @@ import (
 	"testing"
 )
 
-// nodeFixture was produced by running the *actual* Node implementation
-// (apps/api/src/common/crypto.ts logic, inlined) via:
-//
-//	CONFIG_ENCRYPTION_KEY=<key> node -e '... encryptJson(value) ...'
-//
-// This proves byte-for-byte compatibility: Go must decrypt what Node encrypted.
 const (
 	nodeFixtureKey     = "2fcda387431533240a0292632e734c684552dfb4aab8279e382ac13e0e55e16c"
 	nodeFixturePayload = "qGZ5qtw75VHxgaWU/RDK/EIe6b+EZ9zlJqHZ1o4da79gK1BcN91t93GV50+riZ/sa/r3lljbRXTmbm75X4vtbyHV0xLvy+eLUq0a"
@@ -53,8 +47,6 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 }
 
 func TestEncryptJSON_LayoutLength(t *testing.T) {
-	// iv(12) + tag(16) + ciphertext must all be present; for a tiny plaintext
-	// the base64-decoded length should be exactly 28 + len(ciphertext).
 	key := strings.Repeat("1a", 32)
 	enc, err := EncryptJSON(key, "x")
 	if err != nil {

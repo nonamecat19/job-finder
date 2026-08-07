@@ -8,9 +8,6 @@ import (
 	"github.com/job-finder/api/internal/postage/domain"
 )
 
-// Service computes the post-age-at-apply vs response-rate signal from the
-// ApplicationOutcome event log. It is a deterministic SQL aggregation — no
-// model, no LLM in the signal path.
 type Service struct {
 	q domain.Repository
 }
@@ -19,9 +16,6 @@ func NewService(q domain.Repository) *Service {
 	return &Service{q: q}
 }
 
-// Compute returns the full post-age vs response-rate signal with cold-start
-// honesty rules applied. The raw SQL aggregation is bucketed, then each bucket
-// is classified as observed / insufficient / prior per the spec thresholds.
 func (s *Service) Compute(ctx context.Context) (dto.PostAgeResponseDto, error) {
 	rows, err := s.q.PostAgeResponseRate(ctx)
 	if err != nil {
@@ -70,11 +64,6 @@ func (s *Service) Compute(ctx context.Context) (dto.PostAgeResponseDto, error) {
 	return resp, nil
 }
 
-// bucketState classifies a single bucket per the three-state rules:
-//   - Total < global threshold → prior (handled by caller for the overall view;
-//     per-bucket we still show insufficient when below per-bucket min)
-//   - Total ≥ global threshold, bucket < per-bucket min → insufficient
-//   - Total ≥ global threshold, bucket ≥ per-bucket min → observed
 func bucketState(totalApps, bucketN int32) dto.PostAgeBucketState {
 	if totalApps < domain.GlobalColdStartThreshold {
 		return dto.PostAgeStatePrior

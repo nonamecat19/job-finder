@@ -16,7 +16,7 @@ func TestRanker_Rank_OrdersByScoreThenLength(t *testing.T) {
 		score  float64
 		length int
 	}{
-		{0.9, 2}, // higher score wins; tie broken by shorter length
+		{0.9, 2},
 		{0.9, 4},
 		{0.5, 3},
 		{0.1, 1},

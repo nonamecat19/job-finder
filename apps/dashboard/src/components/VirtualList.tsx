@@ -11,7 +11,6 @@ interface VirtualListProps<T> {
   gap?: number;
   className?: string;
   maxHeight?: string;
-  /** Above this item count, the list starts collapsed to `collapsedHeight` behind a toggle button. */
   collapseThreshold?: number;
   collapsedHeight?: string;
 }

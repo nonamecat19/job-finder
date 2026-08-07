@@ -10,12 +10,6 @@ const PROXIMITY_TONE: Record<FitGapProximity, 'green' | 'red' | 'slate'> = {
   distant: 'red',
 };
 
-/**
- * CoachPanel renders the fit-gap coach (009): "you fail N of M must-haves",
- * then per-gap adjacent evidence from the profile with a grounded rephrase
- * suggestion. Assessment is on-demand (a live LLM call per gap), so the
- * panel starts empty until the user clicks Assess.
- */
 export default function CoachPanel({ jobId }: { jobId: string | undefined }) {
   const { data, isLoading, isError: isCachedError } = useCoachAssessment(jobId);
   const assess = useAssessCoach(jobId);

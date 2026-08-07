@@ -17,9 +17,6 @@ import {
   useUploadConfig,
 } from './hooks';
 
-// Profile.name (the record label) is distinct from Resume.name (the person's
-// name on the resume itself, edited in IdentityForm) — this default is never
-// shown to the user, it just satisfies the backend's required-name field.
 const DEFAULT_PROFILE_NAME = 'My Profile';
 
 export default function ProfilePage() {
@@ -31,9 +28,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!profilesLoading && !profile && !creatingRef.current) {
-      // No profile yet: create a blank one silently so the user lands
-      // directly on the full editable form + import button (FR-001, FR-012)
-      // instead of being gated behind a "name it first" step.
       creatingRef.current = true;
       createProfile.mutate({ name: DEFAULT_PROFILE_NAME });
     }
@@ -70,10 +64,6 @@ function ProfileEditor({ profileId, profileName }: { profileId: string; profileN
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
-    // Seeds the editable draft once the resume query resolves — reacting to
-    // an external query resolving, not state derivable from props alone
-    // during render. Reviewed as safe (spec 023-workflow-quality-gates
-    // FR-012 lint adoption).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (resumeDto) setDraft(resumeDto.resume);
   }, [resumeDto]);

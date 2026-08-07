@@ -24,7 +24,6 @@ type remotiveResponse struct {
 	Jobs []remotiveJob `json:"jobs"`
 }
 
-// RemotiveAdapter mirrors remotive.adapter.ts — a remote-only job board.
 type RemotiveAdapter struct{}
 
 func (RemotiveAdapter) Key() string          { return "remotive" }

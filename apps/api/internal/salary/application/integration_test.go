@@ -15,8 +15,6 @@ import (
 func TestIntegration_SalaryCacheUpsert(t *testing.T) {
 	ctx := context.Background()
 
-	// Own database per test (internal/dbtest): the Job and SalaryCache rows
-	// below are invisible to packages running in parallel, and vice versa.
 	database := dbtest.New(t)
 	q := database.Queries
 
@@ -82,8 +80,6 @@ func TestIntegration_SalaryCacheUpsert(t *testing.T) {
 func TestIntegration_JobSalaryPersistence(t *testing.T) {
 	ctx := context.Background()
 
-	// Own database per test (internal/dbtest): the Job and SalaryCache rows
-	// below are invisible to packages running in parallel, and vice versa.
 	database := dbtest.New(t)
 	q := database.Queries
 

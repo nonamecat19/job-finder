@@ -215,7 +215,7 @@ func TestGatewayErrorClassification(t *testing.T) {
 func TestGatewayConnectionRefused(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	url := srv.URL
-	srv.Close() // now refuses connections
+	srv.Close()
 	p, err := New(url, "key", nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -231,8 +231,6 @@ func TestGatewayConnectionRefused(t *testing.T) {
 		t.Errorf("connection refused should be Retryable, got %v", err)
 	}
 }
-
-// --- Served-model logging (030-litellm-model-routing, contracts/task-router.md §C4) ---
 
 func TestServedModelPrefersHeaderOverBody(t *testing.T) {
 	h := http.Header{}
@@ -259,7 +257,6 @@ func TestServedModelUnknownWhenBothAbsent(t *testing.T) {
 
 func TestGatewayCompleteSucceedsWhenModelFieldMissing(t *testing.T) {
 	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
-		// No x-litellm-model-name header and no body "model" field.
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hi"}}]}`))
 	})
 	out, err := p.Complete(context.Background(), "hi", nil)
@@ -307,14 +304,6 @@ func TestGatewayEmbedDelegatesToOllama(t *testing.T) {
 	}
 }
 
-// The regression this guards: an http.Client timeout is absolute and
-// overrides the caller's context, so a value below the proxy's worst-case
-// fallback chain truncates long tasks locally. Generation runs carrying a
-// 900s budget once died at exactly 120.0s under a 120s client cap while the
-// proxy was still working. gateway/config.yaml bounds its chain to
-// tiers x (1+num_retries) x request_timeout = 5 x 2 x 60 = 600s; this must
-// stay above that so the proxy is what times out first and the caller gets a
-// real upstream error instead of a local deadline.
 func TestClientTimeoutExceedsProxyWorstCaseChain(t *testing.T) {
 	const proxyWorstCase = 600 * time.Second
 

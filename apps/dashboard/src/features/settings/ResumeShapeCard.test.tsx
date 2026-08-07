@@ -52,7 +52,6 @@ describe('ResumeShapeCard', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Summary sentences')).toHaveTextContent('4')
     })
-    // Every value is visible in this single place, each with its range.
     expect(screen.getByText('Summary sentences (1-12)')).toBeInTheDocument()
     expect(screen.getByText('Max skill groups (0-20)')).toBeInTheDocument()
     expect(screen.getByText('Bullets per job (1-20)')).toBeInTheDocument()
@@ -92,7 +91,6 @@ describe('ResumeShapeCard', () => {
     await waitFor(() => {
       expect(screen.getByText(/targetPages must be between 1 and 3/)).toBeInTheDocument()
     })
-    // The other values are untouched: nothing was stored.
     expect(screen.getByLabelText('Summary sentences')).toHaveTextContent('4')
     expect(screen.getByLabelText('Max Bullets per job')).toHaveValue('10')
   })
@@ -105,7 +103,6 @@ describe('ResumeShapeCard', () => {
     await waitFor(() => expect(screen.getByLabelText('Target pages')).toHaveTextContent('1'))
     expect(screen.getByLabelText('Summary sentences')).toHaveTextContent('8')
 
-    // After the reset the refetch serves the defaults again.
     getResumeShape.mockResolvedValue({ ...defaults })
     await user.click(screen.getByRole('button', { name: 'reset to defaults' }))
 

@@ -6,9 +6,6 @@ import (
 	"log/slog"
 )
 
-// validateDBPool checks the pool settings that stand on their own, before any
-// worker concurrency is known. Called from Load, so a bad value is rejected
-// before a connection is ever opened (026-db-pool-capacity).
 func validateDBPool(c *Config) error {
 	switch {
 	case c.DBMaxConns < 0:
@@ -33,8 +30,6 @@ func validateDBPool(c *Config) error {
 	return nil
 }
 
-// EffectiveDBMaxConns is the pool size that will be applied: the configured
-// value, or the derived requirement when DB_MAX_CONNS is 0.
 func (c *Config) EffectiveDBMaxConns(required int) int {
 	if c.DBMaxConns > 0 {
 		return c.DBMaxConns
@@ -42,18 +37,6 @@ func (c *Config) EffectiveDBMaxConns(required int) int {
 	return required
 }
 
-// ValidateDBCapacity checks configured capacity against what the workload
-// needs. required comes from db.CapacityBudget.Required(); workers and
-// background are its components, reported so the message names the settings
-// actually in conflict.
-//
-// It takes the budget as arguments rather than computing it: the arithmetic
-// lives in internal/db, which imports internal/queue, which imports this
-// package. Passing the numbers in keeps that direction one-way.
-//
-// Under-capacity fails — the process can prove it on its own. Over-capacity
-// only warns, because it is measured against an operator-declared server limit
-// that may simply be stale (research.md R4).
 func ValidateDBCapacity(c *Config, workers, background, required int) error {
 	if c.DBMaxConns > 0 && c.DBMaxConns < required {
 		return fmt.Errorf("config: DB_MAX_CONNS=%d is below the %d connections required by worker concurrency (workers=%d background=%d reserve=%d). Raise DB_MAX_CONNS, or lower AI_CONCURRENCY_CLOUD / INGEST_CONCURRENCY / ENRICH_CONCURRENCY",

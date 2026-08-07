@@ -172,10 +172,6 @@ func TestGlassdoorSearch_Blocked(t *testing.T) {
 }
 
 func TestGlassdoorHealthCheck(t *testing.T) {
-	// HealthCheck targets the fixed glassdoor.com host; reachability in a
-	// sandboxed/offline test environment is not guaranteed, so this only
-	// asserts the "never a non-nil error" contract, matching IndeedAdapter's
-	// equivalent test.
 	a := GlassdoorAdapter{Scraping: scraping.New()}
 	if _, err := a.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)

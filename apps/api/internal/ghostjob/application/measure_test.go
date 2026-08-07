@@ -13,9 +13,6 @@ import (
 	"github.com/job-finder/api/internal/ghostjob/domain"
 )
 
-// fakeRepo is a controllable stand-in for domain.Repository. Only the
-// methods MeasureSignals actually calls need real behavior; the rest exist
-// to satisfy the interface.
 type fakeRepo struct {
 	repostCount     int32
 	repostErr       error
@@ -24,7 +21,7 @@ type fakeRepo struct {
 	alwaysHiring    int32
 	alwaysHiringErr error
 
-	alwaysHiringCalls []string // records every company arg passed
+	alwaysHiringCalls []string
 }
 
 func (f *fakeRepo) GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error) {
@@ -71,10 +68,6 @@ product and design, and mentor junior engineers. Requirements: 5+ years
 of backend experience, strong knowledge of distributed systems, and
 excellent communication skills.`
 
-// T008 trap: repost count must be able to exceed 1. A naive
-// `count(*) FROM "Job" WHERE "dedupeKey" = $1` can only ever return 1
-// because "dedupeKey" is UNIQUE — this asserts the measured value the
-// service receives is NOT silently clamped to 1.
 func TestMeasureSignals_RepostCountGreaterThanOneIsReachable(t *testing.T) {
 	repo := &fakeRepo{repostCount: 3, alwaysHiring: 1}
 	got := application.MeasureSignals(context.Background(), repo, baseJob())
@@ -139,8 +132,6 @@ func TestMeasureSignals_AlwaysHiringNilForUnparseableCompany(t *testing.T) {
 	}
 }
 
-// Two placeholder-company jobs must not be grouped as one employer: each is
-// independently skipped (nil), never counted against each other.
 func TestMeasureSignals_TwoUnknownCompanyJobsNotGrouped(t *testing.T) {
 	repo := &fakeRepo{repostCount: 1, alwaysHiring: 99}
 	job1 := baseJob()
@@ -159,9 +150,6 @@ func TestMeasureSignals_TwoUnknownCompanyJobsNotGrouped(t *testing.T) {
 	}
 }
 
-// SC-004: a company with exactly one posting must not be treated as evidence
-// of ghosting by the measurement layer — it measures 1 and lets the
-// prompt/service layer treat that as "no evidence", it does not skip it.
 func TestMeasureSignals_AlwaysHiringCountOneForOneOffCompany(t *testing.T) {
 	repo := &fakeRepo{repostCount: 1, alwaysHiring: 1}
 	got := application.MeasureSignals(context.Background(), repo, baseJob())
@@ -173,7 +161,7 @@ func TestMeasureSignals_AlwaysHiringCountOneForOneOffCompany(t *testing.T) {
 func TestMeasureSignals_CrossBoardNilOnTeaserDescription(t *testing.T) {
 	repo := &fakeRepo{repostCount: 1, alwaysHiring: 1}
 	job := baseJob()
-	job.Description = "Great opportunity!" // short teaser
+	job.Description = "Great opportunity!"
 
 	got := application.MeasureSignals(context.Background(), repo, job)
 	if got.CrossBoardCount != nil {
@@ -191,12 +179,9 @@ func TestMeasureSignals_CrossBoardCountsDistinctSourcesOnly(t *testing.T) {
 		alwaysHiring: 1,
 		crossBoardRows: []sqlcgen.ListJobsForCrossBoardCheckRow{
 			{ID: pgtype.UUID{Valid: true}, SourceKey: "djinni", Description: longDescription},
-			// Second appearance on the SAME other source must not double-count.
 			{ID: pgtype.UUID{Valid: true}, SourceKey: "djinni", Description: longDescription},
 			{ID: pgtype.UUID{Valid: true}, SourceKey: "dou", Description: longDescription},
-			// Own source must be excluded even if the description matches.
 			{ID: pgtype.UUID{Valid: true}, SourceKey: job.SourceKey, Description: longDescription},
-			// Unrelated JD must not count.
 			{ID: pgtype.UUID{Valid: true}, SourceKey: "robota", Description: "Totally unrelated marketing coordinator role with different requirements and duties entirely."},
 		},
 	}
@@ -210,9 +195,6 @@ func TestMeasureSignals_CrossBoardCountsDistinctSourcesOnly(t *testing.T) {
 	}
 }
 
-// SC-006: re-measuring the same job over unchanged fixtures yields
-// byte-identical results — the measurements are deterministic even though
-// the model's prose is not.
 func TestMeasureSignals_DeterministicAcrossRuns(t *testing.T) {
 	job := baseJob()
 	job.PostedAt = pgtype.Timestamp{Time: time.Now().Add(-100 * time.Hour), Valid: true}

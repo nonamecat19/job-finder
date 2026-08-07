@@ -68,7 +68,6 @@ describe('ContactLine', () => {
     setupRefreshMock();
     const low = mockJobContact({ id: 'c-low', name: 'Low Confidence', confidence: 0.3, source: 'linkedin' });
     const high = mockJobContact({ id: 'c-high', name: 'High Confidence', confidence: 0.9, source: 'posting' });
-    // API already returns contacts ordered best-first; the component trusts that order.
     setupQueryMock({ data: [high, low] });
 
     render(<ContactLine jobId="job-1" />);
@@ -112,7 +111,6 @@ describe('ContactLine', () => {
       source: 'company-page',
       email: null,
     });
-    // API already returns best-first order.
     setupQueryMock({ data: [high, low] });
 
     render(<ContactLine jobId="job-1" />);

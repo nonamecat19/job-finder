@@ -10,20 +10,12 @@ import (
 	"github.com/job-finder/api/internal/keyword/domain"
 )
 
-// DefaultDiffModel labels rows produced by the deterministic (non-LLM) engine
-// so the cache can be invalidated when the algorithm changes.
 const DefaultDiffModel = "keyword-diff-v1"
 
-// DiffWriter is the outbound persistence port for a computed diff. The sqlc
-// *Queries type satisfies it structurally, so the wiring layer injects the
-// production DB and tests can inject a fake without a database.
 type DiffWriter interface {
 	UpsertKeywordDiff(ctx context.Context, arg sqlcgen.UpsertKeywordDiffParams) (sqlcgen.KeywordDiff, error)
 }
 
-// Persist writes a DiffResult into the KeywordDiff cache row (008-2) for jobID,
-// upserting on the unique jobId so re-running the diff refreshes in place. The
-// model label defaults to DefaultDiffModel when empty.
 func Persist(ctx context.Context, w DiffWriter, jobID pgtype.UUID, res *domain.DiffResult, model string) (sqlcgen.KeywordDiff, error) {
 	if res == nil {
 		return sqlcgen.KeywordDiff{}, fmt.Errorf("keyword: nil diff result")

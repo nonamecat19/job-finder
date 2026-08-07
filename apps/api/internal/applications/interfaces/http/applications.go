@@ -12,15 +12,12 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// ApplicationProvider is the interface ApplicationsHandler needs from the applications service.
 type ApplicationProvider interface {
 	List(ctx context.Context, status *string) ([]dto.ApplicationDto, error)
 	Update(ctx context.Context, id string, in applications.UpdateInput) (dto.ApplicationDto, error)
 	Stats(ctx context.Context) (dto.StatsDto, error)
 }
 
-// ApplicationsHandler wires /api/applications and /api/stats, mirroring
-// applications.controller.ts.
 type ApplicationsHandler struct {
 	Applications ApplicationProvider
 }
@@ -67,9 +64,6 @@ func (h *ApplicationsHandler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := h.Applications.Update(r.Context(), id, in)
 	if err != nil {
-		// Not-found (bad/missing id) is 404; anything else (invalid status
-		// value) is 400 — mirrors NotFoundException vs BadRequestException
-		// in applications.service.ts.
 		if errors.Is(err, applications.ErrNotFound) {
 			httpx.WriteError(w, http.StatusNotFound, "application not found: "+id)
 			return

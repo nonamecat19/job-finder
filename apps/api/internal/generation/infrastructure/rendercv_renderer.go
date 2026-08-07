@@ -17,17 +17,10 @@ import (
 	"github.com/job-finder/api/internal/platform/storage"
 )
 
-// RenderCvRenderer renders a (tailored) RenderCV master object to PDF by
-// writing it back to YAML and shelling out to the `rendercv` CLI. Sits
-// alongside HtmlPdfRenderer: the JSON-Resume path uses html/template +
-// chromedp, this path uses the user's real rendercv config so the Typst
-// theme/design is preserved exactly. Mirrors rendercv-renderer.ts.
 type RenderCvRenderer struct {
 	outDir string
 	bin    string
-	// Store, when set, receives the rendered YAML + PDF so all resume files are
-	// persisted to object storage (MinIO) in addition to the local outDir.
-	Store storage.Blobstore
+	Store  storage.Blobstore
 }
 
 func NewRenderCvRenderer(outDir, bin string) *RenderCvRenderer {
@@ -40,9 +33,6 @@ func NewRenderCvRenderer(outDir, bin string) *RenderCvRenderer {
 	return &RenderCvRenderer{outDir: outDir, bin: bin}
 }
 
-// Render writes master to <outDir>/<baseName>.yaml and runs
-// `rendercv render <yaml> -o <outDir> -pdf <baseName>.pdf -nopng -nohtml -nomd`,
-// returning both file paths.
 func (r *RenderCvRenderer) Render(ctx context.Context, master domain.RendercvMaster, baseName string) (yamlPath, pdfPath string, err error) {
 	outDir, err := ensureOutDir(r.outDir)
 	if err != nil {
@@ -86,7 +76,6 @@ func (r *RenderCvRenderer) Render(ctx context.Context, master domain.RendercvMas
 	return yamlPath, pdfPath, nil
 }
 
-// CountPages returns the number of pages in a PDF file.
 func CountPages(pdfPath string) (int, error) {
 	f, r, err := pdf.Open(pdfPath)
 	if err != nil {

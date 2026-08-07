@@ -8,16 +8,9 @@ import (
 	"time"
 )
 
-// StructureKind identifies a class of structural-integrity violation
-// (feature 028). Block-sequence and experience-order invariants are enforced
-// deterministically by MergeTailored and never produce violations; the only
-// kind emitted today is the text-asserted years contradiction.
 type StructureKind string
 
 const (
-	// StructureTotalExperienceYears flags generated text (summary or a bullet)
-	// that asserts a numeric total years-of-experience figure contradicting
-	// the master's derivable total.
 	StructureTotalExperienceYears StructureKind = "total_experience_years"
 	// StructureHighlightDrift flags an experience highlight that has drifted
 	// too far from the master's original bullet (below the lcsCovered ≥50%
@@ -26,17 +19,12 @@ const (
 	StructureHighlightDrift StructureKind = "highlight_drift"
 )
 
-// StructureViolation is a single structural-integrity violation returned by
-// VerifyStructureIntegrity. It is not persisted; the tailoring loop consumes
-// it to drive the targeted re-prompt and strip-and-log fallback.
 type StructureViolation struct {
 	Kind    StructureKind
 	Path    string
 	Message string
 }
 
-// yearRe extracts a 4-digit year from a free-text date string like "2020-01",
-// "Jan 2020", "2018-06" or "Present". Returns ok=false when no year is found.
 var yearRe = regexp.MustCompile(`(?:^|\D)(\d{4})(?:\D|$)`)
 
 func parseExperienceYear(s string) (int, bool) {
@@ -55,11 +43,6 @@ func parseExperienceYear(s string) (int, bool) {
 	return y, true
 }
 
-// DeriveTotalExperienceYears computes the master's total years of experience
-// the way any reader would: the sum of (endYear - startYear) per experience
-// entry, clamped to >= 0, with an empty or "Present" end date treated as the
-// current year. Entries with no parseable dates contribute 0 — the derivation
-// is conservative and only ever flags a contradiction, never an absence.
 func DeriveTotalExperienceYears(master RendercvMaster) int {
 	sections := CvSections(master)
 	now := time.Now().Year()
@@ -83,29 +66,21 @@ func DeriveTotalExperienceYears(master RendercvMaster) int {
 	return total
 }
 
-// yearsAssertionRe matches numeric years-of-experience assertions in free
-// text. Group 1 is an optional qualifier ("over", "more than", ...), group 2
-// the asserted number, group 3 an optional "of experience" suffix. A match is
-// only treated as an assertion when either the qualifier or the "of
-// experience" suffix is present — a bare "12 years" is too ambiguous to flag.
 var yearsAssertionRe = regexp.MustCompile(`(?i)\b((?:over|more than|almost|nearly|about|above|just over)\s+)?(\d{1,3})\+?\s+years?\b(\s+of\s+(?:professional\s+|relevant\s+)?experience)?`)
 
-// yearsAssertion is one located numeric years claim within a text field.
 type yearsAssertion struct {
 	start, end int
 	number     int
 	text       string
 }
 
-// findYearsAssertions locates every numeric years-of-experience assertion in
-// s, returning its byte span, parsed number and matched text.
 func findYearsAssertions(s string) []yearsAssertion {
 	idxs := yearsAssertionRe.FindAllStringSubmatchIndex(s, -1)
 	out := make([]yearsAssertion, 0, len(idxs))
 	for _, m := range idxs {
 		qualStart, ofExpStart := m[2], m[6]
 		if qualStart < 0 && ofExpStart < 0 {
-			continue // bare "N years" with no experience context
+			continue
 		}
 		n, err := strconv.Atoi(s[m[4]:m[5]])
 		if err != nil {
@@ -116,13 +91,6 @@ func findYearsAssertions(s string) []yearsAssertion {
 	return out
 }
 
-// VerifyStructureIntegrity checks the merged resume's structural integrity
-// against the master (feature 028 invariant 3b): it regex-scans
-// cv.sections.summary[0] and each cv.sections.experience[].highlights[] for
-// numeric years-of-experience assertions and flags any figure that
-// contradicts the master's derivable total. Invariants 1 and 2 (block
-// sequence, experience order) are enforced by MergeTailored and can never
-// violate here.
 func VerifyStructureIntegrity(master, merged RendercvMaster) []StructureViolation {
 	var violations []StructureViolation
 	total := DeriveTotalExperienceYears(master)
@@ -163,11 +131,6 @@ func VerifyStructureIntegrity(master, merged RendercvMaster) []StructureViolatio
 	return violations
 }
 
-// StripStructureViolations is the strip-and-flag fallback for the
-// text-asserted-years invariant: after a targeted re-prompt fails, it removes
-// every offending numeric years claim from the merged resume's summary and
-// experience highlights so the emitted resume never carries a contradicting
-// figure. The caller logs the intervention on the activity row.
 func StripStructureViolations(merged RendercvMaster, violations []StructureViolation) RendercvMaster {
 	if len(violations) == 0 {
 		return merged
@@ -203,12 +166,8 @@ func StripStructureViolations(merged RendercvMaster, violations []StructureViola
 	return merged
 }
 
-// yearsClausePrefixRe matches a connector immediately before a years claim
-// ("with ", "for ", "and "), so stripping the claim leaves grammatical text.
 var yearsClausePrefixRe = regexp.MustCompile(`(?i)(?:and |with |for |of |including |having )$`)
 
-// stripYearsAssertions removes every numeric years-of-experience claim from a
-// single text field, including adjacent connectors and trailing punctuation.
 func stripYearsAssertions(s string) string {
 	matches := findYearsAssertions(s)
 	if len(matches) == 0 {
@@ -242,7 +201,7 @@ func stripYearsAssertions(s string) string {
 	prev := 0
 	for _, sp := range spans {
 		if sp.start < prev {
-			continue // overlapping matches — keep the first cut
+			continue
 		}
 		b.WriteString(s[prev:sp.start])
 		prev = sp.end

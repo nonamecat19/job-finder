@@ -1,10 +1,3 @@
-// Package referral is the facade for the Referral bounded context (plan
-// 011): the Contact/ContactConnection/ReferralPath model, CSV parsing, and
-// outbound ports live in domain/; CSV-import/GitHub-sync/path-finding
-// orchestration lives in application/; the GitHub REST client lives in
-// infrastructure/github/. This file re-exports the shape callers already
-// depend on (compose.go, httpapi/referral.go) so relocating the package
-// required no changes at call sites beyond the import path.
 package referral
 
 import (

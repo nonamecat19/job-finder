@@ -1,5 +1,3 @@
-// Command seed populates the local development database with realistic
-// fixture data. Run via: make seed
 package main
 
 import (
@@ -54,10 +52,6 @@ func run() error {
 		slog.Info("seed: truncated all tables")
 	}
 
-	// Job sources are defined in code (the adapter registry); JobSource rows
-	// are created lazily on first use, not seeded upfront. The fixtures below
-	// (SourceRun, Subscription) FK against those rows, so materialize one per
-	// adapter here via the same lazy GetByKey path the running server uses.
 	registry := domain.NewRegistry(
 		adapters.AdzunaAdapter{AppID: cfg.AdzunaAppID, AppKey: cfg.AdzunaAppKey, Country: cfg.AdzunaCountry},
 		adapters.RemotiveAdapter{},

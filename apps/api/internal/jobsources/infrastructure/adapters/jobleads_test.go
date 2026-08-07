@@ -115,8 +115,6 @@ func TestJobLeadsSearch_NoCredentials(t *testing.T) {
 	}
 }
 
-// stubJobLeadsSession is a fixed-response JobLeadsSessionProvider for tests
-// that don't need to exercise the real login flow.
 type stubJobLeadsSession struct {
 	cookie      string
 	refreshes   int
@@ -158,12 +156,6 @@ func TestJobLeadsSearch_AuthenticatedFetch(t *testing.T) {
 }
 
 func TestJobLeadsHealthCheck(t *testing.T) {
-	// HealthCheck targets the fixed jobleads.com host; reachability in a
-	// unit-test sandbox isn't guaranteed, so this only asserts the
-	// never-a-non-nil-error contract, matching TestIndeedHealthCheck's/
-	// TestGlassdoorHealthCheck's approach for an external dependency. The
-	// authenticated-fetch code path itself is exercised via
-	// TestJobLeadsSearch_AuthenticatedFetch against an httptest.Server.
 	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
 	if _, err := adapter.HealthCheck(context.Background(), nil); err != nil {
 		t.Fatalf("HealthCheck must never return a non-nil error, got %v", err)
@@ -180,11 +172,6 @@ func TestJobLeadsHealthCheck(t *testing.T) {
 }
 
 func TestValidateJobLeadsSubscriptionURL_HostCheck(t *testing.T) {
-	// Adapter-level sanity check that a non-JobLeads host is not silently
-	// accepted by scrapeSubscription (URL parsing itself doesn't validate
-	// host — that's subscriptions.Service's job, covered in
-	// subscriptions/service_test.go; this just documents the parse-only
-	// behavior so a regression there is caught early too).
 	adapter := JobLeadsAdapter{Scraping: scraping.New(), Session: &stubJobLeadsSession{cookie: "cookie-xyz"}}
 	_, err := adapter.scrapeSubscription(context.Background(), "://bad-url", map[string]string{})
 	if err == nil {
@@ -231,9 +218,6 @@ func TestJobLeadsFetchDetail_Unavailable(t *testing.T) {
 	}
 }
 
-// jobLeadsLoginServer mocks JobLeads's form login: GET /login serves the
-// CSRF form; POST /login sets a session cookie when credentials are
-// present. Mirrors djinniLoginServer.
 func jobLeadsLoginServer(t *testing.T, wantEmail, wantPassword string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -285,7 +269,6 @@ func TestJobLeadsLoginBadCreds(t *testing.T) {
 	}
 }
 
-// jobLeadsFakeConfigStore is an in-memory JobLeadsConfigStore for session tests.
 type jobLeadsFakeConfigStore struct {
 	cfg     map[string]any
 	updates int

@@ -24,8 +24,6 @@ type leverPosting struct {
 	Description      string `json:"description"`
 }
 
-// LeverAdapter reads every registered Lever employer's open postings via
-// the vendor's public, unauthenticated postings API (research.md §1).
 type LeverAdapter struct {
 	Roster *roster.Service
 	boardRunState

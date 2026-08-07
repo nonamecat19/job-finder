@@ -8,14 +8,11 @@ import (
 	"github.com/job-finder/api/internal/keyword/domain"
 )
 
-// fakeRephraseModel is a deterministic test double for RephraseModel.
 type fakeRephraseModel struct {
-	// responses maps term -> rephrase output
 	responses map[string]string
 }
 
 func (f *fakeRephraseModel) Rephrase(ctx context.Context, prompt string) (string, error) {
-	// Extract the target term from the prompt
 	for term, resp := range f.responses {
 		if contains(prompt, term) {
 			return resp, nil
@@ -75,7 +72,6 @@ func TestAssess_ZeroAdjacency(t *testing.T) {
 	model := &fakeRephraseModel{responses: map[string]string{}}
 	svc := NewService(model)
 
-	// Missing term: Rust. Profile has only Java/Python — genuinely no adjacency.
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -128,7 +124,6 @@ func TestAssess_AdjacentEvidenceFound(t *testing.T) {
 	}
 	svc := NewService(model)
 
-	// Missing: Docker. Profile has Podman (adjacent per adjacency map).
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -194,7 +189,6 @@ func TestAssess_MaxThreeEvidence(t *testing.T) {
 	}
 	svc := NewService(model)
 
-	// Missing: Postgres. Profile has 5 entries with MySQL, SQLite, Oracle (all adjacent) — should return max 3.
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -236,13 +230,11 @@ func TestAssess_MaxThreeEvidence(t *testing.T) {
 func TestAssess_GroundingRejection(t *testing.T) {
 	model := &fakeRephraseModel{
 		responses: map[string]string{
-			// Return a rephrase that invents a technology not in the source bullet
 			"gRPC": "Built gRPC and REST APIs handling 10k req/s",
 		},
 	}
 	svc := NewService(model)
 
-	// Missing: gRPC. Profile has REST (adjacent), but the rephrase invents gRPC.
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -272,7 +264,6 @@ func TestAssess_GroundingRejection(t *testing.T) {
 	}
 
 	gap := result.Gaps[0]
-	// The grounding check should reject the invented "gRPC" mention, so no evidence
 	if !gap.NoAdjacentEvidence {
 		t.Errorf("Gap.NoAdjacentEvidence: got false, want true (grounding rejected)")
 	}
@@ -289,7 +280,6 @@ func TestAssess_ProximitySorting(t *testing.T) {
 	}
 	svc := NewService(model)
 
-	// Missing: Postgres. Profile has MySQL (close) and Oracle (distant).
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -321,7 +311,6 @@ func TestAssess_ProximitySorting(t *testing.T) {
 		t.Fatalf("AdjacentEvidence: got 0, want >= 1")
 	}
 
-	// First evidence should be the closest proximity (MySQL = close)
 	first := gap.AdjacentEvidence[0]
 	if first.Proximity != domain.ProximityClose {
 		t.Errorf("First evidence proximity: got %q, want %q (closest first)", first.Proximity, domain.ProximityClose)
@@ -331,8 +320,6 @@ func TestAssess_ProximitySorting(t *testing.T) {
 	}
 }
 
-// --- Adversarial: inflated seniority (009-4 framing rewriter) ---
-
 func TestAssess_RejectsInflatedSeniority(t *testing.T) {
 	model := &fakeRephraseModel{
 		responses: map[string]string{
@@ -341,8 +328,6 @@ func TestAssess_RejectsInflatedSeniority(t *testing.T) {
 	}
 	svc := NewService(model)
 
-	// Source label says "DevOps Engineer" (no seniority prefix), but the
-	// rephrase claims "Senior" — must be rejected.
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -388,8 +373,6 @@ func TestAssess_RejectsInflatedSeniority_JuniorToSenior(t *testing.T) {
 	}
 	svc := NewService(model)
 
-	// Source label says "Junior DevOps Engineer" — rephrase claiming "Senior"
-	// must be rejected.
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -435,9 +418,6 @@ func TestAssess_AllowsSameSeniority(t *testing.T) {
 	}
 	svc := NewService(model)
 
-	// Source label says "Senior DevOps Engineer" — rephrase does not mention
-	// seniority at all (only uses words from the source bullet), so no
-	// inflation violation. Same-level or absent seniority is allowed.
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -475,8 +455,6 @@ func TestAssess_AllowsSameSeniority(t *testing.T) {
 	}
 }
 
-// --- Adversarial: invented duration (009-4 framing rewriter) ---
-
 func TestAssess_RejectsInflatedDuration(t *testing.T) {
 	model := &fakeRephraseModel{
 		responses: map[string]string{
@@ -485,7 +463,6 @@ func TestAssess_RejectsInflatedDuration(t *testing.T) {
 	}
 	svc := NewService(model)
 
-	// Source label says "2022–2024" (2 years), but rephrase claims "10+ years".
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{
@@ -523,8 +500,6 @@ func TestAssess_RejectsInflatedDuration(t *testing.T) {
 	}
 }
 
-// --- Adversarial: borrowed technologies (009-4 framing rewriter) ---
-
 func TestAssess_RejectsBorrowedTechnology(t *testing.T) {
 	model := &fakeRephraseModel{
 		responses: map[string]string{
@@ -533,8 +508,6 @@ func TestAssess_RejectsBorrowedTechnology(t *testing.T) {
 	}
 	svc := NewService(model)
 
-	// Source bullet only mentions "Podman and BuildKit" — "Kubernetes" is
-	// borrowed from elsewhere and must be rejected.
 	diffResult := &domain.DiffResult{
 		Matched: []domain.DiffTerm{},
 		MissingRequired: []domain.DiffTerm{

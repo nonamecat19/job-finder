@@ -1,8 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { ROUTES, mockAllRoutes } from './support/mockRoutes';
 
-// Viewport matrix from contracts/layout-primitives.md / data-model E3:
-// 375 → 1 col, 768 → 2 cols, 1280 → 3 cols, 1920 → 4 cols, 2560 → 5 cols.
 const COLUMN_MATRIX: Array<{ width: number; height: number; columns: number }> = [
   { width: 375, height: 812, columns: 1 },
   { width: 768, height: 1024, columns: 2 },
@@ -11,7 +9,6 @@ const COLUMN_MATRIX: Array<{ width: number; height: number; columns: number }> =
   { width: 2560, height: 1440, columns: 5 },
 ];
 
-// Routes with `fit` layout mode (data-model E4); asserted for no page-level scroll (T046, SC-010).
 const FIT_ROUTES = ['/', '/status', '/tracker'];
 
 test.describe('Dashboard grid layout', () => {

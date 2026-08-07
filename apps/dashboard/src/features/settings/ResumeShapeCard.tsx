@@ -20,7 +20,6 @@ type NumericKey = Exclude<
   'skillsEnabled' | 'projectsEnabled' | 'certificationsEnabled'
 >;
 
-// Single-value settings, each with its allowed range and what it does.
 const STEPPER_FIELDS: { key: NumericKey; label: string; min: number; max: number; description: string }[] = [
   {
     key: 'summaryLines',
@@ -59,7 +58,6 @@ const STEPPER_FIELDS: { key: NumericKey; label: string; min: number; max: number
   },
 ];
 
-// Min/max pairs, each rendered as a single two-thumb range.
 const RANGE_FIELDS: {
   minKey: NumericKey;
   maxKey: NumericKey;
@@ -108,9 +106,6 @@ function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
   const [draft, setDraft] = useState<ResumeShapeConfigDto>(config);
 
   useEffect(() => {
-    // Re-syncs the editable draft when the server-confirmed config changes
-    // (after a save or a reset) — reacting to a query resolving, not state
-    // derivable from props during render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(config);
   }, [config]);

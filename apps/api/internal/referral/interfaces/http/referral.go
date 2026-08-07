@@ -14,8 +14,6 @@ import (
 	"github.com/job-finder/api/internal/referral"
 )
 
-// ReferralProvider is the interface ReferralHandler needs from the referral
-// service.
 type ReferralProvider interface {
 	ImportCSV(ctx context.Context, r io.Reader) (referral.ImportSummary, error)
 	SyncGithub(ctx context.Context, contactID string) (*referral.GithubSyncResult, error)
@@ -23,9 +21,6 @@ type ReferralProvider interface {
 	ListContacts(ctx context.Context) ([]referral.Contact, error)
 }
 
-// ReferralHandler wires POST /api/contacts/import, POST
-// /api/contacts/{id}/github-sync, and GET /api/jobs/{id}/referral-paths —
-// the referral-path-finder feature (plan 011).
 type ReferralHandler struct {
 	Referral ReferralProvider
 }
@@ -50,9 +45,6 @@ func (h *ReferralHandler) list(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
-// importCSV accepts a raw text/csv body, or a multipart/form-data upload
-// with the file under the "file" field — matching the profile config
-// upload convention (ProfilesHandler.uploadConfig).
 func (h *ReferralHandler) importCSV(w http.ResponseWriter, r *http.Request) {
 	var body io.Reader = r.Body
 	defer r.Body.Close()

@@ -9,9 +9,6 @@ import (
 	"github.com/job-finder/api/internal/dto"
 )
 
-// Trimmed excerpt of a real jobs.dou.ua vacancy detail page. Regression fixture for
-// the selector bug where `.info` matched both the sidebar company blurb and the
-// vacancy meta, corrupting location/date/description.
 const douDetailFixtureHTML = `
 <html><body>
 <div class="b-vacancy">

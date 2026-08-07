@@ -39,9 +39,6 @@ func TestGhostScore_HappyPath(t *testing.T) {
 	}
 }
 
-// Story 3, scenario 4: the scoring model is unreachable -> an error is
-// shown, and (by construction — the service never persists on error) the
-// previously stored score is left intact.
 func TestGhostScore_ModelUnreachableReturnsError(t *testing.T) {
 	fake := &fakeGhostProvider{err: errors.New("ollama: chat request failed: connection refused")}
 	h := &ghostjobhttp.GhostJobHandler{Ghost: fake}
@@ -64,11 +61,6 @@ func TestGhostScore_DeclinedToScoreReturns422(t *testing.T) {
 	}
 }
 
-// Story 3, scenario 3: a concurrent double-invocation is idempotent via the
-// (jobId, kind) upsert — at the handler layer this just means two
-// concurrent requests each get a normal response; the exactly-one-row
-// guarantee lives in the SQL unique constraint + ON CONFLICT (see
-// ghostjob/service_test.go's TestScoreJob_SecondUpsertReplacesFirst).
 func TestGhostScore_ConcurrentInvocationsBothSucceed(t *testing.T) {
 	fake := &fakeGhostProvider{out: dto.JobSignalDto{ID: "sig-1", JobID: "job-1", Kind: "ghost", Score: 60}}
 	h := &ghostjobhttp.GhostJobHandler{Ghost: fake}

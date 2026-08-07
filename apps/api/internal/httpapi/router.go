@@ -13,17 +13,9 @@ import (
 
 var startTime = time.Now()
 
-// NewRouter builds the API router. acquireTimeout bounds how long any request
-// may wait on a database connection before failing with a capacity error
-// (026-db-pool-capacity); pass 0 to leave requests unbounded.
 func NewRouter(acquireTimeout time.Duration, mounts ...func(chi.Router)) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	// middleware.RealIP is deprecated (spoofable via X-Forwarded-For/X-Real-IP
-	// when the caller controls those headers directly). Acceptable here: this
-	// API is only ever reached through the project's own dashboard/proxy, IP
-	// is used for request logging only (never for auth or rate-limit
-	// decisions), and there is no untrusted public ingress in front of it.
 	r.Use(middleware.RealIP) //nolint:staticcheck // SA1019: see rationale above
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)

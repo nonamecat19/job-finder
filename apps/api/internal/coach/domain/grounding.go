@@ -8,8 +8,6 @@ import (
 	"github.com/job-finder/api/internal/keyword"
 )
 
-// seniorityLevel maps job-title seniority prefixes to a numeric rank.
-// Higher rank = more senior. Used to detect seniority inflation.
 var seniorityLevel = map[string]int{
 	"junior":        0,
 	"associate":     0,
@@ -23,41 +21,32 @@ var seniorityLevel = map[string]int{
 	"distinguished": 4,
 }
 
-// seniorityRe matches a seniority prefix at the start of a job title.
 var seniorityRe = regexp.MustCompile(`(?i)\b(junior|associate|entry|mid|senior|lead|staff|principal|architect|distinguished)\b`)
 
-// dateRangeRe matches date ranges like "2022–2024", "2020-2023", "Jan 2020–Present".
 var dateRangeRe = regexp.MustCompile(`(\d{4})\s*(?:[–\-]|to)\s*(\d{4}|present|now|current)`)
 
 var numberRe = regexp.MustCompile(`\d+(?:[.,]\d+)*%?`)
 var sentenceSplitRe = regexp.MustCompile(`[.!?]\s+`)
 var tokenRe = regexp.MustCompile(`\b[\w']+\b`)
 
-// VerifyRephraseGrounding checks that every proper noun, number, seniority
-// claim, and duration claim in the rephrase is traceable to the source.
-// Returns violations; empty slice means grounded.
 func VerifyRephraseGrounding(sourceBullet string, allowedProper, sourceNums map[string]bool, rephrase string, sourceSeniority string, sourceDateRange string) []string {
 	if strings.TrimSpace(rephrase) == "" {
 		return []string{"empty rephrase"}
 	}
 	var violations []string
 
-	// Check proper nouns (technologies, employers, product names)
 	for _, p := range PropernounsInText(rephrase) {
 		if !allowedProper[LowerASCII(p)] {
 			violations = append(violations, fmt.Sprintf("proper noun / technology %q not in source bullet", p))
 		}
 	}
 
-	// Check metrics/numbers
 	for _, n := range numberRe.FindAllString(rephrase, -1) {
 		if !sourceNums[NormNumber(n)] {
 			violations = append(violations, fmt.Sprintf("metric/number %q not in source bullet", n))
 		}
 	}
 
-	// Check seniority inflation: if the source has a seniority level, the
-	// rephrase must not claim a higher level.
 	if sourceSeniority != "" {
 		rephraseSeniority := ExtractSeniority(rephrase)
 		if rephraseSeniority != "" && seniorityLevel[rephraseSeniority] > seniorityLevel[sourceSeniority] {
@@ -65,8 +54,6 @@ func VerifyRephraseGrounding(sourceBullet string, allowedProper, sourceNums map[
 		}
 	}
 
-	// Check duration inflation: if the source label has a date range, the
-	// rephrase must not claim a longer duration.
 	if sourceDateRange != "" {
 		rephraseDuration := ExtractDateRange(rephrase)
 		if rephraseDuration != "" {
@@ -83,7 +70,6 @@ func VerifyRephraseGrounding(sourceBullet string, allowedProper, sourceNums map[
 
 func splitSentences(s string) []string { return sentenceSplitRe.Split(s, -1) }
 
-// PropernounsInText returns the capitalized, non-sentence-initial tokens of s.
 func PropernounsInText(s string) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -132,7 +118,6 @@ func isPlainCapitalized(tok string) bool {
 	return true
 }
 
-// PropernounSet collects every word token across bullets, indexed lowercased.
 func PropernounSet(bullets []string) map[string]bool {
 	set := map[string]bool{}
 	for _, b := range bullets {
@@ -143,7 +128,6 @@ func PropernounSet(bullets []string) map[string]bool {
 	return set
 }
 
-// NumberSet returns the normalized numeric tokens present in text.
 func NumberSet(text string) map[string]bool {
 	set := map[string]bool{}
 	for _, n := range numberRe.FindAllString(text, -1) {
@@ -157,8 +141,6 @@ func NormNumber(n string) string {
 	return strings.ReplaceAll(n, ",", "")
 }
 
-// ExtractSeniority returns the first seniority-level token found in text,
-// lowercased, or "" if none.
 func ExtractSeniority(text string) string {
 	m := seniorityRe.FindString(text)
 	if m == "" {
@@ -167,15 +149,10 @@ func ExtractSeniority(text string) string {
 	return strings.ToLower(m)
 }
 
-// ExtractDateRange returns the first matched date range from text (e.g.
-// "2022–2024") or "" if none.
 func ExtractDateRange(text string) string {
 	return dateRangeRe.FindString(text)
 }
 
-// ParseDurationYears extracts the number of whole years from a date range
-// string like "2022–2024" (returns 2) or "2020–Present" (returns 0 for
-// unknown end). Returns 0 on parse failure.
 func ParseDurationYears(dr string) int {
 	m := dateRangeRe.FindStringSubmatch(dr)
 	if len(m) < 3 {
@@ -187,7 +164,7 @@ func ParseDurationYears(dr string) int {
 	}
 	endStr := strings.ToLower(m[2])
 	if endStr == "present" || endStr == "now" || endStr == "current" {
-		return 0 // Can't verify open-ended ranges
+		return 0
 	}
 	end := parseInt(endStr)
 	if end == 0 {
@@ -226,7 +203,6 @@ func ProximityRank(p keyword.Proximity) int {
 	}
 }
 
-// Stem is a minimal stemmer (mirrors keyword.stem).
 func Stem(s string) string {
 	s = strings.TrimSuffix(s, "ing")
 	s = strings.TrimSuffix(s, "ed")
@@ -234,6 +210,4 @@ func Stem(s string) string {
 	return s
 }
 
-// TokenRe is the word tokenizer regex used to scan bullet text for adjacent
-// term matches.
 var TokenRe = tokenRe

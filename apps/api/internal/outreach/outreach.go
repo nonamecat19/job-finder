@@ -1,10 +1,3 @@
-// Package outreach is the facade for the Outreach bounded context (plan
-// 012): the Tone/Fact/GroundingTrace/OutreachDraft model and the pure
-// grounding/prompt-building rules live in domain/, the cross-context ports
-// (ContactsProvider, IntelProvider) and the LLM-backed draft orchestration
-// live in application/. This file re-exports the shape callers already
-// depend on (compose.go, httpapi/outreach.go) so relocating the package
-// required no changes at call sites beyond the import path.
 package outreach
 
 import (

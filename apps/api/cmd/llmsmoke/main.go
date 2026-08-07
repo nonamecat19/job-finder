@@ -1,7 +1,3 @@
-// Command llmsmoke is the Go port of apps/api/scripts/llm-smoke.ts — run with
-// the ollama container up:
-//
-//	go run ./cmd/llmsmoke
 package main
 
 import (
@@ -44,7 +40,6 @@ func run() error {
 	}
 	fmt.Println("complete:", text)
 
-	// Exercise each per-task model so both tiers are validated in one run.
 	for label, model := range map[string]string{
 		"match":      cfg.ModelOr(cfg.LLMModelMatch),
 		"generation": cfg.ModelOr(cfg.LLMModelGeneration),

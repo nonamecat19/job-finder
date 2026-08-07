@@ -4,7 +4,6 @@ export interface ToastInput {
   title: string;
   description?: string;
   variant?: ToastVariant;
-  /** Auto-dismiss after this many ms. Defaults per variant. */
   duration?: number;
 }
 

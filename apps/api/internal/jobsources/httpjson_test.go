@@ -271,7 +271,7 @@ func TestPostJSONInvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	body := make(chan int) // channel cannot be marshaled to JSON
+	body := make(chan int)
 	var result map[string]string
 
 	err := PostJSON(context.Background(), server.Client(), server.URL, body, &result, 5*time.Second)

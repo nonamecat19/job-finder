@@ -15,8 +15,6 @@ func hasAdjacent(adj []domain.Adjacency, term string) (domain.Adjacency, bool) {
 	return domain.Adjacency{}, false
 }
 
-// TestAdjacencyLookup covers term+context resolution: context-specific entries
-// plus the always-applicable "any" context, closest proximity first.
 func TestAdjacencyLookup(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -48,7 +46,6 @@ func TestAdjacencyLookup(t *testing.T) {
 	}
 }
 
-// TestAdjacencyOrderedByProximity asserts lookups return closest-first.
 func TestAdjacencyOrderedByProximity(t *testing.T) {
 	adj := domain.Adjacent("Postgres", "any")
 	if len(adj) < 2 {
@@ -74,11 +71,6 @@ func rank(p domain.Proximity) int {
 	}
 }
 
-// TestAdjacencySymmetry is the core acceptance test: adjacency lookups are
-// symmetric where the map says they are, and one-directional where it does
-// not. For every declared edge, if the edge is symmetric the reverse lookup
-// must return the source term at the same proximity; if the edge is explicitly
-// asymmetric, the reverse lookup must NOT contain it.
 func TestAdjacencySymmetry(t *testing.T) {
 	cfg := domain.AdjacencyConfigForTest()
 	symmetricChecked, asymmetricChecked := 0, 0
@@ -119,14 +111,12 @@ func TestAdjacencySymmetry(t *testing.T) {
 	}
 }
 
-// TestAdjacencyMapVersion asserts the map is versioned (spec §2.6).
 func TestAdjacencyMapVersion(t *testing.T) {
 	if v := domain.AdjacencyMapVersion(); v < 1 {
 		t.Errorf("AdjacencyMapVersion() = %d, want >= 1", v)
 	}
 }
 
-// TestLoadAdjacencyMapIdempotent asserts the startup hook can be re-run.
 func TestLoadAdjacencyMap(t *testing.T) {
 	domain.LoadAdjacencyMap()
 	if _, found := hasAdjacent(domain.Adjacent("Docker", "any"), "Podman"); !found {

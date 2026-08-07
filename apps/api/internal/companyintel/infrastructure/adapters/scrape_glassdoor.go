@@ -14,10 +14,6 @@ import (
 
 const glassdoorDomain = "glassdoor.com"
 
-// GlassdoorScraper reads the public Glassdoor company review summary page
-// for its overall rating. Best-effort, fail-closed (spec.md "Glassdoor is
-// best-effort"): any fetch/parse/challenge failure returns an error, which
-// the caller logs at Warn and simply omits the signal — never a card error.
 type GlassdoorScraper struct {
 	Scraping scraping.Scraper
 }
@@ -26,7 +22,7 @@ func (GlassdoorScraper) Kind() string   { return domain.KindGlassdoorRating }
 func (GlassdoorScraper) Domain() string { return glassdoorDomain }
 
 func (s GlassdoorScraper) Scrape(ctx context.Context, in domain.Input) (*domain.SignalResult, error) {
-	slug := crunchbaseSlug(in.CompanyName) // same "lowercase, hyphenate" shape Glassdoor URLs use
+	slug := crunchbaseSlug(in.CompanyName)
 	if slug == "" {
 		return nil, nil
 	}
@@ -44,10 +40,6 @@ func (s GlassdoorScraper) Scrape(ctx context.Context, in domain.Input) (*domain.
 	return parseGlassdoorRating(doc, url)
 }
 
-// parseGlassdoorRating extracts the overall rating from
-// `.rating-summary .rating-value`. A missing/unparsable rating (blocked
-// page, login wall, layout change) is a hard failure — the signal is
-// omitted from the card, matching the "fails closed" contract.
 func parseGlassdoorRating(doc *goquery.Document, sourceURL string) (*domain.SignalResult, error) {
 	text := strings.TrimSpace(doc.Find(".rating-summary .rating-value").First().Text())
 	if text == "" {

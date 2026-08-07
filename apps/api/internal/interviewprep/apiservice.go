@@ -1,9 +1,3 @@
-// Package interviewprep assembles the interview prep pack (spec 013): derived
-// interview questions from the JD's must-have terms and responsibility
-// bullets, matched against the user's STAR stories, plus a keyword-gap
-// summary (008) and a company-news briefing reshaped from company-intel
-// signals (004). No LLM call is required — question derivation and story
-// matching are both pure/template-based (internal/keyword).
 package interviewprep
 
 import (
@@ -22,40 +16,24 @@ import (
 	"github.com/job-finder/api/internal/keyword"
 )
 
-// staleAfter mirrors the dashboard's CompanyIntelCard staleness threshold
-// (apps/dashboard/src/features/job-detail/CompanyIntelCard.tsx STALE_MS).
 const staleAfter = 30 * 24 * time.Hour
 
-// ErrNoDiff is returned when no keyword diff (008) has been computed for the
-// job yet — the prep pack has no JD terms to derive questions or a gap
-// summary from. The HTTP layer maps this to 404.
 var ErrNoDiff = errors.New("interviewprep: no keyword diff for job")
 
-// JobReader is the outbound port to read the job row for its JD text and
-// company name. *sqlcgen.Queries satisfies it structurally.
 type JobReader interface {
 	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
 }
 
-// DiffReader reads the persisted keyword diff (008-2) this pack derives
-// questions and the keyword-gap summary from.
 type DiffReader interface {
 	GetKeywordDiffByJobID(ctx context.Context, jobID pgtype.UUID) (sqlcgen.KeywordDiff, error)
 }
 
-// StoriesFunc supplies the user's STAR stories to match against derived
-// questions. A func rather than an interface so this package never needs to
-// import internal/profile, mirroring coach.ProfileEntriesFunc.
 type StoriesFunc func(ctx context.Context) ([]keyword.StarStory, error)
 
-// CompanyNewsProvider reads the cached company-intel signal set (004) this
-// pack reshapes into companyNews items. companyintel.Service satisfies it
-// structurally.
 type CompanyNewsProvider interface {
 	GetIntel(ctx context.Context, jobID string) (*dto.CompanyIntelDto, error)
 }
 
-// Service assembles the interview prep pack for the HTTP layer.
 type Service struct {
 	jobs    JobReader
 	diffs   DiffReader
@@ -67,8 +45,6 @@ func NewService(jobs JobReader, diffs DiffReader, stories StoriesFunc, news Comp
 	return &Service{jobs: jobs, diffs: diffs, stories: stories, news: news}
 }
 
-// Get assembles the interview prep pack for jobID. Returns ErrNoDiff when no
-// keyword diff has been computed for the job yet (or the id is malformed).
 func (s *Service) Get(ctx context.Context, jobID string) (dto.InterviewPrepPackDto, error) {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {
@@ -152,11 +128,6 @@ func (s *Service) Get(ctx context.Context, jobID string) (dto.InterviewPrepPackD
 	}, nil
 }
 
-// classifiedFromDiff reconstructs the minimal keyword.ClassifiedTerm shape
-// DeriveQuestions needs from the persisted diff buckets. Only the matched
-// and missing-required required-polarity terms become must-haves — the
-// persisted diff does not retain the classifier's phrasing signals, so
-// Evidence falls back to the term text itself.
 func classifiedFromDiff(matched, missingRequired []keyword.DiffTerm) []keyword.ClassifiedTerm {
 	var out []keyword.ClassifiedTerm
 	for _, t := range matched {
@@ -198,9 +169,6 @@ func toStoryMappingDtos(mappings []keyword.StoryMapping) []dto.StoryMappingDto {
 	return out
 }
 
-// buildKeywordGap reshapes the 008 diff buckets into the pack's gap-summary
-// section: bare missing term strings, coverage, and a few templated
-// awareness tips (there is no dedicated tips source).
 func buildKeywordGap(missingRequired, missingPreferred []keyword.DiffTerm, coveragePct float64) dto.KeywordGapSummaryDto {
 	required := termStrings(missingRequired)
 	preferred := termStrings(missingPreferred)
@@ -244,9 +212,6 @@ func joinTerms(terms []string) string {
 	}
 }
 
-// companyNews reshapes the cached company-intel signal set into news items.
-// Returns (nil, false) when no intel has ever been probed for the job's
-// company — the panel's existing "no news" empty state handles that.
 func (s *Service) companyNews(ctx context.Context, jobID string) ([]dto.CompanyNewsItemDto, bool) {
 	if s.news == nil {
 		return nil, false

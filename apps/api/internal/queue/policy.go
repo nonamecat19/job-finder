@@ -7,26 +7,15 @@ import (
 	"github.com/job-finder/api/internal/config"
 )
 
-// TaskPolicy is the resolved concurrency/deadline configuration for one AI
-// task type, built once at startup from config.Config (019-ai-job-throughput).
-// Non-LLM tasks (ingest, enrich) have an empty LLMTaskKey and use
-// LocalConcurrency as their single fixed pool size; HostedConcurrency is
-// unused for them.
 type TaskPolicy struct {
 	TaskType          string
 	Queue             string
 	LocalConcurrency  int
 	HostedConcurrency int
 	MaxDuration       time.Duration
-	// LLMTaskKey is the gateway task key ("match", "generation", "default",
-	// "ghost") used to resolve the live provider class. Empty for non-LLM tasks.
-	LLMTaskKey string
+	LLMTaskKey        string
 }
 
-// PoolSize is the asynq worker pool size: the maximum of the two
-// concurrency levels, since asynq.Config.Concurrency is fixed at server
-// construction while the admission gate enforces the applicable limit per
-// task at runtime (research.md R3).
 func (p TaskPolicy) PoolSize() int {
 	if p.HostedConcurrency > p.LocalConcurrency {
 		return p.HostedConcurrency
@@ -34,8 +23,6 @@ func (p TaskPolicy) PoolSize() int {
 	return p.LocalConcurrency
 }
 
-// PoliciesFromConfig builds one TaskPolicy per AI task type from cfg,
-// covering all six task types (data-model.md §2).
 func PoliciesFromConfig(cfg *config.Config) ([]TaskPolicy, error) {
 	policies := []TaskPolicy{
 		{
@@ -110,9 +97,6 @@ func validatePolicy(p TaskPolicy) error {
 	return nil
 }
 
-// validateLiveness enforces the sweeper's bounds (FR-009/SC-005):
-// ACTIVITY_STALE_AFTER must be at least 2x ACTIVITY_HEARTBEAT_INTERVAL, and
-// ACTIVITY_STALE_AFTER+ACTIVITY_SWEEP_INTERVAL must stay under 5 minutes.
 func validateLiveness(cfg *config.Config) error {
 	if cfg.ActivityHeartbeatInterval <= 0 {
 		return fmt.Errorf("queue: ACTIVITY_HEARTBEAT_INTERVAL must be > 0, got %s", cfg.ActivityHeartbeatInterval)

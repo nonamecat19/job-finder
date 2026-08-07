@@ -106,7 +106,6 @@ var matchResults = []matchSeed{
 }
 
 func seedMatchResults(ctx context.Context, pool *pgxpool.Pool, q *sqlcgen.Queries) error {
-	// Idempotency: check if match results already exist for first seed job.
 	jobID1, err := dbutil.ParseUUID(uuidJob1)
 	if err != nil {
 		return err

@@ -1,12 +1,5 @@
 package db
 
-// PoolStats is a point-in-time snapshot of connection-pool state, consumed by
-// the readiness report and the saturation sampler (026-db-pool-capacity).
-//
-// EmptyAcquireCount and AcquireDurationMs are cumulative since process start,
-// not gauges: one reading cannot say whether the pool is struggling right now,
-// two consecutive readings can. Rate treatment belongs with a metrics system
-// (research.md R6).
 type PoolStats struct {
 	MaxConns          int32 `json:"max_conns"`
 	AcquiredConns     int32 `json:"acquired_conns"`
@@ -17,7 +10,6 @@ type PoolStats struct {
 	Saturated         bool  `json:"saturated"`
 }
 
-// PoolStats reports the pool's current state.
 func (d *DB) PoolStats() PoolStats {
 	s := d.Pool.Stat()
 	return PoolStats{

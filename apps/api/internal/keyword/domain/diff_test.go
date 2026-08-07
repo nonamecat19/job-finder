@@ -7,9 +7,6 @@ import (
 	"github.com/job-finder/api/internal/keyword/domain"
 )
 
-// term is a tiny constructor for an already-normalized JD term. We call the
-// package's extractor path for realism where it matters, but for the pure diff
-// tests we build terms directly so each case isolates one match path.
 func term(raw string, polarity domain.Polarity) domain.ExtractedTerm {
 	res, _ := domain.NewExtractor().Extract("Requirements\n- " + raw)
 	for _, t := range res.Terms {
@@ -36,8 +33,6 @@ func findDiff(terms []domain.DiffTerm, canonical string) (domain.DiffTerm, bool)
 	return domain.DiffTerm{}, false
 }
 
-// TestExactMatch: a resume term whose canonical form equals the JD term's
-// canonical lands in matched with MatchExact.
 func TestExactMatch(t *testing.T) {
 	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
 		term("Kubernetes", domain.PolarityRequired),
@@ -56,8 +51,6 @@ func TestExactMatch(t *testing.T) {
 	}
 }
 
-// TestSynonymMatchIsExact: JD uses an acronym/alias, resume uses the full form.
-// Synonym resolution collapses both to the same canonical → exact match.
 func TestSynonymMatchIsExact(t *testing.T) {
 	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
 		term("K8s", domain.PolarityRequired),
@@ -73,14 +66,10 @@ func TestSynonymMatchIsExact(t *testing.T) {
 	}
 }
 
-// TestNormalizedMatch: canonical strings differ but stemming makes them equal
-// (inflectional variation) → matched with MatchNormalized.
 func TestNormalizedMatch(t *testing.T) {
 	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
 		term("Microservices", domain.PolarityRequired),
 	}}
-	// "microservices" stems (plural strip) to "microservice", matching the
-	// singular resume term even though the canonical strings differ.
 	res := domain.NewDiffer().Diff(jd, []string{"microservice"})
 
 	got, ok := findDiff(res.Matched, jd.Terms[0].Canonical)
@@ -93,8 +82,6 @@ func TestNormalizedMatch(t *testing.T) {
 	}
 }
 
-// TestNoMatchRequiredAndPreferred: unmatched terms fall into the correct
-// missing bucket by polarity.
 func TestNoMatchRequiredAndPreferred(t *testing.T) {
 	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
 		term("Rust", domain.PolarityRequired),
@@ -113,7 +100,6 @@ func TestNoMatchRequiredAndPreferred(t *testing.T) {
 	}
 }
 
-// TestCoveragePct: coverage is (matchedRequired+matchedPreferred)/total*100.
 func TestCoveragePct(t *testing.T) {
 	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
 		term("Python", domain.PolarityRequired),
@@ -134,8 +120,6 @@ func TestCoveragePct(t *testing.T) {
 	}
 }
 
-// TestDeterministicOrdering: buckets are sorted so repeated runs and shuffled
-// input produce byte-identical output (UI stability acceptance criterion).
 func TestDeterministicOrdering(t *testing.T) {
 	mk := func() *domain.ExtractResult {
 		return &domain.ExtractResult{Terms: []domain.ExtractedTerm{
@@ -157,7 +141,6 @@ func TestDeterministicOrdering(t *testing.T) {
 		t.Fatalf("ordering not deterministic:\n a=%v\n b=%v",
 			canonicals(a.MissingRequired), canonicals(b.MissingRequired))
 	}
-	// Missing-required must be canonical-sorted.
 	got := canonicals(a.MissingRequired)
 	want := []string{"Ansible", "Docker", "Zsh"}
 	if !reflect.DeepEqual(got, want) {
@@ -165,8 +148,6 @@ func TestDeterministicOrdering(t *testing.T) {
 	}
 }
 
-// TestExtractResumeTerms pulls terms from whole-profile free text so the diff
-// sees adjacent evidence beyond the rendered resume (009 requirement).
 func TestExtractResumeTerms(t *testing.T) {
 	profile := `
 Skills: Python, Kubernetes, Terraform
@@ -183,7 +164,6 @@ Certifications: AWS Certified Solutions Architect
 		}
 	}
 
-	// End-to-end: whole-profile terms drive the diff.
 	jd := &domain.ExtractResult{Terms: []domain.ExtractedTerm{
 		term("Kubernetes", domain.PolarityRequired),
 		term("Rust", domain.PolarityRequired),

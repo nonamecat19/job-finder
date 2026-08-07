@@ -42,12 +42,6 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
-// allMounts returns every handler's Mount, zero-valued. Mount only registers
-// routes — it never touches the handler's dependencies — so zero values are
-// sufficient to enumerate the surface without standing up the platform.
-//
-// This list is the registration side of FR-006: a handler dropped during a
-// move shows up here as missing routes rather than as a 404 in production.
 func allMounts() []func(chi.Router) {
 	return []func(chi.Router){
 		(&jobsourceshttp.SourcesHandler{}).Mount,
@@ -76,10 +70,6 @@ func allMounts() []func(chi.Router) {
 	}
 }
 
-// TestRouteInventory prints every method+path the fully-mounted router
-// exposes, under both the /api and /api/v1 prefixes. It is a standing guard,
-// not scaffolding: the printed inventory is diffed across refactors to prove
-// the public surface did not move (FR-006, SC-003).
 func TestRouteInventory(t *testing.T) {
 	r := httpapi.NewRouter(0, allMounts()...)
 
@@ -101,8 +91,6 @@ func TestRouteInventory(t *testing.T) {
 		t.Fatal("router exposed no routes")
 	}
 
-	// Both prefixes come from a single registration (FR-007), so every route
-	// must appear under each.
 	var v0, v1 int
 	for _, route := range routes {
 		switch {

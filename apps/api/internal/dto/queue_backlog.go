@@ -1,7 +1,5 @@
 package dto
 
-// QueueBacklogDto is one queue's backlog snapshot (019-ai-job-throughput),
-// assembled from the asynq Inspector plus the resolved task policy.
 type QueueBacklogDto struct {
 	Queue              string  `json:"queue"`
 	ProviderClass      *string `json:"providerClass"`

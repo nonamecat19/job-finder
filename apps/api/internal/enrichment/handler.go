@@ -131,10 +131,6 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		err = h.enrichJobgether(ctx, payload, uid, job)
 		return err
 	default:
-		// No enrich branch for this source. It still has to reach match and
-		// salary-infer below: for a NeedsDetail adapter, ingestion enqueued
-		// neither on the assumption that this handler would run them, so
-		// returning early here would strand the job unscored forever.
 		slog.Warn("enrichment: no detail fetcher for source, scoring the listing as-is",
 			"job", payload.JobID, "source", job.SourceKey)
 		h.enqueueMatch(ctx, payload.JobID, job)
@@ -542,9 +538,6 @@ func (h *Handler) enqueueSalaryInfer(ctx context.Context, jobID string) {
 	}
 }
 
-// RescrapeOne re-triggers detail scraping for a single job (dashboard
-// "Rescrape vacancy"): clears detailScrapedAt so it re-qualifies as
-// needing detail, then enqueues the same enrich task EnqueueBackfill uses.
 func (h *Handler) RescrapeOne(ctx context.Context, jobID string) error {
 	uid, err := dbutil.ParseUUID(jobID)
 	if err != nil {

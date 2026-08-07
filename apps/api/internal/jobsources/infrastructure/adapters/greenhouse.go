@@ -26,9 +26,6 @@ type greenhouseResponse struct {
 	Jobs []greenhouseJob `json:"jobs"`
 }
 
-// GreenhouseAdapter reads every registered Greenhouse employer's open
-// postings via the vendor's public, unauthenticated job-board API
-// (research.md §1) — no credentials, no session, no challenge (FR-001).
 type GreenhouseAdapter struct {
 	Roster *roster.Service
 	boardRunState

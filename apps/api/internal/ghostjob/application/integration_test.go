@@ -14,9 +14,6 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 )
 
-// openTestDB returns a database of this test's own (internal/dbtest), so the
-// Job rows these tests insert cannot be truncated by a package running in
-// parallel. dbtest drops it when the test ends.
 func openTestDB(t *testing.T) *db.DB {
 	t.Helper()
 	return dbtest.New(t)
@@ -39,10 +36,6 @@ func insertTestJob(t *testing.T, q *sqlcgen.Queries, dedupeKey, company string) 
 	return job
 }
 
-// FR-002a / FR-003: repost count must be reachable above 1. This exercises
-// the real path — RecordJobRepost (ingestion's duplicate-hit branch) bumping
-// "seenCount" — rather than the trap of counting Job rows by dedupeKey,
-// which can only ever return 1 because "dedupeKey" is UNIQUE.
 func TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
@@ -69,8 +62,6 @@ func TestIntegration_CountRepostsByDedupeKey_ReachesAboveOne(t *testing.T) {
 	_ = job
 }
 
-// FR-006: a rejected application counts as progression, not as
-// unprogressed — the posting got a real answer, it wasn't ignored.
 func TestIntegration_CountAlwaysHiringByCompany_RejectedCountsAsProgression(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
@@ -99,7 +90,6 @@ func TestIntegration_CountAlwaysHiringByCompany_RejectedCountsAsProgression(t *t
 	_ = unprogressed
 }
 
-// SC-010: deleting a job removes its "JobSignal" row too — zero orphans.
 func TestIntegration_JobSignalCascadesOnJobDelete(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()

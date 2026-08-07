@@ -12,7 +12,6 @@ import (
 	"github.com/job-finder/api/internal/jobsources/roster"
 )
 
-// RosterProvider is the interface RosterHandler needs from roster.Service.
 type RosterProvider interface {
 	List(ctx context.Context) ([]dto.EmployerBoardDto, error)
 	RegisterFromURL(ctx context.Context, rawURL, displayName string) (dto.EmployerBoardDto, error)
@@ -23,7 +22,6 @@ type RosterProvider interface {
 	Discover(ctx context.Context) (int, error)
 }
 
-// RosterHandler wires /api/roster, per specs/domains/job-sources.md § 3.
 type RosterHandler struct {
 	Roster RosterProvider
 }

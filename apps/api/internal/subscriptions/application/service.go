@@ -1,10 +1,3 @@
-// Package application manages URL-based subscriptions: a saved-filter URL
-// on a job site attached to a JobSource by key. This pass is CRUD + enable
-// toggle only; fetching/scraping each URL is deferred.
-//
-// TODO(subscriptions): add an adapter method to fetch a subscription URL and a
-// scheduler that iterates enabled subscriptions and touches "lastRunAt" —
-// integrate at internal/ingestion/scheduler.go, mirroring the SavedSearch flow.
 package application
 
 import (
@@ -22,7 +15,6 @@ import (
 	"github.com/job-finder/api/internal/subscriptions/domain"
 )
 
-// SourceEnsurer and Repository ports live in domain/port.go.
 type Service struct {
 	q       domain.Repository
 	sources domain.SourceEnsurer
@@ -48,8 +40,6 @@ func (s *Service) ListBySource(ctx context.Context, sourceKey string) ([]dto.Sub
 	return mapSubscriptions(rows), nil
 }
 
-// DefaultCron is the schedule a subscription gets when the caller doesn't
-// pick one, matching the SavedSearch default and the column default.
 const DefaultCron = "0 */6 * * *"
 
 func (s *Service) Create(ctx context.Context, sourceKey, rawURL string, name *string, enabled bool, cron string) (*dto.SubscriptionDto, error) {
@@ -62,8 +52,6 @@ func (s *Service) Create(ctx context.Context, sourceKey, rawURL string, name *st
 	if err := validateCron(cron); err != nil {
 		return nil, err
 	}
-	// Validate the source against the code-defined registry (not the db) and
-	// ensure its JobSource row exists so the FK is satisfied.
 	if _, err := s.sources.GetByKey(ctx, sourceKey); err != nil {
 		return nil, fmt.Errorf("source '%s' not found", sourceKey)
 	}
@@ -123,10 +111,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.q.DeleteSubscription(ctx, uid)
 }
 
-// validateCron rejects a cron expression the scheduler can't parse, at save
-// time rather than leaving the subscription silently unschedulable: the
-// scheduler logs and skips a bad expression, which looks like a subscription
-// that simply never runs.
 func validateCron(expr string) error {
 	if _, err := cron.ParseStandard(expr); err != nil {
 		return fmt.Errorf("invalid cron expression %q: %w", expr, err)
@@ -134,9 +118,6 @@ func validateCron(expr string) error {
 	return nil
 }
 
-// validateSubscriptionURL rejects a subscription URL that can't belong to
-// its declared source, at save time rather than at run time (FR-016 for
-// Indeed, FR-015 for RemoteOK). Other sources are unchecked.
 func validateSubscriptionURL(sourceKey, rawURL string) error {
 	switch sourceKey {
 	case "indeed":
@@ -221,13 +202,6 @@ func validateGlassdoorSubscriptionURL(rawURL string) error {
 	return nil
 }
 
-// validateWellfoundSubscriptionURL mirrors validateGlassdoorSubscriptionURL
-// (specs/010-wellfound-job-provider/research.md R6). The legacy angel.co
-// host is accepted alongside wellfound.com/*.wellfound.com since Wellfound
-// was previously branded AngelList/angel.co and old saved-search links may
-// still use it. A path shaped like a single job-detail page (e.g.
-// "/jobs/12345-role-slug") is rejected in favor of a search-results page
-// (e.g. "/role/r/golang-engineer").
 var wellfoundJobDetailPathRe = regexp.MustCompile(`/jobs/\d`)
 
 func validateWellfoundSubscriptionURL(rawURL string) error {
@@ -258,9 +232,6 @@ func validateJobLeadsSubscriptionURL(rawURL string) error {
 	return nil
 }
 
-// validateDjinniSubscriptionURL accepts only the preset-search shape
-// (/jobs/?search_type=basic-search&...), and rejects all other djinni.co URLs
-// — including /my/dashboard/subs/{id}/ — with a human-readable reason.
 func validateDjinniSubscriptionURL(rawURL string) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Host == "" {
@@ -277,12 +248,6 @@ func validateDjinniSubscriptionURL(rawURL string) error {
 	return fmt.Errorf("djinni subscriptions support only preset-search URLs (`djinni.co/jobs/?search_type=basic-search&…`); dashboard URLs are no longer supported")
 }
 
-// validateJobgetherSubscriptionURL rejects a Jobgether subscription URL that
-// isn't a jobgether.com search-results page, mirroring
-// validateGlassdoorSubscriptionURL's host + shape check (FR-015, research.md
-// R6). Jobgether search-results pages live under /jobs/search; a single
-// job-detail page (e.g. /jobs/<slug>-<id>) is rejected with a human-readable
-// reason.
 func validateJobgetherSubscriptionURL(rawURL string) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Host == "" {

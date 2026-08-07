@@ -13,29 +13,17 @@ import (
 	"github.com/job-finder/api/internal/jobsources/domain"
 )
 
-// defaultChunkSize bounds statement size and lock duration inside the persist
-// transaction. It is not a consistency boundary: every chunk of a run commits
-// together, and a chunk failing rolls the whole run back.
 const defaultChunkSize = 500
 
-// Activity ops written for each inserted posting, mirroring the labels the
-// per-posting activity.New calls used before batching.
 const (
 	opMatch  = "match"
 	opGhost  = "ghost_score"
 	opEnrich = "enrich"
 )
 
-// PostingBatch is a run's results after in-batch deduplication, before any
-// database contact.
 type PostingBatch struct {
-	// Postings are deduplicated by DedupeKey(company, title, url).
-	Postings []dto.NormalizedJob
-	// Keys are the dedupe keys, order-aligned with Postings.
-	Keys []string
-	// Found is what the source returned, including the in-batch duplicates
-	// dropped from Postings, so the run's "found" total still describes the
-	// source rather than the survivors.
+	Postings       []dto.NormalizedJob
+	Keys           []string
 	Found          int
 	Skipped        int
 	SubscriptionID pgtype.UUID
@@ -43,15 +31,12 @@ type PostingBatch struct {
 	NeedsDetail    bool
 }
 
-// Classification is the result of one batch lookup over a chunk.
 type Classification struct {
 	Known        map[string]pgtype.UUID
 	NewPostings  []dto.NormalizedJob
 	MergeTargets map[string]pgtype.UUID
 }
 
-// InsertedJob is a posting that this run genuinely inserted, along with the
-// ActivityRun ids pre-created for the work it will queue after commit.
 type InsertedJob struct {
 	JobID       pgtype.UUID
 	DedupeKey   string
@@ -59,22 +44,14 @@ type InsertedJob struct {
 	ActivityIDs map[string]pgtype.UUID
 }
 
-// PersistResult is returned from the transaction and consumed by the
-// post-commit enqueue phase. Only Inserted drives enqueueing: reposted,
-// merged and skipped postings queue nothing, matching pre-batching behaviour.
 type PersistResult struct {
-	Inserted []InsertedJob
-	Reposted int
-	Merged   int
-	Skipped  int
-	// Statements counts the batch statements issued, so the per-run log can
-	// report the interaction count rather than asserting it (FR-014).
+	Inserted   []InsertedJob
+	Reposted   int
+	Merged     int
+	Skipped    int
 	Statements int
 }
 
-// NewPostingBatch deduplicates a run's postings by dedupe key, keeping the
-// FIRST occurrence: adapters return results in source-ranked order, so the
-// first is the one the source ranked higher.
 func NewPostingBatch(jobs []dto.NormalizedJob, subscriptionID, runID pgtype.UUID, needsDetail bool) PostingBatch {
 	batch := PostingBatch{
 		Found:          len(jobs),
@@ -96,10 +73,6 @@ func NewPostingBatch(jobs []dto.NormalizedJob, subscriptionID, runID pgtype.UUID
 	return batch
 }
 
-// persistBatch stores a whole run in chunks. The caller supplies a repository
-// bound to a transaction, so a failure anywhere here rolls back every chunk.
-// FinishSourceRunOk is written from inside so a run's totals can never
-// describe a storage phase that was rolled back (FR-011).
 func persistBatch(ctx context.Context, q domain.BatchRepository, batch PostingBatch, chunkSize int) (PersistResult, error) {
 	if chunkSize <= 0 {
 		chunkSize = defaultChunkSize
@@ -173,8 +146,6 @@ func persistChunk(ctx context.Context, q domain.BatchRepository, batch PostingBa
 	return nil
 }
 
-// classify resolves which of the chunk's postings already exist and, for the
-// board-vendor postings among the rest, which existing job they fold into.
 func classify(ctx context.Context, q domain.BatchRepository, postings []dto.NormalizedJob, keys []string) (Classification, int, error) {
 	rows, err := q.GetJobsByDedupeKeys(ctx, keys)
 	if err != nil {
@@ -182,8 +153,6 @@ func classify(ctx context.Context, q domain.BatchRepository, postings []dto.Norm
 	}
 	statements := 1
 
-	// Correlate by dedupe key, never by position: absent keys are simply not
-	// returned.
 	known := make(map[string]pgtype.UUID, len(rows))
 	for _, row := range rows {
 		known[row.DedupeKey] = row.ID
@@ -205,9 +174,6 @@ func classify(ctx context.Context, q domain.BatchRepository, postings []dto.Norm
 	return Classification{Known: known, NewPostings: newPostings, MergeTargets: targets}, statements, nil
 }
 
-// insertNew bulk-inserts the postings that are neither known nor merged.
-// Results are correlated back by dedupe key: a key missing from RETURNING was
-// won by a concurrent run, so no downstream work is queued for it (FR-013).
 func insertNew(ctx context.Context, q domain.BatchRepository, batch PostingBatch, classified Classification) ([]InsertedJob, int, error) {
 	params := sqlcgen.BulkInsertJobsParams{SubscriptionID: batch.SubscriptionID}
 	candidates := make(map[string]dto.NormalizedJob, len(classified.NewPostings))
@@ -277,9 +243,6 @@ func mergeBoards(ctx context.Context, q domain.BatchRepository, postings []dto.N
 	return int(affected), nil
 }
 
-// attachActivities pre-creates the ActivityRun rows for the work each inserted
-// posting will queue after commit, and hangs their ids on the InsertedJob so
-// the enqueue phase does not have to write one row per task.
 func attachActivities(ctx context.Context, q domain.BatchRepository, batch PostingBatch, inserted []InsertedJob) error {
 	var params sqlcgen.BulkInsertActivitiesParams
 	add := func(op, label, sourceKey string, jobID pgtype.UUID) {
@@ -304,8 +267,6 @@ func attachActivities(ctx context.Context, q domain.BatchRepository, batch Posti
 		return fmt.Errorf("ingestion: insert activities: %w", err)
 	}
 
-	// Correlate by (jobId, op): a job gets two activity rows, so jobId alone
-	// is not a key and row order is not guaranteed.
 	byJobOp := make(map[string]pgtype.UUID, len(rows))
 	for _, row := range rows {
 		byJobOp[dbutil.UUIDString(row.JobId)+"|"+row.Op] = row.ID

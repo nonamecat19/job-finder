@@ -10,7 +10,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// fakeRepo is an in-memory Repository used by pathfinder/service tests.
 type fakeRepo struct {
 	contacts    map[string]sqlcgen.Contact
 	connections []sqlcgen.ContactConnection
@@ -183,8 +182,6 @@ func TestPathFinder_FindPathsToCompany_MultiHop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindPathsToCompany() error = %v", err)
 	}
-	// The finder walks from every non-target contact, so both "bridge"
-	// (direct hop) and "me" (via bridge) produce a path into Acme.
 	if len(paths) != 2 {
 		t.Fatalf("got %d paths, want 2 (from Me and from Bridge)", len(paths))
 	}
@@ -225,8 +222,6 @@ func TestPathFinder_FindPathsToCompany_RespectsMaxDepth(t *testing.T) {
 	repo.connect(b, target, 0.5)
 
 	pf := NewPathFinder(repo)
-	// me -> a -> b -> target is 4 nodes; with maxDepth 2 that full path must
-	// not be found (only the shorter a->b->target and b->target paths do).
 	paths, err := pf.FindPathsToCompany(context.Background(), "Acme", 2)
 	if err != nil {
 		t.Fatalf("FindPathsToCompany() error = %v", err)
