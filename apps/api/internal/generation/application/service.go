@@ -13,7 +13,10 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/apperr"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
@@ -25,6 +28,10 @@ import (
 
 const (
 	groundingAttempts = 2
+	// selectionAttempts bounds the completeness ladder: two tries on the
+	// economy model, then one on the premium model. The last attempt is the
+	// escalation, so raising this raises economy retries, not premium ones.
+	selectionAttempts = 3
 	// shapeAttempts bounds the page-fit adjust cycle so an unreachable page
 	// target cannot spin: compact design, then condense, then accept whatever
 	// was reached.
@@ -56,24 +63,39 @@ type ShapeProvider interface {
 	Shape(ctx context.Context) domain.ShapeConfig
 }
 
+// GenerationRouters is one LLM provider per generation stage. Each is a router
+// over the same gateway, differing only in the task key it asks for, so which
+// model serves a stage stays a deployment decision (035 FR-002/FR-003). Any of
+// them may be the same provider — with no gateway configured they all route to
+// the local model, which is exactly the pre-split behaviour.
+type GenerationRouters struct {
+	Analyze llm.Provider
+	Select  llm.Provider
+	// Premium serves the selection stage only after the economy model has
+	// returned incomplete output twice (035 FR-007).
+	Premium llm.Provider
+	Summary llm.Provider
+	Cover   llm.Provider
+}
+
 type Service struct {
 	q            domain.Repository
 	profiles     domain.ProfileStore
 	htmlRenderer *infrastructure.HtmlPdfRenderer
 	rendercv     *infrastructure.RenderCvRenderer
-	llmc         llm.Provider
+	llm          GenerationRouters
 	genModel     string
 	masterPath   string
 	defaultLevel domain.GroundingLevel
 	shape        ShapeProvider
 }
 
-func NewService(q domain.Repository, profiles domain.ProfileStore, htmlRenderer *infrastructure.HtmlPdfRenderer, rendercv *infrastructure.RenderCvRenderer, llmc llm.Provider, genModel, masterPath, defaultLevel string, shape ShapeProvider) *Service {
+func NewService(q domain.Repository, profiles domain.ProfileStore, htmlRenderer *infrastructure.HtmlPdfRenderer, rendercv *infrastructure.RenderCvRenderer, routers GenerationRouters, genModel, masterPath, defaultLevel string, shape ShapeProvider) *Service {
 	if masterPath == "" {
 		masterPath = "./resume/resume.yaml"
 	}
 	return &Service{
-		q: q, profiles: profiles, htmlRenderer: htmlRenderer, rendercv: rendercv, llmc: llmc, genModel: genModel,
+		q: q, profiles: profiles, htmlRenderer: htmlRenderer, rendercv: rendercv, llm: routers, genModel: genModel,
 		masterPath: masterPath, defaultLevel: domain.ParseGroundingLevel(defaultLevel), shape: shape,
 	}
 }
@@ -103,7 +125,7 @@ func (s *Service) docModel(served string) string {
 	if s.genModel != "" {
 		return s.genModel
 	}
-	return s.llmc.ModelName()
+	return s.llm.Select.ModelName()
 }
 
 func sanitize(s string) string {
@@ -139,21 +161,19 @@ func (s *Service) masterFor(ctx context.Context, profileID *string) (domain.Rend
 	return master, nil
 }
 
-// GenerateAdHoc tailors a resume and writes a cover letter from pasted
-// vacancy text with no backing Job row, persisting both as GeneratedDocument
-// rows with jobId NULL so they show up in the ad-hoc history list.
-func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, coverLetterDoc dto.GeneratedDocumentDto, err error) {
+// GenerateAdHoc tailors a resume from pasted vacancy text with no backing Job
+// row, persisting it as a GeneratedDocument with jobId NULL so it shows up in
+// the ad-hoc history list. It no longer writes a cover letter: that was a paid
+// call and a share of the wait on every run, wanted or not, and is now
+// requested explicitly against the finished resume (035 FR-013).
+func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (dto.GeneratedDocumentDto, error) {
 	level := s.defaultLevel
 	if in.GroundingLevel != nil {
 		level = *in.GroundingLevel
 	}
 	master, err := s.masterFor(ctx, nil)
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
-	}
-	var extraNotes *string
-	if prof, profErr := s.profiles.GetDefault(ctx); profErr == nil {
-		extraNotes = prof.ExtraNotes
+		return dto.GeneratedDocumentDto{}, err
 	}
 
 	company := in.Company
@@ -171,35 +191,75 @@ func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, 
 	cfg := s.shapeConfig(ctx)
 
 	resumeCtx, resumeServed := llm.WithServedModelCapture(ctx)
-	merged, analysis, err := s.tailorRendercvResume(resumeCtx, master, in.Vacancy, level, cfg, in.Hints, nil)
+	prov := &runProvenance{}
+	merged, analysis, err := s.tailorRendercvResume(resumeCtx, master, in.Vacancy, level, cfg, in.Hints, nil, prov)
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+		return dto.GeneratedDocumentDto{}, err
 	}
 	resumeContent, err := json.Marshal(merged)
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+		return dto.GeneratedDocumentDto{}, err
 	}
 	resumePdfPath, err := s.renderResume(ctx, master, merged, analysis, level, cfg, baseName+"-resume-"+strconv.FormatInt(time.Now().UnixMilli(), 10), nil)
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+		return dto.GeneratedDocumentDto{}, err
 	}
-	resumeRow, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
+	resumeRow, err := s.q.InsertGeneratedDocument(ctx, withProvenance(sqlcgen.InsertGeneratedDocumentParams{
 		Type: string(dto.DocumentTypeResume), Version: 1, Content: resumeContent, PdfPath: &resumePdfPath, Model: s.docModel(*resumeServed),
 		Company: &company, Title: &title, Vacancy: &in.Vacancy,
-	})
+	}, prov))
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+		return dto.GeneratedDocumentDto{}, err
 	}
+	return toDocumentDto(resumeRow), nil
+}
+
+// GenerateCoverLetterFor writes a cover letter for an already-generated
+// resume, reusing that document's vacancy and company so the letter is aimed
+// at the same posting the resume was tailored to (035 FR-013).
+func (s *Service) GenerateCoverLetterFor(ctx context.Context, resumeID string) (dto.GeneratedDocumentDto, error) {
+	rid, err := dbutil.ParseUUID(resumeID)
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, apperr.NotFound("document", resumeID)
+	}
+	resume, err := s.q.GetDocumentByID(ctx, rid)
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, apperr.NotFound("document", resumeID)
+	}
+	if resume.Type != string(dto.DocumentTypeResume) {
+		return dto.GeneratedDocumentDto{}, apperr.Conflict("cover letters are generated from a resume, not a " + resume.Type)
+	}
+
+	master, err := s.masterFor(ctx, nil)
+	if err != nil {
+		return dto.GeneratedDocumentDto{}, err
+	}
+	var extraNotes *string
+	if prof, profErr := s.profiles.GetDefault(ctx); profErr == nil {
+		extraNotes = prof.ExtraNotes
+	}
+
+	company, title, vacancy := "vacancy", "resume", ""
+	if resume.Company != nil {
+		company = *resume.Company
+	}
+	if resume.Title != nil {
+		title = *resume.Title
+	}
+	if resume.Vacancy != nil {
+		vacancy = *resume.Vacancy
+	}
+	baseName := sanitize(company + "-" + title)
 
 	profileText := domain.RendercvToText(master)
 	coverCtx, coverServed := llm.WithServedModelCapture(ctx)
-	letter, err := s.writeCoverLetter(coverCtx, profileText, extraNotes, company, title, in.Vacancy)
+	letter, err := s.writeCoverLetter(coverCtx, profileText, extraNotes, company, title, vacancy)
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+		return dto.GeneratedDocumentDto{}, err
 	}
 	coverContent, err := json.Marshal(map[string]string{"text": letter})
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+		return dto.GeneratedDocumentDto{}, err
 	}
 	var namePtr *string
 	if basics, _ := master["cv"].(map[string]any); basics != nil {
@@ -209,17 +269,38 @@ func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (resumeDoc, 
 	}
 	coverPdfPath, err := s.htmlRenderer.RenderCoverLetter(ctx, letter, namePtr, company, title, fmt.Sprintf("%s-cover-%d.pdf", baseName, time.Now().UnixMilli()))
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+		return dto.GeneratedDocumentDto{}, err
 	}
 	coverRow, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
-		Type: string(dto.DocumentTypeCoverLetter), Version: 1, Content: coverContent, PdfPath: &coverPdfPath, Model: s.docModel(*coverServed),
-		Company: &company, Title: &title, Vacancy: &in.Vacancy,
+		JobId: resume.JobId, Type: string(dto.DocumentTypeCoverLetter), Version: nextCoverVersion(ctx, s, resume),
+		Content: coverContent, PdfPath: &coverPdfPath, Model: s.docModel(*coverServed),
+		Company: &company, Title: &title, Vacancy: &vacancy,
 	})
 	if err != nil {
-		return dto.GeneratedDocumentDto{}, dto.GeneratedDocumentDto{}, err
+		return dto.GeneratedDocumentDto{}, err
 	}
+	return toDocumentDto(coverRow), nil
+}
 
-	return toDocumentDto(resumeRow), toDocumentDto(coverRow), nil
+// nextCoverVersion keeps the existing (jobId, type, version) uniqueness rule:
+// a second request for the same job supersedes rather than collides. Ad-hoc
+// documents have a NULL jobId and are not covered by the constraint, so they
+// stay at version 1.
+func nextCoverVersion(ctx context.Context, s *Service, resume sqlcgen.GeneratedDocument) int32 {
+	if !resume.JobId.Valid {
+		return 1
+	}
+	existing, err := s.q.ListDocumentsForJob(ctx, resume.JobId)
+	if err != nil {
+		return 1
+	}
+	next := int32(1)
+	for _, d := range existing {
+		if d.Type == string(dto.DocumentTypeCoverLetter) && d.Version >= next {
+			next = d.Version + 1
+		}
+	}
+	return next
 }
 
 // ListAdHocDocuments returns all documents generated from pasted vacancy
@@ -236,11 +317,114 @@ func (s *Service) ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocume
 	return out, nil
 }
 
-func (s *Service) tailorRendercvResume(ctx context.Context, master domain.RendercvMaster, vacancy string, level domain.GroundingLevel, cfg domain.ShapeConfig, hints *domain.VacancyHints, rec *activity.Recorder) (domain.RendercvMaster, domain.VacancyAnalysis, error) {
+// selectWithCompleteness runs the economy selection stage and gates its output
+// on completeness. A cheap model's characteristic failure is not malformed
+// output — it is well-formed output with content quietly missing, which
+// nothing downstream would notice. One retry on the economy model, then the
+// stage escalates to the premium one rather than rendering a hollowed-out
+// resume (035 FR-006/FR-007).
+func (s *Service) selectWithCompleteness(ctx context.Context, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, prevViolations []string, cfg domain.ShapeConfig, rec *activity.Recorder, prov *runProvenance) (domain.TailoredSelection, error) {
+	var last domain.CompletenessReport
+	for attempt := 0; attempt < selectionAttempts; attempt++ {
+		provider, tier := s.llm.Select, "economy"
+		if attempt == selectionAttempts-1 {
+			provider, tier = s.llm.Premium, "premium"
+		}
+		payload, err := observe(ctx, prov, stageSelect, tier == "premium", func(ctx context.Context) (domain.TailoredSelection, error) {
+			return selectContent(ctx, provider, s.genModel, master, analysis, level, prevViolations, cfg)
+		})
+		if err != nil {
+			return domain.TailoredSelection{}, err
+		}
+		probe, err := domain.MergeTailored(master, payload, nil)
+		if err != nil {
+			return domain.TailoredSelection{}, err
+		}
+		domain.ApplySectionToggles(probe, cfg)
+		report := domain.VerifyCompleteness(master, probe, analysis, cfg)
+		if !report.Shortfall {
+			if tier == "premium" && rec != nil {
+				rec.Step(ctx, "selection escalated to premium model after repeated shortfalls", map[string]any{"escalated": true})
+			}
+			if report.StructuralFallback && rec != nil {
+				rec.Step(ctx, "completeness: vacancy analysis listed no required skills, structural check used instead", map[string]any{"structuralFallback": true})
+			}
+			return payload, nil
+		}
+		last = report
+		if rec != nil {
+			rec.Step(ctx, fmt.Sprintf("completeness shortfall on %s model (attempt %d/%d)", tier, attempt+1, selectionAttempts), map[string]any{
+				"requiredMissing":    last.RequiredMissing,
+				"niceToHaveRetained": last.NiceToHaveRetained,
+				"bulletShortfalls":   last.BulletShortfalls,
+				"tier":               tier,
+			})
+		}
+	}
+	return domain.TailoredSelection{}, fmt.Errorf("selection incomplete after %d attempts: %s", selectionAttempts, last.Reason())
+}
+
+// summarize runs the one premium call in a generation run. Its brief carries
+// the selected achievements and the derived years figure, not the master —
+// that is what keeps the expensive stage small (035 FR-004).
+func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, payload domain.TailoredSelection, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, rec *activity.Recorder, prov *runProvenance) (*domain.TailoredSummary, error) {
+	if rec != nil {
+		rec.Step(ctx, "writing summary (premium model)", nil)
+	}
+	min, max := summarySelectRange(cfg)
+	brief := domain.SummaryBrief{
+		Analysis:         analysis,
+		TotalYears:       domain.DeriveTotalExperienceYears(master),
+		Highlights:       domain.SelectedHighlights(payload),
+		SkillGroupLabels: domain.SkillGroupLabels(master),
+		SentenceMin:      min,
+		SentenceMax:      max,
+	}
+	summary, err := observe(ctx, prov, stageSummary, false, func(ctx context.Context) (domain.TailoredSummary, error) {
+		return writeSummary(ctx, s.llm.Summary, s.genModel, brief)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("summary: %w", err)
+	}
+
+	// The summary is the one part of the document that is written rather than
+	// selected, so it is verified on its own terms: one re-prompt, then strip
+	// the offending claim rather than fail the run or ship it (035 FR-008/FR-009).
+	violations := domain.VerifySummaryGrounding(master, summary, brief)
+	if len(violations) == 0 {
+		return &summary, nil
+	}
+	if rec != nil {
+		rec.Step(ctx, "summary grounding violation, re-prompting", map[string]any{"violations": violations})
+	}
+	retry, err := observe(ctx, prov, stageSummary, false, func(ctx context.Context) (domain.TailoredSummary, error) {
+		return writeSummary(ctx, s.llm.Summary, s.genModel, brief.WithViolations(violations))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("summary re-prompt: %w", err)
+	}
+	reViolations := domain.VerifySummaryGrounding(master, retry, brief)
+	if len(reViolations) == 0 {
+		return &retry, nil
+	}
+	stripped := domain.StripSummaryViolations(retry, reViolations)
+	if rec != nil {
+		rec.Step(ctx, "summary grounding violation recurred, offending claims stripped", map[string]any{
+			"violations": reViolations,
+			"before":     retry.Summary,
+			"after":      stripped.Summary,
+		})
+	}
+	return &stripped, nil
+}
+
+func (s *Service) tailorRendercvResume(ctx context.Context, master domain.RendercvMaster, vacancy string, level domain.GroundingLevel, cfg domain.ShapeConfig, hints *domain.VacancyHints, rec *activity.Recorder, prov *runProvenance) (domain.RendercvMaster, domain.VacancyAnalysis, error) {
 	if rec != nil {
 		rec.Step(ctx, "analyzing vacancy", nil)
 	}
-	analysis, err := analyzeVacancy(ctx, s.llmc, s.genModel, vacancy, hints)
+	analysis, err := observe(ctx, prov, stageAnalyze, false, func(ctx context.Context) (domain.VacancyAnalysis, error) {
+		return analyzeVacancy(ctx, s.llm.Analyze, s.genModel, vacancy, hints)
+	})
 	if err != nil {
 		return nil, domain.VacancyAnalysis{}, fmt.Errorf("vacancy analysis: %w", err)
 	}
@@ -250,11 +434,15 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		if rec != nil {
 			rec.Step(ctx, fmt.Sprintf("tailoring resume (LLM) (attempt %d/%d)", attempt+1, groundingAttempts), nil)
 		}
-		payload, err := selectAndTailor(ctx, s.llmc, s.genModel, master, analysis, level, lastViolations, cfg)
+		payload, err := s.selectWithCompleteness(ctx, master, analysis, level, lastViolations, cfg, rec, prov)
 		if err != nil {
 			return nil, domain.VacancyAnalysis{}, err
 		}
-		merged, err := domain.MergeTailored(master, payload)
+		summary, err := s.summarize(ctx, master, payload, analysis, cfg, rec, prov)
+		if err != nil {
+			return nil, domain.VacancyAnalysis{}, err
+		}
+		merged, err := domain.MergeTailored(master, payload, summary)
 		if err != nil {
 			return nil, domain.VacancyAnalysis{}, err
 		}
@@ -276,6 +464,12 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		lastViolations = domain.VerifyRendercvGrounding(master, merged, level, analysis)
 		if len(lastViolations) == 0 {
 			fixed, err := s.fixStructureIntegrity(ctx, master, merged, analysis, level, cfg, rec)
+			if rec != nil && prov != nil {
+				// FR-017: what each stage cost and who served it, on the run
+				// itself, so the pipeline's economics are observed rather than
+				// estimated after the fact.
+				rec.Step(ctx, "generation stages", prov.meta())
+			}
 			return fixed, analysis, err
 		}
 	}
@@ -324,8 +518,8 @@ func recordShortfalls(ctx context.Context, rec *activity.Recorder, report domain
 type renderDeps struct {
 	render     func(ctx context.Context, merged domain.RendercvMaster, name string) (string, error)
 	countPages func(pdfPath string) (int, error)
-	expand     func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSections, error)
-	condense   func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSections, error)
+	expand     func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error)
+	condense   func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error)
 }
 
 func (s *Service) defaultRenderDeps() renderDeps {
@@ -335,11 +529,11 @@ func (s *Service) defaultRenderDeps() renderDeps {
 			return pdfPath, err
 		},
 		countPages: infrastructure.CountPages,
-		expand: func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
-			return expandContent(ctx, s.llmc, s.genModel, merged, analysis, level, cfg)
+		expand: func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
+			return expandContent(ctx, s.llm.Select, s.genModel, merged, analysis, level, cfg)
 		},
-		condense: func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
-			return condenseContent(ctx, s.llmc, s.genModel, merged, analysis, level, cfg)
+		condense: func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
+			return condenseContent(ctx, s.llm.Select, s.genModel, merged, analysis, level, cfg)
 		},
 	}
 }
@@ -408,7 +602,7 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 			slog.Warn("LLM expand failed, returning short version", "err", err)
 			return renderOutcome{pdfPath: pdfPath, pages: pages}, nil
 		}
-		reMerged, err := domain.MergeTailored(merged, expanded)
+		reMerged, err := domain.MergeTailored(merged, expanded, nil) // summary carried by merged
 		if err != nil {
 			slog.Warn("merge after expand failed, returning short version", "err", err)
 			return renderOutcome{pdfPath: pdfPath, pages: pages}, nil
@@ -453,7 +647,7 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 				slog.Warn("LLM condense failed, returning compact version", "err", err)
 				break
 			}
-			reMerged, err := domain.MergeTailored(merged, condensed)
+			reMerged, err := domain.MergeTailored(merged, condensed, nil) // summary carried by merged
 			if err != nil {
 				slog.Warn("merge after condense failed, returning compact version", "err", err)
 				break
@@ -499,11 +693,11 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 		if rec != nil {
 			rec.Step(ctx, "structure integrity: years assertion detected, re-prompting", map[string]any{"violations": len(structViolations)})
 		}
-		rePrompted, err := retailorForStructure(ctx, s.llmc, s.genModel, master, analysis, level, structViolations, cfg)
+		rePrompted, err := retailorForStructure(ctx, s.llm.Select, s.genModel, master, analysis, level, structViolations, cfg)
 		if err != nil {
 			return nil, err
 		}
-		reMerged, err := domain.MergeTailored(master, rePrompted)
+		reMerged, err := domain.MergeTailored(master, rePrompted, domain.CurrentSummary(merged))
 		if err != nil {
 			return nil, err
 		}
@@ -528,11 +722,11 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 	if rec != nil {
 		rec.Step(ctx, "structure integrity: highlight drift detected, re-prompting", map[string]any{"violations": len(driftViolations)})
 	}
-	rePrompted, err := retailorForStructure(ctx, s.llmc, s.genModel, master, analysis, level, driftViolations, cfg)
+	rePrompted, err := retailorForStructure(ctx, s.llm.Select, s.genModel, master, analysis, level, driftViolations, cfg)
 	if err != nil {
 		return nil, err
 	}
-	reMerged, err := domain.MergeTailored(master, rePrompted)
+	reMerged, err := domain.MergeTailored(master, rePrompted, domain.CurrentSummary(merged))
 	if err != nil {
 		return nil, err
 	}
@@ -590,6 +784,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	var content []byte
 	var pdfPath string
 	genCtx, served := llm.WithServedModelCapture(ctx)
+	prov := &runProvenance{}
 
 	if docType == string(dto.DocumentTypeResume) {
 		// Resolved once per run and threaded as a value (see shapeConfig).
@@ -597,7 +792,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		if rec != nil {
 			rec.Step(ctx, "resume shape config", shapeConfigMeta(cfg))
 		}
-		tailored, analysis, err := s.tailorRendercvResume(genCtx, master, job.Description, s.defaultLevel, cfg, nil, rec)
+		tailored, analysis, err := s.tailorRendercvResume(genCtx, master, job.Description, s.defaultLevel, cfg, nil, rec, prov)
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}
@@ -641,9 +836,9 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		pdfPath = p
 	}
 
-	doc, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
+	doc, err := s.q.InsertGeneratedDocument(ctx, withProvenance(sqlcgen.InsertGeneratedDocumentParams{
 		JobId: jid, Type: docType, Version: version, Content: content, PdfPath: &pdfPath, Model: s.docModel(*served),
-	})
+	}, prov))
 	if err != nil {
 		return dto.GeneratedDocumentDto{}, err
 	}
@@ -681,7 +876,7 @@ func (s *Service) writeCoverLetter(ctx context.Context, profileText string, extr
 	}
 	prompt += fmt.Sprintf("JOB:\nTitle: %s\nCompany: %s\nDescription:\n%s", title, company, strutil.Truncate(vacancyText, 4000))
 
-	result, err := llm.CompleteStructured[coverLetterResult](ctx, s.llmc, prompt, &llm.CompleteOptions{
+	result, err := llm.CompleteStructured[coverLetterResult](ctx, s.llm.Cover, prompt, &llm.CompleteOptions{
 		System:    "You write concise, concrete, honest cover letters.",
 		Model:     s.genModel,
 		MaxTokens: &coverLetterMaxTokens,
@@ -907,5 +1102,25 @@ func toDocumentDto(r sqlcgen.GeneratedDocument) dto.GeneratedDocumentDto {
 		Title:     r.Title,
 		Vacancy:   r.Vacancy,
 		CreatedAt: dbutil.Timestamp(r.CreatedAt),
+
+		SummaryModel:       r.SummaryModel,
+		SummarySubstituted: r.SummarySubstituted,
+		SelectionEscalated: r.SelectionEscalated,
+		StageCostUsd:       numericToFloatPtr(r.StageCostUsd),
 	}
+}
+
+// numericToFloatPtr renders a nullable numeric column as a float pointer, so a
+// run with no measured cost stays absent from the payload rather than
+// reporting zero — an unmeasured run and a free one are different facts.
+func numericToFloatPtr(n pgtype.Numeric) *float64 {
+	if !n.Valid {
+		return nil
+	}
+	f, err := n.Float64Value()
+	if err != nil || !f.Valid {
+		return nil
+	}
+	v := f.Float64
+	return &v
 }

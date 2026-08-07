@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/job-finder/api/internal/generation/domain"
 	"github.com/job-finder/api/internal/platform/llm"
@@ -60,6 +61,8 @@ func buildAnalyzePrompt(vacancy string, hints *domain.VacancyHints) string {
 // analyzeVacancy calls the LLM to produce a VacancyAnalysis from the raw
 // vacancy text (optionally enriched with caller-provided hints).
 func analyzeVacancy(ctx context.Context, lc llm.Provider, model, vacancy string, hints *domain.VacancyHints) (domain.VacancyAnalysis, error) {
+	ctx, cancel := context.WithTimeout(ctx, analyzeStageTimeout)
+	defer cancel()
 	prompt := buildAnalyzePrompt(vacancy, hints)
 	maxT := analysisMaxTokens
 	return llm.CompleteStructured[domain.VacancyAnalysis](ctx, lc, prompt, &llm.CompleteOptions{
@@ -85,18 +88,7 @@ func summarySelectRange(cfg domain.ShapeConfig) (int, int) {
 	return atLeastOne(cfg.SummaryLines - 1), atLeastOne(cfg.SummaryLines)
 }
 
-// summaryExpandRange is one step above the target — the expand path runs when
-// the resume came out short, so it asks for a little more than configured.
-func summaryExpandRange(cfg domain.ShapeConfig) (int, int) {
-	return atLeastOne(cfg.SummaryLines), atLeastOne(cfg.SummaryLines + 1)
-}
 
-// summaryCondenseRange is one step below the target. Per FR-016 the page
-// target outranks the configured section lengths, so on the condense path the
-// summary is asked to come in under its configured length rather than at it.
-func summaryCondenseRange(cfg domain.ShapeConfig) (int, int) {
-	return atLeastOne(cfg.SummaryLines - 2), atLeastOne(cfg.SummaryLines - 1)
-}
 
 // bulletsExpandRange asks for the configured cap plus a couple, matching the
 // old "aim for 10-12 per job" against a default max of 10.
@@ -146,22 +138,38 @@ func pageTargetPhrase(cfg domain.ShapeConfig) string {
 // Step 2: Content Selection & Tailoring
 // ---------------------------------------------------------------------------
 
-// generationMaxTokens is the explicit output token cap for generation calls
-// (033 FR-012). A TailoredSections payload for a one-page resume (summary +
-// ~10 skill groups + ~10 experience entries with up to 10 highlights each +
-// projects) fits within ~4k tokens, but the cap also has to cover the
-// reasoning tokens a thinking model spends before it emits any content —
-// those count against max_completion_tokens. At 4096 a reasoning model
-// (deepseek-v4-pro) burns the entire budget on reasoning, returns empty
-// content with finish_reason=length, and every structured-output retry fails
-// with "unexpected end of JSON input". The cap is set for reasoning models,
-// which every candidate generation model now is.
-const generationMaxTokens = 16384
+// Output caps, one per stage (035 FR-014). Each covers the stage's own payload
+// plus the reasoning tokens a thinking model spends before it emits anything —
+// those count against max_completion_tokens, and a cap that ignores them
+// produces empty content with finish_reason=length, which every
+// structured-output retry then fails on identically.
+const (
+	// selectMaxTokens covers ~10 skill groups + ~10 experience entries with up
+	// to 10 highlights each + projects.
+	selectMaxTokens = 16384
+	// analysisMaxTokens covers required skills, nice-to-haves,
+	// responsibilities and keywords.
+	analysisMaxTokens = 8192
+	// summaryMaxTokens covers 2-4 sentences. A model needing more than this is
+	// deliberating, and its deployment must bound that in gateway/config.yaml
+	// rather than being given a bigger budget here.
+	summaryMaxTokens = 2048
+)
 
-// analysisMaxTokens is the cap for vacancy analysis — a smaller payload
-// (required skills, nice-to-haves, responsibilities, keywords), plus the same
-// reasoning-token headroom generationMaxTokens allows for.
-const analysisMaxTokens = 8192
+// generationMaxTokens is the cap for the page-fitting passes, which return the
+// same selection payload the select stage does.
+const generationMaxTokens = selectMaxTokens
+
+// Per-stage deadlines (035 FR-015). The proxy's own request_timeout was
+// measured not to be enforced — a single call hung 830s while the fallback
+// chain never advanced — so the application's deadline is the only real bound.
+// Together these stay well inside the handler's 14-minute timeout with room
+// for the retry ladder.
+const (
+	analyzeStageTimeout = 90 * time.Second
+	selectStageTimeout  = 240 * time.Second
+	summaryStageTimeout = 120 * time.Second
+)
 
 // buildSelectPrompt constructs the prompt for Step 2. It receives the vacancy
 // analysis from Step 1 and the full master resume content, and asks the LLM
@@ -233,13 +241,8 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	}
 	b.WriteString("- Return the \"Spoken Languages\" group exactly as given: same details, same order, no rewording. It is a fact about the candidate, not a tailoring target.\n")
 	b.WriteString("- Keep highlights concise, one achievement each, no fabricated numbers.\n")
-	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given.\n\n")
-	summaryMin, summaryMax := summarySelectRange(cfg)
-	fmt.Fprintf(&b, "Generate a tailored summary (%d-%d sentences) that:\n", summaryMin, summaryMax)
-	fmt.Fprintf(&b, "- Opens with \"%d+ years of experience\" (this figure is derived from the master's dates; use it verbatim) and domain expertise\n", domain.DeriveTotalExperienceYears(master))
-	b.WriteString("- References 2-3 key skills from the vacancy's required skills\n")
-	b.WriteString("- Mentions one quantified achievement from the selected experience\n")
-	b.WriteString("- Never use a descriptive seniority label (e.g. 'mid-level', 'senior') in place of the years figure\n\n")
+	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given.\n")
+	b.WriteString("- Do NOT write a summary. A separate step writes it.\n\n")
 	// A disabled skills section is removed from the document after the merge,
 	// so there is no reason to spend tokens tailoring it.
 	if cfg.SkillsEnabled {
@@ -285,13 +288,69 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	return b.String()
 }
 
-// selectAndTailor calls the LLM to produce a TailoredSections from the master
-// resume content and the vacancy analysis.
-func selectAndTailor(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, prevViolations []string, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
+// selectContent calls the LLM to produce a TailoredSelection from the master
+// resume content and the vacancy analysis. It does not produce a summary —
+// TailoredSelection has no field for one (035 FR-005).
+func selectContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, prevViolations []string, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
+	ctx, cancel := context.WithTimeout(ctx, selectStageTimeout)
+	defer cancel()
 	prompt := buildSelectPrompt(master, analysis, level, prevViolations, cfg)
-	maxT := generationMaxTokens
-	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, prompt, &llm.CompleteOptions{
+	maxT := selectMaxTokens
+	return llm.CompleteStructured[domain.TailoredSelection](ctx, lc, prompt, &llm.CompleteOptions{
 		System:       "You are an expert resume writer who never fabricates information. " + "You select, reorder and rephrase existing content to match a specific vacancy.",
+		Model:        model,
+		MaxTokens:    &maxT,
+		ResponseMode: llm.ResponseModeStrict,
+	})
+}
+
+// buildSummaryPrompt renders the premium stage's entire input. The master
+// profile is deliberately absent: the brief carries the handful of facts a
+// summary can legitimately reference, which is what keeps the one call priced
+// at premium rates small (035 FR-004).
+func buildSummaryPrompt(brief domain.SummaryBrief) string {
+	var b strings.Builder
+	b.WriteString("Write the professional summary for a tailored resume.\n\n")
+	b.WriteString("VACANCY REQUIRED SKILLS: " + strings.Join(brief.Analysis.RequiredSkills, ", ") + "\n")
+	if len(brief.Analysis.NiceToHaveSkills) > 0 {
+		b.WriteString("VACANCY NICE-TO-HAVE: " + strings.Join(brief.Analysis.NiceToHaveSkills, ", ") + "\n")
+	}
+	if brief.Analysis.ExperienceLevel != "" {
+		b.WriteString("VACANCY SENIORITY: " + brief.Analysis.ExperienceLevel + "\n")
+	}
+	if len(brief.Analysis.IndustryKeywords) > 0 {
+		b.WriteString("INDUSTRY: " + strings.Join(brief.Analysis.IndustryKeywords, ", ") + "\n")
+	}
+	if len(brief.SkillGroupLabels) > 0 {
+		b.WriteString("\nCANDIDATE SKILL AREAS: " + strings.Join(brief.SkillGroupLabels, ", ") + "\n")
+	}
+	if len(brief.Highlights) > 0 {
+		b.WriteString("\nACHIEVEMENTS SELECTED FOR THIS RESUME (the only achievements you may reference):\n")
+		for _, h := range brief.Highlights {
+			b.WriteString("  - " + h + "\n")
+		}
+	}
+	fmt.Fprintf(&b, "\nWrite %d-%d sentences that:\n", brief.SentenceMin, brief.SentenceMax)
+	fmt.Fprintf(&b, "- Open with \"%d+ years of experience\" (derived from the candidate's dates; use it verbatim) and domain expertise\n", brief.TotalYears)
+	b.WriteString("- Reference 2-3 skills the vacancy requires, drawn only from the candidate's skill areas above\n")
+	b.WriteString("- Mention one achievement from the list above, without inventing or altering its numbers\n")
+	b.WriteString("- Never use a seniority label (e.g. 'mid-level', 'senior') in place of the years figure\n")
+	b.WriteString("- Introduce no skill, employer, credential or metric that does not appear above\n")
+	if len(brief.PreviousViolations) > 0 {
+		b.WriteString("\nYour previous attempt violated these grounding rules:\n- ")
+		b.WriteString(strings.Join(brief.PreviousViolations, "\n- "))
+		b.WriteString("\nRewrite without them.")
+	}
+	return b.String()
+}
+
+// writeSummary is the one premium call in a generation run.
+func writeSummary(ctx context.Context, lc llm.Provider, model string, brief domain.SummaryBrief) (domain.TailoredSummary, error) {
+	ctx, cancel := context.WithTimeout(ctx, summaryStageTimeout)
+	defer cancel()
+	maxT := summaryMaxTokens
+	return llm.CompleteStructured[domain.TailoredSummary](ctx, lc, buildSummaryPrompt(brief), &llm.CompleteOptions{
+		System:       "You are an expert resume writer who never fabricates information. You write a concise professional summary using only the facts you are given.",
 		Model:        model,
 		MaxTokens:    &maxT,
 		ResponseMode: llm.ResponseModeStrict,
@@ -302,7 +361,7 @@ func selectAndTailor(ctx context.Context, lc llm.Provider, model string, master 
 // text-asserted-years invariant: the initial generation asserted a numeric
 // total years figure that contradicts the master's derivable total, so the
 // violation is fed back and the LLM asked to regenerate without it.
-func retailorForStructure(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, violations []domain.StructureViolation, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
+func retailorForStructure(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, violations []domain.StructureViolation, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
 	var b strings.Builder
 	b.WriteString(buildSelectPrompt(master, analysis, level, nil, cfg))
 	b.WriteString("\n\nSTRUCTURAL INTEGRITY VIOLATIONS (must fix):\n")
@@ -310,7 +369,7 @@ func retailorForStructure(ctx context.Context, lc llm.Provider, model string, ma
 		fmt.Fprintf(&b, "- %s: %s Use exactly %d+ years; never substitute a seniority label.\n", v.Path, v.Message, domain.DeriveTotalExperienceYears(master))
 	}
 	maxT := generationMaxTokens
-	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, b.String(), &llm.CompleteOptions{
+	return llm.CompleteStructured[domain.TailoredSelection](ctx, lc, b.String(), &llm.CompleteOptions{
 		System:       "You are an expert resume writer who never fabricates information. " + "You select, reorder and rephrase existing content to match a specific vacancy.",
 		Model:        model,
 		MaxTokens:    &maxT,
@@ -320,11 +379,11 @@ func retailorForStructure(ctx context.Context, lc llm.Provider, model string, ma
 
 // expandContent asks the LLM to add more detail to the already-tailored
 // content so the resume fills two pages instead of one. It takes the current
-// merged master and returns a new TailoredSections with a longer summary,
+// merged master and returns a new TailoredSelection with
 // more highlights per job, and richer skill details.
-func expandContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
+func expandContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
 	maxT := generationMaxTokens
-	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, buildExpandPrompt(master, analysis, cfg), &llm.CompleteOptions{
+	return llm.CompleteStructured[domain.TailoredSelection](ctx, lc, buildExpandPrompt(master, analysis, cfg), &llm.CompleteOptions{
 		System:       "You are an expert resume writer who adds relevant detail without fabricating information. " + "Use only content from the master profile.",
 		Model:        model,
 		MaxTokens:    &maxT,
@@ -378,11 +437,10 @@ func buildExpandPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	}
 
 	var b strings.Builder
-	summaryMin, summaryMax := summaryExpandRange(cfg)
 	bulletsMin, bulletsMax := bulletsExpandRange(cfg)
 	fmt.Fprintf(&b, "The resume below is too short (only 1 page). Expand it to fill %s with more detail.\n\n", pageTargetPhrase(cfg))
 	b.WriteString("RULES:\n")
-	fmt.Fprintf(&b, "- Summary: expand to %d-%d sentences with more domain context and achievements.\n", summaryMin, summaryMax)
+	b.WriteString("- Leave the summary alone. It is written by a separate step and is not yours to change.\n")
 	fmt.Fprintf(&b, "- Experience highlights: add 2-3 more relevant bullets per job (aim for %d-%d per job) from the master's available highlights.\n", bulletsMin, bulletsMax)
 	b.WriteString("- Skill details: keep every keyword already in the group and reorder the vacancy-relevant ones first; don't fabricate.\n")
 	b.WriteString("- Do NOT drop any job entry or skill group.\n")
@@ -411,11 +469,11 @@ func buildExpandPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 
 // condenseContent asks the LLM to shorten the already-tailored content so
 // the resume fits on a single page. It takes the current merged master and
-// returns a new TailoredSections with shorter summary, fewer highlights per
+// returns a new TailoredSelection with fewer highlights per
 // job, and more compact skill details.
-func condenseContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSections, error) {
+func condenseContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
 	maxT := generationMaxTokens
-	return llm.CompleteStructured[domain.TailoredSections](ctx, lc, buildCondensePrompt(master, analysis, cfg), &llm.CompleteOptions{
+	return llm.CompleteStructured[domain.TailoredSelection](ctx, lc, buildCondensePrompt(master, analysis, cfg), &llm.CompleteOptions{
 		System:       "You are an expert resume writer who makes content concise without losing impact. " + "Never fabricate information.",
 		Model:        model,
 		MaxTokens:    &maxT,
@@ -442,12 +500,11 @@ func buildCondensePrompt(master domain.RendercvMaster, analysis domain.VacancyAn
 	var b strings.Builder
 	// Per FR-016 the page target outranks the configured section lengths, so
 	// this path deliberately asks for less than the configured range.
-	summaryMin, summaryMax := summaryCondenseRange(cfg)
 	bulletsMin, bulletsMax := bulletsCondenseRange(cfg)
 	fmt.Fprintf(&b, "The resume below is too long and overflows past %s. Shorten it to fit on %s.\n\n",
 		strings.ToLower(pageTargetPhrase(cfg)), pageTargetPhrase(cfg))
 	b.WriteString("RULES:\n")
-	fmt.Fprintf(&b, "- Summary: reduce to %d-%d tight sentences.\n", summaryMin, summaryMax)
+	b.WriteString("- Leave the summary alone. It is written by a separate step and is not yours to change.\n")
 	fmt.Fprintf(&b, "- Experience highlights: keep only the TOP %d-%d most relevant per job; make each bullet shorter (one line).\n", bulletsMin, bulletsMax)
 	b.WriteString("- Skill details: trim to the most vacancy-relevant keywords; remove generic filler.\n")
 	b.WriteString("- Do NOT drop any job entry or skill group — just make each one shorter.\n")

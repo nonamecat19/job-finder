@@ -14,6 +14,7 @@ type (
 	VacancyAnalysis = domain.VacancyAnalysis
 
 	AdHocInput = application.AdHocInput
+	Routers    = application.GenerationRouters
 	Service    = application.Service
 
 	HtmlPdfRenderer  = infrastructure.HtmlPdfRenderer

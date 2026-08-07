@@ -16,10 +16,14 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-const tailorTimeout = 14 * time.Minute
+const (
+	tailorTimeout      = 14 * time.Minute
+	coverLetterTimeout = 5 * time.Minute
+)
 
 type DocumentGenerator interface {
-	GenerateAdHoc(ctx context.Context, in generation.AdHocInput) (resume, coverLetter dto.GeneratedDocumentDto, err error)
+	GenerateAdHoc(ctx context.Context, in generation.AdHocInput) (resume dto.GeneratedDocumentDto, err error)
+	GenerateCoverLetterFor(ctx context.Context, resumeID string) (dto.GeneratedDocumentDto, error)
 	ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocumentDto, error)
 	GetDocumentDto(ctx context.Context, id string) (dto.GeneratedDocumentDto, error)
 	UpdateDocument(ctx context.Context, id, text string) (dto.GeneratedDocumentDto, error)
@@ -32,6 +36,7 @@ type DocumentsHandler struct {
 
 func (h *DocumentsHandler) Mount(r chi.Router) {
 	r.Post("/documents/tailor", h.tailor)
+	r.Post("/documents/{id}/cover-letter", h.coverLetter)
 	r.Get("/documents/ad-hoc", h.listAdHoc)
 	r.Get("/documents/{id}", h.get)
 	r.Put("/documents/{id}", h.update)
@@ -72,7 +77,7 @@ func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), tailorTimeout)
 	defer cancel()
 
-	resume, coverLetter, err := h.Generation.GenerateAdHoc(ctx, generation.AdHocInput{
+	resume, err := h.Generation.GenerateAdHoc(ctx, generation.AdHocInput{
 		Vacancy: body.Vacancy, Company: body.Company, Title: body.Title, GroundingLevel: level, Hints: hints,
 	})
 	if err != nil {
@@ -81,8 +86,21 @@ func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"resume":      resume,
-		"coverLetter": coverLetter,
+		"coverLetter": nil,
 	})
+}
+
+func (h *DocumentsHandler) coverLetter(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), coverLetterTimeout)
+	defer cancel()
+
+	out, err := h.Generation.GenerateCoverLetterFor(ctx, id)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (h *DocumentsHandler) listAdHoc(w http.ResponseWriter, r *http.Request) {

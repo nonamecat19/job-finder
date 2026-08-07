@@ -38,16 +38,20 @@ func (f *fakeRenderer) deps() renderDeps {
 			}
 			return f.pages[len(f.pages)-1], nil
 		},
-		expand: func(context.Context, domain.RendercvMaster, domain.VacancyAnalysis, domain.GroundingLevel, domain.ShapeConfig) (domain.TailoredSections, error) {
+		expand: func(context.Context, domain.RendercvMaster, domain.VacancyAnalysis, domain.GroundingLevel, domain.ShapeConfig) (domain.TailoredSelection, error) {
 			f.expands++
 			if f.expandErr != nil {
-				return domain.TailoredSections{}, f.expandErr
+				return domain.TailoredSelection{}, f.expandErr
 			}
-			return domain.TailoredSections{Summary: "expanded"}, nil
+			return domain.TailoredSelection{Experience: []domain.TailoredExperience{
+				{Company: "Acme", Highlights: []string{"Did a thing", "expanded"}},
+			}}, nil
 		},
-		condense: func(context.Context, domain.RendercvMaster, domain.VacancyAnalysis, domain.GroundingLevel, domain.ShapeConfig) (domain.TailoredSections, error) {
+		condense: func(context.Context, domain.RendercvMaster, domain.VacancyAnalysis, domain.GroundingLevel, domain.ShapeConfig) (domain.TailoredSelection, error) {
 			f.condenses++
-			return domain.TailoredSections{Summary: "condensed"}, nil
+			return domain.TailoredSelection{Experience: []domain.TailoredExperience{
+				{Company: "Acme", Highlights: []string{"condensed"}},
+			}}, nil
 		},
 	}
 }
