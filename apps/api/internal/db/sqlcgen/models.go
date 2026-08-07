@@ -153,17 +153,22 @@ type FreshMatchNotification struct {
 }
 
 type GeneratedDocument struct {
-	ID        pgtype.UUID      `json:"id"`
-	JobId     pgtype.UUID      `json:"jobId"`
-	Type      string           `json:"type"`
-	Version   int32            `json:"version"`
-	Content   []byte           `json:"content"`
-	PdfPath   *string          `json:"pdfPath"`
-	Model     string           `json:"model"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	Company   *string          `json:"company"`
-	Title     *string          `json:"title"`
-	Vacancy   *string          `json:"vacancy"`
+	ID                 pgtype.UUID      `json:"id"`
+	JobId              pgtype.UUID      `json:"jobId"`
+	Type               string           `json:"type"`
+	Version            int32            `json:"version"`
+	Content            []byte           `json:"content"`
+	PdfPath            *string          `json:"pdfPath"`
+	Model              string           `json:"model"`
+	CreatedAt          pgtype.Timestamp `json:"createdAt"`
+	Company            *string          `json:"company"`
+	Title              *string          `json:"title"`
+	Vacancy            *string          `json:"vacancy"`
+	SummaryModel       *string          `json:"summaryModel"`
+	SummarySubstituted bool             `json:"summarySubstituted"`
+	SelectionModel     *string          `json:"selectionModel"`
+	SelectionEscalated bool             `json:"selectionEscalated"`
+	StageCostUsd       pgtype.Numeric   `json:"stageCostUsd"`
 }
 
 type HostRetrievalState struct {

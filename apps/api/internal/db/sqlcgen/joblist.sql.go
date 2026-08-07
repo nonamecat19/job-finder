@@ -95,7 +95,7 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 }
 
 const getJobDocuments = `-- name: GetJobDocuments :many
-SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy FROM "GeneratedDocument" WHERE "jobId" = $1 ORDER BY "createdAt" DESC
+SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd" FROM "GeneratedDocument" WHERE "jobId" = $1 ORDER BY "createdAt" DESC
 `
 
 func (q *Queries) GetJobDocuments(ctx context.Context, jobid pgtype.UUID) ([]GeneratedDocument, error) {
@@ -119,6 +119,11 @@ func (q *Queries) GetJobDocuments(ctx context.Context, jobid pgtype.UUID) ([]Gen
 			&i.Company,
 			&i.Title,
 			&i.Vacancy,
+			&i.SummaryModel,
+			&i.SummarySubstituted,
+			&i.SelectionModel,
+			&i.SelectionEscalated,
+			&i.StageCostUsd,
 		); err != nil {
 			return nil, err
 		}
