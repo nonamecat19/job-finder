@@ -128,12 +128,34 @@ at request time, which advances the chain (030-FR-007).
 > parse — **and the fallback chain will not rescue that**, because the request succeeded.
 > Model IDs are verified against each provider's live catalogue at implementation time and
 > pinned with a dated comment.
-
+>
+> **The same trap, for tools (037-FR-018).** A tier that does not accept a `tools` array gets
+> the request without one and answers normally. `model_info.supports_function_calling` on each
+> tier of a tool-using chain is **documentation that a test reads, not a control the proxy
+> enforces**: LiteLLM uses `model_info` for its model-info endpoint and cost bookkeeping, and
+> it neither refuses the request nor skips the tier. `gateway_config_test.go` asserts the
+> declaration exists so that adding a tier forces the question to be asked; the only mechanism
+> that catches a dropped `tools` array **at runtime** is the loop's required first round, which
+> returns `not_tool_capable` rather than an answer.
+>
+> **And it couples across every task (037-FR-018a).** There is exactly one `local` deployment
+> and every chain terminates at it (030-FR-008), so declaring it tool-capable for one chain
+> declares it tool-capable for every task in the system. Repointing `OLLAMA_URL` or changing
+> the local model for one task's benefit silently changes that claim for all of them.
 
 **Change contract (030-C6).** Changing which model serves a task requires exactly: edit this
 file → `docker compose restart litellm`. No application rebuild, no migration, no dashboard
 action.
 
+**These guardrails run in CI, and only because the path filter says so (037-FR-030).** The
+`go` filter in `.github/workflows/api-ci.yml` includes `gateway/**`. Until 037 it matched only
+`apps/api/**` and two scripts, which meant a pull request touching *only* `gateway/config.yaml`
+skipped the `go-test` job entirely — so the change that most needs `gateway_config_test.go` was
+the one change that never ran it. Any claim in this repository that a check "fails the build"
+should name the job that runs it; this one is `go-test`.
+
+Config can also be hot-reloaded without a restart where the admin API is enabled:
+`curl -X POST http://litellm:4000/config/reload -H "Authorization: Bearer $LITELLM_MASTER_KEY"`.
 
 ### 2.2 Generation stage keys (035-split-model-generation)
 
@@ -220,8 +242,10 @@ per-task deadline and heartbeat middleware in § 4.
 
 **What is built instead**, when the need is real rather than anticipated:
 
-- Multi-turn and tool calling: extend this port (`CompleteChat`, a bounded typed tool loop). Owned
-  here, no new module requirement.
+- Multi-turn and tool calling: extend this port. **Shipped in 037** and still no new module
+  requirement — `CompleteChat` on `domain.Provider`, `CompleteStructuredChat[T]` sharing
+  `CompleteStructured`'s body, and a bounded typed tool loop at
+  `internal/platform/llm/application/toolloop`. See § 2.5.
 - Provider abstraction, failover, retry, model swap without rebuild: already the LiteLLM proxy's job
   (§ 2.1). A framework would duplicate it, worse.
 - Durable multi-step orchestration: already asynq (§ 4).
@@ -278,6 +302,91 @@ name).
 > becomes the resolved model once a fallback fires. `x-litellm-model-name` is authoritative on
 > both paths. Logging must never change error classification or introduce a failure mode — an
 > absent or unparsable field logs `served_model=unknown`, never an error.
+
+### 2.5 Conversations and the typed tool loop (037)
+
+The port speaks conversations, and a model can look things up within a fence.
+
+**The seam.** `domain.Provider` gained one method:
+
+```go
+CompleteChat(ctx, msgs []Message, opts *CompleteOptions) (ChatResult, error)
+```
+
+`Complete` and `CompleteJSON` are now **shims** onto it and keep their exact signatures, so no call
+site changed. Seven differences between the two entry points had to survive that rewrite, and each
+has its own assertion in `golden_request_test.go` (both adapters) and `retry_sideeffects_test.go`.
+Two are worth naming here because they read as tidiable and are not:
+
+- **Ollama `Complete` forwards `MaxTokens` as `num_predict`; Ollama `CompleteJSON` never does.** A
+  token cap on a structured generation truncates JSON mid-object: invalid output, three re-prompts,
+  a failure nothing reports. This is the terminal tier of every chain.
+- **One `CompleteJSON` that takes the strict-schema retry reports served model and usage twice**,
+  because it re-enters the request path. Features 035 and 036 read both.
+
+`CompleteStructuredChat[T]` is `CompleteStructured[T]` over a conversation — the same schema cache,
+strictification, fence stripping, retry count and `Validator` hook, one body, not two.
+`CompleteStructured` is now that function called with `[system?, user]`.
+
+**The loop** — `internal/platform/llm/application/toolloop`, `Run[T]`. Bounds, all fixed before the
+first request and none derivable from model output or a tool result:
+
+| Bound | Default | Note |
+|---|---|---|
+| `MaxRounds` | **4** | Two lookups plus one recovery from a refusal |
+| `PerToolTimeout` | 10s | Per lookup, independent of `ctx` |
+| `MaxResultBytes` | 32 KB | Truncation is **stated in the result**, never silent |
+| `MaxTotalCostUSD` | $0.50 | Accumulated across rounds from the proxy's own cost figure |
+| overall deadline | **required on `ctx`** | `Run` errors before issuing any request if the context has none |
+
+There is deliberately **no** overall-deadline field: `ctx` is the single deadline, because a second
+competing timeout is what produced 030's 830-second hang. But "no second timer" is not "bounded" —
+the proxy's own worst case is 600s per call, so four rounds without a caller deadline is forty
+minutes. Hence the requirement rather than a default.
+
+Round one sends `tool_choice: "required"` and every later round `"auto"`. That asymmetry is the whole
+of the not-tool-capable detection: under `required` a tool-capable model must emit a call, so its
+absence is diagnostic; under `auto` a model that chose not to look anything up and a model whose
+`tools` array was dropped in transit are indistinguishable.
+
+Failure never leaves the loop as an exception. A refused call, a failed call, a timed-out call and a
+truncated result all become `tool` messages the model can react to. Only five stop reasons end an
+exchange — `answered`, `max_rounds`, `deadline`, `cost_ceiling`, `not_tool_capable` — and only
+`answered` produces a value. Every other reason returns the zero `T` **and** an error.
+
+**Tool output is untrusted.** Lookups read the platform's own database, but what is in it came from
+job postings other people wrote. Each result is delimited with a marker its own bytes cannot close,
+and the exchange's system framing states that result content is data. A heuristic sets
+`SuspectedInjection` on the round's record — that is a **detector, not a filter**; it records and does
+not sanitise. What actually contains an injection is structural: the toolset, the bounds, the round
+count, the tool choice and the answer's schema are fixed before the first request and never re-read
+from the conversation.
+
+**The read-only rule (FR-008).** A lookup is a read. Enforcement is
+`apps/api/internal/toolfence_test.go`, which discovers tool-registering packages by import, requires
+each to appear in an explicit declared list, and resolves each one's **transitive** closure with
+`go list -deps` (through `os/exec` — not `x/tools/go/packages`, which is not in `go.mod`). Forbidden:
+`internal/notifier`, `internal/outreach`, `internal/postage`, `internal/applications`,
+`internal/retrieval` and `internal/jobsources`. The last two matter more than they look: `retrieval`
+performs outbound HTTP and drives a headless browser, so a lookup importing it would reach the open
+internet from inside a model's decision loop.
+
+**Three things that fence cannot catch**, stated because an undocumented limit gets trusted for
+things it does not do:
+
+1. A lookup that builds its own request from `net/http`. That package cannot be forbidden.
+2. **A closure over an already-injected capability** — the largest hole. Handlers are closures; one
+   defined inside a service that already holds an outreach client can call it while the lookup's own
+   package imports nothing. No import-graph analysis sees this, which is why a small, enumerated,
+   reviewed toolset is a required complementary control rather than a reassurance.
+3. It sees packages, not call paths, so it can fail on a dependency no lookup can actually reach.
+   That direction is deliberate: it fails closed.
+
+**Consumer.** `internal/salary/application` estimates a band through two read-only lookups
+(`lookup_comparable_bands`, `get_posting_details`). The service's two writes stay in `Infer`, outside
+the model call. When the exchange stops for any reason other than `answered`, nothing is persisted —
+a fallback to a low-confidence band would write a Principle II fabrication to the database and label
+it an estimate.
 
 ## 3. Boundaries
 
