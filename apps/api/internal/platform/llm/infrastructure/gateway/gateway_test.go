@@ -123,8 +123,48 @@ func TestGatewayCompleteJSONSetsResponseFormat(t *testing.T) {
 	if gotBody.Model != "generation" {
 		t.Errorf("request model = %q, want generation", gotBody.Model)
 	}
-	if gotBody.ResponseFormat["type"] != "json_object" {
+	if gotBody.ResponseFormat == nil || gotBody.ResponseFormat.Type != "json_object" {
 		t.Errorf("response_format = %+v, want json_object", gotBody.ResponseFormat)
+	}
+}
+
+func TestGatewayCompleteJSONStrictSendsJsonSchema(t *testing.T) {
+	var gotBody chatRequest
+	p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		_ = json.NewEncoder(w).Encode(chatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{{Message: struct {
+				Content string `json:"content"`
+			}{Content: "{}"}}},
+		})
+	})
+	opts := &domain.CompleteOptions{
+		Model:        "generation",
+		ResponseMode: domain.ResponseModeStrict,
+		JSONSchema:   `{"type":"object","properties":{"summary":{"type":"string"}},"additionalProperties":false}`,
+	}
+	if _, err := p.CompleteJSON(context.Background(), "hi", opts); err != nil {
+		t.Fatalf("CompleteJSON: %v", err)
+	}
+	if gotBody.ResponseFormat == nil || gotBody.ResponseFormat.Type != "json_schema" {
+		t.Fatalf("response_format = %+v, want json_schema", gotBody.ResponseFormat)
+	}
+	if gotBody.ResponseFormat.JSONSchema == nil {
+		t.Fatal("json_schema block missing")
+	}
+	if !gotBody.ResponseFormat.JSONSchema.Strict {
+		t.Error("json_schema.strict = false, want true")
+	}
+	schema := gotBody.ResponseFormat.JSONSchema.Schema
+	if schema == nil {
+		t.Fatal("json_schema.schema is nil")
+	}
+	if ap, ok := schema["additionalProperties"].(bool); !ok || ap {
+		t.Errorf("json_schema.schema additionalProperties = %v, want false", schema["additionalProperties"])
 	}
 }
 

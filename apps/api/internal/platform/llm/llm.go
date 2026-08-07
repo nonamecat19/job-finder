@@ -22,6 +22,7 @@ type (
 	Provider        = domain.Provider
 	Validator       = domain.Validator
 	CompleteOptions = domain.CompleteOptions
+	ResponseMode    = domain.ResponseMode
 
 	Router        = application.Router
 	ProviderClass = application.ProviderClass
@@ -33,6 +34,10 @@ type (
 const (
 	ProviderClassLocal  = application.ProviderClassLocal
 	ProviderClassHosted = application.ProviderClassHosted
+
+	// 033: structured-output strictness modes.
+	ResponseModeJSON   = domain.ResponseModeJSON
+	ResponseModeStrict = domain.ResponseModeStrict
 )
 
 var (
