@@ -178,22 +178,53 @@ model_list:
       api_key: os.environ/OPENROUTER_API_KEY
 
   # --- default ---
+  # --- default (salary, outreach, recruiter extraction) ---
+  #
+  # 037: every tier of this chain carries a model_info.supports_function_calling
+  # declaration, because `default` is the key the salary tool loop runs on.
+  #
+  # READ THIS BEFORE TRUSTING THE ANNOTATION. It is DOCUMENTATION THAT A TEST
+  # READS, NOT A CONTROL THE PROXY ENFORCES. LiteLLM uses model_info for its
+  # model-info endpoint and cost bookkeeping; it does not refuse a request, skip
+  # a tier, or stop `drop_params: true` (below) from silently dropping a `tools`
+  # array an upstream will not accept. The request then succeeds without tools —
+  # the identical capability trap this file already documents for
+  # response_format, where "the fallback chain will not rescue that, because the
+  # request succeeded".
+  #
+  # The line exists so gateway_config_test.go can assert that somebody
+  # considered tool capability when adding a tier. The only mechanism that
+  # catches a dropped tools array at runtime is the loop's required first round,
+  # which returns not_tool_capable rather than an answer.
+  #
+  # Values below reflect each provider's published tool-calling support as of
+  # 2026-08-07. They are a documented claim, not a live probe: if a tier starts
+  # answering the salary loop's first round with prose, this is the first line
+  # to re-verify.
   - model_name: default
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
+    model_info:
+      supports_function_calling: true
   - model_name: default-groq
     litellm_params:
       model: groq/llama-3.3-70b-versatile
       api_key: os.environ/GROQ_API_KEY
+    model_info:
+      supports_function_calling: true
   - model_name: default-cohere
     litellm_params:
       model: cohere_chat/command-r-08-2024
       api_key: os.environ/COHERE_API_KEY
+    model_info:
+      supports_function_calling: true
   - model_name: default-openrouter
     litellm_params:
       model: openrouter/openai/gpt-4o-mini
       api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      supports_function_calling: true
 
   # --- local (terminal tier, shared by every task, FR-008) ---
   # model_info declares this deployment as free (036 FR-014). Without an
@@ -209,6 +240,15 @@ model_list:
     model_info:
       input_cost_per_token: 0
       output_cost_per_token: 0
+      # 037 FR-018a: there is exactly ONE local deployment and every task chain
+      # ends at it. Declaring it tool-capable here declares it tool-capable FOR
+      # EVERY TASK IN THE SYSTEM, not just for the one chain that needed the
+      # claim. That is a statement about the model this deployment currently
+      # points at (gpt-oss:120b-cloud, which supports tool calling), and it has
+      # to be re-checked whenever OLLAMA_URL is repointed or the model changes —
+      # a swap made for one task's benefit silently changes this claim for all
+      # of them.
+      supports_function_calling: true
 
 litellm_settings:
   # --- observability (036-langfuse-llm-observability) ---

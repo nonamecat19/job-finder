@@ -12,7 +12,7 @@ jobs:
   #
   # Deliberately NOT a top-level `on: paths:` filter: a workflow skipped that
   # way never reports its checks at all, so once the Phase 2 ruleset in
-  # specs/domains/platform-operations.md § 2.2 is applied
+  # specs/domains/platform-operations.md ï¿½ 2.2 is applied
   # every required check would sit at "Expected" forever and block the merge.
   # A job skipped by `if:` reports as skipped, which GitHub counts as passing.
   #
@@ -53,6 +53,17 @@ jobs:
               - 'apps/api/**'
               - 'scripts/sqlc-check.sh'
               - 'scripts/tygo-check.sh'
+              # gateway/** is here because apps/api/internal/platform/llm/
+              # gateway_config_test.go reads gateway/config.yaml and asserts the
+              # routing contract against it: that every chain terminates at the
+              # local tier (035), that no literal credential appears, that the
+              # observability callbacks are global (036), and that every tier of
+              # a tool-using chain declares its tool capability (037).
+              #
+              # Without this line a pull request touching ONLY gateway/config.yaml
+              # skips the go-test job entirely â€” so the change that most needs
+              # those guardrails is the one change that never runs them.
+              - 'gateway/**'
             sqlc:
               - 'scripts/sqlc-check.sh'
               - 'apps/api/sqlc.yaml'

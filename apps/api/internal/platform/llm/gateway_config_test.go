@@ -264,7 +264,14 @@ var gatewayInvariants = []struct {
 	{"observability callbacks are declared globally", checkObservabilityCallbacks},
 	{"036 did not disturb the failover timing arithmetic", checkTimingArithmeticUnchanged},
 	{"the local terminal tier declares a zero cost", checkLocalTierIsPricedFree},
+	{"every tier of a tool-using chain declares tool capability", checkToolChainsDeclareCapability},
 }
+
+// toolUsingTaskKeys are the task keys an application tool loop runs on (037
+// FR-018). Listed explicitly, in the style of requestedGenerationGroups: a
+// derived list would go quiet the moment a consumer was removed, which is
+// exactly when somebody is most likely to have forgotten the annotation.
+var toolUsingTaskKeys = []string{"default"}
 
 // Invariant 6: both callbacks declared, and declared globally (036-C1-1/C1-2).
 //
@@ -350,6 +357,59 @@ func checkLocalTierIsPricedFree(c *gatewayConfig) []string {
 	return []string{fmt.Sprintf("no %q deployment found", terminalTier)}
 }
 
+// Invariant 9: every tier of a tool-using chain says whether it can call tools
+// (037 FR-018, C6-1/C6-2/C6-5).
+//
+// What this asserts is that somebody *considered* the question when adding a
+// tier — not that the proxy will act on the answer. It will not: LiteLLM reads
+// model_info for its model-info endpoint and cost bookkeeping, and
+// `drop_params: true` silently drops a `tools` array an upstream will not
+// accept, so the request succeeds without tools and the fallback chain never
+// engages. That is the same capability trap this repository already documents
+// for response_format.
+//
+// The runtime backstop is elsewhere: the loop's first round is sent with
+// tool_choice "required", and prose in reply to it returns not_tool_capable
+// rather than an answer.
+func checkToolChainsDeclareCapability(c *gatewayConfig) []string {
+	declared := map[string]bool{}
+	for _, d := range c.ModelList {
+		if v, ok := d.ModelInfo["supports_function_calling"]; ok {
+			if b, isBool := v.(bool); isBool && b {
+				declared[d.ModelName] = true
+			}
+		}
+	}
+
+	var violations []string
+	for _, key := range toolUsingTaskKeys {
+		chain := append([]string{key}, chainFor(c, key)...)
+		for _, tier := range chain {
+			if !declared[tier] {
+				violations = append(violations, fmt.Sprintf(
+					"tier %q of tool-using chain %q declares no model_info.supports_function_calling: true; "+
+						"a tier added to a tool chain without a capability decision fails the loop's required first round at runtime (037-FR-018)",
+					tier, key))
+			}
+		}
+		if len(chain) > 0 && chain[len(chain)-1] != terminalTier {
+			violations = append(violations, fmt.Sprintf(
+				"tool-using chain %q does not terminate at %q; Principle V holds for tool chains too (037-C6-3)", key, terminalTier))
+		}
+	}
+	return violations
+}
+
+// chainFor returns the declared fallback chain for a task key, or nil.
+func chainFor(c *gatewayConfig, key string) []string {
+	for _, entry := range c.LiteLLMSettings.Fallbacks {
+		if chain, ok := entry[key]; ok {
+			return chain
+		}
+	}
+	return nil
+}
+
 func TestGatewayConfigHonoursRoutingContract(t *testing.T) {
 	cfg := loadGatewayConfig(t)
 	for _, inv := range gatewayInvariants {
@@ -377,9 +437,15 @@ model_list:
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: generation-summary
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
+  - model_name: default
+    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
+    model_info: {supports_function_calling: true}
+  - model_name: default-groq
+    litellm_params: {model: groq/llama-3.3-70b-versatile, api_key: os.environ/GROQ_API_KEY}
+    model_info: {supports_function_calling: true}
   - model_name: local
     litellm_params: {model: ollama_chat/gpt-oss:120b-cloud, api_key: os.environ/OLLAMA_KEY}
-    model_info: {input_cost_per_token: 0, output_cost_per_token: 0}
+    model_info: {input_cost_per_token: 0, output_cost_per_token: 0, supports_function_calling: true}
 litellm_settings:
   success_callback: ["langfuse"]
   failure_callback: ["langfuse"]
@@ -393,6 +459,7 @@ litellm_settings:
     - generation-select: [local]
     - generation-select-premium: [local]
     - generation-summary: [local]
+    - default: [default-groq, local]
 `
 
 func fixture(t *testing.T, yamlText string) *gatewayConfig {
@@ -493,9 +560,33 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			name:  "local tier loses its zero cost",
 			check: checkLocalTierIsPricedFree,
 			mutate: func(s string) string {
-				return strings.Replace(s, "    model_info: {input_cost_per_token: 0, output_cost_per_token: 0}\n", "", 1)
+				return strings.Replace(s, "    model_info: {input_cost_per_token: 0, output_cost_per_token: 0, supports_function_calling: true}\n", "", 1)
 			},
 			wantSub: "declares no model_info.input_cost_per_token",
+		},
+		{
+			// The case C6-5 names: a tier added to a tool chain without a
+			// capability decision. It answers the loop's required first round
+			// with prose, which reads as a model problem rather than a config
+			// one unless something says otherwise here.
+			name:  "a tool-chain tier is added without a capability declaration",
+			check: checkToolChainsDeclareCapability,
+			mutate: func(s string) string {
+				return strings.Replace(s,
+					"    - default: [default-groq, local]",
+					"    - default: [default-groq, default-mystery, local]", 1) + "\n"
+			},
+			wantSub: "declares no model_info.supports_function_calling",
+		},
+		{
+			name:  "the shared local tier loses its capability declaration",
+			check: checkToolChainsDeclareCapability,
+			mutate: func(s string) string {
+				return strings.Replace(s,
+					"model_info: {input_cost_per_token: 0, output_cost_per_token: 0, supports_function_calling: true}",
+					"model_info: {input_cost_per_token: 0, output_cost_per_token: 0}", 1)
+			},
+			wantSub: "tier \"local\"",
 		},
 	}
 
