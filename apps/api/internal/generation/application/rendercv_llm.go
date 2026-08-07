@@ -88,8 +88,6 @@ func summarySelectRange(cfg domain.ShapeConfig) (int, int) {
 	return atLeastOne(cfg.SummaryLines - 1), atLeastOne(cfg.SummaryLines)
 }
 
-
-
 // bulletsExpandRange asks for the configured cap plus a couple, matching the
 // old "aim for 10-12 per job" against a default max of 10.
 func bulletsExpandRange(cfg domain.ShapeConfig) (int, int) {
