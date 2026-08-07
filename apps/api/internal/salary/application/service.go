@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/platform/llm/application/toolloop"
 	"github.com/job-finder/api/internal/salary/domain"
 )
 
@@ -126,20 +128,58 @@ func (s *Service) llmInfer(ctx context.Context, job sqlcgen.Job) (domain.SalaryB
 		model = s.llmc.ModelName()
 	}
 
-	band, err := llm.CompleteStructured[domain.SalaryBand](ctx, s.llmc, prompt, &llm.CompleteOptions{
-		System: "You are a compensation analyst. Estimate realistic salary ranges based on job title, company, and location.",
-		Model:  model,
-	})
+	opts := &llm.CompleteOptions{
+		System: "You are a compensation analyst. Estimate realistic salary ranges based on job title, company, and location. " +
+			"Look up comparable bands and read the full posting before answering — an estimate made without checking is a guess.",
+		Model:        model,
+		ResponseMode: llm.ResponseModeStrict,
+	}
+
+	tools, err := s.newSalaryToolset()
+	if err != nil {
+		return domain.SalaryBand{}, err
+	}
+	ts, err := toolloop.NewToolset(tools...)
 	if err != nil {
 		return domain.SalaryBand{}, err
 	}
 
+	// The loop requires a deadline, and this is the call site that has to supply
+	// one: the worker's own AI_TASK_TIMEOUT_SALARY governs the whole task, but a
+	// context that arrives here without a deadline would let a four-round
+	// exchange run for as long as the proxy's worst case allows. A local bound
+	// makes that impossible rather than unlikely.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, salaryExchangeTimeout)
+		defer cancel()
+	}
+
+	// Passing the job id explicitly rather than letting the model guess one:
+	// get_posting_details reads by id, and an id it invented would either fail
+	// to parse or read a different posting.
+	msgs := llm.PromptMessages("", prompt+"\n\nThe id of this posting is "+dbutil.UUIDString(job.ID)+".")
+
+	res, err := toolloop.Run[domain.SalaryBand](ctx, s.llmc, ts, msgs, opts, toolloop.Bounds{})
+	if err != nil {
+		// FR-022 / C7-3: every non-answered stop is an error, and Infer's
+		// caller persists nothing on an error. A conversion that fell back to a
+		// low-confidence band here would write a fabrication to the database
+		// and mark it as an estimate.
+		return domain.SalaryBand{}, fmt.Errorf("salary exchange stopped as %s: %w", res.StopReason, err)
+	}
+
+	band := res.Value
 	band.Source = domain.SourceLLM
 	if band.Confidence == 0 {
 		band.Confidence = 0.3
 	}
 	return band, nil
 }
+
+// salaryExchangeTimeout bounds one salary exchange when the caller supplied no
+// deadline of its own.
+const salaryExchangeTimeout = 4 * time.Minute
 
 func (s *Service) persistJobSalary(ctx context.Context, uid pgtype.UUID, band domain.SalaryBand) error {
 	return s.q.UpdateJobSalary(ctx, sqlcgen.UpdateJobSalaryParams{
