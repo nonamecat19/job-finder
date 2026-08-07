@@ -18,6 +18,26 @@ import (
 
 var ErrInvalidResponse = errors.New("llm: structured output failed after all retries")
 
+// ResponseMode controls how the provider constrains structured output.
+// The zero value (ResponseModeJSON) preserves the pre-033 behaviour: the
+// request carries response_format {"type":"json_object"} and the model is
+// trusted to produce JSON, with CompleteStructured's parse-and-retry loop
+// catching malformed output. ResponseModeStrict sends a strict JSON Schema
+// (response_format {"type":"json_schema","json_schema":{...,"strict":true}})
+// so the provider rejects extra fields at the API level rather than relying
+// on prose alone — the first line of defense against fabrication (033 FR-005).
+type ResponseMode int
+
+const (
+	// ResponseModeJSON is the legacy mode: json_object, no schema enforcement.
+	// Every existing caller that does not set ResponseMode gets this.
+	ResponseModeJSON ResponseMode = iota
+	// ResponseModeStrict sends a strict JSON Schema derived from the target
+	// type so the model cannot emit unexpected fields. Only meaningful for
+	// CompleteJSON (structured calls); ignored by Complete (plain text).
+	ResponseModeStrict
+)
+
 // CompleteOptions mirrors llm.types.ts CompleteOptions. Temperature/MaxTokens
 // are pointers so "unset" (use provider default) is distinguishable from an
 // explicit zero, matching the TS `opts?: { temperature?: number }` semantics.
@@ -28,6 +48,15 @@ type CompleteOptions struct {
 	// Model overrides the provider's default model for this call (per-task
 	// model selection). Empty uses the provider default.
 	Model string
+	// ResponseMode controls structured-output strictness (033). Zero value
+	// (ResponseModeJSON) is backward-compatible — existing callers that do
+	// not set it keep the json_object behaviour exactly.
+	ResponseMode ResponseMode
+	// JSONSchema carries the marshalled JSON Schema string for
+	// ResponseModeStrict calls, set by CompleteStructured so the provider
+	// adapter can embed it in the request without re-generating it. Empty
+	// for ResponseModeJSON calls.
+	JSONSchema string
 }
 
 // ModelOr returns the per-call model override, or def if opts is nil/unset.
@@ -131,6 +160,18 @@ func schemaFor(t reflect.Type) string {
 func CompleteStructured[T any](ctx context.Context, p Provider, prompt string, opts *CompleteOptions) (T, error) {
 	var zero T
 	schema := schemaFor(reflect.TypeOf(zero))
+
+	if opts == nil {
+		opts = &CompleteOptions{}
+	}
+	// When the caller opts into strict mode, attach the schema so the
+	// provider adapter can embed it in response_format.json_schema. A
+	// caller that leaves the zero value (ResponseModeJSON) keeps the
+	// legacy behaviour: the schema is still appended to the prompt as
+	// text below, but the wire request stays json_object.
+	if opts.ResponseMode == ResponseModeStrict && opts.JSONSchema == "" {
+		opts.JSONSchema = schema
+	}
 
 	lastErr := ""
 	for attempt := 0; attempt <= structuredRetries; attempt++ {

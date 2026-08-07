@@ -84,7 +84,25 @@ type chatRequest struct {
 	Messages            []chatMessage     `json:"messages"`
 	Temperature         float64           `json:"temperature"`
 	MaxCompletionTokens *int              `json:"max_completion_tokens,omitempty"`
-	ResponseFormat      map[string]string `json:"response_format,omitempty"`
+	ResponseFormat      *responseFormat   `json:"response_format,omitempty"`
+}
+
+// responseFormat expresses the OpenAI response_format parameter in both its
+// forms: the legacy json_object mode and the strict json_schema mode (033
+// FR-005). The pointer is nil when no format is sent (plain-text Complete calls).
+type responseFormat struct {
+	Type       string      `json:"type"`                 // "json_object" | "json_schema"
+	JSONSchema *jsonSchema `json:"json_schema,omitempty"` // present only for json_schema
+}
+
+// jsonSchema is the strict-schema payload sent under response_format. The
+// schema is a JSON object (not a string) so the provider validates field
+// names and types at the API level. Strict=true means additionalProperties
+// is false and every required field is enforced.
+type jsonSchema struct {
+	Name   string         `json:"name"`
+	Schema map[string]any `json:"schema"`
+	Strict bool           `json:"strict"`
 }
 
 type chatResponse struct {
@@ -197,13 +215,63 @@ func (g *Provider) CompleteJSON(ctx context.Context, prompt string, opts *domain
 	}
 	messages = append(messages, chatMessage{Role: "user", Content: prompt})
 
-	return g.chat(ctx, chatRequest{
-		Model:          opts.ModelOr(g.ModelName()),
-		Stream:         false,
-		Messages:       messages,
-		Temperature:    opts.Temp(0.1),
-		ResponseFormat: map[string]string{"type": "json_object"},
-	})
+	req := chatRequest{
+		Model:       opts.ModelOr(g.ModelName()),
+		Stream:      false,
+		Messages:    messages,
+		Temperature: opts.Temp(0.1),
+	}
+	if opts != nil && opts.MaxTokens != nil {
+		req.MaxCompletionTokens = opts.MaxTokens
+	}
+
+	strictMode := opts != nil && opts.ResponseMode == domain.ResponseModeStrict && opts.JSONSchema != ""
+	if strictMode {
+		var schemaMap map[string]any
+		if err := json.Unmarshal([]byte(opts.JSONSchema), &schemaMap); err == nil {
+			req.ResponseFormat = &responseFormat{
+				Type: "json_schema",
+				JSONSchema: &jsonSchema{
+					Name:   "tailored_output",
+					Schema: schemaMap,
+					Strict: true,
+				},
+			}
+		} else {
+			// Schema parse failure — fall back to json_object so the call
+			// still goes through with the prompt-appended schema text.
+			strictMode = false
+			req.ResponseFormat = &responseFormat{Type: "json_object"}
+		}
+	} else {
+		req.ResponseFormat = &responseFormat{Type: "json_object"}
+	}
+
+	text, err := g.chat(ctx, req)
+	if err != nil {
+		// 033 FR-006: if the provider rejected the strict schema (a 400/422
+		// that often signals response_format is unsupported or dropped),
+		// retry once with json_object mode before propagating the error.
+		// This prevents the 030-C5 capability trap at runtime — the
+		// existing JSON-parse retry loop in CompleteStructured handles
+		// any malformed output from the fallback.
+		if strictMode && isResponseFormatRejection(err) {
+			req.ResponseFormat = &responseFormat{Type: "json_object"}
+			return g.chat(ctx, req)
+		}
+	}
+	return text, err
+}
+
+// isResponseFormatRejection returns true when the error suggests the provider
+// did not accept the response_format parameter (a 400/422 from the proxy
+// classifying as an unavailable/unsupported model or param). This is the
+// runtime guard for the 030-C5 capability trap: drop_params:true would
+// silently drop an unsupported json_schema, degrading into prose the app
+// cannot parse. Rather than rely on config-time verification alone, this
+// fallback catches a provider that rejects the param loudly.
+func isResponseFormatRejection(err error) bool {
+	return errors.Is(err, shared.ErrModelUnavailable) || errors.Is(err, shared.ErrInvalidResponse)
 }
 
 // Embed delegates to the local Ollama embedder — the proxy offers no
