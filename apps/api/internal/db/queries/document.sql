@@ -6,9 +6,10 @@ WHERE "jobId" = $1 AND "type" = $2;
 -- name: InsertGeneratedDocument :one
 INSERT INTO "GeneratedDocument" (
 	"jobId", "type", "version", "content", "pdfPath", "model", "company", "title", "vacancy",
-	"summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd"
+	"summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd",
+	"summaryOptionId"
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING *;
 
 -- name: ListDocumentsForJob :many

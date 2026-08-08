@@ -169,6 +169,7 @@ type GeneratedDocument struct {
 	SelectionModel     *string          `json:"selectionModel"`
 	SelectionEscalated bool             `json:"selectionEscalated"`
 	StageCostUsd       pgtype.Numeric   `json:"stageCostUsd"`
+	SummaryOptionId    *string          `json:"summaryOptionId"`
 }
 
 type HostRetrievalState struct {
@@ -382,6 +383,12 @@ type Subscription struct {
 	LastRunAt pgtype.Timestamp `json:"lastRunAt"`
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
 	Cron      string           `json:"cron"`
+}
+
+type SummaryModelSetting struct {
+	ID        string           `json:"id"`
+	OptionId  string           `json:"optionId"`
+	UpdatedAt pgtype.Timestamp `json:"updatedAt"`
 }
 
 type SynonymOverride struct {

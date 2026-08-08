@@ -12,7 +12,7 @@ import (
 )
 
 const getDocumentByID = `-- name: GetDocumentByID :one
-SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd" FROM "GeneratedDocument" WHERE "id" = $1
+SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd", "summaryOptionId" FROM "GeneratedDocument" WHERE "id" = $1
 `
 
 func (q *Queries) GetDocumentByID(ctx context.Context, id pgtype.UUID) (GeneratedDocument, error) {
@@ -35,6 +35,7 @@ func (q *Queries) GetDocumentByID(ctx context.Context, id pgtype.UUID) (Generate
 		&i.SelectionModel,
 		&i.SelectionEscalated,
 		&i.StageCostUsd,
+		&i.SummaryOptionId,
 	)
 	return i, err
 }
@@ -42,10 +43,11 @@ func (q *Queries) GetDocumentByID(ctx context.Context, id pgtype.UUID) (Generate
 const insertGeneratedDocument = `-- name: InsertGeneratedDocument :one
 INSERT INTO "GeneratedDocument" (
 	"jobId", "type", "version", "content", "pdfPath", "model", "company", "title", "vacancy",
-	"summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd"
+	"summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd",
+	"summaryOptionId"
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd"
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+RETURNING id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd", "summaryOptionId"
 `
 
 type InsertGeneratedDocumentParams struct {
@@ -63,6 +65,7 @@ type InsertGeneratedDocumentParams struct {
 	SelectionModel     *string        `json:"selectionModel"`
 	SelectionEscalated bool           `json:"selectionEscalated"`
 	StageCostUsd       pgtype.Numeric `json:"stageCostUsd"`
+	SummaryOptionId    *string        `json:"summaryOptionId"`
 }
 
 func (q *Queries) InsertGeneratedDocument(ctx context.Context, arg InsertGeneratedDocumentParams) (GeneratedDocument, error) {
@@ -81,6 +84,7 @@ func (q *Queries) InsertGeneratedDocument(ctx context.Context, arg InsertGenerat
 		arg.SelectionModel,
 		arg.SelectionEscalated,
 		arg.StageCostUsd,
+		arg.SummaryOptionId,
 	)
 	var i GeneratedDocument
 	err := row.Scan(
@@ -100,12 +104,13 @@ func (q *Queries) InsertGeneratedDocument(ctx context.Context, arg InsertGenerat
 		&i.SelectionModel,
 		&i.SelectionEscalated,
 		&i.StageCostUsd,
+		&i.SummaryOptionId,
 	)
 	return i, err
 }
 
 const listAdHocDocuments = `-- name: ListAdHocDocuments :many
-SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd" FROM "GeneratedDocument"
+SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd", "summaryOptionId" FROM "GeneratedDocument"
 WHERE "jobId" IS NULL
 ORDER BY "createdAt" DESC
 `
@@ -136,6 +141,7 @@ func (q *Queries) ListAdHocDocuments(ctx context.Context) ([]GeneratedDocument, 
 			&i.SelectionModel,
 			&i.SelectionEscalated,
 			&i.StageCostUsd,
+			&i.SummaryOptionId,
 		); err != nil {
 			return nil, err
 		}
@@ -148,7 +154,7 @@ func (q *Queries) ListAdHocDocuments(ctx context.Context) ([]GeneratedDocument, 
 }
 
 const listDocumentsForJob = `-- name: ListDocumentsForJob :many
-SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd" FROM "GeneratedDocument"
+SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd", "summaryOptionId" FROM "GeneratedDocument"
 WHERE "jobId" = $1
 ORDER BY "type" ASC, "version" DESC
 `
@@ -179,6 +185,7 @@ func (q *Queries) ListDocumentsForJob(ctx context.Context, jobid pgtype.UUID) ([
 			&i.SelectionModel,
 			&i.SelectionEscalated,
 			&i.StageCostUsd,
+			&i.SummaryOptionId,
 		); err != nil {
 			return nil, err
 		}
@@ -211,7 +218,7 @@ func (q *Queries) MaxDocumentVersion(ctx context.Context, arg MaxDocumentVersion
 const updateDocumentContent = `-- name: UpdateDocumentContent :one
 UPDATE "GeneratedDocument" SET "content" = $2, "pdfPath" = $3
 WHERE "id" = $1
-RETURNING id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd"
+RETURNING id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd", "summaryOptionId"
 `
 
 type UpdateDocumentContentParams struct {
@@ -240,6 +247,7 @@ func (q *Queries) UpdateDocumentContent(ctx context.Context, arg UpdateDocumentC
 		&i.SelectionModel,
 		&i.SelectionEscalated,
 		&i.StageCostUsd,
+		&i.SummaryOptionId,
 	)
 	return i, err
 }
