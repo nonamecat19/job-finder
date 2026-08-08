@@ -4,9 +4,36 @@
 
 **Created**: 2026-08-07
 
-**Status**: Draft
+**Status**: Draft — **not planned, not built. Rescope before planning.**
 
 **Input**: User description: "current ai model for resume generation is not good as needed. the model should be more strict. investigate different models by quality/price from openrouter and add ability for user to pick one of 3-5 models for resume"
+
+## Standing note (added 2026-08-08)
+
+This spec has no `plan.md`, `research.md` or `tasks.md`, and no code answers to it — the grep for a
+model selector across `apps/dashboard`, `packages/shared` and `internal/generation` returns nothing.
+That is deliberate, but the reason was recorded only in the commit message that created this file
+(`d064c91`), where nobody looking at the feature directory would find it. Restating it here.
+
+**Two of this spec's three user stories have been overtaken.**
+
+- **US2 (curated options measured, not guessed)** is now 038's job. The scored golden-set harness
+  runs the six deterministic corpus cases against candidate models and writes a per-model,
+  per-case, per-stage artifact with cost, latency and served model. That is the measurement US2
+  asks for, and it exists —`go test -tags eval_live ./internal/generation/application/ -run
+  TestLiveComparison -eval.models <a>,<b>`. What US2 still lacks is one live invocation and a
+  decision about which 3-5 options to publish.
+- **US1 (the picker itself)** needs rescoping, not implementing as written. 035 split generation
+  into five stages served by different models. Offering the user a choice over *the* generation
+  model no longer maps onto anything: the mechanical stages (analyze, select) are not worth
+  exposing — the economy model does them as well as the premium one — and the choice that carries
+  real quality and cost is the **summary stage**. A picker over five stages is a settings panel
+  nobody wants; a picker over the summary is the feature the user actually asked for.
+- **US3** should be re-read against 035's per-stage cost recording before it is planned.
+
+**Before anyone runs `/speckit-plan` on this**: scope US1 down to a summary-stage choice, and cut
+or rewrite the FRs that assume a single generation model. Planning it as written would produce
+tasks against a pipeline shape that no longer exists.
 
 ## User Scenarios & Testing *(mandatory)*
 
