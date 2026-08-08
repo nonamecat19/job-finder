@@ -39,6 +39,12 @@ type StageOutcome struct {
 // measurement rather than estimate.
 type runProvenance struct {
 	stages []StageOutcome
+	// summaryOption is the id of the 034 catalogue option this run's summary
+	// was written with. The served model is already captured per stage, but a
+	// model name does not say which option the user picked: two options can
+	// resolve to the same upstream after a fallback, and the option is what the
+	// user chose and what the result surface has to show back to them.
+	summaryOption string
 }
 
 // observe runs fn with served-model and usage capture attached, then records
@@ -145,6 +151,10 @@ func withProvenance(params sqlcgen.InsertGeneratedDocumentParams, prov *runProve
 		return params
 	}
 	params.SummaryModel = prov.summaryModel()
+	if prov.summaryOption != "" {
+		opt := prov.summaryOption
+		params.SummaryOptionId = &opt
+	}
 	params.SummarySubstituted = prov.summarySubstituted()
 	params.SelectionModel = prov.selectionModel()
 	params.SelectionEscalated = prov.selectionEscalated()
