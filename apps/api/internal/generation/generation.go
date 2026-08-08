@@ -12,6 +12,7 @@ type (
 	GroundingLevel  = domain.GroundingLevel
 	VacancyHints    = domain.VacancyHints
 	VacancyAnalysis = domain.VacancyAnalysis
+	SummaryOption   = domain.SummaryOption
 
 	AdHocInput = application.AdHocInput
 	Routers    = application.GenerationRouters
@@ -33,6 +34,12 @@ var (
 	RendercvToText          = domain.RendercvToText
 	ParseRendercv           = domain.ParseRendercv
 	PrepareMasterForMarshal = domain.PrepareMasterForMarshal
+
+	// 034 summary-model choice.
+	SummaryOptions       = domain.SummaryOptions
+	DefaultSummaryOption = domain.DefaultSummaryOption
+	LookupSummaryOption  = domain.LookupSummaryOption
+	WithSummaryOption    = application.WithSummaryOption
 
 	sectionOrderKey = domain.SectionOrderKey
 

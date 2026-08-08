@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -63,6 +64,14 @@ type ShapeProvider interface {
 	Shape(ctx context.Context) domain.ShapeConfig
 }
 
+// SummaryModelProvider hands the pipeline the summary option the user picked
+// (034). Declared here for the same reason ShapeProvider is: so this package
+// never imports the settings package. *summarymodel.Service satisfies it
+// structurally.
+type SummaryModelProvider interface {
+	SummaryOption(ctx context.Context) domain.SummaryOption
+}
+
 // GenerationRouters is one LLM provider per generation stage. Each is a router
 // over the same gateway, differing only in the task key it asks for, so which
 // model serves a stage stays a deployment decision (035 FR-002/FR-003). Any of
@@ -74,8 +83,19 @@ type GenerationRouters struct {
 	// Premium serves the selection stage only after the economy model has
 	// returned incomplete output twice (035 FR-007).
 	Premium llm.Provider
+	// Summary serves the default (`standard`) option, and is the fallback for
+	// any option SummaryByOption does not carry. Keeping it a plain field
+	// rather than folding it into the map is what makes a caller that knows
+	// nothing about 034 — the eval harness, every existing test — behave
+	// exactly as it did before the feature existed.
 	Summary llm.Provider
-	Cover   llm.Provider
+	// SummaryByOption routes the non-default summary options a user can pick
+	// (034). One entry per hosted catalogue option; the self-hosted option
+	// resolves to a router with no gateway, which is the pre-split behaviour.
+	// A missing entry is not an error: an option is a routing preference, and a
+	// preference that can fail a resume run is a liability.
+	SummaryByOption map[string]llm.Provider
+	Cover           llm.Provider
 }
 
 type Service struct {
@@ -88,6 +108,60 @@ type Service struct {
 	masterPath   string
 	defaultLevel domain.GroundingLevel
 	shape        ShapeProvider
+	summaryModel SummaryModelProvider
+}
+
+// SetSummaryModelProvider installs the 034 port. It is a setter rather than a
+// NewService parameter because NewService already takes nine arguments and is
+// called from a dozen tests, every one of which would have to grow a nil for a
+// feature it does not exercise.
+func (s *Service) SetSummaryModelProvider(p SummaryModelProvider) { s.summaryModel = p }
+
+// summaryOption resolves the user's choice once, at the top of a run. Every
+// step downstream takes the resolved value, so a settings change mid-run cannot
+// alter the document being generated — the in-flight run finishes with the
+// option it started with, by construction. This is the discipline shapeConfig
+// established and it matters more here: swapping the model writing the summary
+// halfway through a run would produce a document nobody chose.
+func (s *Service) summaryOption(ctx context.Context) domain.SummaryOption {
+	// A per-run choice wins over the stored default. It rides on the context
+	// for the same reason the run trace does (withRunTrace, just below): the
+	// tailoring path is eight frames deep and threading one more argument
+	// through every one of them, plus every test that calls them, would buy
+	// nothing this does not.
+	if opt, ok := summaryOptionFromContext(ctx); ok {
+		return opt
+	}
+	if s.summaryModel == nil {
+		return domain.DefaultSummaryOption()
+	}
+	return s.summaryModel.SummaryOption(ctx)
+}
+
+type summaryOptionCtxKey struct{}
+
+// WithSummaryOption carries a single run's chosen summary option. Callers that
+// accept a choice on the request — the tailoring handler — set it here; a
+// caller that sets nothing gets the user's stored default, and a deployment
+// with no settings service at all gets the catalogue default.
+func WithSummaryOption(ctx context.Context, opt domain.SummaryOption) context.Context {
+	return context.WithValue(ctx, summaryOptionCtxKey{}, opt)
+}
+
+func summaryOptionFromContext(ctx context.Context) (domain.SummaryOption, bool) {
+	opt, ok := ctx.Value(summaryOptionCtxKey{}).(domain.SummaryOption)
+	return opt, ok && opt.ID != ""
+}
+
+// summaryProviderFor picks the provider serving a chosen option, falling back
+// to the stage default when the option has no router wired — an option added to
+// the catalogue before its deployment exists, or a gateway-less install where
+// every router is the local model anyway.
+func (s *Service) summaryProviderFor(opt domain.SummaryOption) llm.Provider {
+	if p, ok := s.llm.SummaryByOption[opt.ID]; ok && p != nil {
+		return p
+	}
+	return s.llm.Summary
 }
 
 func NewService(q domain.Repository, profiles domain.ProfileStore, htmlRenderer *infrastructure.HtmlPdfRenderer, rendercv *infrastructure.RenderCvRenderer, routers GenerationRouters, genModel, masterPath, defaultLevel string, shape ShapeProvider) *Service {
@@ -367,7 +441,12 @@ func (s *Service) selectWithCompleteness(ctx context.Context, master domain.Rend
 // summarize runs the one premium call in a generation run. Its brief carries
 // the selected achievements and the derived years figure, not the master —
 // that is what keeps the expensive stage small (035 FR-004).
-func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, payload domain.TailoredSelection, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, rec *activity.Recorder, prov *runProvenance) (*domain.TailoredSummary, error) {
+// summaryLC is the provider serving this run's chosen option (034), resolved
+// once at the top of the run and passed down rather than re-read here.
+func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, payload domain.TailoredSelection, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, rec *activity.Recorder, prov *runProvenance, summaryLC llm.Provider) (*domain.TailoredSummary, error) {
+	if summaryLC == nil {
+		summaryLC = s.llm.Summary
+	}
 	if rec != nil {
 		rec.Step(ctx, "writing summary (premium model)", nil)
 	}
@@ -381,7 +460,7 @@ func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, p
 		SentenceMax:      max,
 	}
 	summary, err := observe(ctx, prov, stageSummary, false, func(ctx context.Context) (domain.TailoredSummary, error) {
-		return writeSummary(ctx, s.llm.Summary, s.genModel, brief)
+		return writeSummary(ctx, summaryLC, s.genModel, brief)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("summary: %w", err)
@@ -398,7 +477,7 @@ func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, p
 		rec.Step(ctx, "summary grounding violation, re-prompting", map[string]any{"violations": violations})
 	}
 	retry, err := observe(ctx, prov, stageSummary, false, func(ctx context.Context) (domain.TailoredSummary, error) {
-		return writeSummary(ctx, s.llm.Summary, s.genModel, brief.WithViolations(violations))
+		return writeSummary(ctx, summaryLC, s.genModel, brief.WithViolations(violations))
 	})
 	if err != nil {
 		return nil, fmt.Errorf("summary re-prompt: %w", err)
@@ -426,6 +505,22 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 	// each of those call sites having to remember to.
 	ctx = withRunTrace(ctx, rec)
 
+	// 034: resolve the summary option once, here, at the top of the run. Every
+	// call below takes the resolved provider, so a settings change while this
+	// run is in flight cannot swap the model writing the summary halfway
+	// through and produce a document nobody chose.
+	summaryOpt := s.summaryOption(ctx)
+	summaryLC := s.summaryProviderFor(summaryOpt)
+	if prov != nil {
+		prov.summaryOption = summaryOpt.ID
+	}
+	if rec != nil {
+		rec.Step(ctx, "summary model: "+summaryOpt.Label, map[string]any{
+			"option": summaryOpt.ID,
+			"cost":   summaryOpt.Cost,
+		})
+	}
+
 	if rec != nil {
 		rec.Step(ctx, "analyzing vacancy", nil)
 	}
@@ -445,7 +540,7 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		if err != nil {
 			return nil, domain.VacancyAnalysis{}, err
 		}
-		summary, err := s.summarize(ctx, master, payload, analysis, cfg, rec, prov)
+		summary, err := s.summarize(ctx, master, payload, analysis, cfg, rec, prov, summaryLC)
 		if err != nil {
 			return nil, domain.VacancyAnalysis{}, err
 		}
@@ -461,9 +556,15 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		recordShortfalls(ctx, rec, report)
 		// 033 FR-001: drop ungrounded skill tokens on the primary pass, not
 		// only after expand/condense. Capture the removed tokens for logging.
+		// FR-010: DropUngroundedSkillTokens mutates in place and reports
+		// nothing, so the before/after diff is the only record of what it took
+		// out.
+		skillsBefore := skillDetailEntries(merged)
 		domain.DropUngroundedSkillTokens(master, merged)
 		if rec != nil {
-			rec.Step(ctx, "grounding: ungrounded skill tokens dropped", nil)
+			rec.Step(ctx, "grounding: ungrounded skill tokens dropped", map[string]any{
+				"tokens": droppedSkillEntries(skillsBefore, skillDetailEntries(merged)),
+			})
 		}
 		if rec != nil {
 			rec.Step(ctx, fmt.Sprintf("grounding check (attempt %d/%d)", attempt+1, groundingAttempts), nil)
@@ -517,6 +618,43 @@ func recordShortfalls(ctx context.Context, rec *activity.Recorder, report domain
 			"available": sf.Available,
 		})
 	}
+}
+
+// skillDetailEntries flattens every comma-separated skill entry across the
+// document's skills groups, trimmed and in document order. It reads the same
+// shape domain.DropUngroundedSkillTokens writes, so a before/after pair of
+// these is exactly what that function removed.
+func skillDetailEntries(doc domain.RendercvMaster) []string {
+	var out []string
+	for _, g := range domain.AsSliceOfMaps(domain.CvSections(doc)["skills"]) {
+		for _, entry := range strings.Split(domain.StringField(g, "details"), ",") {
+			if e := strings.TrimSpace(entry); e != "" {
+				out = append(out, e)
+			}
+		}
+	}
+	return out
+}
+
+// droppedSkillEntries returns the entries present in before but not after, as a
+// multiset difference so a token repeated across two groups and removed from
+// only one is still reported once. Sorted, because the result is logged and an
+// activity trail that reorders itself run to run is not comparable (033 FR-010).
+func droppedSkillEntries(before, after []string) []string {
+	remaining := make(map[string]int, len(after))
+	for _, e := range after {
+		remaining[e]++
+	}
+	var dropped []string
+	for _, e := range before {
+		if remaining[e] > 0 {
+			remaining[e]--
+			continue
+		}
+		dropped = append(dropped, e)
+	}
+	sort.Strings(dropped)
+	return dropped
 }
 
 // renderDeps are the render-loop's collaborators, injected so the page-target
@@ -1116,6 +1254,7 @@ func toDocumentDto(r sqlcgen.GeneratedDocument) dto.GeneratedDocumentDto {
 		CreatedAt: dbutil.Timestamp(r.CreatedAt),
 
 		SummaryModel:       r.SummaryModel,
+		SummaryOptionID:    r.SummaryOptionId,
 		SummarySubstituted: r.SummarySubstituted,
 		SelectionEscalated: r.SelectionEscalated,
 		StageCostUsd:       numericToFloatPtr(r.StageCostUsd),
