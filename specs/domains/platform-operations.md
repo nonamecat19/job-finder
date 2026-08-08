@@ -123,12 +123,42 @@ stops gating. Any rename must update this section in the same change (023-FR-003
 | `go test` | PR, push master | `go` | ~3 min |
 | `frontend test (vitest)` | PR, push master | `web` | ~2 min |
 | `frontend typecheck` | PR, push master | `web` | ~2 min |
+| `shared types — no duplicates / no weakened fields / complete nullability` | PR, push master | `tygo` | ~1 min |
 | `lint (go)` | PR, push master | `go` | ~2 min |
 | `lint (web)` | PR, push master | `web` | ~1 min |
 | `integration test` | PR, push master | `go` | ~5 min |
+| `secret scan` | PR, push master | `any` | ~20 s |
+| `vulnerability scan (go)` | PR, push master | `go` | ~1 min |
+| `vulnerability scan (web)` | PR, push master | `web` | ~1 min |
+| `build image (api)` | PR, push master | `go` | ~2 min warm / ~8 min cold |
+| `build image (dashboard)` | PR, push master | `web` | ~1 min warm / ~4 min cold |
 
-`e2e (playwright)` **was the tenth entry and is gone** — see the notice in § 2. Nine jobs
-gate today.
+`e2e (playwright)` **was an entry and is gone** — see the notice in § 2. **Fifteen jobs
+gate today.**
+
+Two corrections to the count this table used to carry. It said "nine jobs" and omitted
+`shared types — …`, which the workflow has defined and reported all along; ten gated
+before 039. 039 then added the five supply-chain and build-integrity gates, bringing the
+total to fifteen.
+
+The five 039 gates follow the naming rules the rest of the table already uses: subject
+first, scope in parentheses, and **no tool name in the check name**. `vulnerability scan
+(go)` runs govulncheck and `secret scan` runs gitleaks, but neither says so — replacing
+the tool must not force a ruleset edit, exactly as `lint (go)` does not say
+`golangci-lint`.
+
+`secret scan` is the only job on the `any` filter (`- '**'`). It is the one gate whose
+verdict any file can change: a provider key pasted into a `specs/` markdown file is still
+a provider key, and unlike a broken build it cannot be undone by a follow-up commit —
+every clone and fork keeps a copy, so the only remedy is rotation. The ~20-second cost is
+far below the ~20 runner-minutes that motivated the filtering design in the first place.
+
+The two image jobs introduce **no new filter**. `apps/api/Dockerfile` COPYs only
+`apps/api/**`, already the `go` anchor's first entry; `apps/dashboard/Dockerfile` COPYs
+`pnpm-workspace.yaml`, `package.json`, `pnpm-lock.yaml`, `tsconfig.base.json`,
+`packages/shared` and `apps/dashboard`, every one already in `web`. The `go` anchor also
+carries `gateway/**`, so a gateway-only change rebuilds the API image for nothing. That is
+the right way round: a false run costs two minutes, a false skip lets a broken image merge.
 
 The set runs in parallel against a ≤10 minute wall-clock target. **`detect changed
 areas` — the `changes` job — is deliberately not in the gating set** and must never be
@@ -187,7 +217,7 @@ gh api -X POST repos/nonamecat19/job-finder/rulesets \
   -f 'rules[][type]=required_status_checks'
 ```
 
-with `required_status_checks` listing exactly the nine job names in § 2.1 — **not** `e2e
+with `required_status_checks` listing exactly the fifteen job names in § 2.1 — **not** `e2e
 (playwright)`, which no workflow reports any more — and
 `pull_request.required_approving_review_count: 0` (023-FR-004 — one maintainer, so requiring
 approval would deadlock the repository). Self-merge after green checks is the intended flow.
@@ -216,8 +246,109 @@ four fails (023-FR-009).
 browser — and are deliberately **not** part of `test-lint`.
 
 **The coverage invariant**: `test-lint` must cover the union of every required CI check that
-does not need infrastructure. A check added to CI without a matching local target breaks
-023-SC-005 (≥95% local/CI agreement) and authors stop trusting the local run.
+does not need infrastructure **and whose verdict depends only on the tree**. A check added
+to CI without a matching local target breaks 023-SC-005 (≥95% local/CI agreement) and
+authors stop trusting the local run.
+
+### 3.1 The supply-chain gates and why they sit outside `test-lint` (039)
+
+The second clause of the invariant above was added by 039 rather than quietly violated.
+Four new targets exist, grouped under one alias:
+
+```
+make vuln-go    # scripts/govulncheck-check.sh
+make vuln-web   # pnpm audit --audit-level=high --prod=false
+make secrets    # gitleaks git . --redact --config .gitleaks.toml
+make audit      # the three above, first non-zero wins (same shape as `make lint`)
+make images     # docker build of both images, standalone
+```
+
+None is part of `test-lint`, and that is a decision, not an omission:
+
+1. **They are not deterministic in time.** An advisory published this afternoon turns this
+   morning's green run red with no code change. The property 023-SC-005 protects — that a
+   passing local run predicts a passing CI run — was never on offer here, so folding them
+   in would weaken the invariant rather than honour it.
+2. **They need the network, and `images` needs Docker.** That is the same exemption
+   `test-integration` and `test-e2e` already hold.
+
+`make images` additionally costs 6–8 minutes cold, which would make the pre-push loop
+slower than CI and push people to skip it entirely.
+
+`make secrets` is the closest call — it is fast, offline and deterministic, and it would
+fit `test-lint` on the letter of the invariant. It stays with the other three so that
+"audit-class gate" is one coherent group with one entry point, rather than one gate hiding
+inside `test-lint` and three outside it.
+
+### 3.2 Responding to a failing supply-chain gate (039)
+
+| Gate | What it means | What to do |
+|---|---|---|
+| `secret scan` | A credential shape appears in this pull request's commit range. | **Rotate the credential first** — it is in a pushed branch, so treat it as public. Then remove it from the change. Only if it is genuinely a false positive, add an allowlist entry to `.gitleaks.toml` with a comment giving the reason. |
+| `vulnerability scan (go)` | A Go dependency has an advisory **reachable** from this module's code. | `cd apps/api && go get <module>@<fixed-version> && go mod tidy`. If no fix exists, add an expiring entry to `apps/api/.govulncheck-ignore`. |
+| `vulnerability scan (web)` | A workspace dependency has an advisory at `high` or above. | Bump it. If no fix exists, add the id to `auditConfig.ignoreCves` in `pnpm-workspace.yaml` **and** a row in the table below. |
+| `build image (api)` / `build image (dashboard)` | The Dockerfile no longer builds. | Fix the Dockerfile. **There is no suppression mechanism and there should not be** — a vulnerability or a secret match can be a false positive or an unfixable upstream fact, but an image that does not build is never either. |
+
+**The Go exception file.** `apps/api/.govulncheck-ignore` takes one entry per line:
+
+```
+GO-2026-1234  2026-10-01  No fixed version upstream; reachable only from <path>
+```
+
+The expiry is the point. An expired entry **fails** the gate rather than lapsing into
+silence, so the only way to keep an exception is to renew it in a reviewed diff. A
+malformed line and an entry for an advisory that no longer appears both fail too — a dead
+entry reads as live risk, and a silently skipped bad line means somebody believes an
+advisory is suppressed when it is not. `scripts/govulncheck-check.sh --self-test` proves
+all six parser failure modes without needing a real advisory.
+
+**Reachability, not presence.** `govulncheck` fails the build only when the vulnerable
+symbol is actually called from this module. Unreachable findings are printed and pass. At
+the time 039 shipped there were three of them (klauspost/compress, x/crypto's unmaintained
+openpgp package, x/net's dnsmessage) — real advisories against real dependencies that no
+code path reaches. Failing on those would have made the gate noise inside a week.
+
+**The web severity floor is `high`**, declared explicitly in the workflow rather than left
+to a tool default. `moderate` was considered and rejected: the dashboard is a self-hosted
+single-user front end with no untrusted multi-tenant input, and nearly every `moderate`
+finding in a Vite/React devDependency tree is a build-time-only ReDoS advisory that a
+deployed static bundle cannot reach. Starting at `high` keeps the gate credible. It can be
+tightened later without a design change.
+
+**Web advisory exceptions** — `auditConfig.ignoreCves` in `pnpm-workspace.yaml` (pnpm 11
+no longer reads the `pnpm` field from `package.json` and warns that `auditConfig` there is
+ignored). The array ships empty. Every id added to it needs a row here:
+
+| Advisory | Package | Fixed version | Reason | Review by |
+|---|---|---|---|---|
+| *(none)* | | | | |
+
+**The one-time full-history secret audit** (039-FR-016) ran at 484 commits and found
+**15 findings, all false positives — no job-finder credential has ever been committed, so
+nothing required rotation.** They were: the default `linkedin-client-id` rule matching the
+`linkedinUrl` column alias in `contact.sql` and its sqlc output (8); `gcp-api-key` matching
+Google Maps keys belonging to the *scraped sites* in the work.ua HTML parser fixtures (3);
+`generic-api-key` on the `nodeFixtureKey` cross-language crypto test vector (2) and on a
+`tokens:` struct field in the rephrase path (1); and a `Bearer <placeholder>` in a deleted
+spec's example curl (1). Each has a narrow allowlist entry in `.gitleaks.toml` with the
+reason inline.
+
+Worth recording: `nodeFixtureKey` is a genuine 64-hex value and did **not** trip the
+project's own `job-finder-config-encryption-key` rule, because that rule binds to the
+`CONFIG_ENCRYPTION_KEY` variable name rather than matching bare hex. That binding is why
+the rule does not also match every commit hash and checksum in the tree.
+
+**What Dependabot cannot cover.** `.github/dependabot.yml` watches the Go module, the pnpm
+workspace, the workflow's actions, and both Dockerfiles' base images. It does **not** read
+compose files, so the images pinned in `docker-compose.yml` and `docker-compose.prod.yml`
+— `pgvector/pgvector:pg16`, `redis:7-alpine`, `minio/minio:latest`,
+`ghcr.io/flaresolverr/flaresolverr:latest`, the ClickHouse image and the Langfuse images —
+stay manual. Two of those are pinned to `:latest`, which is a separate problem.
+
+Its `gomod` entry points at `/apps/api`, not `/`. There is no root `go.mod`, and
+**Dependabot reports no error when it finds no manifest at the configured directory** — a
+wrong path produces silence, not a failure, so the misconfiguration stays invisible until
+someone notices no Go updates have ever arrived.
 
 `make lint-go` runs `scripts/golangci-check.sh` (the version guard) then `golangci-lint run`
 over `apps/api` with `apps/api/.golangci.yml`, reporting `file:line: message (linter-name)`.
@@ -236,7 +367,7 @@ as the canonical entry point precisely so the four callers cannot drift:
 
 | Caller | Calls |
 |---|---|
-| Author, by hand | `make test-lint` before opening a PR |
+| Author, by hand | `make test-lint` before opening a PR; `make audit` when touching dependencies |
 | `Stop` hook | `lint-go`/`test-go` and/or `lint-web`/`test-react`, scoped to changed paths |
 | `PostToolUse` hooks | `make sqlc-generate`, `make tygo-generate` |
 | CI | `make lint-go`, `make lint-web`, the two-step integration sequence |
