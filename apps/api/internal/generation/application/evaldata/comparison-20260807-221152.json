@@ -1,0 +1,749 @@
+{
+  "run_at": "2026-08-07T22:04:28Z",
+  "corpus_revision": "evaldata/cases/absent-skills/case.yaml:661,evaldata/cases/absent-skills/master.yaml:13032,evaldata/cases/absent-skills/vacancy.txt:658,evaldata/cases/ambiguous-dates/case.yaml:680,evaldata/cases/ambiguous-dates/master.yaml:1686,evaldata/cases/ambiguous-dates/vacancy.txt:447,evaldata/cases/baseline/case.yaml:1178,evaldata/cases/baseline/master.yaml:13032,evaldata/cases/baseline/vacancy.txt:816,evaldata/cases/nearly-empty-profile/case.yaml:594,evaldata/cases/nearly-empty-profile/master.yaml:881,evaldata/cases/nearly-empty-profile/vacancy.txt:314,evaldata/cases/oversized-profile/case.yaml:666,evaldata/cases/oversized-profile/master.yaml:13032,evaldata/cases/oversized-profile/vacancy.txt:816,evaldata/cases/vague-vacancy/case.yaml:659,evaldata/cases/vague-vacancy/master.yaml:881,evaldata/cases/vague-vacancy/vacancy.txt:314",
+  "scorer_set_version": 1,
+  "request_params": {
+    "grounding_level": "",
+    "response_mode": 0,
+    "temperature": "",
+    "max_tokens": "",
+    "shape_config": ""
+  },
+  "models": [
+    {
+      "model": "generation-summary",
+      "cases": [
+        {
+          "case": "absent-skills",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 5992,
+              "cost_usd": 0.00511
+            },
+            {
+              "stage": "select",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 9115,
+              "cost_usd": 0.016012
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4863,
+              "cost_usd": 0.004306
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 19976,
+          "cost_usd": 0.025428
+        },
+        {
+          "case": "ambiguous-dates",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4260,
+              "cost_usd": 0.00399
+            },
+            {
+              "stage": "select",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 6769,
+              "cost_usd": 0.011016
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 3995,
+              "cost_usd": 0.003432
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 3955,
+              "cost_usd": 0.003418
+            },
+            {
+              "stage": "select",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 6387,
+              "cost_usd": 0.010782
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4386,
+              "cost_usd": 0.003212
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4108,
+              "cost_usd": 0.003338
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 33867,
+          "cost_usd": 0.039188
+        },
+        {
+          "case": "baseline",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 5428,
+              "cost_usd": 0.005904
+            },
+            {
+              "stage": "select",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 9009,
+              "cost_usd": 0.015874
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4651,
+              "cost_usd": 0.003814
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 19093,
+          "cost_usd": 0.025592
+        },
+        {
+          "case": "nearly-empty-profile",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 3663,
+              "cost_usd": 0.003334
+            },
+            {
+              "stage": "select",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4991,
+              "cost_usd": 0.008764
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 3563,
+              "cost_usd": 0.002774
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 3077,
+              "cost_usd": 0.002584
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 15297,
+          "cost_usd": 0.017456
+        },
+        {
+          "case": "oversized-profile",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 0.5,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 6886,
+              "cost_usd": 0.004644
+            },
+            {
+              "stage": "select",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 8496,
+              "cost_usd": 0.015844
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 5511,
+              "cost_usd": 0.00365
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 20898,
+          "cost_usd": 0.024138
+        },
+        {
+          "case": "vague-vacancy",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 3280,
+              "cost_usd": 0.00303
+            },
+            {
+              "stage": "select",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4366,
+              "cost_usd": 0.00842
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 3909,
+              "cost_usd": 0.00253
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4414,
+              "cost_usd": 0.00245
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 15971,
+          "cost_usd": 0.01643
+        },
+        {
+          "case": "unbounded-deliberation",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 5289,
+              "cost_usd": 0.005324
+            },
+            {
+              "stage": "select",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 8558,
+              "cost_usd": 0.015722
+            },
+            {
+              "stage": "summary",
+              "served_model": "openrouter/anthropic/claude-sonnet-5",
+              "served_group": "generation-summary",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 4417,
+              "cost_usd": 0.003854
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 18270,
+          "cost_usd": 0.0249
+        }
+      ],
+      "median_scores": {
+        "bullet_shortfalls": 0,
+        "grounding_violations": 0,
+        "highlight_drift": 0,
+        "nice_to_have_retention": 1,
+        "required_skills_missing": 0,
+        "structural_violations": 0
+      },
+      "median_duration_ms": 19093,
+      "median_cost_usd": 0.0249,
+      "total_cost_usd": 0.173132,
+      "incomplete_cases": 0
+    },
+    {
+      "model": "generation-summary-fast",
+      "cases": [
+        {
+          "case": "absent-skills",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 915,
+              "cost_usd": 0.00084695
+            },
+            {
+              "stage": "select",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 1331,
+              "cost_usd": 0.0023455
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 1508,
+              "cost_usd": 0.00102055
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 3761,
+          "cost_usd": 0.004213
+        },
+        {
+          "case": "ambiguous-dates",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 583,
+              "cost_usd": 0.000593
+            },
+            {
+              "stage": "select",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 801,
+              "cost_usd": 0.001229
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 55650,
+              "cost_usd": 0.00056905
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 716,
+              "cost_usd": 0.0008118499999999999
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 57754,
+          "cost_usd": 0.0032029
+        },
+        {
+          "case": "baseline",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 689,
+              "cost_usd": 0.0007978499999999999
+            },
+            {
+              "stage": "select",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 1285,
+              "cost_usd": 0.0020046
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 431,
+              "cost_usd": 0.0005311000000000001
+            },
+            {
+              "stage": "select",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 57861,
+              "cost_usd": 0.00160835
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 655,
+              "cost_usd": 0.000543
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 60930,
+          "cost_usd": 0.0054849
+        },
+        {
+          "case": "nearly-empty-profile",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 416,
+              "cost_usd": 0.000469
+            },
+            {
+              "stage": "select",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 761,
+              "cost_usd": 0.0009314
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 1430,
+              "cost_usd": 0.001059
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 55691,
+              "cost_usd": 0.0004205
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 58301,
+          "cost_usd": 0.0028799
+        },
+        {
+          "case": "oversized-profile",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 0.5,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 860,
+              "cost_usd": 0.0005841500000000001
+            },
+            {
+              "stage": "select",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 1392,
+              "cost_usd": 0.002361
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 503,
+              "cost_usd": 0.0005355
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 2760,
+          "cost_usd": 0.0034806499999999996
+        },
+        {
+          "case": "vague-vacancy",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 1061,
+              "cost_usd": 0.00053885
+            },
+            {
+              "stage": "select",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 55800,
+              "cost_usd": 0.00115385
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 399,
+              "cost_usd": 0.0003464
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 57262,
+          "cost_usd": 0.0020391000000000003
+        },
+        {
+          "case": "unbounded-deliberation",
+          "scores": {
+            "bullet_shortfalls": 0,
+            "grounding_violations": 0,
+            "highlight_drift": 0,
+            "nice_to_have_retention": 1,
+            "required_skills_missing": 0,
+            "structural_violations": 0
+          },
+          "stages": [
+            {
+              "stage": "analyze",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 593,
+              "cost_usd": 0.0005549
+            },
+            {
+              "stage": "select",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 1113,
+              "cost_usd": 0.00193435
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 424,
+              "cost_usd": 0.0005011999999999999
+            },
+            {
+              "stage": "summary",
+              "served_model": "cerebras/gpt-oss-120b",
+              "served_group": "generation-summary-fast",
+              "substituted": false,
+              "escalated": false,
+              "duration_ms": 57943,
+              "cost_usd": 0.0005079
+            }
+          ],
+          "incomplete": false,
+          "duration_ms": 60082,
+          "cost_usd": 0.00349835
+        }
+      ],
+      "median_scores": {
+        "bullet_shortfalls": 0,
+        "grounding_violations": 0,
+        "highlight_drift": 0,
+        "nice_to_have_retention": 1,
+        "required_skills_missing": 0,
+        "structural_violations": 0
+      },
+      "median_duration_ms": 57754,
+      "median_cost_usd": 0.0034806499999999996,
+      "total_cost_usd": 0.0247988,
+      "incomplete_cases": 0
+    }
+  ]
+}
