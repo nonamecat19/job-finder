@@ -10,6 +10,7 @@ import {
   useAdHocDocuments,
   useGenerateCoverLetter,
   useSaveAdHocDocument,
+  useSummaryModel,
   useTailorDocuments,
 } from './hooks';
 
@@ -20,6 +21,9 @@ export default function TailorPage() {
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
   const [groundingLevel, setGroundingLevel] = useState<(typeof GROUNDING_LEVELS)[number]>('moderate');
+  // 034: undefined means "whatever my stored default is". The server decides,
+  // so the page renders correctly before the menu has loaded.
+  const [summaryOptionId, setSummaryOptionId] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<{
     resume: GeneratedDocumentDto;
     coverLetter: GeneratedDocumentDto | null;
@@ -27,6 +31,9 @@ export default function TailorPage() {
   const [editingDoc, setEditingDoc] = useState<{ id: string; text: string } | null>(null);
 
   const { data: history } = useAdHocDocuments();
+  const { data: summaryModel } = useSummaryModel();
+  const chosenSummaryOptionId = summaryOptionId ?? summaryModel?.optionId ?? '';
+  const chosenSummaryOption = summaryModel?.options.find((o) => o.id === chosenSummaryOptionId);
   const tailor = useTailorDocuments();
   const coverLetter = useGenerateCoverLetter();
   const saveLetter = useSaveAdHocDocument(() => setEditingDoc(null));
@@ -35,7 +42,13 @@ export default function TailorPage() {
   const submit = () => {
     if (!vacancy.trim()) return;
     tailor.mutate(
-      { vacancy, company: company || undefined, title: title || undefined, groundingLevel },
+      {
+        vacancy,
+        company: company || undefined,
+        title: title || undefined,
+        groundingLevel,
+        summaryOptionId: summaryOptionId || undefined,
+      },
       {
         onSuccess: (data) => {
           setResult({ resume: data.resume, coverLetter: data.coverLetter ?? null });
@@ -81,6 +94,24 @@ export default function TailorPage() {
             </Select>
           </Field>
         </div>
+        {summaryModel ? (
+          <Field label="Summary writer" className="mt-3">
+            <Select
+              aria-label="Summary writer"
+              value={chosenSummaryOptionId}
+              onChange={(e) => setSummaryOptionId(e.target.value)}
+            >
+              {summaryModel.options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label} — {o.cost}
+                </option>
+              ))}
+            </Select>
+            {chosenSummaryOption ? (
+              <p className="mt-1 text-xs text-muted">{chosenSummaryOption.description}</p>
+            ) : null}
+          </Field>
+        ) : null}
         <Field label="Vacancy text" className="mt-3">
           <Textarea
             className="h-48"
@@ -103,6 +134,13 @@ export default function TailorPage() {
           <SectionTitle>Result</SectionTitle>
           {result.resume.summarySubstituted ? (
             <SummarySubstitutionNotice model={result.resume.summaryModel} />
+          ) : null}
+          {result.resume.summaryOptionId ? (
+            <p className="mb-2 text-xs text-muted" data-testid="summary-option-used">
+              Summary written by{' '}
+              {summaryModel?.options.find((o) => o.id === result.resume.summaryOptionId)?.label ??
+                result.resume.summaryOptionId}
+            </p>
           ) : null}
           <DocumentRow doc={result.resume} />
           {result.coverLetter ? (

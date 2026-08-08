@@ -172,6 +172,12 @@ export interface GeneratedDocumentDto {
    * FR-012).
    */
   summaryModel?: string;
+  /**
+   * Which catalogue option the user picked (034). Distinct from SummaryModel:
+   * two options can land on the same upstream after a fallback, so the served
+   * model cannot say which option was chosen.
+   */
+  summaryOptionId?: string;
   summarySubstituted: boolean;
   selectionEscalated: boolean;
   stageCostUsd?: number /* float64 */;
@@ -731,6 +737,32 @@ export interface ResumeShapeConfigDto {
   certificationsMax: number /* int */;
   fontSize: number /* int */;
 }
+/**
+ * SummaryModelOptionDto is one entry on the 034 summary-model menu. Cost is a
+ * relative indicator, not a price: a figure here would be wrong within a month
+ * and could not be reproduced by the reader. Real per-run cost lives in the 038
+ * comparison artifact.
+ */
+export interface SummaryModelOptionDto {
+  id: string;
+  label: string;
+  description: string;
+  cost: string;
+  selfHosted: boolean;
+  current: boolean;
+}
+/**
+ * SummaryModelSettingDto is the whole menu plus which entry is selected, so the
+ * dashboard renders the selector from one response rather than joining a
+ * catalogue against a setting.
+ */
+export interface SummaryModelSettingDto {
+  options: SummaryModelOptionDto[];
+  optionId: string;
+}
+export interface UpdateSummaryModelRequestDto {
+  optionId: string;
+}
 
 //////////
 // source: tailoring.go
@@ -783,6 +815,12 @@ export interface TailorResumeRequestDto {
   profileId: string;
   jobId?: string;
   vacancy?: AdhocVacancyDto;
+  /**
+   * SummaryOptionID is the 034 summary-model choice for this run. Optional:
+   * absent means "use my stored default", which is what every caller written
+   * before the feature sends.
+   */
+  summaryOptionId?: string;
 }
 export interface AdhocVacancyDto {
   company: string;

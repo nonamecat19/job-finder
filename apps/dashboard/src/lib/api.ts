@@ -28,6 +28,7 @@ import type {
   Resume,
   ResumeDto,
   ResumeShapeConfigDto,
+  SummaryModelSettingDto,
   ReferralContactDto,
   ReferralPathDto,
   SavedSearchDto,
@@ -136,6 +137,9 @@ export const api = {
       requiredSkills?: string[];
       niceToHave?: string[];
       experienceLevel?: string;
+      // 034: omit to use the stored default. Sending one applies it to this
+      // run and makes it the new default.
+      summaryOptionId?: string;
     }) =>
       request<{ resume: GeneratedDocumentDto; coverLetter: GeneratedDocumentDto | null }>('/documents/tailor', {
         method: 'POST',
@@ -274,5 +278,14 @@ export const api = {
       }),
     resetResumeShape: () =>
       request<ResumeShapeConfigDto>('/v1/settings/resume-shape', { method: 'DELETE' }),
+    // Summary model (034). GET returns the whole menu with the current entry
+    // marked, so the selector renders from one response and the menu and the
+    // selection can never disagree about which options exist.
+    getSummaryModel: () => request<SummaryModelSettingDto>('/v1/settings/summary-model'),
+    putSummaryModel: (optionId: string) =>
+      request<SummaryModelSettingDto>('/v1/settings/summary-model', {
+        method: 'PUT',
+        body: JSON.stringify({ optionId }),
+      }),
   },
 };

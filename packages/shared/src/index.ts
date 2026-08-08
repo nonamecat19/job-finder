@@ -183,6 +183,9 @@ export type Resume = Omit<Gen.Resume, 'unrecognized' | 'sections'> & {
 export type ResumeBasics = Gen.ResumeBasics;
 
 export type ResumeShapeConfigDto = Gen.ResumeShapeConfigDto;
+export type SummaryModelOptionDto = Gen.SummaryModelOptionDto;
+export type SummaryModelSettingDto = Gen.SummaryModelSettingDto;
+export type UpdateSummaryModelRequestDto = Gen.UpdateSummaryModelRequestDto;
 
 export type RunVerdictDto = Nullable<Gen.RunVerdictDto, 'blockReason'>;
 
