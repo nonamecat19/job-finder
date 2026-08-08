@@ -27,6 +27,7 @@ jobs:
       sqlc: ${{ github.event_name != 'pull_request' || steps.filter.outputs.sqlc == 'true' }}
       tygo: ${{ github.event_name != 'pull_request' || steps.filter.outputs.tygo == 'true' }}
       web: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web == 'true' }}
+      any: ${{ github.event_name != 'pull_request' || steps.filter.outputs.any == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -85,6 +86,21 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
+            # The one deliberately tree-wide filter, in a file whose entire
+            # design is about narrowing. `secret scan` is the only gate whose
+            # verdict ANY file can change: a provider key pasted into a specs/
+            # markdown file is still a provider key, and unlike a broken build
+            # it cannot be undone by a follow-up commit — every clone and fork
+            # keeps a copy, so the only remedy is rotation.
+            #
+            # The cost argument that motivated this whole mechanism (~20
+            # runner-minutes to rebuild Go and Node) does not apply: the scan
+            # is a ~20-second job. It stays inside the filter mechanism rather
+            # than dropping its `if:` so it reports uniformly with every other
+            # check, and so `any` is available to a future gate with the same
+            # semantics.
+            any:
+              - '**'
 
   sqlc-drift:
     name: sqlc generate is up to date
@@ -319,3 +335,184 @@ jobs:
 
       - name: make lint-web
         run: make lint-web
+
+  # ---------------------------------------------------------------------------
+  # Supply-chain and build-integrity gates (039)
+  #
+  # Four classes of defect used to merge green: a leaked credential, a
+  # published advisory against a dependency, dependency drift, and a container
+  # image that no longer builds. The jobs below close the first three; the
+  # fourth is closed by the two image builds at the end.
+  #
+  # Every one of them is gated by an `if:` on a `changes` output rather than a
+  # top-level path filter, for the same reason the rest of this file is: a job
+  # skipped by `if:` reports as skipped (which GitHub counts as passing), while
+  # a workflow skipped by `on: paths:` reports nothing at all and would leave a
+  # required check sitting at "Expected" forever.
+  # ---------------------------------------------------------------------------
+
+  secret-scan:
+    name: secret scan
+    needs: changes
+    # Filter `any` — this is the one gate whose verdict any file can change. A
+    # provider key pasted into a specs/ markdown file is still a provider key,
+    # and unlike a broken build it cannot be undone by a follow-up commit.
+    if: needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 — the scan runs over this pull request's own commit
+      # range, which needs the merge base present locally.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read pinned gitleaks version
+        id: gl
+        run: echo "version=$(tr -d '[:space:]' < .gitleaks-version)" >> "$GITHUB_OUTPUT"
+
+      # The pinned upstream binary, not gitleaks/gitleaks-action: that action
+      # requires a GITLEAKS_LICENSE secret for organization-owned repositories.
+      # Same scanner, no account, no licence question.
+      - name: Install gitleaks
+        env:
+          VERSION: ${{ steps.gl.outputs.version }}
+        run: |
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      # Scoped to the commits this pull request actually adds (FR-013), so a
+      # finding that predates the scanner does not fail unrelated work. On a
+      # push, the range is the previous commit to this one — the same weaker
+      # signal dorny/paths-filter already degrades to on push.
+      #
+      # --redact is mandatory (FR-015): without it the workflow log becomes a
+      # second copy of the leak, readable by anyone who can read the run.
+      - name: Scan the pull request's commit range
+        env:
+          RANGE: >-
+            ${{ github.event_name == 'pull_request'
+                && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha)
+                || format('{0}..{1}', github.event.before, github.sha) }}
+        run: |
+          set +e
+          gitleaks git . \
+            --redact --no-banner \
+            --config .gitleaks.toml \
+            --log-opts "$RANGE"
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "No secrets found in $RANGE." ;;
+            1) echo "::error::Secret detected in this change. Rotate the credential first, then remove it — see specs/domains/platform-operations.md." ; exit 1 ;;
+            *) echo "::error::gitleaks failed to run (exit $status). This is a configuration or download problem, NOT a leak." ; exit "$status" ;;
+          esac
+
+  vulnerability-scan-go:
+    name: vulnerability scan (go)
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+
+      - name: Read pinned govulncheck version
+        id: gv
+        run: echo "version=$(tr -d '[:space:]' < apps/api/.govulncheck-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v${{ steps.gv.outputs.version }}
+
+      # The wrapper, not govulncheck directly: govulncheck has no ignore file,
+      # and an advisory with no upstream fix still needs a reviewable, expiring
+      # exception rather than a blanket `|| true`. The script also gives
+      # `make vuln-go` the identical verdict locally.
+      - name: scripts/govulncheck-check.sh
+        run: ./scripts/govulncheck-check.sh
+
+  vulnerability-scan-web:
+    name: vulnerability scan (web)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Frozen, so the audit reads the versions the lockfile actually resolves
+      # rather than whatever the registry serves this minute (FR-010).
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Severity floor is `high`, declared here rather than left to a tool
+      # default. --prod=false keeps devDependencies in scope: the build
+      # toolchain is part of the supply chain. Exceptions go in
+      # pnpm.auditConfig.ignoreCves with a reason recorded in the domain doc.
+      - name: pnpm audit
+        run: pnpm audit --audit-level=high --prod=false
+
+  build-image-api:
+    name: build image (api)
+    needs: changes
+    # Filter `go`. apps/api/Dockerfile COPYs only apps/api/go.mod, apps/api/go.sum
+    # and apps/api/. — every one covered by the `go` filter's 'apps/api/**'
+    # entry. The `go` anchor also carries 'gateway/**', so a gateway-only change
+    # rebuilds this image unnecessarily. That is the right way round: a false
+    # run costs two minutes, a false skip lets a broken image merge.
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # push: false and load: false — this gate proves the image BUILDS. It
+      # publishes nothing, needs no registry credential, and skips the export
+      # to the runner's docker daemon, which nothing here consumes.
+      #
+      # The gha cache is content-addressed per layer, so a changed COPY input
+      # invalidates from that layer down and cannot serve a stale success.
+      # Scoped per image so the two do not evict each other.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  build-image-dashboard:
+    name: build image (dashboard)
+    needs: changes
+    # Filter `web`. apps/dashboard/Dockerfile COPYs pnpm-workspace.yaml,
+    # package.json, pnpm-lock.yaml, tsconfig.base.json, packages/shared and
+    # apps/dashboard — every one already listed in the `web` filter.
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/dashboard/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=dashboard
+          cache-to: type=gha,mode=max,scope=dashboard
