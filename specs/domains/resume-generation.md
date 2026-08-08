@@ -600,3 +600,54 @@ in the same change.** A fix without a case is a fix that can regress silently, a
 exists precisely so that the second occurrence of a failure is impossible rather than merely
 unlikely. This is the rule the corpus is built on: every case in it names a failure this
 repository actually recorded.
+
+## The summary model choice (034)
+
+The user picks who writes the professional summary. **Only** the summary — not the whole pipeline,
+and not the other four stages.
+
+That restraint is the design. 035 measured the economy model doing the mechanical stages (analyze,
+select) as well as the premium one at a fraction of the price, and failing at the summary. Offering
+a choice over the mechanical stages would sell the user a way to spend more money for no
+improvement; offering it over the summary hands them the one lever that changes what they get. The
+original 034 spec asked for a choice of "the model that writes my resume", which stopped meaning
+anything the moment 035 split the pipeline — see the standing note at the top of that spec.
+
+**The catalogue** lives in `internal/generation/domain/summary_option.go`: `standard`, `premium`,
+`fast` and `local`. Four entries, one of them self-hosted and always available. It is Go rather than
+a database table because an option is a gateway task key plus prose, and the task key has to exist
+in `gateway/config.yaml` — a deployment artifact reviewed in code. A row in a table could name a key
+the gateway has never heard of, and that failure is silent: no such group, the call falls through,
+and a user who deliberately picked "Premium" gets whatever the terminal tier is while the UI happily
+reports success. `apps/api/internal/summarycatalogue_test.go` is what stops that, asserting every
+option's key is a declared and chained model group.
+
+**The default routes to the pre-034 task key**, `generation-summary`, unchanged. A user who never
+opens the selector therefore sends exactly the request they sent before the feature existed — true
+by construction rather than by vigilance. Giving the default its own key would have made that
+property depend on two chains being kept in sync forever.
+
+**Adding an option** is three steps: an entry in the catalogue, a task key with a fallback chain
+terminating at `local` in `gateway/config.yaml`, and that key added to `requestedGenerationGroups`
+in `gateway_config_test.go`. The routers wire themselves from the catalogue.
+
+**How the choice is resolved.** Once, at the top of a run, beside the shape config and for the same
+reason: a settings change while a run is in flight must not swap the model writing the summary
+halfway through and produce a document nobody chose. A per-run choice on the request wins over the
+stored default, and choosing also persists — picking and remembering are one action, not two.
+
+**An unconfigured or unknown option degrades, it does not fail.** An option is a routing preference,
+and a preference that can fail a resume run is a liability. The write path is stricter than the read
+path on purpose: an unknown id sent to `PUT /v1/settings/summary-model` is a 400, because the client
+picked it from a menu this same API served, whereas an unknown id *read back* from storage is an
+option retired between releases and resolves to the default.
+
+**What this does not do is measure the options.** The catalogue's cost indicators are relative words
+— "moderate", "highest" — not prices, because a figure written here would be wrong within a month
+and could not be reproduced by the next reader. Deciding whether `premium` is worth its cost is
+038's job, and 038 answers it with a durable artifact:
+
+```sh
+go test -tags eval_live ./internal/generation/application/ \
+  -run TestLiveComparison -eval.models generation-summary,generation-summary-premium
+```
