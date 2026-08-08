@@ -10,12 +10,14 @@ vi.mock('./hooks', () => ({
   useTailorDocuments: vi.fn(),
   useGenerateCoverLetter: vi.fn(),
   useSaveAdHocDocument: vi.fn(),
+  useSummaryModel: vi.fn(),
 }));
 
 import {
   useAdHocDocuments,
   useGenerateCoverLetter,
   useSaveAdHocDocument,
+  useSummaryModel,
   useTailorDocuments,
 } from './hooks';
 
@@ -23,6 +25,19 @@ const mockedUseAdHocDocuments = vi.mocked(useAdHocDocuments);
 const mockedUseTailorDocuments = vi.mocked(useTailorDocuments);
 const mockedUseGenerateCoverLetter = vi.mocked(useGenerateCoverLetter);
 const mockedUseSaveAdHocDocument = vi.mocked(useSaveAdHocDocument);
+const mockedUseSummaryModel = vi.mocked(useSummaryModel);
+
+// 034: the menu the selector renders from. Mirrors the shape the API serves —
+// options plus the current selection in one response.
+const summaryMenu = {
+  optionId: 'standard',
+  options: [
+    { id: 'standard', label: 'Standard', description: 'The balanced default.', cost: 'moderate', selfHosted: false, current: true },
+    { id: 'premium', label: 'Premium', description: 'The strongest writer available.', cost: 'highest', selfHosted: false, current: false },
+    { id: 'fast', label: 'Fast', description: 'Cheapest and quickest.', cost: 'lowest', selfHosted: false, current: false },
+    { id: 'local', label: 'Self-hosted', description: 'Runs on your own machine.', cost: 'free', selfHosted: true, current: false },
+  ],
+};
 
 function setupHooks(resume: GeneratedDocumentDto, coverLetter: GeneratedDocumentDto | null = null) {
   mockedUseAdHocDocuments.mockReturnValue({ data: [] } as any);
@@ -38,6 +53,7 @@ function setupHooks(resume: GeneratedDocumentDto, coverLetter: GeneratedDocument
   } as any);
 
   mockedUseSaveAdHocDocument.mockReturnValue({ mutate: vi.fn() } as any);
+  mockedUseSummaryModel.mockReturnValue({ data: summaryMenu } as any);
 
   return { tailorMutate, coverLetterMutate };
 }
@@ -109,5 +125,57 @@ describe('TailorPage', () => {
 
     expect(screen.getByText('Cover letter')).toBeInTheDocument();
     expect(screen.getByText('Dear hiring manager')).toBeInTheDocument();
+  });
+  // 034: the summary-model selector.
+  describe('summary model selector', () => {
+    it('renders every option and preselects the stored choice', async () => {
+      setupHooks(resumeDoc());
+      renderWithProviders(<TailorPage />);
+
+      const select = screen.getByLabelText('Summary writer') as HTMLSelectElement;
+      expect(select.value).toBe('standard');
+      for (const o of summaryMenu.options) {
+        expect(screen.getByRole('option', { name: new RegExp(o.label) })).toBeInTheDocument();
+      }
+      // The description of the current option is what tells the user what they
+      // are choosing between; a bare label would make the menu a guess.
+      expect(screen.getByText('The balanced default.')).toBeInTheDocument();
+    });
+
+    it('sends the chosen option with the tailoring request', async () => {
+      const { tailorMutate } = setupHooks(resumeDoc());
+      const user = userEvent.setup();
+      renderWithProviders(<TailorPage />);
+
+      await user.selectOptions(screen.getByLabelText('Summary writer'), 'premium');
+      await user.type(screen.getByPlaceholderText(/Paste the job posting text here/), 'Backend role');
+      await user.click(screen.getByRole('button', { name: /generate resume/i }));
+
+      expect(tailorMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ summaryOptionId: 'premium' }),
+        expect.anything(),
+      );
+    });
+
+    // Not sending the field at all is what makes an untouched selector
+    // byte-identical to the pre-034 request (spec AC3).
+    it('sends no option when the user does not touch the selector', async () => {
+      const { tailorMutate } = setupHooks(resumeDoc());
+
+      await runTailoring();
+
+      expect(tailorMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ summaryOptionId: undefined }),
+        expect.anything(),
+      );
+    });
+
+    it('shows which option produced the finished resume', async () => {
+      setupHooks(resumeDoc({ summaryOptionId: 'premium' } as any));
+
+      await runTailoring();
+
+      expect(screen.getByTestId('summary-option-used')).toHaveTextContent('Premium');
+    });
   });
 });

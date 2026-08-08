@@ -2,6 +2,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 
+// 034: the summary-model menu. One query serves the options and the current
+// choice, because a menu fetched separately from the selection can disagree
+// with it about which options exist.
+export function useSummaryModel() {
+  return useQuery({
+    queryKey: ['settings', 'summary-model'],
+    queryFn: () => api.settings.getSummaryModel(),
+  });
+}
+
 export function useAdHocDocuments() {
   return useQuery({
     queryKey: queryKeys.documents.adHoc,
