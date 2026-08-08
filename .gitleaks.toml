@@ -1,0 +1,147 @@
+# gitleaks configuration for job-finder (039).
+#
+# Extends the upstream default rule set rather than replacing it — those rules
+# are a maintained corpus covering every common provider, and hand-rolling five
+# replacements for them would be a strict downgrade.
+#
+# The rules below cover the credential shapes THIS project actually handles and
+# that the defaults do not: the config encryption key, and the four LLM provider
+# keys that live in the litellm container's environment (Constitution Principle
+# V). Detection only — this file relocates no credential.
+#
+# Run locally with `make secrets`. See specs/domains/platform-operations.md for
+# what to do when it fires.
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Project-specific rules
+#
+# Every rule binds to its VARIABLE NAME rather than matching a bare value.
+# That is not stylistic: CONFIG_ENCRYPTION_KEY is 32 bytes of hex, and a bare
+# 64-hex-character regex matches git commit hashes, test vectors, checksums and
+# a good fraction of any lockfile. Bound to the assignment, it matches exactly
+# the thing worth catching.
+
+[[rules]]
+id          = "job-finder-config-encryption-key"
+description = "CONFIG_ENCRYPTION_KEY — 32-byte hex, encrypts stored provider config"
+regex       = '''(?i)\bCONFIG_ENCRYPTION_KEY\b\s*[:=]\s*['"]?([a-f0-9]{64})['"]?'''
+keywords    = ["config_encryption_key"]
+
+[[rules]]
+id          = "job-finder-cerebras-api-key"
+description = "Cerebras API key (csk- prefix)"
+regex       = '''\bcsk-[a-zA-Z0-9]{32,}\b'''
+keywords    = ["csk-"]
+
+[[rules]]
+id          = "job-finder-groq-api-key"
+description = "Groq API key (gsk_ prefix)"
+regex       = '''\bgsk_[a-zA-Z0-9]{40,}\b'''
+keywords    = ["gsk_"]
+
+[[rules]]
+id          = "job-finder-openrouter-api-key"
+description = "OpenRouter API key (sk-or-v1- prefix)"
+regex       = '''\bsk-or-v1-[a-f0-9]{48,}\b'''
+keywords    = ["sk-or-v1-"]
+
+# Cohere issues opaque 40-character keys with no prefix, so shape alone is
+# indistinguishable from any other base62 blob. Bound to the variable name,
+# with an entropy floor so a placeholder like "your-key-here" does not fire.
+[[rules]]
+id          = "job-finder-cohere-api-key"
+description = "Cohere API key (opaque 40-char, matched via its variable name)"
+regex       = '''(?i)\bCOHERE_API_KEY\b\s*[:=]\s*['"]?([a-zA-Z0-9]{40})['"]?'''
+keywords    = ["cohere_api_key"]
+entropy     = 3.5
+
+# ---------------------------------------------------------------------------
+
+# Two blocks, because gitleaks matches allowlist `regexes` against the captured
+# SECRET by default, while some of our false positives are only recognisable
+# from the surrounding line. `regexTarget` is per-block, so the line-targeted
+# entries need their own.
+
+[[allowlists]]
+description = "Placeholders and documentation that are legitimately key-shaped"
+
+paths = [
+  # Ships with every variable present and every value empty. It is the file
+  # that teaches people which keys exist, so it must name all of them.
+  '''^\.env\.example$''',
+  # LiteLLM routing config. Its values are os.environ/ references, never
+  # literals — and apps/api/internal/platform/llm/gateway_config_test.go
+  # already asserts that no literal credential appears in it (036).
+  '''^gateway/config\.yaml$''',
+  # This feature's own record documents key names, prefixes, and the regexes
+  # above. Matching its own documentation would fail every pull request that
+  # touches the spec.
+  '''^specs/039-supply-chain-ci/''',
+  # The rule definitions themselves.
+  '''^\.gitleaks\.toml$''',
+
+  # --- entries below were added from the one-time full-history audit (FR-016).
+  # All 15 findings were false positives; none was a job-finder credential, so
+  # nothing required rotation. Each entry records which finding it silences.
+
+  # Scraped upstream HTML kept as parser fixtures. The `gcp-api-key` hits are
+  # Google Maps keys belonging to the scraped SITES, embedded in their own
+  # public page source. Not ours, not secret, and rewriting the fixtures would
+  # make them stop reproducing the pages the parsers are tested against.
+  '''testdata/.*\.html$''',
+
+  # Cross-language crypto fixture. `nodeFixtureKey` is a 64-hex value generated
+  # solely to prove Go decrypts what the old Node implementation encrypted —
+  # byte-for-byte compatibility is the whole point of the test, so the value
+  # must stay literal. It has never been a deployment key.
+  #
+  # Note this did NOT trip job-finder-config-encryption-key: that rule binds to
+  # the CONFIG_ENCRYPTION_KEY variable name, and this is `nodeFixtureKey`. The
+  # binding design is working; it is the default generic-api-key rule that
+  # fires here.
+  '''internal/crypto/crypto_test\.go$''',
+
+  # Historic spec quickstarts used `Authorization: Bearer <placeholder>` in
+  # example curl invocations. Those directories are deleted (specs fold into
+  # specs/domains/ on ship) but remain in history, which a full-history local
+  # run still walks.
+  '''^specs/[0-9]{3}-.*/quickstart\.md$''',
+]
+
+regexes = [
+  # Documentation placeholders. Narrow on purpose: each matches a literal
+  # instructional string, not a value shape.
+  '''your[-_]?(api[-_]?)?key[-_]?here''',
+  '''<[A-Z_]{3,}>''',
+  '''\$\{[A-Z_]+\}''',
+  '''os\.environ/[A-Z_]+''',
+  # `openssl rand -hex 32` appears in README and .env.example as the
+  # instruction for GENERATING the key, not as a key.
+  '''openssl rand -hex 32''',
+
+]
+
+# Intentionally empty. A commit allowlist suppresses everything in a commit,
+# which is the blunt instrument this mechanism exists to avoid. If a historical
+# commit ever needs suppressing, the entry gets a comment saying why and the
+# credential gets rotated first.
+commits = []
+
+[[allowlists]]
+description = "False positives recognisable only from the surrounding source line"
+regexTarget = "line"
+
+regexes = [
+  # The default linkedin-client-id rule fires on the column alias `linkedinUrl`
+  # in contact.sql and in its sqlc-generated Go. A camelCase column name is not
+  # a LinkedIn client id, and the alias cannot be renamed without changing the
+  # DTO contract the dashboard consumes.
+  '''linkedinUrl''',
+
+  # The default generic-api-key rule fires on a `tokens:` struct field in the
+  # keyword rephrase path — a count of LLM tokens, not a credential.
+  '''\btokens:\s''',
+]

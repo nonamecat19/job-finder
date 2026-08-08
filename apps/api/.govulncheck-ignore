@@ -1,0 +1,21 @@
+# Advisory exceptions for govulncheck. Enforced by scripts/govulncheck-check.sh.
+#
+# Format, one entry per line:
+#
+#   <GO-YYYY-NNNN>  <expiry YYYY-MM-DD>  <reason to end of line>
+#
+# An entry suppresses exactly ONE advisory until its expiry date. After that
+# the gate fails until the entry is renewed in a reviewed diff — an exception
+# cannot persist unattended, which is what stops this file becoming a
+# graveyard of forgotten risk.
+#
+# Only reach for an entry when the advisory has NO released fix. If a fix
+# exists, bump the dependency instead:
+#
+#   cd apps/api && go get <module>@<fixed-version> && go mod tidy
+#
+# A malformed line, an expired entry, or an entry for an advisory that no
+# longer appears all fail the gate deliberately. See
+# specs/domains/platform-operations.md for the runbook.
+#
+# Empty is the expected steady state.
