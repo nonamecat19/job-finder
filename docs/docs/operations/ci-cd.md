@@ -1,7 +1,7 @@
 ---
 title: CI and delivery
 sidebar_position: 3
-description: The six CI jobs, what each gates, version pinning, and how to fix each failure.
+description: The CI jobs, what each gates, version pinning, the supply-chain gates, and how to fix each failure.
 ---
 
 # CI and delivery
@@ -42,6 +42,21 @@ others.
 | `go-test` | *go test* | `go test ./...` in `apps/api` |
 | `frontend-test` | *frontend test (vitest)* | dashboard unit tests |
 | `frontend-typecheck` | *frontend typecheck* | `pnpm typecheck` |
+| `secret-scan` | *secret scan* | no credential in this pull request's commits |
+| `vulnerability-scan-go` | *vulnerability scan (go)* | no **reachable** advisory in `apps/api`'s dependencies |
+| `vulnerability-scan-web` | *vulnerability scan (web)* | no workspace advisory at `high` or above |
+| `build-image-api` | *build image (api)* | `apps/api/Dockerfile` still builds |
+| `build-image-dashboard` | *build image (dashboard)* | `apps/dashboard/Dockerfile` still builds |
+
+The last five are the supply-chain and build-integrity gates. Before them, four classes of
+defect could merge with every check green: a committed credential, a published advisory
+against a dependency, dependency drift, and a container image that no longer builds.
+
+Each is skipped rather than absent on a pull request that cannot affect it — the
+distinction matters, because a check that reports *nothing* would sit at "Expected"
+forever once branch protection is applied. `secret scan` is the exception that runs on
+almost everything: it uses a tree-wide filter, because a key pasted into a markdown file
+is still a key.
 
 ## Version pinning
 
@@ -54,8 +69,10 @@ others.
     sqlc-version: ${{ steps.sqlc.outputs.version }}
 ```
 
-Both generators are pinned in-repo (`apps/api/.sqlc-version`, `apps/api/.tygo-version`),
-and the local check script refuses to run on a mismatched version. Without that, the drift
+Five tools are pinned in-repo this way — `apps/api/.sqlc-version`,
+`apps/api/.tygo-version`, `apps/api/.golangci-version`,
+`apps/api/.govulncheck-version` and `.gitleaks-version` — and each local check script
+refuses to run on a mismatched version. Without that, the drift
 check would flap between machines whenever someone upgraded a tool.
 
 Go comes from `go-version-file: apps/api/go.mod` — one source of truth for the language
@@ -135,18 +152,102 @@ change fails the build.
 | `go-test` | a real regression | reproduce with `make test-go` |
 | `frontend-test` | component or contract change | `make test-react` |
 | `frontend-typecheck` | shared types not mirrored, or a real type error | rebuild shared, then `pnpm typecheck` |
+| `secret scan` | a credential shape in your commits | **rotate the credential first** — it is already pushed — then remove it. See below |
+| `vulnerability scan (go)` | a reachable advisory | `cd apps/api && go get <module>@<fixed> && go mod tidy` |
+| `vulnerability scan (web)` | an advisory at `high`+ | bump the package; reproduce with `make vuln-web` |
+| `build image (api)` / `(dashboard)` | the Dockerfile broke | fix it — there is no suppression path, by design |
+
+## Responding to a supply-chain gate
+
+### A secret was detected
+
+Treat it as public: it is in a pushed branch, and anyone with read access — plus every
+clone and fork — has it. **Rotate the credential before doing anything else.** Then remove
+it from the change.
+
+Only if the finding is genuinely not a secret, add an entry to `.gitleaks.toml` with a
+comment saying why. Keep it narrow — a bare `.*` path or regex is never acceptable, and the
+allowlist has two blocks because gitleaks matches `regexes` against the captured secret by
+default, while some false positives are only recognisable from the surrounding line
+(`regexTarget = "line"`).
+
+The scan never prints the matched value in full: `--redact` is mandatory, because the
+workflow log is itself readable.
+
+### A Go advisory blocks the merge
+
+`govulncheck` fails only on advisories **reachable** from this module's own code — call
+graph, not dependency graph. An unreachable finding is printed and passes. This is what
+keeps the gate actionable: at the time it was introduced, three real advisories against
+real dependencies were unreachable, and failing on those would have made the gate noise
+within a week.
+
+If a fix exists, bump. If it does not, add an expiring entry to
+`apps/api/.govulncheck-ignore`:
+
+```
+GO-2026-1234  2026-10-01  No fixed version upstream; reachable only from <path>
+```
+
+The expiry is the point — an expired entry **fails** the gate rather than lapsing into
+silence, so keeping an exception means renewing it in a reviewed diff. A malformed line, a
+duplicate, and an entry for an advisory that no longer appears all fail too.
+
+```bash
+./scripts/govulncheck-check.sh --self-test   # proves all six parser failure modes offline
+```
+
+### A web advisory blocks the merge
+
+The severity floor is `high`, set explicitly in the workflow rather than left to a default.
+`moderate` was considered and rejected: nearly every moderate finding in a Vite/React
+devDependency tree is a build-time-only ReDoS that a deployed static bundle cannot reach.
+
+Exceptions go in `auditConfig.ignoreCves` in **`pnpm-workspace.yaml`** — not
+`package.json`, which pnpm 11 no longer reads for this — and every id needs a row in the
+table in `specs/domains/platform-operations.md` § 3.2 giving the reason.
+
+### An image build fails
+
+Fix the Dockerfile. There is deliberately no suppression mechanism: a vulnerability or a
+secret match can be a false positive or an unfixable upstream fact, but an image that does
+not build is never either.
+
+Reproduce with `make images`.
+
+## Automated dependency updates
+
+`.github/dependabot.yml` opens weekly grouped pull requests for the Go module, the pnpm
+workspace, the workflow's actions, and both Dockerfiles' base images. Minor and patch
+arrive batched; majors arrive individually, so a breaking change is never hidden behind a
+diff of twenty other bumps. Each ecosystem has an open-pull-request cap.
+
+It does **not** read compose files, so the images in `docker-compose.yml` and
+`docker-compose.prod.yml` stay manual.
 
 ## Pre-push checklist
 
 ```bash
-make test-lint                     # go test + vitest
+make test-lint                     # go test + vitest + both linters
 make sqlc-check                    # drift
 make tygo-check                    # drift
 pnpm typecheck
 cd apps/api && go vet ./...
 ```
 
-That is every CI job reproduced locally.
+That reproduces every CI job whose verdict depends only on the tree.
+
+The supply-chain gates are separate, because theirs does not:
+
+```bash
+make audit                         # vuln-go + vuln-web + secrets
+make images                        # both container builds (slow: 6-8 min cold)
+```
+
+`make audit` is not part of `test-lint` on purpose. An advisory published this afternoon
+turns this morning's green run red with no commit in between, so a passing local run
+cannot promise a passing CI run — which is the whole promise `test-lint` exists to make.
+Run it when you touch dependencies.
 
 ## Delivery
 
