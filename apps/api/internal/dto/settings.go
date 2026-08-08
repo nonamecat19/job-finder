@@ -22,3 +22,28 @@ type ResumeShapeConfigDto struct {
 	CertificationsMax     int  `json:"certificationsMax"`
 	FontSize              int  `json:"fontSize"`
 }
+
+// SummaryModelOptionDto is one entry on the 034 summary-model menu. Cost is a
+// relative indicator, not a price: a figure here would be wrong within a month
+// and could not be reproduced by the reader. Real per-run cost lives in the 038
+// comparison artifact.
+type SummaryModelOptionDto struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	Cost        string `json:"cost"`
+	SelfHosted  bool   `json:"selfHosted"`
+	Current     bool   `json:"current"`
+}
+
+// SummaryModelSettingDto is the whole menu plus which entry is selected, so the
+// dashboard renders the selector from one response rather than joining a
+// catalogue against a setting.
+type SummaryModelSettingDto struct {
+	Options  []SummaryModelOptionDto `json:"options"`
+	OptionID string                  `json:"optionId"`
+}
+
+type UpdateSummaryModelRequestDto struct {
+	OptionID string `json:"optionId"`
+}
