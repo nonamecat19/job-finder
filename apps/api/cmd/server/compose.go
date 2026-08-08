@@ -59,6 +59,8 @@ import (
 	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/subscriptions"
 	subscriptionshttp "github.com/job-finder/api/internal/subscriptions/interfaces/http"
+	"github.com/job-finder/api/internal/summarymodel"
+	summarymodelhttp "github.com/job-finder/api/internal/summarymodel/interfaces/http"
 )
 
 type App struct {
@@ -82,6 +84,7 @@ type App struct {
 	Outreach      *outreachhttp.OutreachHandler
 	AiFeatures    *aifeaturehttp.AiFeatureHandler
 	ResumeShape   *resumeshapehttp.ResumeShapeHandler
+	SummaryModel  *summarymodelhttp.SummaryModelHandler
 	InterviewPrep *interviewprephttp.InterviewPrepHandler
 	Health        *health.HealthHandler
 	Hosts         *jobsourceshttp.HostsHandler
@@ -196,9 +199,13 @@ type llmHandles struct {
 	GenerationSelectRouter  *llm.Router
 	GenerationPremiumRouter *llm.Router
 	GenerationSummaryRouter *llm.Router
-	RephraseRouter          *llm.Router
-	GhostRouter             *llm.Router
-	DefaultRouter           *llm.Router
+	// SummaryOptionRouters is one router per 034 summary option, keyed by
+	// option id. Built from the catalogue so adding an option is a one-line
+	// change there rather than a wiring change here.
+	SummaryOptionRouters map[string]llm.Provider
+	RephraseRouter       *llm.Router
+	GhostRouter          *llm.Router
+	DefaultRouter        *llm.Router
 }
 
 func composeLLM(p *Platform) (*llmHandles, error) {
@@ -219,6 +226,7 @@ func composeLLM(p *Platform) (*llmHandles, error) {
 		GenerationSelectRouter:  llm.NewRouter("generation-select", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
 		GenerationPremiumRouter: llm.NewRouter("generation-select-premium", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
 		GenerationSummaryRouter: llm.NewRouter("generation-summary", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
+		SummaryOptionRouters:    summaryOptionRouters(gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
 		RephraseRouter:          llm.NewRouter("rephrase", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelRephrase)),
 		GhostRouter:             llm.NewRouter("ghost", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGhost)),
 		DefaultRouter:           llm.NewRouter("default", gatewayIface, ollamaProvider, cfg.LLMModel),
@@ -286,10 +294,11 @@ func composeGhostJob(p *Platform, ghostRouter *llm.Router) *ghostHandles {
 }
 
 type generationHandles struct {
-	Generation  *generation.Service
-	Handler     *generation.Handler
-	Documents   *generationhttp.DocumentsHandler
-	ResumeShape *resumeshapehttp.ResumeShapeHandler
+	Generation   *generation.Service
+	Handler      *generation.Handler
+	Documents    *generationhttp.DocumentsHandler
+	ResumeShape  *resumeshapehttp.ResumeShapeHandler
+	SummaryModel *summarymodelhttp.SummaryModelHandler
 }
 
 func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Service, routers generation.Routers) (*generationHandles, error) {
@@ -322,12 +331,21 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	if err != nil {
 		return nil, err
 	}
+	// 034: which option writes the summary. Like the shape service, a failure
+	// to load it is not fatal — the catalogue default is a complete answer, and
+	// refusing to start the API over a preferences row would be a poor trade.
+	summarySvc, err := summarymodel.NewService(ctx, p.DB.Queries)
+	if err != nil {
+		return nil, err
+	}
 	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, routers, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl, shapeSvc)
+	generationSvc.SetSummaryModelProvider(summarySvc)
 	return &generationHandles{
-		Generation:  generationSvc,
-		Handler:     generation.NewHandler(generationSvc, p.DB.Queries),
-		Documents:   &generationhttp.DocumentsHandler{Generation: generationSvc},
-		ResumeShape: &resumeshapehttp.ResumeShapeHandler{Settings: shapeSvc},
+		Generation:   generationSvc,
+		Handler:      generation.NewHandler(generationSvc, p.DB.Queries),
+		Documents:    &generationhttp.DocumentsHandler{Generation: generationSvc, SummaryModel: summarySvc},
+		ResumeShape:  &resumeshapehttp.ResumeShapeHandler{Settings: shapeSvc},
+		SummaryModel: &summarymodelhttp.SummaryModelHandler{Settings: summarySvc},
 	}, nil
 }
 
@@ -607,7 +625,13 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Select:  llmH.GenerationSelectRouter,
 		Premium: llmH.GenerationPremiumRouter,
 		Summary: llmH.GenerationSummaryRouter,
-		Cover:   llmH.GenerationRouter,
+		// 034: one router per hosted summary option. The `standard` option is
+		// served by Summary above — it is the same task key the pipeline used
+		// before the feature existed, which is what makes an untouched selector
+		// byte-identical to today. The self-hosted option is a router with no
+		// gateway, which is the pre-split behaviour.
+		SummaryByOption: llmH.SummaryOptionRouters,
+		Cover:           llmH.GenerationRouter,
 	})
 	if err != nil {
 		return nil, err
@@ -651,6 +675,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
 		AiFeatures:    matchingH.AiFeatureHandler,
 		ResumeShape:   generationH.ResumeShape,
+		SummaryModel:  generationH.SummaryModel,
 		InterviewPrep: interviewPrepH,
 		Health:        composeHealth(p),
 		Hosts:         hostsH,
@@ -669,4 +694,23 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 
 		Scheduler: ingestionH.Scheduler,
 	}, nil
+}
+
+// summaryOptionRouters builds one provider per 034 summary option, from the
+// catalogue rather than from a list repeated here — an option added in
+// internal/generation/domain wires itself.
+//
+// The self-hosted option deliberately gets a router with **no gateway**: that
+// is what "runs entirely on your own machine" means, and it is the same shape
+// the whole application takes when no gateway is configured at all.
+func summaryOptionRouters(gateway, local llm.Provider, localModel string) map[string]llm.Provider {
+	out := map[string]llm.Provider{}
+	for _, o := range generation.SummaryOptions() {
+		if o.SelfHosted() {
+			out[o.ID] = llm.NewRouter("", nil, local, localModel)
+			continue
+		}
+		out[o.ID] = llm.NewRouter(o.TaskKey, gateway, local, localModel)
+	}
+	return out
 }

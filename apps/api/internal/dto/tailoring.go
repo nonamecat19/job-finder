@@ -53,6 +53,10 @@ type TailorResumeRequestDto struct {
 	ProfileID string           `json:"profileId"`
 	JobID     *string          `json:"jobId,omitempty"`
 	Vacancy   *AdhocVacancyDto `json:"vacancy,omitempty"`
+	// SummaryOptionID is the 034 summary-model choice for this run. Optional:
+	// absent means "use my stored default", which is what every caller written
+	// before the feature sends.
+	SummaryOptionID *string `json:"summaryOptionId,omitempty"`
 }
 
 type AdhocVacancyDto struct {
