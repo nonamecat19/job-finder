@@ -47,6 +47,11 @@ var requestedGenerationGroups = []string{
 	"generation-select",
 	"generation-select-premium",
 	"generation-summary",
+	// 034: the two hosted summary options a user can pick. The `standard`
+	// option routes to "generation-summary" above and needs no entry of its
+	// own; the self-hosted option never reaches the gateway at all.
+	"generation-summary-premium",
+	"generation-summary-fast",
 }
 
 const terminalTier = "local"
@@ -437,6 +442,10 @@ model_list:
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: generation-summary
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
+  - model_name: generation-summary-premium
+    litellm_params: {model: openrouter/anthropic/claude-opus-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
+  - model_name: generation-summary-fast
+    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
   - model_name: default
     litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
     model_info: {supports_function_calling: true}
@@ -459,6 +468,8 @@ litellm_settings:
     - generation-select: [local]
     - generation-select-premium: [local]
     - generation-summary: [local]
+    - generation-summary-premium: [local]
+    - generation-summary-fast: [local]
     - default: [default-groq, local]
 `
 

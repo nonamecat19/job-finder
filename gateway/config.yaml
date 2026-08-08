@@ -161,6 +161,35 @@ model_list:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
 
+  # --- user-selectable summary options (034) ---
+  # The summary stage is the only stage the user gets to choose, because it is
+  # the only one where the choice buys anything: 035 measured the economy model
+  # doing analyze and select as well as the premium one, and failing at the
+  # summary. The catalogue lives in internal/generation/domain/summary_option.go
+  # and a test asserts every option's key is declared and chained here.
+  #
+  # `standard` is deliberately absent from this block: it routes to the
+  # `generation-summary` key above, unchanged, so a user who never opens the
+  # selector sends exactly the request they sent before the feature existed.
+  - model_name: generation-summary-premium
+    litellm_params:
+      model: openrouter/anthropic/claude-opus-5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-summary-premium-sonnet
+    litellm_params:
+      model: openrouter/anthropic/claude-sonnet-5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-summary-fast
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: generation-summary-fast-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+
   # --- rephrase ---
   - model_name: rephrase
     litellm_params:
@@ -324,6 +353,8 @@ litellm_settings:
     - generation-select: [generation-select-cerebras, generation-select-cohere, local]
     - generation-select-premium: [generation-select-premium-haiku, local]
     - generation-summary: [generation-summary-haiku, generation-summary-cerebras, local]
+    - generation-summary-premium: [generation-summary-premium-sonnet, generation-summary-cerebras, local]
+    - generation-summary-fast: [generation-summary-fast-groq, generation-summary-cerebras, local]
     - rephrase: [rephrase-groq, rephrase-cohere, rephrase-openrouter, local]
     - ghost: [ghost-groq, ghost-cohere, ghost-openrouter, local]
     - default: [default-groq, default-cohere, default-openrouter, local]
