@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,8 +31,16 @@ type DocumentGenerator interface {
 	GetDocumentDownload(ctx context.Context, id string) (path *string, filename string, err error)
 }
 
+// SummaryModelStore remembers the user's summary-model choice (034). Optional:
+// a deployment without it still honours a per-run choice, it just does not
+// remember it.
+type SummaryModelStore interface {
+	Update(ctx context.Context, optionID string) (generation.SummaryOption, error)
+}
+
 type DocumentsHandler struct {
-	Generation DocumentGenerator
+	Generation   DocumentGenerator
+	SummaryModel SummaryModelStore
 }
 
 func (h *DocumentsHandler) Mount(r chi.Router) {
@@ -51,6 +60,10 @@ type tailorBody struct {
 	RequiredSkills  []string `json:"requiredSkills,omitempty"`
 	NiceToHave      []string `json:"niceToHave,omitempty"`
 	ExperienceLevel *string  `json:"experienceLevel,omitempty"`
+	// SummaryOptionID is the 034 summary-model choice for this run. Absent
+	// means "use my stored default", which is what every client written before
+	// the feature sends.
+	SummaryOptionID *string `json:"summaryOptionId,omitempty"`
 }
 
 func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +89,26 @@ func (h *DocumentsHandler) tailor(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), tailorTimeout)
 	defer cancel()
+
+	// 034: a choice on the request applies to this run and becomes the stored
+	// default, so picking and remembering are one action rather than two. An
+	// id the catalogue does not know is rejected here rather than silently
+	// downgraded — the client picked it from a menu this API served.
+	if body.SummaryOptionID != nil {
+		opt, ok := generation.LookupSummaryOption(*body.SummaryOptionID)
+		if !ok {
+			httpx.WriteError(w, http.StatusBadRequest, "unknown summary model option: "+*body.SummaryOptionID)
+			return
+		}
+		ctx = generation.WithSummaryOption(ctx, opt)
+		if h.SummaryModel != nil {
+			if _, err := h.SummaryModel.Update(ctx, opt.ID); err != nil {
+				// Remembering the choice is a convenience; failing to remember
+				// it must not cost the user the resume they asked for.
+				slog.Warn("could not persist summary model choice", "option", opt.ID, "err", err)
+			}
+		}
+	}
 
 	resume, err := h.Generation.GenerateAdHoc(ctx, generation.AdHocInput{
 		Vacancy: body.Vacancy, Company: body.Company, Title: body.Title, GroundingLevel: level, Hints: hints,

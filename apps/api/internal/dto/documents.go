@@ -17,7 +17,11 @@ type GeneratedDocumentDto struct {
 	// SummarySubstituted is what the review surface shows the user: a summary
 	// written by a fallback is still a summary, but they should know (035
 	// FR-012).
-	SummaryModel       *string  `json:"summaryModel,omitempty"`
+	SummaryModel *string `json:"summaryModel,omitempty"`
+	// Which catalogue option the user picked (034). Distinct from SummaryModel:
+	// two options can land on the same upstream after a fallback, so the served
+	// model cannot say which option was chosen.
+	SummaryOptionID    *string  `json:"summaryOptionId,omitempty"`
 	SummarySubstituted bool     `json:"summarySubstituted"`
 	SelectionEscalated bool     `json:"selectionEscalated"`
 	StageCostUsd       *float64 `json:"stageCostUsd,omitempty"`
