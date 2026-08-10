@@ -1,10 +1,11 @@
 {
   "case": "ambiguous-dates",
-  "scorer_set_version": 1,
-  "recorded_at": "2026-08-07",
-  "reason": "initial baseline",
+  "scorer_set_version": 2,
+  "recorded_at": "2026-08-10",
+  "reason": "scorer set v2: added duplicate_provenance, wrapping the new VerifyHighlightProvenance check; fixtures re-recorded for the 067903f select prompt/schema",
   "scores": {
     "bullet_shortfalls": 0,
+    "duplicate_provenance": 0,
     "grounding_violations": 0,
     "highlight_drift": 0,
     "nice_to_have_retention": 1,

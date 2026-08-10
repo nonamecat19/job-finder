@@ -24,7 +24,7 @@ import (
 // A baseline recorded under a different version is not comparable: the delta
 // would be measured across two instruments and read as a quality change. The
 // comparator refuses rather than subtracting.
-const ScorerSetVersion = 1
+const ScorerSetVersion = 2
 
 // Direction says which way is worse, so the comparator never has to infer
 // whether 3 → 5 is good.
@@ -99,6 +99,18 @@ var scorers = []Scorer{
 		Direction: LowerIsBetter,
 		Score: func(in scoreInput) float64 {
 			return float64(len(domain.VerifyHighlightGrounding(in.master, in.result)))
+		},
+	},
+	{
+		Name:      "duplicate_provenance",
+		Direction: LowerIsBetter,
+		Score: func(in scoreInput) float64 {
+			// VerifyHighlightProvenance, in rendercv_structure.go, wired into
+			// the grounding ladder in service.go. It is the only check that
+			// sees one master bullet rendered as two accomplishments — every
+			// other check reads each half on its own, and each half is
+			// grounded.
+			return float64(len(domain.VerifyHighlightProvenance(in.master, in.result)))
 		},
 	},
 	{
@@ -178,9 +190,10 @@ func scorerNames() []string {
 // compared against a run with seven, and the missing scorer would read as
 // "unchanged" rather than "never measured".
 func TestScorerSetVersionMatchesTheSet(t *testing.T) {
-	const versionAtWhichThisWasWritten = 1
+	const versionAtWhichThisWasWritten = 2
 	wantNames := []string{
 		"bullet_shortfalls",
+		"duplicate_provenance",
 		"grounding_violations",
 		"highlight_drift",
 		"nice_to_have_retention",
@@ -290,6 +303,7 @@ func TestScorerDelegationIsExact(t *testing.T) {
 			"grounding_violations":    float64(len(domain.VerifyRendercvGrounding(in.master, in.result, in.level, in.analysis))),
 			"structural_violations":   float64(len(domain.VerifyStructureIntegrity(in.master, in.result))),
 			"highlight_drift":         float64(len(domain.VerifyHighlightGrounding(in.master, in.result))),
+			"duplicate_provenance":    float64(len(domain.VerifyHighlightProvenance(in.master, in.result))),
 			"required_skills_missing": float64(len(in.report.RequiredMissing)),
 			"nice_to_have_retention":  in.report.NiceToHaveRetained,
 			"bullet_shortfalls":       float64(len(in.report.BulletShortfalls)),
@@ -373,8 +387,23 @@ func mutatedDocuments() []mutation {
 		return d
 	}()
 
+	// One master bullet spun into two wordings. Both halves keep enough of the
+	// original to pass lcsCovered — that is what makes this defect invisible to
+	// every scorer but its own.
+	oneBulletTwice := func() domain.RendercvMaster {
+		_, d, _, _ := scoringFixture()
+		s := sections(d)
+		exp := s["experience"].([]any)[0].(map[string]any)
+		exp["highlights"] = []any{
+			"Shipped the payments service",
+			"Shipped the payments service to production",
+		}
+		return d
+	}()
+
 	return []mutation{
 		{"a company absent from master", fabricatedCompany, "grounding_violations"},
+		{"one master bullet rendered as two accomplishments", oneBulletTwice, "duplicate_provenance"},
 		{"a highlight sharing no words with any master bullet", driftedHighlight, "highlight_drift"},
 		{"highlights stripped below ExperienceBulletsMin", strippedBullets, "bullet_shortfalls"},
 		{"a required skill removed", removedRequiredSkill, "required_skills_missing"},

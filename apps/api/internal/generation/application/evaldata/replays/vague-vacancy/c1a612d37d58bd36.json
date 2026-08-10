@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:c1a612d37d58bd36947faba86cd63d0b34603506ac11cdf88803b887c1273d30",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "The resume below is too short (only 1 page). Expand it to fill TWO pages with more detail.  RULES: - Leave the summary alone. It is written by a separate step a",
+    "prompt_len": 4978,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2966,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Small Studio\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Developed and maintained the REST API for a scheduling product, taking full ownership of its functionality and contributing to impactful feature development.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Successfully executed a zero-downtime database migration from SQLite to Postgres, ensuring uninterrupted product continuity and enhancing data management capabilities.\",\n          \"sourceIndex\": 1\n        },\n        {\n          \"rephrased\": \"Implemented new features and improvements for the scheduling product's REST API, directly contributing to user experience and product value.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Troubleshot and resolved issues within the existing API, ensuring optimal performance and reliability for the scheduling service.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Optimized database queries and schema following the migration to Postgres, leading to improved application performance and scalability.\",\n          \"sourceIndex\": 1\n        }\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": []\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

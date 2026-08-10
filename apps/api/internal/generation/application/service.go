@@ -574,6 +574,12 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 			rec.Step(ctx, fmt.Sprintf("grounding check (attempt %d/%d)", attempt+1, groundingAttempts), nil)
 		}
 		lastViolations = domain.VerifyRendercvGrounding(master, merged, level, analysis)
+		// One master bullet, one line on the page. ResolveHighlights drops a
+		// repeated sourceIndex, so this only fires when two references to
+		// *different* bullets were reworded into the same accomplishment —
+		// which no earlier check can see, because both halves are grounded in
+		// the bullet they were spun from.
+		lastViolations = append(lastViolations, domain.VerifyHighlightProvenance(master, merged)...)
 		if len(lastViolations) == 0 {
 			fixed, err := s.fixStructureIntegrity(ctx, master, merged, analysis, level, cfg, rec)
 			if rec != nil && prov != nil {

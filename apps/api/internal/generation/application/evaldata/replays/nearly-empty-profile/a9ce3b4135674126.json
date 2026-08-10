@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:a9ce3b4135674126b48afa01cf8e94bdfb1837cae46a778056706cb216e8217d",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: Go, Postgres, Docker NICE-TO-HAVE: database migration, L",
+    "prompt_len": 5184,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2966,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Small Studio (Backend Developer) | Remote\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Developed and maintained the Go-based REST API for a scheduling product, owning endpoints end-to-end.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Migrated the scheduling service from SQLite to Postgres with zero downtime, demonstrating database migration expertise.\",\n          \"sourceIndex\": 1\n        }\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [\n    {\n      \"addTokens\": \"Go,Postgres,Docker\",\n      \"groupLabel\": \"Backend\",\n      \"removeTokens\": \"\",\n      \"replaceDetails\": null\n    },\n    {\n      \"addTokens\": \"Linux operations\",\n      \"groupLabel\": \"Tools\",\n      \"removeTokens\": \"\",\n      \"replaceDetails\": null\n    }\n  ],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": []\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

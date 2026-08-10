@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:e8d1ddce19ea2e8c45b51bcdc5d18ba7af03f4730d20d0ba20581911e4c6a127",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: Go, Postgres at scale, Kubernetes in production, Track r",
+    "prompt_len": 5929,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2966,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Northwind Data\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Rebuilt the ingestion pipeline to handle ten times the daily volume, demonstrating ability to scale platform services.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Introduced schema versioning across six downstream consumers, ensuring careful migration and platform stability.\",\n          \"sourceIndex\": 1\n        }\n      ]\n    },\n    {\n      \"company\": \"Contoso Consulting\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Delivered a reporting service for a logistics client, showcasing ownership of platform services.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Automated the client's nightly reconciliation job, improving efficiency and reliability.\",\n          \"sourceIndex\": 1\n        }\n      ]\n    },\n    {\n      \"company\": \"Fabrikam\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Led the migration of the billing service off a shared database, demonstrating architectural decision-making and careful migration.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Cut p95 checkout latency from 900ms to 210ms, a significant throughput improvement.\",\n          \"sourceIndex\": 1\n        }\n      ]\n    },\n    {\n      \"company\": \"Early Startup\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Built the first version of the customer portal, taking ownership of a key platform service.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Set up the deployment pipeline the team used for three years, demonstrating architectural foresight and platform development.\",\n          \"sourceIndex\": 1\n        }\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": []\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

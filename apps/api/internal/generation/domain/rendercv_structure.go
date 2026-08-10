@@ -303,6 +303,63 @@ func StripUngroundedHighlights(master, merged RendercvMaster) RendercvMaster {
 	return merged
 }
 
+// VerifyHighlightProvenance reports experience entries where two rendered
+// highlights derive from the same master bullet.
+//
+// One master bullet is one accomplishment, and it can appear on the page once.
+// A document that says it twice — in two wordings, so neither is a literal
+// duplicate — reads as two accomplishments and inflates the candidate's record
+// without containing a single fabricated word. StripUngroundedHighlights cannot
+// catch it: both halves pass lcsCovered against the bullet they were spun from,
+// which is exactly why they pass.
+//
+// Selection cannot express it either, since ResolveHighlights drops a repeated
+// sourceIndex. That is the point of verifying rather than trusting: the repair
+// is silent, so without a check nothing downstream can tell a document where
+// the repair fired from one where it was never needed. Models do emit the
+// defect — the eval corpus has a recorded select response pointing three
+// references at the same bullet — and the check is what lets the gate see it.
+//
+// Attribution is by best word-overlap, the same rule StripUngroundedHighlights
+// uses to pick a replacement, so both agree on which master bullet a highlight
+// came from. Entries with no master bullets are skipped; a highlight that
+// belongs to no master bullet is drift, which VerifyHighlightGrounding reports.
+func VerifyHighlightProvenance(master, merged RendercvMaster) []string {
+	masterSections := CvSections(master)
+	mergedSections := CvSections(merged)
+	if mergedSections == nil {
+		return nil
+	}
+	masterCompanyHighlights := map[string][]string{}
+	for _, e := range AsSliceOfMaps(masterSections["experience"]) {
+		masterCompanyHighlights[norm(StringField(e, "company"))] = StringSliceField(e, "highlights")
+	}
+
+	var violations []string
+	for _, e := range AsSliceOfMaps(mergedSections["experience"]) {
+		company := StringField(e, "company")
+		masterBullets := masterCompanyHighlights[norm(company)]
+		if len(masterBullets) == 0 {
+			continue
+		}
+		claimedBy := map[string]string{}
+		for _, h := range StringSliceField(e, "highlights") {
+			source := bestOverlapBullet(h, masterBullets)
+			if source == "" {
+				continue
+			}
+			if first, ok := claimedBy[source]; ok {
+				violations = append(violations, fmt.Sprintf(
+					"experience %q: two highlights derive from the same master bullet %q: %q and %q",
+					company, truncateStr(source, 60), truncateStr(first, 60), truncateStr(h, 60)))
+				continue
+			}
+			claimedBy[source] = h
+		}
+	}
+	return violations
+}
+
 // bestOverlapBullet returns the master bullet with the highest word-overlap
 // against proposed. Returns "" if masterBullets is empty.
 func bestOverlapBullet(proposed string, masterBullets []string) string {

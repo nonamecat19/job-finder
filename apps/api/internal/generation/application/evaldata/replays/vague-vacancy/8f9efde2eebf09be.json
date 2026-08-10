@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:8f9efde2eebf09bec2bf322872b1373b81bc12b1b74bde7c7df15423298f1a51",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS:  EXPERIENCE LEVEL: mid KEY RESPONSIBILITIES:   - Work on",
+    "prompt_len": 5106,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2966,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Small Studio\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Owned and maintained the REST API for a scheduling product, demonstrating ownership and building impactful features.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Successfully migrated the service from SQLite to Postgres with zero downtime, ensuring product continuity and improving data management.\",\n          \"sourceIndex\": 1\n        }\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": []\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}
