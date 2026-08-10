@@ -7,7 +7,13 @@ import SkillsBlock from './components/SkillsBlock';
 import SummaryBlock from './components/SummaryBlock';
 import VacancyPane, { type VacancyPaneInput } from './components/VacancyPane';
 import WorkEntryBlock from './components/WorkEntryBlock';
-import { useGenerationRun, useReorderGenerationSection, useStartGenerationRun, useToggleGenerationItem } from './hooks';
+import {
+  useExportGenerationRun,
+  useGenerationRun,
+  useReorderGenerationSection,
+  useStartGenerationRun,
+  useToggleGenerationItem,
+} from './hooks';
 
 // T020/T032: the two-pane shell — generated items on the left, assembled as
 // Summary / Work Experience / Skills blocks (US1), vacancy and controls on
@@ -23,6 +29,7 @@ export default function GenerateWorkspacePage() {
   const startRun = useStartGenerationRun();
   const toggleItem = useToggleGenerationItem(runId);
   const reorderSection = useReorderGenerationSection(runId);
+  const exportRun = useExportGenerationRun(runId);
 
   const handleGenerate = (input: VacancyPaneInput) => {
     if (!profileId) return;
@@ -60,7 +67,17 @@ export default function GenerateWorkspacePage() {
         </Surface>
 
         <div className="min-h-0 w-full shrink-0 overflow-y-auto lg:w-96">
-          <VacancyPane onGenerate={handleGenerate} pending={startRun.isPending} disabled={!profileId} />
+          <VacancyPane
+            onGenerate={handleGenerate}
+            pending={startRun.isPending}
+            disabled={!profileId}
+            onExport={run ? () => exportRun.mutate() : undefined}
+            exportPending={exportRun.isPending}
+            exportDisabled={!run || run.state === 'running'}
+            exportState={exportRun.data ?? run?.export}
+            exportError={exportRun.isError ? (exportRun.error as Error).message : undefined}
+            warnings={run ? exportWarnings(run) : undefined}
+          />
           {startRun.isError ? (
             <p className="mt-2 text-sm text-danger">{(startRun.error as Error).message}</p>
           ) : null}
@@ -68,6 +85,41 @@ export default function GenerateWorkspacePage() {
       </div>
     </div>
   );
+}
+
+// exportWarnings is T073: what the user should know before they export, said
+// before the export rather than after it. Two kinds — a section the user has
+// emptied (the server exports it happily; it is their resume, and FR-019 only
+// refuses a wholly empty document), and AI-written content they have included,
+// which no grounding check ever verified (FR-016).
+function exportWarnings(run: GenerationRunDto): string[] {
+  const warnings: string[] = [];
+  const selected = (section: GenerationSectionDto | undefined) =>
+    section?.items.filter((i) => i.selected && !i.unavailable) ?? [];
+
+  if (selected(run.sections.find((s) => s.kind === 'summary')).length === 0) {
+    warnings.push('This resume has no summary — nothing is included in the summary section.');
+  }
+  if (selected(run.sections.find((s) => s.kind === 'skills')).length === 0) {
+    warnings.push('This resume has no skills — every skill group is switched off.');
+  }
+
+  // The summary section is excluded: it is written by the run itself and
+  // grounded by its own stage, and warning about it on every single export
+  // would train the user to ignore the warning that matters — an unverified
+  // *suggestion* they chose to include (FR-016).
+  const aiIncluded = run.sections
+    .filter((s) => s.kind !== 'summary')
+    .flatMap((s) => selected(s))
+    .filter((i) => i.origin === 'ai').length;
+  if (aiIncluded > 0) {
+    warnings.push(
+      `${aiIncluded} AI-written item${aiIncluded === 1 ? '' : 's'} ${aiIncluded === 1 ? 'is' : 'are'} included. ` +
+        'AI-written content is unverified — read it before you send this resume.',
+    );
+  }
+
+  return warnings;
 }
 
 function WorkspaceLeftPane({
@@ -143,7 +195,9 @@ function WorkspaceLeftPane({
         />
       ))}
 
-      {skillsSection ? <SkillsBlock section={skillsSection} onToggle={onToggle} onReorder={onReorder} /> : null}
+      {skillsSection ? (
+        <SkillsBlock section={skillsSection} onToggle={onToggle} onReorder={onReorder} onEditText={onEditText} />
+      ) : null}
     </div>
   );
 }

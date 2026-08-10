@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { GenerationExportDto } from '@job-finder/shared';
 import { Button, Field, Input, Select, Spinner, Surface, Textarea } from '../../../components/ui';
 import { SectionTitle } from '../../../components/layout/PageHeader';
 import { useSummaryModel } from '../../tailor/hooks';
@@ -17,13 +18,31 @@ interface VacancyPaneProps {
   onGenerate: (input: VacancyPaneInput) => void;
   pending: boolean;
   disabled?: boolean;
+  // The export half (T072/T073): absent until a run exists, so the pane is
+  // unchanged on the empty workspace.
+  onExport?: () => void;
+  exportPending?: boolean;
+  exportDisabled?: boolean;
+  exportState?: GenerationExportDto;
+  exportError?: string;
+  warnings?: string[];
 }
 
 // T021: company/title/vacancy text plus the two controls that carry over
 // from /tailor — grounding level and the 034 summary writer — reused via the
 // same useSummaryModel hook TailorPage uses, so the menu and the current
 // choice never disagree about which options exist.
-export default function VacancyPane({ onGenerate, pending, disabled }: VacancyPaneProps) {
+export default function VacancyPane({
+  onGenerate,
+  pending,
+  disabled,
+  onExport,
+  exportPending,
+  exportDisabled,
+  exportState,
+  exportError,
+  warnings,
+}: VacancyPaneProps) {
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
   const [vacancy, setVacancy] = useState('');
@@ -109,6 +128,58 @@ export default function VacancyPane({ onGenerate, pending, disabled }: VacancyPa
         </Button>
         {pending ? <Spinner label="starting generation…" /> : null}
       </div>
+
+      {onExport ? (
+        <div className="mt-4 border-t border-subtle pt-3">
+          <SectionTitle>Export</SectionTitle>
+          {warnings?.map((warning) => (
+            <p key={warning} className="mb-2 rounded-md border border-warning/30 bg-warning-soft p-2 text-xs text-warning">
+              {warning}
+            </p>
+          ))}
+          <div className="flex items-center gap-2">
+            <Button disabled={exportDisabled || exportPending} onClick={onExport}>
+              Export PDF
+            </Button>
+            {exportPending ? <Spinner label="rendering your resume…" /> : null}
+          </div>
+          {exportError ? <p className="mt-2 text-sm text-danger">{exportError}</p> : null}
+          {exportState?.status === 'exported' ? (
+            <p className="mt-2 text-xs text-muted">
+              Exported. Find it in your documents — it contains exactly the items you included.
+            </p>
+          ) : null}
+          {exportState?.status === 'blocked' && exportState.report ? (
+            <OverflowReport report={exportState.report} />
+          ) : null}
+        </div>
+      ) : null}
     </Surface>
+  );
+}
+
+// OverflowReport is FR-019: the export is over the page budget, so it is
+// reported with named candidates the user acts on. There is deliberately no
+// "apply" control — nothing here deselects anything, because resolving the
+// overflow silently is exactly what the rule forbids.
+function OverflowReport({ report }: { report: NonNullable<GenerationExportDto['report']> }) {
+  return (
+    <div className="mt-2 rounded-md border border-warning/30 bg-warning-soft p-2" data-testid="overflow-report">
+      <p className="text-xs text-warning">
+        This selection renders as {report.pagesRendered} page{report.pagesRendered === 1 ? '' : 's'}, over your target
+        of {report.pagesTarget}. Nothing was dropped or reworded.
+      </p>
+      {report.candidates.length > 0 ? (
+        <>
+          <p className="mt-2 text-xs text-muted">Lowest-ranked included items, worst first:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted">
+            {report.candidates.map((c) => (
+              <li key={c.itemId}>{c.label}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted">Uncheck what you can spare on the left, then export again.</p>
+        </>
+      ) : null}
+    </div>
   );
 }

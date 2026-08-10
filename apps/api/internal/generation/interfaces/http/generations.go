@@ -23,6 +23,10 @@ type WorkspaceGenerator interface {
 	// toggle/edit/reorder and whole-section reorder (contracts/rest-api.md).
 	PatchGenerationItem(ctx context.Context, runID, itemID string, req dto.PatchGenerationItemRequestDto) (dto.GenerationItemDto, error)
 	ReorderSection(ctx context.Context, runID, sectionID string, itemIDs []string) (dto.GenerationSectionDto, error)
+	// ExportGenerationRun and GetGenerationExport are Phase 7 (US5): the
+	// render-once export and its idempotent short-poll.
+	ExportGenerationRun(ctx context.Context, runID string) (dto.GenerationExportDto, error)
+	GetGenerationExport(ctx context.Context, runID string) (dto.GenerationExportDto, error)
 }
 
 type GenerationsHandler struct {
@@ -36,6 +40,8 @@ func (h *GenerationsHandler) Mount(r chi.Router) {
 	r.Delete("/generations/{runId}", h.remove)
 	r.Patch("/generations/{runId}/items/{itemId}", h.patchItem)
 	r.Patch("/generations/{runId}/sections/{sectionId}/order", h.reorderSection)
+	r.Post("/generations/{runId}/export", h.export)
+	r.Get("/generations/{runId}/export", h.exportStatus)
 }
 
 func (h *GenerationsHandler) start(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +106,34 @@ func (h *GenerationsHandler) patchItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := h.Workspace.PatchGenerationItem(r.Context(), runID, itemID, body)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// export is `POST /v1/generations/{runId}/export` (rest-api.md): `200` with
+// the overflow report when the selection does not fit the page budget, `202`
+// otherwise — the client polls `GET …/export` for the document id either way.
+// A `409` comes from the service: the run is running, or nothing is selected.
+func (h *GenerationsHandler) export(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "runId")
+	out, err := h.Workspace.ExportGenerationRun(r.Context(), runID)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	if out.Status == "blocked" {
+		httpx.WriteJSON(w, http.StatusOK, out)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusAccepted, out)
+}
+
+func (h *GenerationsHandler) exportStatus(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "runId")
+	out, err := h.Workspace.GetGenerationExport(r.Context(), runID)
 	if err != nil {
 		httpx.WriteAppError(w, err)
 		return

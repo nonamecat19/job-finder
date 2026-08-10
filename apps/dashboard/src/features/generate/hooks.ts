@@ -36,6 +36,18 @@ export function useStartGenerationRun() {
   });
 }
 
+// T072: the export is a plain mutation, not a poll loop — the POST either
+// comes back with the finished document or with the overflow report, and the
+// run query is invalidated so the workspace picks up the new export state.
+export function useExportGenerationRun(runId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.generations.export(runId!),
+    onSettled: () => qc.invalidateQueries({ queryKey: generations.get(runId) }),
+  });
+}
+
 // applyItemPatch returns a new run with one item's fields updated — the pure
 // transform both the optimistic toggle and the optimistic reorder build on.
 function applyItemPatch(

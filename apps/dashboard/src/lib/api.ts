@@ -10,6 +10,7 @@ import type {
   FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
+  GenerationExportDto,
   GenerationRunDto,
   GithubSyncResultDto,
   HostRetrievalStatusDto,
@@ -352,11 +353,8 @@ export const api = {
         body: JSON.stringify({ sections }),
       }),
     export: (runId: string) =>
-      request<{ status: string; documentId?: string; report?: unknown }>(`/v1/generations/${runId}/export`, {
-        method: 'POST',
-      }),
-    exportStatus: (runId: string) =>
-      request<{ status: string; documentId?: string; report?: unknown }>(`/v1/generations/${runId}/export`),
+      request<GenerationExportDto>(`/v1/generations/${runId}/export`, { method: 'POST' }),
+    exportStatus: (runId: string) => request<GenerationExportDto>(`/v1/generations/${runId}/export`),
     remove: (runId: string) => request<void>(`/v1/generations/${runId}`, { method: 'DELETE' }),
   },
 };

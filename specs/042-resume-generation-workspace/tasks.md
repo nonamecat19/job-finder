@@ -176,16 +176,16 @@ exactly a permutation/subset of the master's, with every omission visible and un
 
 ### Tests for User Story 4
 
-- [ ] T058 [P] [US4] Test in `apps/api/internal/generation/domain/workspace_skills_test.go` that the seeded skills section is a permutation of the master's groups — no group added, reworded or absent from the list — and that a `skillsMaxGroups` cap leaves the excess groups present-but-unselected rather than removed
+- [X] T058 [P] [US4] Test in `apps/api/internal/generation/domain/workspace_skills_test.go` that the seeded skills section is a permutation of the master's groups — no group added, reworded or absent from the list — and that a `skillsMaxGroups` cap leaves the excess groups present-but-unselected rather than removed
 
 ### Implementation for User Story 4
 
-- [ ] T059 [P] [US4] Extend `RankedSkills.GroupOrder` handling in `apps/api/internal/generation/domain/ranking_verify.go` with the same range/duplicate/short checks the achievement ranking uses
-- [ ] T060 [US4] Order skill-group items from `RankedSkills.GroupOrder` in `apps/api/internal/generation/application/workspace.go`, keeping within-group entry order from the existing deterministic `domain.RankSkills` and leaving pinned groups (`Spoken Languages`) exactly as authored
-- [ ] T061 [US4] Apply `skillsMaxGroups` as a **selection** boundary rather than a removal in the same file: the lowest-ranked groups become unselected items, still rendered (FR-011, US4 AS-2)
-- [ ] T062 [US4] Add AI-suggested skills to the skills section as `origin='ai'`, `selected=false` in `apps/api/internal/generation/application/workspace.go`, separate from the user's real groups (US3 AS-4, delivered here because it is the skills surface)
-- [ ] T063 [US4] Render the profile / suggested split in `apps/dashboard/src/features/generate/components/SkillsBlock.tsx`, matching `WorkEntryBlock`'s grouping so the two sections read identically
-- [ ] T064 [P] [US4] Add corpus case `apps/api/internal/generation/application/evaldata/cases/suggestion-duplicates-profile/` asserting the R6 suppression fires, and re-record its baseline with a stated reason
+- [X] T059 [P] [US4] Extend `RankedSkills.GroupOrder` handling in `apps/api/internal/generation/domain/ranking_verify.go` with the same range/duplicate/short checks the achievement ranking uses
+- [X] T060 [US4] Order skill-group items from `RankedSkills.GroupOrder` in `apps/api/internal/generation/application/workspace.go`, keeping within-group entry order from the existing deterministic `domain.RankSkills` and leaving pinned groups (`Spoken Languages`) exactly as authored
+- [X] T061 [US4] Apply `skillsMaxGroups` as a **selection** boundary rather than a removal in the same file: the lowest-ranked groups become unselected items, still rendered (FR-011, US4 AS-2)
+- [X] T062 [US4] Add AI-suggested skills to the skills section as `origin='ai'`, `selected=false` in `apps/api/internal/generation/application/workspace.go`, separate from the user's real groups (US3 AS-4, delivered here because it is the skills surface)
+- [X] T063 [US4] Render the profile / suggested split in `apps/dashboard/src/features/generate/components/SkillsBlock.tsx`, matching `WorkEntryBlock`'s grouping so the two sections read identically
+- [X] T064 [P] [US4] Add corpus case `apps/api/internal/generation/application/evaldata/cases/suggestion-duplicates-profile/` asserting the R6 suppression fires, and re-record its baseline with a stated reason
 
 **Checkpoint**: Both grounded surfaces obey the same contract.
 
@@ -201,20 +201,20 @@ content is exactly the selected items in the displayed order.
 
 ### Tests for User Story 5
 
-- [ ] T065 [P] [US5] Test in `apps/api/internal/generation/domain/assemble_test.go` that `Assemble` emits exactly the selected items in `position` order, includes no unselected or `unavailable` item, and preserves master experience order and every out-of-scope field (company, dates, education) verbatim
-- [ ] T066 [P] [US5] Test in `apps/api/internal/generation/application/workspace_export_test.go` (`TestWorkspaceExport`) that the export path issues **zero** LLM calls and never calls `TrimHighlights`, using the injected `renderDeps` seam
+- [X] T065 [P] [US5] Test in `apps/api/internal/generation/domain/assemble_test.go` that `Assemble` emits exactly the selected items in `position` order, includes no unselected or `unavailable` item, and preserves master experience order and every out-of-scope field (company, dates, education) verbatim
+- [X] T066 [P] [US5] Test in `apps/api/internal/generation/application/workspace_export_test.go` (`TestWorkspaceExport`) that the export path issues **zero** LLM calls and never calls `TrimHighlights`, using the injected `renderDeps` seam
 
 ### Implementation for User Story 5
 
-- [ ] T067 [P] [US5] Implement `Assemble(master RendercvMaster, sections []Section) (RendercvMaster, error)` in `apps/api/internal/generation/domain/assemble.go`, deep-cloning the run's `master_snapshot` and writing only section contents — never a section key, never `_order`, matching `MergeTailored`'s discipline
-- [ ] T068 [P] [US5] Implement `OverflowCandidates(sections []Section, over int) []OverflowCandidate` in `apps/api/internal/generation/domain/overflow.go`, returning the lowest-`rank` **selected** items worst-first
-- [ ] T069 [US5] Implement the render-once export in `apps/api/internal/generation/application/workspace_export.go`: `Assemble` → `ApplyFontSize` → `RenderCvRenderer.Render` → `CountPages`; over target → `CompactDesign` and re-render once; still over → `blocked` with the overflow report. `expandContent`, `TrimHighlights`, `padHighlights` and the `ApplyHardLimits` truncation must not appear on this path (`research.md` R5) (depends on T067, T068)
-- [ ] T070 [US5] Insert the resulting `GeneratedDocument` row and set `generation_runs.export_document_id` / `export_status` in the same file, so `GET /api/documents` and the existing PDF download work unchanged
-- [ ] T071 [US5] Implement `POST /v1/generations/{runId}/export` and `GET /v1/generations/{runId}/export` in `apps/api/internal/generation/interfaces/http/generations.go` with the `202` / `200 blocked` / `409` semantics from `contracts/rest-api.md`
-- [ ] T072 [US5] Add the export control and the overflow report to `apps/dashboard/src/features/generate/components/VacancyPane.tsx`: pages rendered vs target, and the named drop candidates as a list the user acts on — the UI must not offer to apply them automatically (FR-019)
-- [ ] T073 [US5] Warn before export when a section has zero selected items in `apps/dashboard/src/features/generate/GenerateWorkspacePage.tsx` ("this resume has no summary / no skills"), and warn at include-time that AI-written content is unverified
-- [ ] T074 [P] [US5] Integration test in `apps/api/internal/generation/interfaces/http/generations_export_test.go` asserting a `blocked` export mutates no item and returns candidates ordered worst-rank-first
-- [ ] T075 [P] [US5] Vitest in `apps/dashboard/src/features/generate/GenerateWorkspacePage.test.tsx` asserting an export taken with no user action on any suggestion ships zero AI-origin items (SC-004)
+- [X] T067 [P] [US5] Implement `Assemble(master RendercvMaster, sections []Section) (RendercvMaster, error)` in `apps/api/internal/generation/domain/assemble.go`, deep-cloning the run's `master_snapshot` and writing only section contents — never a section key, never `_order`, matching `MergeTailored`'s discipline
+- [X] T068 [P] [US5] Implement `OverflowCandidates(sections []Section, over int) []OverflowCandidate` in `apps/api/internal/generation/domain/overflow.go`, returning the lowest-`rank` **selected** items worst-first
+- [X] T069 [US5] Implement the render-once export in `apps/api/internal/generation/application/workspace_export.go`: `Assemble` → `ApplyFontSize` → `RenderCvRenderer.Render` → `CountPages`; over target → `CompactDesign` and re-render once; still over → `blocked` with the overflow report. `expandContent`, `TrimHighlights`, `padHighlights` and the `ApplyHardLimits` truncation must not appear on this path (`research.md` R5) (depends on T067, T068)
+- [X] T070 [US5] Insert the resulting `GeneratedDocument` row and set `generation_runs.export_document_id` / `export_status` in the same file, so `GET /api/documents` and the existing PDF download work unchanged
+- [X] T071 [US5] Implement `POST /v1/generations/{runId}/export` and `GET /v1/generations/{runId}/export` in `apps/api/internal/generation/interfaces/http/generations.go` with the `202` / `200 blocked` / `409` semantics from `contracts/rest-api.md`
+- [X] T072 [US5] Add the export control and the overflow report to `apps/dashboard/src/features/generate/components/VacancyPane.tsx`: pages rendered vs target, and the named drop candidates as a list the user acts on — the UI must not offer to apply them automatically (FR-019)
+- [X] T073 [US5] Warn before export when a section has zero selected items in `apps/dashboard/src/features/generate/GenerateWorkspacePage.tsx` ("this resume has no summary / no skills"), and warn at include-time that AI-written content is unverified
+- [X] T074 [P] [US5] Integration test in `apps/api/internal/generation/interfaces/http/generations_export_test.go` asserting a `blocked` export mutates no item and returns candidates ordered worst-rank-first
+- [X] T075 [P] [US5] Vitest in `apps/dashboard/src/features/generate/GenerateWorkspacePage.test.tsx` asserting an export taken with no user action on any suggestion ships zero AI-origin items (SC-004)
 
 **Checkpoint**: All five user stories are independently functional.
 

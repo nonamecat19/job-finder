@@ -120,6 +120,9 @@ type Service struct {
 	// (PatchGenerationItem, ReorderSection) inside one transaction. Installed
 	// via SetTxRunner, same setter discipline as asynqClient.
 	tx domain.TxRunner
+	// exportRender overrides the 042 export path's render collaborators when
+	// set (SetExportRenderer); zero value means the real RenderCv renderer.
+	exportRender renderDeps
 }
 
 // SetSummaryModelProvider installs the 034 port. It is a setter rather than a
