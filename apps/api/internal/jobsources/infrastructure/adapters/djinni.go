@@ -249,6 +249,110 @@ func (d DjinniAdapter) FetchDetail(ctx context.Context, jobURL string, _ map[str
 	return patch, nil
 }
 
+// djinniPostingPathRe matches the single-posting shape: /jobs/<digits>-<slug>.
+// A preset-search URL is /jobs or /jobs/ with a query, which this rejects — the
+// host is Djinni's either way, but only one of the two is a posting.
+var djinniPostingPathRe = regexp.MustCompile(`^/jobs/\d+-`)
+
+func djinniIsHost(host string) bool {
+	host = strings.ToLower(host)
+	return host == "djinni.co" || host == "www.djinni.co"
+}
+
+// ClaimsHost lets manual add tell "this is a Djinni search URL" from "nobody
+// reads this host". Both fail, but only the first has a subscription as its
+// recovery.
+func (DjinniAdapter) ClaimsHost(host string) bool { return djinniIsHost(host) }
+
+// MatchesPostingURL implements domain.PostingReader. It does no I/O and
+// tolerates any input, because it is called for every registered adapter on
+// every manual add.
+func (DjinniAdapter) MatchesPostingURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	if !djinniIsHost(parsed.Host) {
+		return false
+	}
+	return djinniPostingPathRe.MatchString(parsed.Path)
+}
+
+// ReadPosting implements domain.PostingReader. It reuses FetchDetail's
+// selectors verbatim for description, salary, location, remote and postedAt, so
+// a manually added Djinni vacancy matches an enriched crawled one, and adds the
+// title and company selectors the detail path never needed.
+//
+// Missing fields come back empty rather than as an error: a page that loads but
+// omits a description is the fill-in case, not a failure.
+func (d DjinniAdapter) ReadPosting(ctx context.Context, rawURL string, _ map[string]any) (dto.NormalizedJob, error) {
+	// Anonymously, like the rest of the post-016 Djinni path, and through the
+	// same scraper so per-host pacing applies unchanged.
+	doc, err := d.fetchParse(ctx, rawURL, nil)
+	if err != nil {
+		return dto.NormalizedJob{}, err
+	}
+	if djinniIsLoginPage(doc) {
+		return dto.NormalizedJob{}, fmt.Errorf("djinni: the posting is behind a login wall")
+	}
+
+	title := strings.TrimSpace(doc.Find(`.detail--title, h1.detail--title, .job-post-page__title, h1`).First().Text())
+	company := strings.TrimSpace(doc.Find(`a[href^="/company/"], .js-analytics-company, [data-analytics="company_page"]`).First().Text())
+	description := jobsources.SelectionText(doc.Find(`.job-post__description, .job-post-page__description, .js-original-text, [data-qa="job-description"], article`).First())
+	salary := strings.TrimSpace(doc.Find(`.public-salary-item, .job-additional-info-item .text-success, .text-success`).First().Text())
+	location := strings.TrimSpace(doc.Find(`.location-text, .job-additional-info-item .location`).First().Text())
+	postedAt, _ := doc.Find(`.job-post__details time, time[datetime]`).First().Attr("datetime")
+
+	bodyHTML, _ := doc.Find("body").Html()
+	bodyHTML = strutil.Truncate(bodyHTML, 8000)
+
+	job := dto.NormalizedJob{
+		SourceKey:   d.Key(),
+		Title:       title,
+		Company:     company,
+		Location:    jobsources.NilIfEmpty(location),
+		Remote:      djinniRemoteRe.MatchString(doc.Find("body").Text()),
+		SalaryRaw:   jobsources.NilIfEmpty(salary),
+		URL:         djinniCanonicalPostingURL(rawURL),
+		Description: description,
+		Raw:         map[string]string{"html": bodyHTML},
+	}
+	if postedAt != "" {
+		job.PostedAt = &postedAt
+	}
+	if id := djinniPostingID(rawURL); id != "" {
+		job.ExternalID = &id
+	}
+	return job, nil
+}
+
+// djinniCanonicalPostingURL drops the query and fragment so the same posting
+// reached through a tracking link produces the same dedupe key as a crawl.
+func djinniCanonicalPostingURL(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return rawURL
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
+}
+
+func djinniPostingID(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	segs := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(segs) == 0 {
+		return ""
+	}
+	return segs[len(segs)-1]
+}
+
 func (d DjinniAdapter) HealthCheck(ctx context.Context, config map[string]any) (bool, error) {
 	html, err := d.Scraping.FetchHTML(ctx, "https://djinni.co/jobs/", nil)
 	if err != nil {

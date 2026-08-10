@@ -62,6 +62,7 @@ func run() error {
 		adapters.RobotaAdapter{},
 		adapters.JobSpyAdapter{URL: cfg.JobspyURL},
 		adapters.JoobleAdapter{APIKey: cfg.JoobleAPIKey},
+		adapters.ManualAdapter{},
 	)
 	sourcesSvc := application.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
 	for _, a := range registry.All() {

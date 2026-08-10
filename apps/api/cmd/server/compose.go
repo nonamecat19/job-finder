@@ -141,6 +141,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		asAdapter,
 		wkAdapter,
 		srAdapter,
+		adapters.ManualAdapter{},
 	)
 	sourcesSvc := application.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc

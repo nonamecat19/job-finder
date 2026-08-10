@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/platform/scraping"
 )
 
@@ -192,5 +194,137 @@ func TestDjinniSearchBasicSearchStripsPageParamFromSavedURL(t *testing.T) {
 
 	if firstReqPage != "1" {
 		t.Errorf("expected first fetch to use page=1, got page=%s", firstReqPage)
+	}
+}
+
+// --- 041 PostingReader ---
+
+func TestDjinniMatchesPostingURL(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want bool
+	}{
+		{"posting path accepted", "https://djinni.co/jobs/123456-senior-go-engineer/", true},
+		{"posting path on www accepted", "https://www.djinni.co/jobs/123456-senior-go-engineer/", true},
+		{"posting path with tracking query accepted", "https://djinni.co/jobs/123456-senior-go-engineer/?from=telegram", true},
+		{"http scheme accepted", "http://djinni.co/jobs/1-a/", true},
+		{"preset search rejected", "https://djinni.co/jobs/?search_type=basic-search&primary_keyword=Golang", false},
+		{"bare jobs listing rejected", "https://djinni.co/jobs/", false},
+		{"bare jobs listing without slash rejected", "https://djinni.co/jobs", false},
+		{"numeric-only path rejected", "https://djinni.co/jobs/123456", false},
+		{"company page rejected", "https://djinni.co/company/novatech/jobs/", false},
+		{"dashboard rejected", "https://djinni.co/my/dashboard/subs/42/", false},
+		{"other host rejected", "https://jobs.dou.ua/vacancies/123456-go/", false},
+		{"lookalike host rejected", "https://djinni.co.evil.example/jobs/1-a/", false},
+		{"non-http scheme rejected", "javascript:alert(1)", false},
+		{"empty rejected", "", false},
+		{"garbage rejected", "://///not a url", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := (DjinniAdapter{}).MatchesPostingURL(tt.url); got != tt.want {
+				t.Errorf("MatchesPostingURL(%q) = %v, want %v", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDjinniReadPostingExtractsEveryField(t *testing.T) {
+	fixture := loadFixture(t, "djinni_posting.html")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(fixture))
+	}))
+	defer srv.Close()
+
+	d := DjinniAdapter{Scraping: scraping.New()}
+	job, err := d.ReadPosting(context.Background(), srv.URL+"/jobs/123456-senior-go-engineer/?from=telegram", nil)
+	if err != nil {
+		t.Fatalf("ReadPosting: %v", err)
+	}
+
+	if job.SourceKey != "djinni" {
+		t.Errorf("sourceKey = %q, want djinni", job.SourceKey)
+	}
+	if job.Title != "Senior Go Engineer" {
+		t.Errorf("title = %q", job.Title)
+	}
+	if job.Company != "NovaTech" {
+		t.Errorf("company = %q", job.Company)
+	}
+	if !strings.Contains(job.Description, "ledger service") {
+		t.Errorf("description missing the posting body, got %q", job.Description)
+	}
+	if job.Location == nil || *job.Location != "Kyiv, Lviv" {
+		t.Errorf("location = %v", job.Location)
+	}
+	if !job.Remote {
+		t.Error("expected remote to be detected from the page text")
+	}
+	if job.SalaryRaw == nil || *job.SalaryRaw != "$5000-7000" {
+		t.Errorf("salaryRaw = %v", job.SalaryRaw)
+	}
+	if job.PostedAt == nil || *job.PostedAt != "2026-07-28T09:15:00+03:00" {
+		t.Errorf("postedAt = %v — it must come from the page, never from the add time", job.PostedAt)
+	}
+	if strings.Contains(job.URL, "?") {
+		t.Errorf("url = %q, want the tracking query dropped so the dedupe key matches a crawl", job.URL)
+	}
+}
+
+func TestDjinniReadPostingReturnsPartialsRatherThanErroring(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<html><body><h1>Go Engineer</h1></body></html>`))
+	}))
+	defer srv.Close()
+
+	d := DjinniAdapter{Scraping: scraping.New()}
+	job, err := d.ReadPosting(context.Background(), srv.URL+"/jobs/1-go-engineer/", nil)
+	if err != nil {
+		t.Fatalf("expected a partial read, not an error: %v", err)
+	}
+	if job.Title != "Go Engineer" {
+		t.Errorf("title = %q", job.Title)
+	}
+	if job.Company != "" || job.Description != "" {
+		t.Errorf("expected the absent fields to come back empty, got company=%q description=%q", job.Company, job.Description)
+	}
+}
+
+func TestDjinniReadPostingReportsLoginWall(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<html><body><form><input name="password" type="password"></form></body></html>`))
+	}))
+	defer srv.Close()
+
+	d := DjinniAdapter{Scraping: scraping.New()}
+	if _, err := d.ReadPosting(context.Background(), srv.URL+"/jobs/1-go/", nil); err == nil {
+		t.Fatal("expected a login wall to be reported as an error, not read as an empty posting")
+	}
+}
+
+func TestDjinniAdapterSatisfiesPostingReader(t *testing.T) {
+	if _, ok := domain.AsPostingReader(DjinniAdapter{}); !ok {
+		t.Fatal("expected DjinniAdapter to implement domain.PostingReader")
+	}
+}
+
+func TestManualAdapterHasNoPostingReader(t *testing.T) {
+	if _, ok := domain.AsPostingReader(ManualAdapter{}); ok {
+		t.Fatal("the manual source reads nothing — it must not claim any host")
+	}
+}
+
+func TestManualAdapterSearchFailsLoudly(t *testing.T) {
+	jobs, err := (ManualAdapter{}).Search(context.Background(), dto.SearchQuery{}, nil)
+	if err == nil {
+		t.Fatal("expected the manual source to refuse being crawled rather than return an empty result")
+	}
+	if jobs != nil {
+		t.Errorf("expected no jobs, got %d", len(jobs))
+	}
+	healthy, err := (ManualAdapter{}).HealthCheck(context.Background(), nil)
+	if err != nil || !healthy {
+		t.Errorf("expected the manual source to report healthy, got healthy=%v err=%v", healthy, err)
 	}
 }
