@@ -39,6 +39,28 @@ type RankedSelection struct {
 	Skills     RankedSkills       `json:"skills" jsonschema_description:"the relevance order of the master's skill groups"`
 }
 
+// ExperienceSuggestions is one master company's worth of suggested
+// achievement bullets — the suggestion stage's per-entry response
+// (contracts/llm-contracts.md §2). Deliberately absent: any index field. A
+// suggestion cannot claim to be one of the user's bullets, which is the
+// mirror image of RankedExperience's missing text field — together the two
+// types make the profile/AI distinction a property of the wire format.
+type ExperienceSuggestions struct {
+	Company string   `json:"company" jsonschema_description:"company name copied EXACTLY from the list below"`
+	Bullets []string `json:"bullets" jsonschema_description:"achievement bullets the vacancy calls for that this candidate's profile does not contain"`
+}
+
+// SuggestionSet is the suggestion stage's whole response: achievement
+// suggestions per company and a flat list of suggested skills. Routed
+// through the existing generation-select task key (research.md R4) and run
+// concurrently with the summary stage — it never sees the master's bullet
+// text or skill tokens, only company names and skill group labels, so a
+// suggestion cannot be a paraphrase of material it was never shown.
+type SuggestionSet struct {
+	Experience []ExperienceSuggestions `json:"experience"`
+	Skills     []string                `json:"skills" jsonschema_description:"skills the vacancy asks for that the profile does not list"`
+}
+
 // SeedRankedItems builds one experience (or project) section's items from a
 // verified ranking (research.md R2): the top min(target, available) ranked
 // indices are selected, the remainder of the ranking is unselected, and any

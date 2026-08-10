@@ -158,4 +158,44 @@ describe('GenerateWorkspacePage', () => {
     expect(toggleMutate).toHaveBeenCalledWith({ itemId: 'item-1', selected: false });
     expect(startMutate).not.toHaveBeenCalled();
   });
+
+  // T057: a run with suggestions produces zero selected AI items until the
+  // user acts (FR-013/SC-004) — the checkbox for an "ai" item starts
+  // unchecked, and including it keeps the "AI · unverified" badge rather
+  // than swapping it for the profile badge.
+  it('renders AI suggestions unselected by default and keeps their badge once included', async () => {
+    setup();
+    const toggleMutate = vi.fn();
+    mockedUseToggleGenerationItem.mockReturnValue({ mutate: toggleMutate, isPending: false } as any);
+    window.history.pushState({}, '', '/generate?runId=run-1');
+    const run = baseRun();
+    run.sections[0].items.push({
+      id: 'item-ai-1',
+      origin: 'ai',
+      kind: 'achievement',
+      text: 'Led the migration to a service mesh',
+      rank: 1,
+      position: 1,
+      selected: false,
+      edited: false,
+      unavailable: false,
+    });
+    mockedUseGenerationRun.mockReturnValue({ data: run, isLoading: false, error: null } as any);
+
+    const user = userEvent.setup();
+    renderWithProviders(<GenerateWorkspacePage />);
+
+    const suggestionRow = screen.getByText('Led the migration to a service mesh').closest('li')!;
+    expect(suggestionRow.querySelector('[data-badge="origin-ai-unverified"]')).not.toBeNull();
+
+    const checkbox = suggestionRow.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    await user.click(checkbox);
+
+    expect(toggleMutate).toHaveBeenCalledWith({ itemId: 'item-ai-1', selected: true });
+    // The badge is a property of origin, not of selection — it survives
+    // inclusion (FR-014).
+    expect(suggestionRow.querySelector('[data-badge="origin-ai-unverified"]')).not.toBeNull();
+  });
 });

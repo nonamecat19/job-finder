@@ -149,18 +149,18 @@ contains none of them, and including one adds it to the export.
 
 ### Tests for User Story 3
 
-- [ ] T049 [P] [US3] Test in `apps/api/internal/generation/domain/suggestions_test.go` that `SuppressDuplicateSuggestions` removes a bullet matching a master bullet for that entry on normalised form or ≥0.9 word-set containment, and leaves the profile item untouched (FR-017)
-- [ ] T050 [P] [US3] Test in `apps/api/internal/generation/application/workspace_suggest_test.go` that every `origin='ai'` item is created with `selected = false` (FR-013 / SC-004)
+- [X] T049 [P] [US3] Test in `apps/api/internal/generation/domain/suggestions_test.go` that `SuppressDuplicateSuggestions` removes a bullet matching a master bullet for that entry on normalised form or ≥0.9 word-set containment, and leaves the profile item untouched (FR-017)
+- [X] T050 [P] [US3] Test in `apps/api/internal/generation/application/workspace_suggest_test.go` that every `origin='ai'` item is created with `selected = false` (FR-013 / SC-004)
 
 ### Implementation for User Story 3
 
-- [ ] T051 [P] [US3] Define `ExperienceSuggestions` and `SuggestionSet` in `apps/api/internal/generation/domain/ranking.go` per `contracts/llm-contracts.md` §2 — text only, **no index field**
-- [ ] T052 [P] [US3] Implement `SuppressDuplicateSuggestions` in `apps/api/internal/generation/domain/suggestions.go`, reusing the existing `norm()` and `tokens()` helpers from `rendercv.go` so the comparison basis is the pipeline's existing one
-- [ ] T053 [US3] Implement `buildSuggestPrompt` and `suggestContent` in `apps/api/internal/generation/application/rankcv_llm.go`, routed through the existing `generation-select` task key (no `gateway/config.yaml` change — `research.md` R4), taking the analysis plus company names and skill-group labels but **not** the master's bullet text
-- [ ] T054 [US3] Run the suggestion stage concurrently with the summary stage in `apps/api/internal/generation/application/workspace.go`, dropping entries whose company does not match a master company, applying T052, and persisting survivors as `origin='ai'`, `selected=false`, ranked after every profile item (depends on T051–T053)
-- [ ] T055 [US3] Add the suggestion group to `apps/dashboard/src/features/generate/components/WorkEntryBlock.tsx`: visually distinct, each item badged "AI · unverified", with an empty state when a run produced none (never a missing or broken section)
-- [ ] T056 [US3] Allow inline editing of an included AI item in `apps/dashboard/src/features/generate/components/ItemRow.tsx` (FR-015), keeping the unverified badge after inclusion and after editing (FR-014)
-- [ ] T057 [P] [US3] Vitest in `apps/dashboard/src/features/generate/GenerateWorkspacePage.test.tsx` asserting that a run with suggestions produces zero selected AI items until the user acts, and that including one keeps its badge
+- [X] T051 [P] [US3] Define `ExperienceSuggestions` and `SuggestionSet` in `apps/api/internal/generation/domain/ranking.go` per `contracts/llm-contracts.md` §2 — text only, **no index field**
+- [X] T052 [P] [US3] Implement `SuppressDuplicateSuggestions` in `apps/api/internal/generation/domain/suggestions.go`, reusing the existing `norm()` and `tokens()` helpers from `rendercv.go` so the comparison basis is the pipeline's existing one
+- [X] T053 [US3] Implement `buildSuggestPrompt` and `suggestContent` in `apps/api/internal/generation/application/rankcv_llm.go`, routed through the existing `generation-select` task key (no `gateway/config.yaml` change — `research.md` R4), taking the analysis plus company names and skill-group labels but **not** the master's bullet text
+- [X] T054 [US3] Run the suggestion stage concurrently with the summary stage in `apps/api/internal/generation/application/workspace.go`, dropping entries whose company does not match a master company, applying T052, and persisting survivors as `origin='ai'`, `selected=false`, ranked after every profile item (depends on T051–T053)
+- [X] T055 [US3] Add the suggestion group to `apps/dashboard/src/features/generate/components/WorkEntryBlock.tsx`: visually distinct, each item badged "AI · unverified", with an empty state when a run produced none (never a missing or broken section)
+- [X] T056 [US3] Allow inline editing of an included AI item in `apps/dashboard/src/features/generate/components/ItemRow.tsx` (FR-015), keeping the unverified badge after inclusion and after editing (FR-014)
+- [X] T057 [P] [US3] Vitest in `apps/dashboard/src/features/generate/GenerateWorkspacePage.test.tsx` asserting that a run with suggestions produces zero selected AI items until the user acts, and that including one keeps its badge
 
 **Checkpoint**: The escape hatch exists without weakening grounding. Stories 1–3 all work.
 

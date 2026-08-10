@@ -9,6 +9,65 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
+// buildSuggestPrompt constructs the prompt for the suggestion stage
+// (contracts/llm-contracts.md §2, T053). Unlike buildRankPrompt, it is
+// deliberately NOT given the master's bullet text or skill tokens — only
+// company names and skill group labels — so a model that cannot see the
+// candidate's wording cannot paraphrase it (research.md R4): the cheapest
+// reduction of the FR-017 duplicate case is not showing the material that
+// would be duplicated. Remaining duplicates are suppressed deterministically
+// by SuppressDuplicateSuggestions after the response comes back.
+func buildSuggestPrompt(companies []string, skillGroupLabels []string, analysis domain.VacancyAnalysis) string {
+	analysisLines := renderAnalysisLines(analysis)
+
+	var b strings.Builder
+	b.WriteString("Given this vacancy analysis, suggest achievement bullets and skills the vacancy calls for " +
+		"that this candidate's profile may be missing. You are NOT shown the candidate's existing bullets or " +
+		"skill details — only their employer names and skill group labels below — so suggest material a " +
+		"candidate in these roles plausibly has, not a rewording of anything you cannot see.\n\n")
+	b.WriteString("VACANCY ANALYSIS:\n")
+	b.WriteString(strings.Join(analysisLines, "\n"))
+	b.WriteString("\n\nRULES:\n")
+	b.WriteString("- Return experience keyed by the EXACT company name shown below; do not add companies.\n")
+	b.WriteString("- Suggest achievement bullets only for skills/responsibilities the vacancy calls for that a\n")
+	b.WriteString("  candidate at that company plausibly did — do not invent metrics or claims.\n")
+	b.WriteString("- Do NOT write a summary and do NOT rank or select existing content. Separate steps do both.\n")
+	b.WriteString("- Zero suggestions for an entry, or overall, is a valid answer — do not force one.\n\n")
+
+	b.WriteString("EMPLOYERS (master, in order):\n")
+	for i, c := range companies {
+		fmt.Fprintf(&b, "  [%d] %s\n", i, c)
+	}
+
+	if len(skillGroupLabels) > 0 {
+		b.WriteString("\nEXISTING SKILL GROUP LABELS (master):\n")
+		for i, l := range skillGroupLabels {
+			fmt.Fprintf(&b, "  [%d] %s\n", i, l)
+		}
+	}
+
+	return b.String()
+}
+
+// suggestContent calls the LLM to produce a SuggestionSet — a separate call
+// from rankContent, routed through the SAME `generation-select` router
+// (research.md R4: no new gateway model group). It runs concurrently with
+// the summary stage (T054).
+func suggestContent(ctx context.Context, lc llm.Provider, model string, companies []string, skillGroupLabels []string, analysis domain.VacancyAnalysis) (domain.SuggestionSet, error) {
+	ctx, cancel := context.WithTimeout(ctx, selectStageTimeout)
+	defer cancel()
+	prompt := buildSuggestPrompt(companies, skillGroupLabels, analysis)
+	maxT := selectMaxTokens
+	return llm.CompleteStructured[domain.SuggestionSet](ctx, lc, prompt, &llm.CompleteOptions{
+		System: "You are suggesting achievement bullets and skills a candidate's profile may be missing, " +
+			"based only on their employer names and existing skill group labels. You never see or rephrase " +
+			"their actual bullets or skill details.",
+		Model:        model,
+		MaxTokens:    &maxT,
+		ResponseMode: llm.ResponseModeStrict,
+	})
+}
+
 // buildRankPrompt constructs the prompt for the ranking stage
 // (contracts/llm-contracts.md §1, T041). It reuses buildSelectPrompt's
 // numbered-bullet rendering verbatim (renderExperienceEntryLines,

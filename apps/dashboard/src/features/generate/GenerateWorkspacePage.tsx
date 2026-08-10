@@ -134,7 +134,13 @@ function WorkspaceLeftPane({
       {summarySection ? <SummaryBlock section={summarySection} onToggle={onToggle} onEditText={onEditText} /> : null}
 
       {experienceSections.map((section) => (
-        <WorkEntryBlock key={section.id} section={section} onToggle={onToggle} onReorder={onReorder} />
+        <WorkEntryBlock
+          key={section.id}
+          section={section}
+          onToggle={onToggle}
+          onReorder={onReorder}
+          onEditText={onEditText}
+        />
       ))}
 
       {skillsSection ? <SkillsBlock section={skillsSection} onToggle={onToggle} onReorder={onReorder} /> : null}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -490,6 +491,26 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		}
 	}
 
+	// The suggestion stage (T053/T054) runs concurrently with the summary
+	// stage below — a separate LLM call, through the same generation-select
+	// provider, taking the analysis plus company names and skill-group
+	// labels but never the master's bullet text (research.md R4). It is
+	// joined just before the run's final state is set, so it never delays
+	// the summary and never fails the run on its own.
+	if rec != nil {
+		rec.Step(ctx, "suggesting additional content", nil)
+	}
+	var (
+		suggestWG  sync.WaitGroup
+		suggestSet domain.SuggestionSet
+		suggestErr error
+	)
+	suggestWG.Add(1)
+	go func() {
+		defer suggestWG.Done()
+		suggestSet, suggestErr = suggestContent(ctx, s.llm.Select, s.genModel, experienceCompanies(master), domain.SkillGroupLabels(master), analysis)
+	}()
+
 	// selectedProfileHighlights reads the run's currently-selected profile
 	// items, so it picks up whatever rankExperienceSections/applyRankedSections
 	// just wrote — real ranking where it verified, the master-order fallback
@@ -555,6 +576,20 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		} else {
 			_ = s.q.SetSectionState(ctx, sqlcgen.SetSectionStateParams{ID: summarySectionID, State: string(domain.SectionReady)})
 		}
+	}
+
+	// Join the suggestion stage (spawned above, alongside ranking). Its
+	// content is unverified by definition (FR-016 — no grounding check runs
+	// on a SuggestionSet) and off by default, so a failure here is logged
+	// and otherwise ignored: it never downgrades finalState or fails the run.
+	suggestWG.Wait()
+	if suggestErr == nil {
+		expItems, skillItems := buildSuggestionItems(suggestSet, master)
+		if err := s.persistSuggestions(ctx, rid, expItems, skillItems); err != nil && rec != nil {
+			rec.Step(ctx, "suggestion persistence failed", map[string]any{"error": err.Error()})
+		}
+	} else if rec != nil {
+		rec.Step(ctx, "suggestion generation failed", map[string]any{"error": suggestErr.Error()})
 	}
 
 	_ = s.q.SetRunState(ctx, sqlcgen.SetRunStateParams{ID: rid, State: string(finalState)})
