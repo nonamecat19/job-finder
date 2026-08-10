@@ -29,6 +29,22 @@ flowchart TD
 The rule this enforces: a tailored resume reorders, reweights and rephrases what is true.
 It does not invent employers, dates or skills.
 
+Two decisions are deliberately kept away from the model rather than checked afterwards:
+
+- **Skill order.** The selection payload has no skills field. Groups carry over from the
+  master untouched and `domain.RankSkills` orders them from the vacancy analysis — a
+  permutation, so nothing can be dropped, reworded or invented on the way.
+- **Numbers.** Every metric a highlight asserts must appear in the master bullets it draws
+  from, checked at every grounding level. Word-overlap alone cannot see this: it discards
+  short tokens, so `40%` was invisible to it.
+- **Which bullets appear.** Highlights are `{sourceIndex, rephrased}` references into the
+  numbered bullet list the prompt showed for that entry, not free text. A rewording is
+  checked against the one bullet it names and falls back to the original when it drifts;
+  under strict grounding it is ignored outright.
+- **Condensing for the page target.** `domain.TrimHighlights` drops bullets from the end of
+  each entry — the selection stage already ranked them — instead of a model call that would
+  reword everything it kept. Expanding is still a model call.
+
 ## Service shape
 
 ```go

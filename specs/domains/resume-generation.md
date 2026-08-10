@@ -23,9 +23,9 @@ requirements and only one of them is worth a premium model.
 | Stage | Task key | What it does | Verified for |
 |---|---|---|---|
 | Analysis | `generation-analyze` | vacancy text → required/nice-to-have skills, keywords | — |
-| Selection | `generation-select` | which skills, in what order; which achievements per job; their rewording | grounding + **completeness** |
+| Selection | `generation-select` | which achievements per job; their rewording | grounding + **completeness** |
 | Summary | `generation-summary` | writes the 2-4 sentence summary | grounding, independently |
-| Page fit | `generation-select` | expand/condense to hit the page target | grounding |
+| Page fit | `generation-select` | expand to hit the page target; condensing is code (`TrimHighlights`) | grounding |
 
 **The summary is the only part that is written rather than selected**, and it is the only
 part where a cheap model was measured fabricating (2026-08-07: glm-4.7 invented a summary
@@ -53,9 +53,10 @@ than rendering a hollowed-out resume. When the analysis lists no required skills
 weighted checks would be vacuously true, so the gate falls back to a structural check (group
 count equals the master's) and records that it did.
 
-Note what is *not* a shortfall: a group the model omits entirely. The merge keys skills by
-index and leaves an unmentioned group at its master value, so omission is absorbed. Only
-content returned in truncated form reaches the document.
+Note what is *not* a shortfall: anything about skills. A selection response has no skills
+field at all — skill order is computed by `RankSkills`, and the master's own groups carry
+through the merge untouched — so a model cannot truncate them whether it omits them or not.
+The gate now bites on the material the model does return: the per-job achievement counts.
 
 **Provenance (035-FR-012/FR-017).** Each run records, per stage, which model served it,
 whether the chain fell back, the duration and the measured cost — the last from the proxy's
@@ -64,6 +65,15 @@ and shown on the review surface: a user who was told they get the strict model m
 silently receive the cheap one. Substitution is detected from the proxy's
 `x-litellm-attempted-fallbacks` header, so the application still never learns which upstream
 model was configured for a key.
+
+**Condensing is code, not a fourth model call.** Over-target documents get the
+compact design first, then `domain.TrimHighlights` drops bullets from the end of each entry
+toward ~60% of the configured maximum. The selection stage already ordered them by relevance,
+so the tail is the least relevant material; the wording that survives is wording that was
+already verified. Page fitting is a layout problem, and it no longer buys a third opportunity
+to reword the document. When there is nothing left to trim the loop stops rather than
+re-rendering an identical file. Expansion is still a model call: choosing *which* further
+bullets earn a place is a judgement, not arithmetic.
 
 **Cover letters are on demand** (035-FR-013). A tailoring run produces a resume only; the
 letter is requested against a finished resume via `POST /documents/{id}/cover-letter`.
@@ -75,8 +85,9 @@ letter is requested against a finished resume via `POST /documents/{id}/cover-le
 **Allow-list.** AI edits are restricted to:
 
 1. the professional summary,
-2. the description bullets under each work-experience entry,
-3. skills and skill groups,
+2. which description bullets appear under each work-experience entry, and an optional
+   rewording of a bullet held against that bullet alone (see §2a),
+3. skill *proposals* the user reviews — never applied skill text; see §2a,
 4. *(028)* the additional fields 028 admits to the list,
 5. *(031, 032)* section presence/length, only as driven by the saved shape config.
 
@@ -99,6 +110,55 @@ posting. No invented experience, skills, employers, dates, degrees or metrics.
   fabricate.** When the profile holds less content than the floor asks for, generation uses
   what exists and records the shortfall. Grounding checks pass at the same rate regardless of
   configuration.
+
+### 2a. What the model is not allowed to decide
+
+The failures above were enforced by *checking* the model's free text — and a check can only
+catch what it can see. Each rule below either stops asking for the text, or looks at the one
+thing the old check was blind to.
+
+**Skill order is code, not a model decision.** The select prompt used to ask for a rewritten
+`details` string per group ("vacancy-required skills first"). In that response a reorder and
+a silent deletion are indistinguishable, and only the completeness gate stood between a
+dropped skill and the page. `TailoredSelection` no longer carries skills; `MergeTailored`
+carries every group over from the master untouched; and `domain.RankSkills` orders them from
+the vacancy analysis:
+
+- within a group, entries sort by relevance — a match against a **required** vacancy skill
+  outranks a **nice-to-have**, which outranks the rest; ties keep the master's authored order,
+- an entry's score is the best match any of its tokens makes, so a slash-joined entry cannot
+  outrank a single required skill by listing more words,
+- the ordering is a permutation: nothing is added, reworded or dropped,
+- groups keep the master's order unless `skillsMaxGroups` forces a choice, in which case they
+  sort by how much of the vacancy they cover so the cap keeps the relevant ones,
+- pinned groups (`Spoken Languages`) are left exactly as authored,
+- the same inputs always produce the same output.
+
+**Achievements are chosen by reference, not written.** `TailoredExperience.Highlights` and
+`TailoredProject.Highlights` are `[]HighlightRef` — `{sourceIndex, rephrased}` — where
+`sourceIndex` names one of the numbered bullets the prompt listed for that entry. The prompt
+numbers them; `MergeTailored` resolves them via `ResolveHighlights`:
+
+- an index outside the entry's bullet list, or a repeat of one already used, is dropped,
+- an omitted `rephrased` yields the master's bullet verbatim,
+- a `rephrased` is checked against **the one bullet it names** — word overlap and metrics —
+  and a failure resolves to the original rather than failing the run,
+- under **strict** grounding `rephrased` is not consulted at all.
+
+A bullet that merges two originals, borrows from another employer, or carries a number its
+source never had is now unrepresentable rather than detectable. This is also what lets the
+pre-merge check be exact: it compares a rewording against its named source, where it used to
+compare against every bullet the company ever had.
+
+**Metrics must trace to the bullet that carries them.** The highlight-drift check
+(`lcsCovered`) counts word overlap, and its word set drops tokens shorter than three
+characters — so `40%` reduced to `40` and was discarded before the comparison. A model could
+take a real bullet, attach a metric the candidate never claimed, and pass. Every number a
+highlight asserts is now checked against the master bullets it may draw from, at **every**
+grounding level: an invented number is not a stylistic liberty a looser level tolerates.
+Digits inside an identifier (`S3`, `p95`, `EC2`) name a technology rather than assert a
+quantity and are skipped. The check runs pre-merge on the selection payload and post-merge on
+the document, and covers project highlights as well as experience.
 
 ## 3. Structural invariants (028)
 
@@ -167,10 +227,9 @@ Escalation on a contradiction:
 3. **No figure asserted** — no violation. The check flags a *contradiction*, never the
    absence of a claim; "senior backend engineer" with no number is fine.
 
-**The LLM payload after 028.** `TailoredSections` carries exactly three fields: `summary` (2–3
+**The LLM payload after 028.** `TailoredSections` carries `summary` (2–3
 sentences, **must not assert a numeric total-years figure** — describe seniority
-descriptively); `skills` (one entry per master skill group at the same `[index]`, with
-vacancy-required skills first within each group, group set and order matching master); and
+descriptively) and
 `experience` (one entry per master entry, keyed by exact `company` name, with only
 `highlights` — the top 3–5 most relevant, rephrased — changeable). The prompt's hard rules in
 `buildSelectPrompt` say so explicitly: keep every experience entry, keep them in the exact
