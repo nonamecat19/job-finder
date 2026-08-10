@@ -33,6 +33,11 @@ type evalRun struct {
 	// this request — recorded the same way every other fixture is
 	// (-eval.record).
 	ranking domain.RankedSelection
+	// suggestions is the suggestion stage's raw response (T064, 042), taken
+	// over the same replayed `generation-select` provider for the same reason
+	// `ranking` is: the corpus has to see what the model offered before R6's
+	// suppression removes the duplicates.
+	suggestions domain.SuggestionSet
 }
 
 // stubRenderDeps builds render dependencies that need no PDF toolchain.
@@ -120,6 +125,16 @@ func runCase(t *testing.T, c EvalCase) evalRun {
 		}
 	}
 
+	if run.err == nil {
+		suggested, serr := suggestContent(
+			context.Background(), sel, "", experienceCompanies(c.Master), domain.SkillGroupLabels(c.Master), analysis)
+		if serr != nil {
+			run.err = fmt.Errorf("suggestion: %w", serr)
+		} else {
+			run.suggestions = suggested
+		}
+	}
+
 	for _, p := range []*ReplayProvider{analyze, sel, premium, summary, cover} {
 		run.misses += p.missCount()
 	}
@@ -128,12 +143,13 @@ func runCase(t *testing.T, c EvalCase) evalRun {
 
 func scoreRun(c EvalCase, r evalRun) map[string]Score {
 	return scoreAll(scoreInput{
-		master:   c.Master,
-		result:   r.merged,
-		analysis: r.analysis,
-		cfg:      c.Cfg,
-		level:    c.Level,
-		runErr:   r.err,
-		ranking:  r.ranking,
+		master:      c.Master,
+		result:      r.merged,
+		analysis:    r.analysis,
+		cfg:         c.Cfg,
+		level:       c.Level,
+		runErr:      r.err,
+		ranking:     r.ranking,
+		suggestions: r.suggestions,
 	})
 }

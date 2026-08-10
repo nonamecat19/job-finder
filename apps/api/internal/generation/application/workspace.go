@@ -315,11 +315,17 @@ type rankedSectionResult struct {
 // No I/O beyond the two LLM calls: it takes the master and analysis already
 // resolved by the caller and returns a decision per entry, so it can be
 // tested without a database (T038).
-func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig) []rankedSectionResult {
+// It also returns the verified skill-group order from the same response
+// (T060) — one call ranks both surfaces, so pulling the skills order out here
+// costs nothing and keeps the two decisions on the same attempt. A nil order
+// means no attempt verified, and the caller leaves the master-order skills
+// seed in place, exactly as it does for a fallback experience entry.
+func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig) ([]rankedSectionResult, []int) {
 	sections := domain.CvSections(master)
 	experience := domain.AsSliceOfMaps(sections["experience"])
+	skillGroupCount := len(domain.AsSliceOfMaps(sections["skills"]))
 	if len(experience) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	type entry struct {
@@ -362,6 +368,21 @@ func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, 
 		return attempt{ranking: ranking, valid: len(domain.VerifyRanking(len(e.highlights), cfg.ExperienceBulletsMin, ranking)) == 0}
 	}
 
+	// A skill-group order is verified on the same footing as an achievement
+	// ranking (T059): every group index exactly once, or the attempt is
+	// rejected and retried like any other. A master with no skill groups has
+	// nothing to order, so it is trivially valid.
+	skillOrderOf := func(sel domain.RankedSelection, callErr error) []int {
+		if callErr != nil || skillGroupCount == 0 {
+			return nil
+		}
+		order := sel.Skills.GroupOrder
+		if len(domain.VerifySkillGroupOrder(skillGroupCount, order)) > 0 {
+			return nil
+		}
+		return order
+	}
+
 	first, firstErr := rankContent(ctx, lc, model, master, analysis, cfg, nil)
 	firstAttempts := make([]attempt, len(entries))
 	var needRetry []string
@@ -371,15 +392,23 @@ func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, 
 			needRetry = append(needRetry, e.company)
 		}
 	}
+	skillOrder := skillOrderOf(first, firstErr)
+	skillsRejected := skillGroupCount > 0 && skillOrder == nil
 
 	var second domain.RankedSelection
 	secondErr := fmt.Errorf("ranking retry not attempted")
-	if len(needRetry) > 0 {
-		violationMsgs := make([]string, len(needRetry))
-		for i, c := range needRetry {
-			violationMsgs[i] = fmt.Sprintf("the ranking for company %q was rejected: it must name exactly K distinct in-range indices", c)
+	if len(needRetry) > 0 || skillsRejected {
+		violationMsgs := make([]string, 0, len(needRetry)+1)
+		for _, c := range needRetry {
+			violationMsgs = append(violationMsgs, fmt.Sprintf("the ranking for company %q was rejected: it must name exactly K distinct in-range indices", c))
+		}
+		if skillsRejected {
+			violationMsgs = append(violationMsgs, fmt.Sprintf("the skill groupOrder was rejected: it must name each of the %d skill group indices exactly once", skillGroupCount))
 		}
 		second, secondErr = rankContent(ctx, lc, model, master, analysis, cfg, violationMsgs)
+		if skillsRejected {
+			skillOrder = skillOrderOf(second, secondErr)
+		}
 	}
 
 	results := make([]rankedSectionResult, len(entries))
@@ -395,7 +424,7 @@ func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, 
 		}
 		results[i] = rankedSectionResult{entryKey: e.company, fallbackUsed: true}
 	}
-	return results
+	return results, skillOrder
 }
 
 // applyRankedSections persists rankExperienceSections' decisions: a section
@@ -440,6 +469,58 @@ func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, re
 	return nil
 }
 
+// applyRankedSkills replaces the skills section's master-order seed with the
+// ranking stage's group order (T060/T061). A nil or empty order leaves the
+// seed exactly as StartGenerationRun wrote it — the FR-010 fallback shape,
+// identical to what applyRankedSections does for an experience entry.
+//
+// Group *contents* never come from the model: they are read back from the
+// master and ordered within each group by the deterministic domain.RankSkills,
+// so the model's only influence on this section is which group comes first
+// and — through cfg.SkillsMaxGroups — which are pre-selected.
+func (s *Service) applyRankedSkills(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, groupOrder []int) error {
+	if len(groupOrder) == 0 {
+		return nil
+	}
+	groups := withinGroupRankedSkills(master, analysis)
+	if len(groups) == 0 {
+		return nil
+	}
+	sections, err := s.q.ListSectionsByRun(ctx, runID)
+	if err != nil {
+		return err
+	}
+	for _, sec := range sections {
+		if sec.Kind != string(domain.SectionKindSkills) {
+			continue
+		}
+		if err := s.q.DeleteSectionItems(ctx, sec.ID); err != nil {
+			return err
+		}
+		return s.persistWorkspaceItems(ctx, sec.ID, domain.SeedSkillItems(groups, groupOrder, cfg.SkillsMaxGroups))
+	}
+	return nil
+}
+
+// withinGroupRankedSkills returns the master's skill groups with each group's
+// entries ordered by vacancy relevance. RankSkills mutates in place and the
+// run's master snapshot must stay byte-identical to what was persisted, so it
+// runs on a JSON round-trip copy; SkillsMaxGroups is deliberately zeroed on
+// that copy, because the between-group order is the ranking stage's GroupOrder
+// now and RankSkills' own group reordering would fight it for the same slots.
+func withinGroupRankedSkills(master domain.RendercvMaster, analysis domain.VacancyAnalysis) []map[string]any {
+	raw, err := json.Marshal(map[string]any(master))
+	if err != nil {
+		return domain.AsSliceOfMaps(domain.CvSections(master)["skills"])
+	}
+	var clone domain.RendercvMaster
+	if err := json.Unmarshal(raw, &clone); err != nil {
+		return domain.AsSliceOfMaps(domain.CvSections(master)["skills"])
+	}
+	domain.RankSkills(clone, analysis, domain.ShapeConfig{SkillsEnabled: true})
+	return domain.AsSliceOfMaps(domain.CvSections(clone)["skills"])
+}
+
 // StartRun is the background half of a workspace run, dispatched by
 // worker.Handler on payload.GenerationRunID (T012). Ranking runs here, after
 // analysis and before the summary highlights are read (T044): the experience
@@ -480,7 +561,12 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 	if rec != nil {
 		rec.Step(ctx, "ranking achievements", nil)
 	}
-	rankResults := rankExperienceSections(ctx, s.llm.Select, s.genModel, master, analysis, cfg)
+	rankResults, skillOrder := rankExperienceSections(ctx, s.llm.Select, s.genModel, master, analysis, cfg)
+	if err := s.applyRankedSkills(ctx, rid, master, analysis, cfg, skillOrder); err != nil && rec != nil {
+		// Same posture as the experience ranking below: the master-order
+		// skills seed is already correct and stays in place.
+		rec.Step(ctx, "skills ranking persistence failed", map[string]any{"error": err.Error()})
+	}
 	if err := s.applyRankedSections(ctx, rid, rankResults); err != nil {
 		// Ranking persistence failing does not fail the run: the master-order
 		// seed StartGenerationRun already wrote is correct and stays in place
@@ -755,18 +841,6 @@ func (s *Service) runToDto(ctx context.Context, run sqlcgen.GenerationRun, secti
 	var cfg domain.ShapeConfig
 	_ = json.Unmarshal(run.ShapeConfig, &cfg)
 
-	exportStatus := ""
-	if run.ExportStatus != nil {
-		exportStatus = *run.ExportStatus
-	}
-	var report *dto.OverflowReportDto
-	if len(run.ExportReport) > 0 {
-		var r dto.OverflowReportDto
-		if json.Unmarshal(run.ExportReport, &r) == nil {
-			report = &r
-		}
-	}
-
 	return dto.GenerationRunDto{
 		ID:                 dbutil.UUIDString(run.ID),
 		State:              run.State,
@@ -777,14 +851,10 @@ func (s *Service) runToDto(ctx context.Context, run sqlcgen.GenerationRun, secti
 		SummarySubstituted: false,
 		MasterChanged:      s.masterChanged(ctx, run),
 		ShapeConfig:        shapeConfigToDto(cfg),
-		Export: dto.GenerationExportDto{
-			Status:     exportStatus,
-			DocumentID: dbutil.UUIDStringPtr(run.ExportDocumentID),
-			Report:     report,
-		},
-		Sections:  sectionDtos,
-		CreatedAt: timestamptzString(run.CreatedAt),
-		UpdatedAt: timestamptzString(run.UpdatedAt),
+		Export:             exportDtoFromRun(run),
+		Sections:           sectionDtos,
+		CreatedAt:          timestamptzString(run.CreatedAt),
+		UpdatedAt:          timestamptzString(run.UpdatedAt),
 	}
 }
 

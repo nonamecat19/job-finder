@@ -45,6 +45,60 @@ func invalidRankReply(t *testing.T) func(string) string {
 	}
 }
 
+// rankMasterWithSkills adds three skill groups to rankMaster, so the skills
+// half of the same response has something to order.
+func rankMasterWithSkills() domain.RendercvMaster {
+	m := rankMaster()
+	domain.CvSections(m)["skills"] = []any{
+		map[string]any{"label": "Languages", "details": "Go, TypeScript"},
+		map[string]any{"label": "Cloud", "details": "AWS, GCP"},
+		map[string]any{"label": "Data", "details": "Postgres, Redis"},
+	}
+	return m
+}
+
+// T059/T060: a verified groupOrder comes back from the same call that ranked
+// the achievements, and an unverifiable one is retried once and then dropped
+// so the caller keeps the master-order seed.
+func TestSkillGroupOrderIsVerifiedLikeAnAchievementRanking(t *testing.T) {
+	reply := func(order []int) func(string) string {
+		return func(string) string {
+			return mustJSON(t, domain.RankedSelection{
+				Experience: []domain.RankedExperience{{Company: "Acme", Ranking: []int{2, 0, 3, 1}}},
+				Skills:     domain.RankedSkills{GroupOrder: order},
+			})
+		}
+	}
+	cfg := domain.DefaultShapeConfig()
+	cfg.ExperienceBulletsMin = 2
+
+	t.Run("verified order is returned", func(t *testing.T) {
+		provider := &stageProvider{name: "generation-select", reply: reply([]int{2, 0, 1})}
+
+		_, order := rankExperienceSections(context.Background(), provider, "", rankMasterWithSkills(), rankAnalysis(), cfg)
+
+		if want := []int{2, 0, 1}; len(order) != len(want) {
+			t.Fatalf("order = %v, want %v", order, want)
+		}
+		if provider.calls != 1 {
+			t.Errorf("provider called %d times, want 1", provider.calls)
+		}
+	})
+
+	t.Run("order omitting a group is retried then dropped", func(t *testing.T) {
+		provider := &stageProvider{name: "generation-select", reply: reply([]int{0, 1})}
+
+		_, order := rankExperienceSections(context.Background(), provider, "", rankMasterWithSkills(), rankAnalysis(), cfg)
+
+		if order != nil {
+			t.Errorf("order = %v, want nil so the master-order seed stands", order)
+		}
+		if provider.calls != 2 {
+			t.Errorf("provider called %d times, want 2 (the bad groupOrder alone must trigger the retry)", provider.calls)
+		}
+	})
+}
+
 // T038: a ranking rejected on both attempts falls back to master order
 // (fallbackUsed = true, no items to persist — the caller leaves the
 // StartGenerationRun seed exactly as it is) rather than failing the run.
@@ -53,7 +107,7 @@ func TestTwiceRejectedRankingFallsBackToMasterOrder(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.ExperienceBulletsMin = 2
 
-	results := rankExperienceSections(context.Background(), provider, "", rankMaster(), rankAnalysis(), cfg)
+	results, _ := rankExperienceSections(context.Background(), provider, "", rankMaster(), rankAnalysis(), cfg)
 
 	if len(results) != 1 {
 		t.Fatalf("len(results) = %d, want 1", len(results))
@@ -82,7 +136,7 @@ func TestValidRankingOnFirstAttemptNeedsNoRetry(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.ExperienceBulletsMin = 2
 
-	results := rankExperienceSections(context.Background(), provider, "", rankMaster(), rankAnalysis(), cfg)
+	results, _ := rankExperienceSections(context.Background(), provider, "", rankMaster(), rankAnalysis(), cfg)
 
 	if len(results) != 1 {
 		t.Fatalf("len(results) = %d, want 1", len(results))
@@ -129,7 +183,7 @@ func TestRankingValidOnRetryIsUsed(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.ExperienceBulletsMin = 2
 
-	results := rankExperienceSections(context.Background(), provider, "", rankMaster(), rankAnalysis(), cfg)
+	results, _ := rankExperienceSections(context.Background(), provider, "", rankMaster(), rankAnalysis(), cfg)
 
 	if len(results) != 1 {
 		t.Fatalf("len(results) = %d, want 1", len(results))

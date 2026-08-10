@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:898b1e22d6f22e60f8c9f5e36f75143e5e754f39efcad3900d59f296e2f774cb",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, suggest achievement bullets and skills the vacancy calls for that this candidate's profile may be missing. You are NOT shown the ca",
+    "prompt_len": 2357,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 606,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"bullets\": [\n        \"Owned and operated deployment pipelines, reducing deploy time and incident frequency.\",\n        \"Scaled deployment systems to meet growing demands.\",\n        \"Mentored engineers toward seniority, improving team capabilities.\"\n      ],\n      \"company\": \"Northwind Systems\"\n    }\n  ],\n  \"skills\": [\n    \"Kubernetes\",\n    \"Terraform\",\n    \"multi-region failover\",\n    \"cost optimization\",\n    \"incident postmortems\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

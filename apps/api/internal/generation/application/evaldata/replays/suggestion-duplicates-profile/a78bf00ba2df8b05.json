@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:a78bf00ba2df8b052bfb8c6e1b726f9557821677a3df84e8de4f6aa69f131207",
+  "request_summary": {
+    "model_key": "generation-analyze",
+    "prompt_prefix": "Analyze this job vacancy and extract structured requirements.  VACANCY TEXT: Senior Site Reliability Engineer — Payments Platform  We run the payment rails fo",
+    "prompt_len": 2306,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "8192",
+    "response_mode": 0,
+    "schema_len": 0,
+    "json_output": true
+  },
+  "response": "{\n  \"required",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-analyze"
+}

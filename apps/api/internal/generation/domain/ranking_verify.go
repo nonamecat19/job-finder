@@ -81,6 +81,22 @@ func VerifyRanking(available, target int, ranking []int) []RankingViolation {
 	return violations
 }
 
+// VerifySkillGroupOrder applies VerifyRanking's three structural checks to
+// RankedSkills.GroupOrder (contracts/llm-contracts.md §1): every index in
+// [0, groupCount), none repeated, and none missing. The prompt asks for every
+// skill group index exactly once, so K here is groupCount itself — passing
+// target == available collapses min(2*target, available) to available, which
+// is what makes "short" mean "omitted a group" on this surface while it means
+// "ranked fewer than 2N candidates" on an achievement ranking.
+//
+// The consequence of an omission is the same as it is for achievements: retry
+// once, then fall back to master order (FR-010). A group is never dropped over
+// a bad ranking, because the order and the list are separate concerns —
+// SeedSkillItems emits every group whatever the order says.
+func VerifySkillGroupOrder(groupCount int, order []int) []RankingViolation {
+	return VerifyRanking(groupCount, groupCount, order)
+}
+
 // MasterOrderRanking is the FR-010 fallback: the first K indices in master
 // order, used when a ranking is rejected twice.
 func MasterOrderRanking(available, target int) []int {

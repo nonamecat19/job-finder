@@ -25,7 +25,7 @@ import (
 // A baseline recorded under a different version is not comparable: the delta
 // would be measured across two instruments and read as a quality change. The
 // comparator refuses rather than subtracting.
-const ScorerSetVersion = 3
+const ScorerSetVersion = 4
 
 // Direction says which way is worse, so the comparator never has to infer
 // whether 3 → 5 is good.
@@ -56,6 +56,10 @@ type scoreInput struct {
 	// report is one VerifyCompleteness per run, shared by the three scorers
 	// that read it so the verifier runs once.
 	report domain.CompletenessReport
+	// suggestions is the suggestion stage's raw response for this run (T064,
+	// 042) — read before SuppressDuplicateSuggestions acts on it, for the
+	// same reason `ranking` is read before VerifyRanking does.
+	suggestions domain.SuggestionSet
 	// ranking is the ranking stage's raw response for this run (T045, 042).
 	// Unlike every other field here it is not read off `result` — a rejected
 	// ranking never reaches the document, only the fallback does — so this is
@@ -160,6 +164,35 @@ var scorers = []Scorer{
 			return rankingViolationsTotal(in.master, in.cfg, in.ranking)
 		},
 	},
+	{
+		Name:      "suggestion_duplicates",
+		Direction: LowerIsBetter,
+		Score: func(in scoreInput) float64 {
+			return suggestionDuplicatesTotal(in.master, in.suggestions)
+		},
+	},
+}
+
+// suggestionDuplicatesTotal counts the suggested bullets and skills research.md
+// R6's suppression had to remove: what the suggestion stage returned, minus
+// what domain.SuppressDuplicateSuggestions let through (042 T064).
+//
+// Measured on the raw response rather than on the survivors, because the
+// survivors carry no duplicates by construction — SuppressDuplicateSuggestions
+// is what makes that true, so scoring them would be scoring a tautology. What
+// can regress is the prompt: research.md R4 withholds the master's bullet text
+// and skill tokens from the suggestion stage precisely so the model cannot
+// duplicate them, and this is how much that withholding failed to prevent.
+func suggestionDuplicatesTotal(master domain.RendercvMaster, suggestions domain.SuggestionSet) float64 {
+	return float64(suggestionItemCount(suggestions) - suggestionItemCount(domain.SuppressDuplicateSuggestions(suggestions, master)))
+}
+
+func suggestionItemCount(s domain.SuggestionSet) int {
+	n := len(s.Skills)
+	for _, e := range s.Experience {
+		n += len(e.Bullets)
+	}
+	return n
 }
 
 // rankingViolationsTotal sums domain.VerifyRanking's violations across every
@@ -232,7 +265,7 @@ func scorerNames() []string {
 // compared against a run with seven, and the missing scorer would read as
 // "unchanged" rather than "never measured".
 func TestScorerSetVersionMatchesTheSet(t *testing.T) {
-	const versionAtWhichThisWasWritten = 3
+	const versionAtWhichThisWasWritten = 4
 	wantNames := []string{
 		"bullet_shortfalls",
 		"duplicate_provenance",
@@ -242,6 +275,7 @@ func TestScorerSetVersionMatchesTheSet(t *testing.T) {
 		"ranking_violations",
 		"required_skills_missing",
 		"structural_violations",
+		"suggestion_duplicates",
 	}
 
 	if ScorerSetVersion != versionAtWhichThisWasWritten {
@@ -347,6 +381,9 @@ func TestScorerDelegationIsExact(t *testing.T) {
 		if m.ranking != nil {
 			in.ranking = *m.ranking
 		}
+		if m.suggestions != nil {
+			in.suggestions = *m.suggestions
+		}
 		inputs = append(inputs, in)
 	}
 
@@ -363,6 +400,7 @@ func TestScorerDelegationIsExact(t *testing.T) {
 			"nice_to_have_retention":  in.report.NiceToHaveRetained,
 			"bullet_shortfalls":       float64(len(in.report.BulletShortfalls)),
 			"ranking_violations":      rankingViolationsTotal(in.master, in.cfg, in.ranking),
+			"suggestion_duplicates":   suggestionDuplicatesTotal(in.master, in.suggestions),
 		}
 
 		for name, wantVal := range want {
@@ -391,6 +429,10 @@ type mutation struct {
 	// mutation that needs a second axis. nil means "leave baseScoreInput's
 	// healthy ranking as-is".
 	ranking *domain.RankedSelection
+	// suggestions overrides scoreInput.suggestions, for the same reason
+	// `ranking` overrides scoreInput.ranking: a suppressed suggestion never
+	// reaches the document either.
+	suggestions *domain.SuggestionSet
 }
 
 // mutatedDocuments injects known defects into a copy of a healthy document.
@@ -469,16 +511,23 @@ func mutatedDocuments() []mutation {
 	badRanking := domain.RankedSelection{
 		Experience: []domain.RankedExperience{{Company: "Acme", Ranking: []int{0, 0}}},
 	}
+	// duplicatedSuggestion is a suggestion stage that echoed a master bullet
+	// back — the FR-017 case R6 exists for, and the one R4's prompt is meant
+	// to make unlikely rather than impossible.
+	duplicatedSuggestion := domain.SuggestionSet{
+		Experience: []domain.ExperienceSuggestions{{Company: "Acme", Bullets: []string{"Shipped the payments service"}}},
+	}
 	_, healthyDoc, _, _ := scoringFixture()
 
 	return []mutation{
-		{"a company absent from master", fabricatedCompany, "grounding_violations", nil},
-		{"one master bullet rendered as two accomplishments", oneBulletTwice, "duplicate_provenance", nil},
-		{"a highlight sharing no words with any master bullet", driftedHighlight, "highlight_drift", nil},
-		{"highlights stripped below ExperienceBulletsMin", strippedBullets, "bullet_shortfalls", nil},
-		{"a required skill removed", removedRequiredSkill, "required_skills_missing", nil},
-		{"a nice-to-have skill dropped", droppedNiceToHave, "nice_to_have_retention", nil},
-		{"a ranking response with a duplicated index", healthyDoc, "ranking_violations", &badRanking},
+		{"a company absent from master", fabricatedCompany, "grounding_violations", nil, nil},
+		{"one master bullet rendered as two accomplishments", oneBulletTwice, "duplicate_provenance", nil, nil},
+		{"a highlight sharing no words with any master bullet", driftedHighlight, "highlight_drift", nil, nil},
+		{"highlights stripped below ExperienceBulletsMin", strippedBullets, "bullet_shortfalls", nil, nil},
+		{"a required skill removed", removedRequiredSkill, "required_skills_missing", nil, nil},
+		{"a nice-to-have skill dropped", droppedNiceToHave, "nice_to_have_retention", nil, nil},
+		{"a ranking response with a duplicated index", healthyDoc, "ranking_violations", &badRanking, nil},
+		{"a suggestion echoing a master bullet back", healthyDoc, "suggestion_duplicates", nil, &duplicatedSuggestion},
 	}
 }
 
@@ -496,6 +545,9 @@ func TestScorersDetectInjectedDefects(t *testing.T) {
 		t.Run(m.name, func(t *testing.T) {
 			in := baseScoreInput()
 			in.result = m.doc
+			if m.suggestions != nil {
+				in.suggestions = *m.suggestions
+			}
 			if m.ranking != nil {
 				in.ranking = *m.ranking
 			}

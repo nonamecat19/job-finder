@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:3f5833d2a34e0a295b2ffeefda65b332c0960b56a92b6c9cd3af5a447192032b",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, suggest achievement bullets and skills the vacancy calls for that this candidate's profile may be missing. You are NOT shown the ca",
+    "prompt_len": 2129,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 606,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"bullets\": [\n        \"Owned and operated core platform services, including billing and ingestion pipelines.\",\n        \"Made key architectural decisions for platform services, ensuring scalability and reliability.\",\n        \"Successfully migrated critical platform components with minimal disruption.\"\n      ],\n      \"company\": \"Northwind Data\"\n    },\n    {\n      \"bullets\": [\n        \"Contributed to the development and maintenance of platform services.\",\n        \"Participated in architectural discussions for new platform features.\",\n        \"Assisted in the careful migration of existing services.\"\n      ],\n      \"company\": \"Contoso Consulting\"\n    },\n    {\n      \"bullets\": [\n        \"Managed and enhanced platform services, focusing on performance and stability.\",\n        \"Drove architectural improvements for internal APIs and data processing.\",\n        \"Executed complex data migrations, ensuring data integrity and minimal downtime.\"\n      ],\n      \"company\": \"Fabrikam\"\n    },\n    {\n      \"bullets\": [\n        \"Built and scaled platform services in a fast-paced startup environment.\",\n        \"Made critical architectural choices to support rapid growth.\",\n        \"Led careful migration efforts for core platform functionalities.\"\n      ],\n      \"company\": \"Early Startup\"\n    }\n  ],\n  \"skills\": [\n    \"Go\",\n    \"Postgres at scale\",\n    \"Kubernetes in production\",\n    \"Track record of latency or throughput improvements\",\n    \"Terraform\",\n    \"Experience splitting a shared database\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

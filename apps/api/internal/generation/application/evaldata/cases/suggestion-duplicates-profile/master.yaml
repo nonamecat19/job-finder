@@ -1,0 +1,83 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rendercv/rendercv/refs/tags/v2.8/schema.json
+# Synthetic fixture, closed date ranges only (038 corpus rule: no `present`).
+#
+# Built so the suggestion stage is maximally tempted to restate what the
+# candidate already has: every skill group LABEL names the exact competence the
+# vacancy asks for, and the matching DETAILS — which the suggestion prompt is
+# never shown (research.md R4) — already list the tokens a model would suggest
+# from the label alone.
+cv:
+  name: Dana Okafor
+  headline:
+  location: Seattle, WA
+  email: dana.okafor@example.com
+  photo:
+  phone:
+  website:
+  social_networks:
+    - network: LinkedIn
+      username: danaokafor-synthetic
+    - network: GitHub
+      username: danaokafor-synthetic
+  custom_connections:
+  sections:
+    summary:
+      - Site reliability engineer who has spent eight years keeping payment systems online.
+    experience:
+      - company: Harborline Payments
+        position: Senior Site Reliability Engineer
+        date:
+        start_date: 2019-03
+        end_date: 2025-06
+        location: Seattle, WA
+        summary:
+        highlights:
+          - Ran the Kubernetes platform behind every payment service
+          - Wrote the Terraform modules the whole company provisions from
+          - Cut mean time to recovery from 45 minutes to 11 minutes
+          - Built the Prometheus alerting that replaced manual dashboard watching
+          - Led incident response for three Sev1 outages without data loss
+          - Automated the certificate rotation that used to page someone quarterly
+      - company: Cascade Freight
+        position: Site Reliability Engineer
+        date:
+        start_date: 2016-08
+        end_date: 2019-02
+        location: Portland, OR
+        summary:
+        highlights:
+          - Migrated the tracking service off bare metal onto Kubernetes
+          - Introduced the on-call rotation and its escalation policy
+          - Reduced alert noise by 70 percent by rewriting the alert rules
+          - Wrote the runbooks the support team still follows
+    skills:
+      - label: Kubernetes and Terraform
+        details: Kubernetes, Terraform, Helm, Docker
+      - label: Observability
+        details: Prometheus, Grafana, OpenTelemetry, Loki
+      - label: Incident Response
+        details: On-call, incident command, postmortems, error budgets
+      - label: Languages
+        details: Go, Python, Bash
+design:
+  theme: classic
+locale:
+  language: english
+settings:
+  current_date: today
+  render_command:
+    output_folder: rendercv_output
+    design:
+    locale:
+    typst_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.typ
+    pdf_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.pdf
+    markdown_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.md
+    html_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.html
+    png_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.png
+    dont_generate_markdown: false
+    dont_generate_html: false
+    dont_generate_typst: false
+    dont_generate_pdf: false
+    dont_generate_png: false
+  bold_keywords: []
+  pdf_title: NAME - CV

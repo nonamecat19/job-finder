@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:45f5033aef16806388cc3d90431bdfd187eb89884c0b721f43000b881480eefd",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, suggest achievement bullets and skills the vacancy calls for that this candidate's profile may be missing. You are NOT shown the ca",
+    "prompt_len": 1800,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 606,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"bullets\": [\n        \"Owned the development of key product features from conception to launch.\",\n        \"Contributed to product strategy and roadmap discussions, influencing the direction of new initiatives.\",\n        \"Built and shipped impactful features that directly addressed user needs and business goals.\"\n      ],\n      \"company\": \"Small Studio\"\n    }\n  ],\n  \"skills\": [\n    \"Product Ownership\",\n    \"Product Strategy\",\n    \"Feature Development\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

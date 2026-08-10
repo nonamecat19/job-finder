@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:55ce98b60b471fac69e5ea281421cbb2ca15fd2aa8bfcf72691a1504e7a93013",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write the professional summary for a tailored resume.  VACANCY REQUIRED SKILLS: Kubernetes in production, Terraform, Prometheus-based alerting, Incident respons",
+    "prompt_len": 2017,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"9+ years of experience in payments platform engineering, specializing in Kubernetes, Terraform, and Prometheus-based observability and incident response. Owned the Kubernetes platform powering all payment services and reduced mean time to recovery from 45 minutes to 11 minutes, while building alerting and runbooks that strengthened operational resilience.\"}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-summary"
+}

@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:8d44eae1c9dca307209199f20a3c28e612c0f68d8832d08bb0db868c9f4d8d32",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, tailor the candidate's resume content.  VACANCY ANALYSIS: REQUIRED SKILLS: Kubernetes in production, Terraform, Prometheus-based al",
+    "prompt_len": 6592,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2966,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Harborline Payments\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Owned the Kubernetes platform powering all payment services\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Authored Terraform modules used company-wide for infrastructure provisioning\",\n          \"sourceIndex\": 1\n        },\n        {\n          \"rephrased\": \"Reduced mean time to recovery from 45 minutes to 11 minutes on a payments system\",\n          \"sourceIndex\": 2\n        },\n        {\n          \"rephrased\": \"Designed and implemented Prometheus-based alerting, replacing manual dashboard monitoring\",\n          \"sourceIndex\": 3\n        },\n        {\n          \"rephrased\": \"Led incident response for critical outages, ensuring no data loss\",\n          \"sourceIndex\": 4\n        },\n        {\n          \"rephrased\": \"Automated certificate rotation, eliminating manual quarterly interventions\",\n          \"sourceIndex\": 5\n        }\n      ]\n    },\n    {\n      \"company\": \"Cascade Freight\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Migrated a critical tracking service to Kubernetes\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Established the on-call rotation and escalation policy for incident response\",\n          \"sourceIndex\": 1\n        },\n        {\n          \"rephrased\": \"Reduced alert noise by 70% through targeted rewriting of alert rules\",\n          \"sourceIndex\": 2\n        },\n        {\n          \"rephrased\": \"Developed comprehensive runbooks for incident support\",\n          \"sourceIndex\": 3\n        }\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [\n    {\n      \"addTokens\": \"Go,Python\",\n      \"groupLabel\": \"Languages\",\n      \"removeTokens\": \"\",\n      \"replaceDetails\": null\n    },\n    {\n      \"addTokens\": \"Prometheus\",\n      \"groupLabel\": \"Observability\",\n      \"removeTokens\": \"\",\n      \"replaceDetails\": null\n    },\n    {\n      \"addTokens\": \"Kubernetes,Terraform\",\n      \"groupLabel\": \"Kubernetes and Terraform\",\n      \"removeTokens\": \"\",\n      \"replaceDetails\": null\n    },\n    {\n      \"addTokens\": \"On-call,incident command,postmortems\",\n      \"groupLabel\": \"Incident Response\",\n      \"removeTokens\": \"\",\n      \"replaceDetails\": null\n    }\n  ],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": []\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

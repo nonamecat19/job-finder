@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:d163d09fbb75601309fd48d3b6445a25a613de02e362ce360e50fa6963f1600b",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, suggest achievement bullets and skills the vacancy calls for that this candidate's profile may be missing. You are NOT shown the ca",
+    "prompt_len": 1878,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 606,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"bullets\": [\n        \"Owned scheduling API endpoints end to end, including design, implementation, and deployment.\",\n        \"Migrated legacy code for the scheduling API to a modern Go-based microservice architecture.\",\n        \"Operated and maintained Linux-based infrastructure supporting the scheduling API, including Docker container orchestration.\"\n      ],\n      \"company\": \"Small Studio\"\n    }\n  ],\n  \"skills\": [\n    \"Go\",\n    \"Postgres\",\n    \"Docker\",\n    \"database migration\",\n    \"Linux operations\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

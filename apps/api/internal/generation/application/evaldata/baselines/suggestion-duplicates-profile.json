@@ -1,0 +1,17 @@
+{
+  "case": "suggestion-duplicates-profile",
+  "scorer_set_version": 4,
+  "recorded_at": "2026-08-10",
+  "reason": "042 T064: initial baseline for the R6 suppression case — a profile that already matches the vacancy, where suggestion_duplicates reads how much research.md R4's withheld-text prompt failed to prevent",
+  "scores": {
+    "bullet_shortfalls": 0,
+    "duplicate_provenance": 0,
+    "grounding_violations": 0,
+    "highlight_drift": 0,
+    "nice_to_have_retention": 1,
+    "ranking_violations": 0,
+    "required_skills_missing": 1,
+    "structural_violations": 0,
+    "suggestion_duplicates": 4
+  }
+}

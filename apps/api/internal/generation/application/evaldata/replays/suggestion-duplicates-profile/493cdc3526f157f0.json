@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:493cdc3526f157f018e6f54311eba72e06a0b44ff6ae8f377809120533d81cb6",
+  "request_summary": {
+    "model_key": "generation-analyze",
+    "prompt_prefix": "Analyze this job vacancy and extract structured requirements.  VACANCY TEXT: Senior Site Reliability Engineer — Payments Platform  We run the payment rails fo",
+    "prompt_len": 2431,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "8192",
+    "response_mode": 0,
+    "schema_len": 0,
+    "json_output": true
+  },
+  "response": "{\n  \"requiredSkills\": [\n    \"Kubernetes in production\",\n    \"Terraform\",\n    \"Prometheus-based alerting\",\n    \"Incident response\",\n    \"Postmortems\",\n    \"Go\",\n    \"Python\"\n  ],\n  \"niceToHaveSkills\": [\n    \"Reducing mean time to recovery on a payments system\",\n    \"Alert-noise reduction\",\n    \"Certificate rotation automation\",\n    \"Secret rotation automation\"\n  ],\n  \"experienceLevel\": \"senior\",\n  \"keyResponsibilities\": [\n    \"Own a Kubernetes platform\",\n    \"Write Terraform for platform infrastructure\",\n    \"Respond to incidents\",\n    \"Design and implement Prometheus-based alerting\",\n    \"Write tooling in Go or Python\",\n    \"Participate in on-call rotation\",\n    \"Conduct postmortems\",\n    \"Automate certificate and secret rotation\"\n  ],\n  \"industryKeywords\": [\n    \"Payments Platform\",\n    \"Fintech\"\n  ],\n  \"seniorityKeywords\": [\n    \"Owned a Kubernetes platform\",\n    \"Been the person on the bridge when it broke\",\n    \"Designed rather than inherited alerting\",\n    \"On-call rotation from month two\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-analyze"
+}

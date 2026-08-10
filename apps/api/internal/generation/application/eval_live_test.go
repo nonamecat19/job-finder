@@ -203,6 +203,15 @@ func recordCase(t *testing.T, gw llm.Provider, c EvalCase) {
 		t.Fatalf("case %q: ranking failed, nothing recorded: %v", c.Name, rerr)
 	}
 
+	// The suggestion stage (042 T064), recorded for the same reason and over
+	// the same provider: runCase makes this exact call, so without it here the
+	// gate reports a replay miss rather than a score.
+	if _, serr := suggestContent(
+		t.Context(), providers["generation-select"], "",
+		experienceCompanies(c.Master), domain.SkillGroupLabels(c.Master), analysis); serr != nil {
+		t.Fatalf("case %q: suggestion failed, nothing recorded: %v", c.Name, serr)
+	}
+
 	dir := caseReplayDir(c.Name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", dir, err)

@@ -67,28 +67,87 @@ func SeedFromMaster(master RendercvMaster, cfg ShapeConfig) []Section {
 		position++
 	}
 
-	skillGroups := AsSliceOfMaps(sections["skills"])
-	skillItems := make([]Item, 0, len(skillGroups))
-	for i, g := range skillGroups {
-		idx := i
-		skillItems = append(skillItems, Item{
-			Origin:      OriginProfile,
-			Kind:        ItemKindSkillGroup,
-			SourceIndex: &idx,
-			SourceText:  skillGroupText(g),
-			Rank:        i,
-			Position:    i,
-			Selected:    true,
-		})
-	}
 	out = append(out, Section{
 		Kind:     SectionKindSkills,
 		Position: position,
 		State:    SectionReady,
-		Items:    skillItems,
+		Items:    SeedSkillItems(AsSliceOfMaps(sections["skills"]), nil, cfg.SkillsMaxGroups),
 	})
 
 	return out
+}
+
+// SeedSkillItems builds the skills section's items from the master's skill
+// groups, in the order `groupOrder` names (a verified RankedSkills.GroupOrder,
+// or nil for master order). It is SeedRankedItems' counterpart for skills, and
+// obeys the same two rules:
+//
+//   - The result is always a permutation of `groups`. Nothing is added,
+//     reworded or dropped — the model supplies an order over indices, never
+//     text, so a lost or invented group is not expressible.
+//   - maxGroups is a *selection* boundary, not a removal (FR-011, US4 AS-2):
+//     the groups past it stay in the list as unselected items the user can
+//     promote, rather than disappearing the way ApplyHardLimits' render-time
+//     cap makes them.
+//
+// Pinned groups ("Spoken Languages") keep the position the candidate authored
+// them at and are always selected: they are a fact about the candidate, not a
+// tailoring target, so neither the ranking nor the cap moves them — the same
+// exemption capSkillGroups gives them at render time.
+func SeedSkillItems(groups []map[string]any, groupOrder []int, maxGroups int) []Item {
+	pinned := make([]bool, len(groups))
+	pinnedCount := 0
+	for i, g := range groups {
+		if IsPinnedSkillGroup(StringField(g, "label")) {
+			pinned[i] = true
+			pinnedCount++
+		}
+	}
+
+	seen := make(map[int]bool, len(groups))
+	ranked := make([]int, 0, len(groups))
+	for _, idx := range groupOrder {
+		if idx < 0 || idx >= len(groups) || seen[idx] || pinned[idx] {
+			continue
+		}
+		seen[idx] = true
+		ranked = append(ranked, idx)
+	}
+	for i := range groups {
+		if !pinned[i] && !seen[i] {
+			ranked = append(ranked, i)
+		}
+	}
+
+	slots := len(ranked)
+	if maxGroups > 0 {
+		slots = maxGroups - pinnedCount
+		if slots < 0 {
+			slots = 0
+		}
+	}
+
+	items := make([]Item, 0, len(groups))
+	next := 0
+	for i := range groups {
+		source, selected := i, true
+		if !pinned[i] {
+			source = ranked[next]
+			next++
+			selected = next <= slots
+		}
+		idx := source
+		items = append(items, Item{
+			Origin:      OriginProfile,
+			Kind:        ItemKindSkillGroup,
+			SourceIndex: &idx,
+			SourceText:  skillGroupText(groups[source]),
+			Rank:        i,
+			Position:    i,
+			Selected:    selected,
+		})
+	}
+	return items
 }
 
 // entryLabel is the display label copied from master: "Senior Engineer ·

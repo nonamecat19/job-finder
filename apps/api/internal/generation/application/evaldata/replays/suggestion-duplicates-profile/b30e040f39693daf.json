@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:b30e040f39693daf6ae62ca31709969d66aa170b061610973c32ef5d3e9b808c",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, suggest achievement bullets and skills the vacancy calls for that this candidate's profile may be missing. You are NOT shown the ca",
+    "prompt_len": 2531,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 606,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"bullets\": [\n        \"Owned a Kubernetes platform, ensuring its stability and performance.\",\n        \"Responded to production incidents, minimizing downtime and impact.\",\n        \"Conducted postmortems to identify root causes and implement preventative measures.\",\n        \"Automated certificate rotation processes to enhance security and compliance.\",\n        \"Automated secret rotation processes, reducing manual intervention and security risks.\"\n      ],\n      \"company\": \"Harborline Payments\"\n    },\n    {\n      \"bullets\": [\n        \"Designed and implemented Prometheus-based alerting systems to monitor critical services.\",\n        \"Wrote Go and Python tooling to automate operational tasks and improve efficiency.\",\n        \"Participated in an on-call rotation, providing 24/7 support for production systems.\"\n      ],\n      \"company\": \"Cascade Freight\"\n    }\n  ],\n  \"skills\": [\n    \"Kubernetes in production\",\n    \"Terraform\",\n    \"Prometheus-based alerting\",\n    \"Incident response\",\n    \"Postmortems\",\n    \"Go\",\n    \"Python\",\n    \"Reducing mean time to recovery on a payments system\",\n    \"Alert-noise reduction\",\n    \"Certificate rotation automation\",\n    \"Secret rotation automation\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

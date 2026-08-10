@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:170e41feab7a73838fe11ed30aff443fef87d08e9065c08666a0e1e08c7d0565",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, suggest achievement bullets and skills the vacancy calls for that this candidate's profile may be missing. You are NOT shown the ca",
+    "prompt_len": 2336,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 606,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"bullets\": [\n        \"Developed kernel bypass networking solutions for high-frequency trading.\",\n        \"Implemented lock-free data structures for a high-throughput matching engine.\",\n        \"Optimized memory layout for NUMA architectures to improve performance.\"\n      ],\n      \"company\": \"Nexus AI\"\n    },\n    {\n      \"bullets\": [\n        \"Contributed to the development of high-performance networking components using DPDK.\",\n        \"Researched and implemented kernel bypass networking techniques.\"\n      ],\n      \"company\": \"NVIDIA Research\"\n    },\n    {\n      \"bullets\": [\n        \"Worked on low-latency systems, potentially involving kernel bypass networking.\",\n        \"Developed high-performance data structures for distributed systems.\"\n      ],\n      \"company\": \"Google DeepMind\"\n    },\n    {\n      \"bullets\": [\n        \"Explored and implemented advanced networking protocols for research purposes.\",\n        \"Developed efficient data structures for large-scale data processing.\"\n      ],\n      \"company\": \"Apple ML Research\"\n    },\n    {\n      \"bullets\": [\n        \"Researched and developed kernel-level networking optimizations.\",\n        \"Implemented concurrent data structures for distributed systems.\"\n      ],\n      \"company\": \"Microsoft Research\"\n    }\n  ],\n  \"skills\": [\n    \"Rust\",\n    \"unsafe Rust\",\n    \"async Rust runtimes\",\n    \"FPGA\",\n    \"kernel-bypass networking\",\n    \"DPDK\",\n    \"io_uring\",\n    \"Exchange connectivity protocols\",\n    \"FIX\",\n    \"ITCH\",\n    \"OUCH\",\n    \"Formal verification\",\n    \"model checking\",\n    \"Erlang\",\n    \"OCaml\",\n    \"Hardware timestamping\",\n    \"Options market microstructure\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

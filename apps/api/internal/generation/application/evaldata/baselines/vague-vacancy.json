@@ -1,8 +1,8 @@
 {
   "case": "vague-vacancy",
-  "scorer_set_version": 3,
+  "scorer_set_version": 4,
   "recorded_at": "2026-08-10",
-  "reason": "042 T045/T047: add ranking_violations scorer (ScorerSetVersion 2 -\u003e 3), delegating to domain.VerifyRanking over the ranking stage's new RankedSelection response",
+  "reason": "042 T064: scorer set v4 adds suggestion_duplicates (research.md R6 suppression); every other score unchanged",
   "scores": {
     "bullet_shortfalls": 0,
     "duplicate_provenance": 0,
@@ -11,6 +11,7 @@
     "nice_to_have_retention": 1,
     "ranking_violations": 0,
     "required_skills_missing": 0,
-    "structural_violations": 0
+    "structural_violations": 0,
+    "suggestion_duplicates": 0
   }
 }

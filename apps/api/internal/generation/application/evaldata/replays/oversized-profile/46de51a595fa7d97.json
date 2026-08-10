@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:46de51a595fa7d972b87b3bfb69047cc9f8695390f1bb5fb1974220f47314c88",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, suggest achievement bullets and skills the vacancy calls for that this candidate's profile may be missing. You are NOT shown the ca",
+    "prompt_len": 2546,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 606,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"bullets\": [\n        \"Built and deployed production model serving infrastructure for large language models.\",\n        \"Owned the end-to-end inference path, optimizing for latency and throughput.\",\n        \"Developed kernel-level performance improvements for deep learning models.\",\n        \"Designed and implemented distributed systems for scalable model serving.\",\n        \"Contributed to platform development enabling research team deployment of ML models.\",\n        \"Made independent architectural decisions for inference platform components.\"\n      ],\n      \"company\": \"Nexus AI\"\n    },\n    {\n      \"bullets\": [\n        \"Developed and optimized CUDA kernels for high-performance deep learning inference.\",\n        \"Contributed to the development of production model serving systems.\",\n        \"Worked on distributed systems for large-scale machine learning model deployment.\",\n        \"Engaged in kernel-level performance tuning for ML workloads.\"\n      ],\n      \"company\": \"NVIDIA Research\"\n    },\n    {\n      \"bullets\": [\n        \"Built serving layers for large language models, focusing on production deployment.\",\n        \"Owned the inference path end-to-end, implementing performance optimizations.\",\n        \"Developed distributed systems for efficient model serving.\",\n        \"Contributed to platform development for research team model deployment.\",\n        \"Made architectural decisions for inference systems.\"\n      ],\n      \"company\": \"Google DeepMind\"\n    },\n    {\n      \"bullets\": [\n        \"Developed and optimized inference paths for machine learning models.\",\n        \"Contributed to building serving layers for large models.\",\n        \"Worked on distributed systems for model deployment.\",\n        \"Engaged in performance optimization at the kernel level.\"\n      ],\n      \"company\": \"Apple ML Research\"\n    },\n    {\n      \"bullets\": [\n        \"Built serving layers for large language models, ensuring production readiness.\",\n        \"Owned the inference path end-to-end, driving performance improvements.\",\n        \"Developed distributed systems for scalable model serving.\",\n        \"Contributed to platform development for research team deployments.\",\n        \"Made key architectural decisions for inference infrastructure.\"\n      ],\n      \"company\": \"Microsoft Research\"\n    }\n  ],\n  \"skills\": [\n    \"Python\",\n    \"C++\",\n    \"CUDA\",\n    \"PyTorch\",\n    \"production model serving\",\n    \"distributed systems\",\n    \"Kubernetes in production\",\n    \"measurable latency or throughput improvements\",\n    \"JAX\",\n    \"Triton\",\n    \"model compression\",\n    \"quantization\",\n    \"pruning\",\n    \"published research in efficient inference\",\n    \"scaling an engineering team\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

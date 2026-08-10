@@ -1,0 +1,20 @@
+name: suggestion-duplicates-profile
+why: >
+  A profile that already contains everything the vacancy asks for. This is the FR-017
+  failure the suggestion stage invites: asked what the candidate is missing against a
+  vacancy they already match, a model with nothing genuinely absent to offer fills the
+  field anyway — with the material it can infer from the skill group labels, which is
+  the material the candidate already has. research.md R4 is the first defence (the
+  suggestion prompt is never shown the master's bullet text or skill details, so a
+  duplicate has to be reconstructed rather than copied) and R6's
+  SuppressDuplicateSuggestions is the second. The `suggestion_duplicates` scorer counts
+  what R6 had to remove, so this case is where the two defences are measured against
+  each other: the number is a reading of how much R4 failed to prevent, and a run that
+  starts duplicating more than the baseline is a prompt regression, not a model mood.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 3
+  experience_bullets_max: 5
+  skills_max_groups: 3
+  summary_lines: 2
+page_counts: [2]

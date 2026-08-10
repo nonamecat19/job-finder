@@ -1,0 +1,19 @@
+Senior Site Reliability Engineer — Payments Platform
+
+We run the payment rails for a few thousand merchants and we need an SRE who has
+done this before: owned a Kubernetes platform, written the Terraform behind it,
+and been the person on the bridge when it broke.
+
+Required:
+- Kubernetes in production, not just in a homelab
+- Terraform for everything, reviewed like application code
+- Prometheus-based alerting you designed rather than inherited
+- Incident response experience, including running postmortems
+- Go or Python for the tooling you will inevitably write
+
+Nice to have:
+- Experience reducing mean time to recovery on a payments system
+- Alert-noise reduction work you can describe with numbers
+- Certificate and secret rotation automation
+
+You will join a team of six and share the on-call rotation from month two.
