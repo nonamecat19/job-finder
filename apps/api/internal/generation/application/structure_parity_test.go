@@ -42,9 +42,8 @@ func TestSplitPipelineLeavesSectionSetAndOrderUnchanged(t *testing.T) {
 	}}
 	sel := &stageProvider{name: "generation-select", reply: func(string) string {
 		return mustJSON(t, domain.TailoredSelection{
-			Skills: []domain.TailoredSkillGroup{{Index: 0, Details: "Go, Docker, Postgres"}},
 			Experience: []domain.TailoredExperience{
-				{Company: "Acme", Highlights: []string{"Shipped the payments service"}},
+				{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0}}},
 			},
 		})
 	}}

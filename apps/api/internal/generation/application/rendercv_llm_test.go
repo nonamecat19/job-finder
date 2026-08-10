@@ -112,7 +112,7 @@ func TestBuildSelectPromptUsesConfiguredTargets(t *testing.T) {
 
 	prompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
 
-	if !containsAll(prompt, "TOP 4-5 most relevant highlights") {
+	if !containsAll(prompt, "TOP 4-5 most relevant bullets") {
 		t.Errorf("select prompt does not carry the configured bullet targets:\n%s", prompt)
 	}
 	for _, stale := range []string{"TOP 8-10"} {
@@ -150,8 +150,11 @@ func TestPromptsWithDefaultConfigReproduceOriginalWording(t *testing.T) {
 
 	selectPrompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
 	if !containsAll(selectPrompt,
-		"select the TOP 8-10 most relevant highlights",
-		"keep all relevant keywords (do not trim)",
+		"select the TOP 8-10 most relevant bullets",
+		// Skill ordering left this prompt for RankSkills: the shape config
+		// still drives the bullet targets, but no wording here asks the model
+		// to touch a skill.
+		"Do NOT return skills",
 	) {
 		t.Errorf("default select prompt drifted from the original wording:\n%s", selectPrompt)
 	}
@@ -171,18 +174,12 @@ func TestPromptsWithDefaultConfigReproduceOriginalWording(t *testing.T) {
 		t.Errorf("default expand prompt drifted from the original wording:\n%s", expandPrompt)
 	}
 
-	condensePrompt := buildCondensePrompt(master, analysis, cfg)
-	if !containsAll(condensePrompt,
-		"overflows past two pages",
-		"Shorten it to fit on TWO pages",
-		"Leave the summary alone",
-		"keep only the TOP 5-6 most relevant per job",
-	) {
-		t.Errorf("default condense prompt drifted from the original wording:\n%s", condensePrompt)
-	}
+	// There is no condense prompt any more: condensing is domain.TrimHighlights,
+	// which drops the least relevant bullets rather than asking a model to
+	// rewrite the surviving ones.
 }
 
-func TestExpandAndCondensePromptsDeriveFromConfig(t *testing.T) {
+func TestExpandPromptDerivesFromConfig(t *testing.T) {
 	master := loadSampleMaster(t)
 	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
 	cfg := domain.DefaultShapeConfig()
@@ -197,10 +194,11 @@ func TestExpandAndCondensePromptsDeriveFromConfig(t *testing.T) {
 		t.Errorf("expand prompt does not derive from the config:\n%s", expandPrompt)
 	}
 
-	condensePrompt := buildCondensePrompt(master, analysis, cfg)
-	// One step below: the page target outranks the section lengths (FR-016).
-	if !containsAll(condensePrompt, "fit on ONE page", "TOP 2-4 most relevant per job") {
-		t.Errorf("condense prompt does not derive from the config:\n%s", condensePrompt)
+	// The condense side of this is bulletsCondenseRange feeding
+	// domain.TrimHighlights: the page target still outranks the configured
+	// section lengths (FR-016), it just no longer costs a model call.
+	if _, max := bulletsCondenseRange(cfg); max != 4 {
+		t.Errorf("condense ceiling = %d, want 4 — 60%% of the configured maximum", max)
 	}
 }
 
@@ -259,7 +257,7 @@ func TestBuildSelectPromptProjectsBlockOnlyWhenLimited(t *testing.T) {
 	cfg.ProjectsMax = 2
 	limited := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
 	if !containsAll(limited, "PROJECTS (master)", "name: SideProject", "Return the 2 most vacancy-relevant projects",
-		"copied EXACTLY", "that same project's own bullets") {
+		"copied EXACTLY", "that same project's own bullet list") {
 		t.Errorf("limited prompt missing the projects block:\n%s", limited)
 	}
 

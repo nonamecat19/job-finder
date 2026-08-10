@@ -15,8 +15,8 @@ func TestPageFitCannotAlterTheSummary(t *testing.T) {
 	const premiumSummary = "8+ years of experience building payment systems."
 
 	merged, err := domain.MergeTailored(stageMaster(), domain.TailoredSelection{
-		Experience: []domain.TailoredExperience{{Company: "Acme", Highlights: []string{"Did a thing"}}},
-	}, &domain.TailoredSummary{Summary: premiumSummary})
+		Experience: []domain.TailoredExperience{{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0}}}},
+	}, &domain.TailoredSummary{Summary: premiumSummary}, domain.GroundingModerate)
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}
@@ -48,15 +48,15 @@ func TestPageFitCannotAlterTheSummary(t *testing.T) {
 func TestStructureRepromptKeepsTheSummary(t *testing.T) {
 	const premiumSummary = "8+ years of experience building payment systems."
 	merged, err := domain.MergeTailored(stageMaster(), domain.TailoredSelection{
-		Experience: []domain.TailoredExperience{{Company: "Acme", Highlights: []string{"Did a thing"}}},
-	}, &domain.TailoredSummary{Summary: premiumSummary})
+		Experience: []domain.TailoredExperience{{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0}}}},
+	}, &domain.TailoredSummary{Summary: premiumSummary}, domain.GroundingModerate)
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 
 	reMerged, err := domain.MergeTailored(stageMaster(), domain.TailoredSelection{
-		Experience: []domain.TailoredExperience{{Company: "Acme", Highlights: []string{"Did a thing again"}}},
-	}, domain.CurrentSummary(merged))
+		Experience: []domain.TailoredExperience{{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0, Rephrased: "Did a thing again"}}}},
+	}, domain.CurrentSummary(merged), domain.GroundingModerate)
 	if err != nil {
 		t.Fatalf("re-merge: %v", err)
 	}

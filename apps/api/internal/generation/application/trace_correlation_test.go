@@ -102,7 +102,7 @@ func tracedService(t *testing.T) (*Service, []*traceSpy) {
 
 func traceTestConfig() domain.ShapeConfig {
 	cfg := domain.DefaultShapeConfig()
-	cfg.ExperienceBulletsMin = 1
+	cfg.ExperienceBulletsMin = 2
 	return cfg
 }
 

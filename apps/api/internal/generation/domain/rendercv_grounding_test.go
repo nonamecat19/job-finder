@@ -306,3 +306,97 @@ func TestVerifyRendercvGroundingIgnoresDigitsInsideIdentifiers(t *testing.T) {
 		t.Errorf("p95/S3 are technology names, not metrics; got %v", violations)
 	}
 }
+
+func TestVerifyTailoredSectionsGroundingRejectsInventedMetricBeforeMerge(t *testing.T) {
+	master := metricMaster("Led the payments migration")
+	payload := TailoredSections{TailoredSelection: TailoredSelection{
+		Experience: []TailoredExperience{{Company: "Acme", Highlights: []HighlightRef{{SourceIndex: 0, Rephrased: "Led the payments migration for 3M users"}}}},
+	}}
+
+	if !hasViolationContaining(VerifyTailoredSectionsGrounding(master, payload), `asserts metric "3m"`) {
+		t.Error("an invented metric must be caught before the merge, not only after it")
+	}
+}
+
+func refMaster(bullets ...string) RendercvMaster { return metricMaster(bullets...) }
+
+func mergedHighlights(t *testing.T, master RendercvMaster, refs []HighlightRef, level GroundingLevel) []string {
+	t.Helper()
+	merged, err := MergeTailored(master, TailoredSelection{
+		Experience: []TailoredExperience{{Company: "Acme", Highlights: refs}},
+	}, nil, level)
+	if err != nil {
+		t.Fatalf("MergeTailored: %v", err)
+	}
+	return StringSliceField(AsSliceOfMaps(CvSections(merged)["experience"])[0], "highlights")
+}
+
+// A reference with no rewording is the master's bullet, verbatim.
+func TestMergeResolvesReferencesToMasterBullets(t *testing.T) {
+	master := refMaster("Shipped the payments service", "Cut checkout latency by 40%")
+	got := mergedHighlights(t, master, []HighlightRef{{SourceIndex: 1}, {SourceIndex: 0}}, GroundingModerate)
+
+	want := []string{"Cut checkout latency by 40%", "Shipped the payments service"}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("highlights = %v, want the master's own bullets in the selected order %v", got, want)
+	}
+}
+
+// The fabrication that motivated references: text that reads like a bullet but
+// belongs to no single one. It cannot be expressed — a rewording is held
+// against the bullet it names, and a failed rewording falls back to it.
+func TestMergeFallsBackToTheMasterBulletWhenARewordingDrifts(t *testing.T) {
+	master := refMaster("Shipped the payments service")
+	got := mergedHighlights(t, master, []HighlightRef{
+		{SourceIndex: 0, Rephrased: "Architected a distributed trading platform from scratch"},
+	}, GroundingModerate)
+
+	if len(got) != 1 || got[0] != "Shipped the payments service" {
+		t.Errorf("highlights = %v, want the master's wording after the rewording was rejected", got)
+	}
+}
+
+func TestMergeFallsBackWhenARewordingAddsAMetric(t *testing.T) {
+	master := refMaster("Cut checkout latency on the payments service")
+	got := mergedHighlights(t, master, []HighlightRef{
+		{SourceIndex: 0, Rephrased: "Cut checkout latency on the payments service by 40%"},
+	}, GroundingModerate)
+
+	if len(got) != 1 || got[0] != "Cut checkout latency on the payments service" {
+		t.Errorf("highlights = %v, want the metric-free master wording", got)
+	}
+}
+
+func TestMergeKeepsAGroundedRewording(t *testing.T) {
+	master := refMaster("Cut checkout latency by 40%")
+	got := mergedHighlights(t, master, []HighlightRef{
+		{SourceIndex: 0, Rephrased: "Cut checkout latency 40%"},
+	}, GroundingModerate)
+
+	if len(got) != 1 || got[0] != "Cut checkout latency 40%" {
+		t.Errorf("highlights = %v, want the accepted rewording", got)
+	}
+}
+
+// Strict grounding does not consult the rewording at all.
+func TestMergeIgnoresRewordingsUnderStrictGrounding(t *testing.T) {
+	master := refMaster("Cut checkout latency by 40%")
+	got := mergedHighlights(t, master, []HighlightRef{
+		{SourceIndex: 0, Rephrased: "Cut checkout latency 40%"},
+	}, GroundingStrict)
+
+	if len(got) != 1 || got[0] != "Cut checkout latency by 40%" {
+		t.Errorf("highlights = %v, want the master's wording untouched under strict grounding", got)
+	}
+}
+
+func TestMergeDropsUnusableReferences(t *testing.T) {
+	master := refMaster("Shipped the payments service", "Cut checkout latency")
+	got := mergedHighlights(t, master, []HighlightRef{
+		{SourceIndex: 0}, {SourceIndex: 0}, {SourceIndex: 9}, {SourceIndex: -1},
+	}, GroundingModerate)
+
+	if len(got) != 1 || got[0] != "Shipped the payments service" {
+		t.Errorf("highlights = %v, want the repeat and the out-of-range indices dropped", got)
+	}
+}

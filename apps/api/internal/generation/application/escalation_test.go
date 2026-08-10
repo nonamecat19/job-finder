@@ -8,9 +8,9 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// escalationMaster has a skill group the vacancy will require, so a truncated
-// selection response is detectable as a shortfall rather than a stylistic
-// difference.
+// escalationMaster has two bullets under its one job, so a selection that
+// returns fewer than the configured minimum is detectable as a shortfall
+// rather than a stylistic difference.
 func escalationMaster() domain.RendercvMaster {
 	return domain.RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"summary": []any{"A summary."},
@@ -28,21 +28,15 @@ func escalationMaster() domain.RendercvMaster {
 }
 
 func truncatedSelection(t *testing.T) func(string) string {
-	// Returns both groups but guts the Backend one, dropping Docker — which the
-	// vacancy requires. Note the shape of this fixture: omitting a group
-	// entirely would NOT be a shortfall, because the merge keys skills by index
-	// and leaves an unmentioned group at its master value. Only content the
-	// model returns in truncated form actually reaches the document, and that is
-	// exactly what the cheap models were measured doing (glm-4.7-flash returned
-	// 17 skill tokens where the master had 187).
+	// Returns the job with one bullet where the configured minimum is two —
+	// well-formed output with content quietly missing, which is what the cheap
+	// models were measured doing. Skills cannot be truncated this way any more:
+	// they are never carried in a selection response, so the only shortfall a
+	// model can still cause is in the material it does return.
 	return func(string) string {
 		return mustJSON(t, domain.TailoredSelection{
-			Skills: []domain.TailoredSkillGroup{
-				{Index: 0, Details: "Go"},
-				{Index: 1, Details: "React, TypeScript"},
-			},
 			Experience: []domain.TailoredExperience{
-				{Company: "Acme", Highlights: []string{"Shipped the payments service"}},
+				{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0}}},
 			},
 		})
 	}
@@ -51,12 +45,8 @@ func truncatedSelection(t *testing.T) func(string) string {
 func completeSelection(t *testing.T) func(string) string {
 	return func(string) string {
 		return mustJSON(t, domain.TailoredSelection{
-			Skills: []domain.TailoredSkillGroup{
-				{Index: 0, Details: "Go, Postgres, Docker"},
-				{Index: 1, Details: "React, TypeScript"},
-			},
 			Experience: []domain.TailoredExperience{
-				{Company: "Acme", Highlights: []string{"Shipped the payments service", "Cut latency in half"}},
+				{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0}, {SourceIndex: 1}}},
 			},
 		})
 	}
@@ -97,7 +87,7 @@ func TestSelectionEscalatesAfterRepeatedShortfall(t *testing.T) {
 	svc, sel, prem := escalationService(t, truncatedSelection(t), completeSelection(t))
 	prov := &runProvenance{}
 	cfg := domain.DefaultShapeConfig()
-	cfg.ExperienceBulletsMin = 1
+	cfg.ExperienceBulletsMin = 2
 
 	_, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), "Go role", domain.GroundingModerate, cfg, nil, nil, prov)
 	if err != nil {
@@ -121,7 +111,7 @@ func TestHealthySelectionNeverEscalates(t *testing.T) {
 	svc, sel, prem := escalationService(t, completeSelection(t), completeSelection(t))
 	prov := &runProvenance{}
 	cfg := domain.DefaultShapeConfig()
-	cfg.ExperienceBulletsMin = 1
+	cfg.ExperienceBulletsMin = 2
 
 	if _, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), "Go role", domain.GroundingModerate, cfg, nil, nil, prov); err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
@@ -143,7 +133,7 @@ func TestHealthySelectionNeverEscalates(t *testing.T) {
 func TestPersistentShortfallFailsRatherThanRendering(t *testing.T) {
 	svc, _, _ := escalationService(t, truncatedSelection(t), truncatedSelection(t))
 	cfg := domain.DefaultShapeConfig()
-	cfg.ExperienceBulletsMin = 1
+	cfg.ExperienceBulletsMin = 2
 
 	_, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), "Go role", domain.GroundingModerate, cfg, nil, nil, &runProvenance{})
 	if err == nil {

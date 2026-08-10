@@ -410,7 +410,7 @@ func (s *Service) selectWithCompleteness(ctx context.Context, master domain.Rend
 		if err != nil {
 			return domain.TailoredSelection{}, err
 		}
-		probe, err := domain.MergeTailored(master, payload, nil)
+		probe, err := domain.MergeTailored(master, payload, nil, level)
 		if err != nil {
 			return domain.TailoredSelection{}, err
 		}
@@ -443,7 +443,7 @@ func (s *Service) selectWithCompleteness(ctx context.Context, master domain.Rend
 // that is what keeps the expensive stage small (035 FR-004).
 // summaryLC is the provider serving this run's chosen option (034), resolved
 // once at the top of the run and passed down rather than re-read here.
-func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, payload domain.TailoredSelection, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, rec *activity.Recorder, prov *runProvenance, summaryLC llm.Provider) (*domain.TailoredSummary, error) {
+func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, payload domain.TailoredSelection, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, rec *activity.Recorder, prov *runProvenance, summaryLC llm.Provider) (*domain.TailoredSummary, error) {
 	if summaryLC == nil {
 		summaryLC = s.llm.Summary
 	}
@@ -454,7 +454,7 @@ func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, p
 	brief := domain.SummaryBrief{
 		Analysis:         analysis,
 		TotalYears:       domain.DeriveTotalExperienceYears(master),
-		Highlights:       domain.SelectedHighlights(payload),
+		Highlights:       domain.SelectedHighlights(master, payload, level),
 		SkillGroupLabels: domain.SkillGroupLabels(master),
 		SentenceMin:      min,
 		SentenceMax:      max,
@@ -540,11 +540,11 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		if err != nil {
 			return nil, domain.VacancyAnalysis{}, err
 		}
-		summary, err := s.summarize(ctx, master, payload, analysis, cfg, rec, prov, summaryLC)
+		summary, err := s.summarize(ctx, master, payload, analysis, level, cfg, rec, prov, summaryLC)
 		if err != nil {
 			return nil, domain.VacancyAnalysis{}, err
 		}
-		merged, err := domain.MergeTailored(master, payload, summary)
+		merged, err := domain.MergeTailored(master, payload, summary, level)
 		if err != nil {
 			return nil, domain.VacancyAnalysis{}, err
 		}
@@ -552,6 +552,10 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		// verification, so grounding and structure checks see exactly what
 		// will be rendered.
 		domain.ApplySectionToggles(merged, cfg)
+		// Skills survive the merge exactly as the master wrote them; their
+		// order is decided here, from the analysis, before the group cap in
+		// ApplyHardLimits picks which ones make the page.
+		domain.RankSkills(merged, analysis, cfg)
 		report := domain.ApplyHardLimits(master, merged, cfg)
 		recordShortfalls(ctx, rec, report)
 		// 033 FR-001: drop ungrounded skill tokens on the primary pass, not
@@ -664,7 +668,10 @@ type renderDeps struct {
 	render     func(ctx context.Context, merged domain.RendercvMaster, name string) (string, error)
 	countPages func(pdfPath string) (int, error)
 	expand     func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error)
-	condense   func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error)
+	// condense is not an LLM call: page fitting is a layout problem, and the
+	// selection stage already ranked these bullets. It returns the shortened
+	// document and whether there was anything left to shorten.
+	condense func(doc domain.RendercvMaster, cfg domain.ShapeConfig) (domain.RendercvMaster, bool, error)
 }
 
 func (s *Service) defaultRenderDeps() renderDeps {
@@ -677,8 +684,13 @@ func (s *Service) defaultRenderDeps() renderDeps {
 		expand: func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
 			return expandContent(ctx, s.llm.Select, s.genModel, merged, analysis, level, cfg)
 		},
-		condense: func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
-			return condenseContent(ctx, s.llm.Select, s.genModel, merged, analysis, level, cfg)
+		condense: func(doc domain.RendercvMaster, cfg domain.ShapeConfig) (domain.RendercvMaster, bool, error) {
+			shorter, err := domain.DeepCloneYAML(doc)
+			if err != nil {
+				return nil, false, err
+			}
+			_, max := bulletsCondenseRange(cfg)
+			return shorter, domain.TrimHighlights(shorter, max), nil
 		},
 	}
 }
@@ -747,7 +759,7 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 			slog.Warn("LLM expand failed, returning short version", "err", err)
 			return renderOutcome{pdfPath: pdfPath, pages: pages}, nil
 		}
-		reMerged, err := domain.MergeTailored(merged, expanded, nil) // summary carried by merged
+		reMerged, err := domain.MergeTailored(merged, expanded, nil, level) // summary carried by merged
 		if err != nil {
 			slog.Warn("merge after expand failed, returning short version", "err", err)
 			return renderOutcome{pdfPath: pdfPath, pages: pages}, nil
@@ -785,26 +797,23 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 			candidate, suffix = merged, "-compact"
 		} else {
 			if rec != nil {
-				rec.Step(ctx, "resume still overflows, asking LLM to condense content", map[string]any{"pages": out.pages, "pageTarget": cfg.TargetPages})
+				rec.Step(ctx, "resume still overflows, dropping the least relevant bullets", map[string]any{"pages": out.pages, "pageTarget": cfg.TargetPages})
 			}
-			condensed, err := deps.condense(ctx, merged, analysis, level, cfg)
+			shorter, trimmed, err := deps.condense(merged, cfg)
 			if err != nil {
-				slog.Warn("LLM condense failed, returning compact version", "err", err)
+				slog.Warn("condense failed, returning compact version", "err", err)
 				break
 			}
-			reMerged, err := domain.MergeTailored(merged, condensed, nil) // summary carried by merged
-			if err != nil {
-				slog.Warn("merge after condense failed, returning compact version", "err", err)
+			if !trimmed {
+				// Already at the condense floor: another render would produce
+				// the same document, so the compact version is the answer.
 				break
 			}
-			domain.DropUngroundedSkillTokens(merged, reMerged)
-			domain.ApplyHardLimits(master, reMerged, cfg)
-			// 033 FR-009: apply the same highlight-drift cleanup as the primary pass.
-			domain.StripUngroundedHighlights(merged, reMerged)
-			domain.CompactDesign(reMerged)
-			// The condense prompt asked for shorter sections than configured.
+			domain.CompactDesign(shorter)
+			// Section lengths went below what the config asked for, to reach
+			// the page target (FR-016).
 			out.conflict = true
-			candidate, suffix = reMerged, "-condensed"
+			candidate, suffix = shorter, "-condensed"
 		}
 
 		candidatePath, err := deps.render(ctx, candidate, baseName+suffix)
@@ -842,11 +851,12 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 		if err != nil {
 			return nil, err
 		}
-		reMerged, err := domain.MergeTailored(master, rePrompted, domain.CurrentSummary(merged))
+		reMerged, err := domain.MergeTailored(master, rePrompted, domain.CurrentSummary(merged), level)
 		if err != nil {
 			return nil, err
 		}
 		domain.ApplySectionToggles(reMerged, cfg)
+		domain.RankSkills(reMerged, analysis, cfg)
 		domain.ApplyHardLimits(master, reMerged, cfg)
 		reViolations := domain.VerifyStructureIntegrity(master, reMerged)
 		if len(reViolations) == 0 {
@@ -871,11 +881,12 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 	if err != nil {
 		return nil, err
 	}
-	reMerged, err := domain.MergeTailored(master, rePrompted, domain.CurrentSummary(merged))
+	reMerged, err := domain.MergeTailored(master, rePrompted, domain.CurrentSummary(merged), level)
 	if err != nil {
 		return nil, err
 	}
 	domain.ApplySectionToggles(reMerged, cfg)
+	domain.RankSkills(reMerged, analysis, cfg)
 	domain.ApplyHardLimits(master, reMerged, cfg)
 	reDrift := domain.VerifyHighlightGrounding(master, reMerged)
 	if len(reDrift) == 0 {

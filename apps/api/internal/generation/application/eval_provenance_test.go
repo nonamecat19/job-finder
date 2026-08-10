@@ -65,11 +65,11 @@ func rawRun(t *testing.T, c EvalCase) evalRun {
 	if err != nil {
 		t.Fatalf("%s: select stage: %v", c.Name, err)
 	}
-	sum, err := svc.summarize(ctx, c.Master, payload, analysis, c.Cfg, nil, run.prov, nil)
+	sum, err := svc.summarize(ctx, c.Master, payload, analysis, c.Level, c.Cfg, nil, run.prov, nil)
 	if err != nil {
 		t.Fatalf("%s: summary stage: %v", c.Name, err)
 	}
-	merged, err := domain.MergeTailored(c.Master, payload, sum)
+	merged, err := domain.MergeTailored(c.Master, payload, sum, c.Level)
 	if err != nil {
 		t.Fatalf("%s: merge: %v", c.Name, err)
 	}
@@ -77,6 +77,7 @@ func rawRun(t *testing.T, c EvalCase) evalRun {
 	// them before either check runs — so they belong on both sides of the
 	// comparison.
 	domain.ApplySectionToggles(merged, c.Cfg)
+	domain.RankSkills(merged, analysis, c.Cfg)
 	domain.ApplyHardLimits(c.Master, merged, c.Cfg)
 
 	for _, p := range []*ReplayProvider{analyze, sel, premium, summary, cover} {

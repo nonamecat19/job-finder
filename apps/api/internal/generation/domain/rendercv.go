@@ -42,19 +42,29 @@ type VacancyAnalysis struct {
 	SeniorityKeywords   []string `json:"seniorityKeywords"   jsonschema_description:"leadership/ownership indicators found in the vacancy"`
 }
 
-type TailoredSkillGroup struct {
-	Index   int    `json:"index" jsonschema_description:"0-based index of the skill group in the master, unchanged"`
-	Details string `json:"details" jsonschema_description:"comma-separated skills for this group, reordered so vacancy-required skills come first"`
+// HighlightRef points at one of the bullets the prompt listed, instead of
+// carrying a bullet of its own.
+//
+// This is what makes achievement fabrication unrepresentable rather than
+// detectable. A free-text highlight could merge two bullets, borrow one from
+// another job or attach a metric nobody claimed, and the checks that followed
+// had to reconstruct which master bullet it was supposed to be — which is why
+// they compared against *any* bullet of the same company and let a bolted-on
+// number through. A reference has exactly one source, so "does this claim
+// trace" stops being an inference.
+type HighlightRef struct {
+	SourceIndex int    `json:"sourceIndex" jsonschema_description:"0-based index of the bullet in the numbered list shown for this entry"`
+	Rephrased   string `json:"rephrased,omitempty" jsonschema_description:"optional rewording of THAT bullet only; omit to keep the master's wording"`
 }
 
 type TailoredExperience struct {
-	Company    string   `json:"company" jsonschema_description:"company name copied EXACTLY from the master"`
-	Highlights []string `json:"highlights" jsonschema_description:"selected, reordered, rephrased highlights (top 3-5 most relevant)"`
+	Company    string         `json:"company" jsonschema_description:"company name copied EXACTLY from the master"`
+	Highlights []HighlightRef `json:"highlights" jsonschema_description:"the most relevant bullets for this entry, by index, in the order they should appear"`
 }
 
 type TailoredProject struct {
-	Name       string   `json:"name" jsonschema_description:"project name copied EXACTLY from the master"`
-	Highlights []string `json:"highlights" jsonschema_description:"selected, rephrased highlights drawn only from THIS project's own master bullets"`
+	Name       string         `json:"name" jsonschema_description:"project name copied EXACTLY from the master"`
+	Highlights []HighlightRef `json:"highlights" jsonschema_description:"the most relevant bullets for THIS project, by index into its own bullet list"`
 }
 
 type TailoredSkillGroupAdd struct {
@@ -75,8 +85,12 @@ type SkillChange struct {
 // page-fitting passes reuse this same type — so a page-fit response that tries
 // to reword the summary has nowhere to put it and is discarded at unmarshal
 // rather than merged (035 FR-005/FR-010).
+//
+// It has no applied skills field either, for the same reason: skill order is
+// computed by RankSkills from the vacancy analysis. The remaining skill fields
+// are *proposals* — they are surfaced for the user to accept or reject, and
+// never reach the document on their own.
 type TailoredSelection struct {
-	Skills     []TailoredSkillGroup `json:"skills" jsonschema_description:"one entry per master skill group, same indexes, vacancy-required skills first"`
 	Experience []TailoredExperience `json:"experience" jsonschema_description:"one entry per master experience entry, keyed by company"`
 	Projects   []TailoredProject    `json:"projects" jsonschema_description:"the most vacancy-relevant master projects, keyed by name; empty unless a project limit is configured"`
 
@@ -123,15 +137,57 @@ func CurrentSummary(doc RendercvMaster) *TailoredSummary {
 // SelectedHighlights flattens the achievements the selection stage kept, in
 // document order. It is what lets the summary reference a real achievement
 // without being handed the master profile.
-func SelectedHighlights(sel TailoredSelection) []string {
+func SelectedHighlights(base RendercvMaster, sel TailoredSelection, level GroundingLevel) []string {
+	sections := CvSections(base)
+	byCompany := map[string][]string{}
+	for _, e := range AsSliceOfMaps(sections["experience"]) {
+		byCompany[norm(StringField(e, "company"))] = StringSliceField(e, "highlights")
+	}
+	byProject := map[string][]string{}
+	for _, p := range AsSliceOfMaps(sections["projects"]) {
+		byProject[norm(StringField(p, "name"))] = StringSliceField(p, "highlights")
+	}
+
 	var out []string
 	for _, e := range sel.Experience {
-		out = append(out, e.Highlights...)
+		out = append(out, ResolveHighlights(byCompany[norm(e.Company)], e.Highlights, level)...)
 	}
 	for _, p := range sel.Projects {
-		out = append(out, p.Highlights...)
+		out = append(out, ResolveHighlights(byProject[norm(p.Name)], p.Highlights, level)...)
 	}
 	return out
+}
+
+// ResolveHighlights turns a list of references into the bullets they name.
+//
+// Every rule here is a repair rather than a rejection, because there is always
+// a correct answer available: the master's own wording. An index nothing
+// points at is dropped, a repeat is dropped, and a rewording that drifts from
+// the bullet it claims to rephrase — or attaches a number that bullet never
+// carried — is replaced by the original. Under strict grounding the rewording
+// is not consulted at all.
+func ResolveHighlights(sources []string, refs []HighlightRef, level GroundingLevel) []string {
+	out := make([]string, 0, len(refs))
+	seen := make(map[int]bool, len(refs))
+	for _, ref := range refs {
+		if ref.SourceIndex < 0 || ref.SourceIndex >= len(sources) || seen[ref.SourceIndex] {
+			continue
+		}
+		seen[ref.SourceIndex] = true
+		out = append(out, resolveHighlight(sources[ref.SourceIndex], ref, level))
+	}
+	return out
+}
+
+func resolveHighlight(source string, ref HighlightRef, level GroundingLevel) string {
+	rephrased := strings.TrimSpace(ref.Rephrased)
+	if rephrased == "" || level == GroundingStrict {
+		return source
+	}
+	if !lcsCovered(rephrased, []string{source}) || len(ungroundedMetrics(rephrased, []string{source})) > 0 {
+		return source
+	}
+	return rephrased
 }
 
 // SkillGroupLabels lists the master's skill group labels — the candidate's
@@ -333,7 +389,7 @@ func toStringKey(k any) string {
 // one is supplied. A nil summary means "leave what is already there" — that is
 // the page-fitting case, where the premium-written summary must survive
 // untouched (035 FR-010).
-func MergeTailored(master RendercvMaster, payload TailoredSelection, summary *TailoredSummary) (RendercvMaster, error) {
+func MergeTailored(master RendercvMaster, payload TailoredSelection, summary *TailoredSummary, level GroundingLevel) (RendercvMaster, error) {
 	merged, err := DeepCloneYAML(master)
 	if err != nil {
 		return nil, err
@@ -347,12 +403,9 @@ func MergeTailored(master RendercvMaster, payload TailoredSelection, summary *Ta
 		sections["summary"] = []any{strings.TrimSpace(summary.Summary)}
 	}
 
-	skills := AsSliceOfMaps(sections["skills"])
-	for _, s := range payload.Skills {
-		if s.Index >= 0 && s.Index < len(skills) && !IsPinnedSkillGroup(StringField(skills[s.Index], "label")) {
-			skills[s.Index]["details"] = strings.TrimSpace(s.Details)
-		}
-	}
+	// Skills are deliberately not merged from the payload. They carry over from
+	// the master untouched and are ordered afterwards by RankSkills, so no model
+	// response can rewrite, reorder or silently shorten them.
 
 	byCompany := map[string]map[string]any{}
 	for _, e := range AsSliceOfMaps(sections["experience"]) {
@@ -360,7 +413,7 @@ func MergeTailored(master RendercvMaster, payload TailoredSelection, summary *Ta
 	}
 	for _, pe := range payload.Experience {
 		if target, ok := byCompany[norm(pe.Company)]; ok {
-			target["highlights"] = cleanHighlights(pe.Highlights)
+			target["highlights"] = cleanHighlights(ResolveHighlights(StringSliceField(target, "highlights"), pe.Highlights, level))
 		}
 	}
 
@@ -370,7 +423,7 @@ func MergeTailored(master RendercvMaster, payload TailoredSelection, summary *Ta
 	}
 	for _, pp := range payload.Projects {
 		if target, ok := byProject[norm(pp.Name)]; ok {
-			target["highlights"] = cleanHighlights(pp.Highlights)
+			target["highlights"] = cleanHighlights(ResolveHighlights(StringSliceField(target, "highlights"), pp.Highlights, level))
 		}
 	}
 

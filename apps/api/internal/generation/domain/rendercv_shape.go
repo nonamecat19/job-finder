@@ -266,3 +266,32 @@ func padHighlights(current, pool []any, min, max int) []any {
 	}
 	return padded
 }
+
+// TrimHighlights shortens every experience and project entry to at most
+// maxPerEntry bullets, dropping from the end, and reports whether it changed
+// anything.
+//
+// This is the page-fitting condense pass. It used to be an LLM call asking for
+// "the TOP 5-6, each shorter", which put a third model turn between the master
+// profile and the page — one more chance to reword a bullet the user never
+// approved, to fit a target that is a layout problem, not a judgement call.
+// The selection stage already ordered these bullets by relevance, so dropping
+// from the end drops the least relevant, and the wording that survives is the
+// wording that was already verified.
+func TrimHighlights(doc RendercvMaster, maxPerEntry int) bool {
+	if maxPerEntry < 1 {
+		return false
+	}
+	changed := false
+	sections := CvSections(doc)
+	for _, key := range []string{"experience", "projects"} {
+		for _, e := range AsSliceOfMaps(sections[key]) {
+			highlights, _ := e["highlights"].([]any)
+			if len(highlights) > maxPerEntry {
+				e["highlights"] = highlights[:maxPerEntry]
+				changed = true
+			}
+		}
+	}
+	return changed
+}

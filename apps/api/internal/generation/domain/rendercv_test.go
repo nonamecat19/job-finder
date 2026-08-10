@@ -61,26 +61,26 @@ func loadSampleMaster(t *testing.T) RendercvMaster {
 	return RendercvMaster(NormalizeYAMLMap(m).(map[string]any))
 }
 
-func TestMergeTailored_KeepsSpokenLanguagesGroupVerbatim(t *testing.T) {
+// A selection response has no way to reach the skills section: MergeTailored
+// carries every group over from the master untouched, so a model that invents,
+// truncates or reorders skills cannot land any of it in the document. Ordering
+// is RankSkills' job, from the vacancy analysis.
+func TestMergeTailored_LeavesSkillsAtTheirMasterValues(t *testing.T) {
 	master := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"skills": []any{
 			map[string]any{"label": "Backend", "details": "Go, Postgres"},
 			map[string]any{"label": "Spoken Languages", "details": "Ukrainian (native), English (B2)"},
 		},
 	}}}
-	payload := TailoredSelection{Skills: []TailoredSkillGroup{
-		{Index: 0, Details: "Go, Kubernetes"},
-		{Index: 1, Details: "English (fluent), German (basic)"},
-	}}
 
-	merged, err := MergeTailored(master, payload, nil)
+	merged, err := MergeTailored(master, TailoredSelection{}, nil, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
 
 	skills := AsSliceOfMaps(CvSections(merged)["skills"])
-	if got := StringField(skills[0], "details"); got != "Go, Kubernetes" {
-		t.Errorf("skill[0].details = %q, want the tailored value", got)
+	if got := StringField(skills[0], "details"); got != "Go, Postgres" {
+		t.Errorf("skill[0].details = %q, want the master's details", got)
 	}
 	if got := StringField(skills[1], "details"); got != "Ukrainian (native), English (B2)" {
 		t.Errorf("spoken languages rewritten to %q, want the master's details", got)
@@ -90,14 +90,11 @@ func TestMergeTailored_KeepsSpokenLanguagesGroupVerbatim(t *testing.T) {
 func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 	master := loadSampleMaster(t)
 	payload := TailoredSelection{
-		Skills: []TailoredSkillGroup{
-			{Index: 0, Details: "Go, Kubernetes"},
-		},
 		Experience: []TailoredExperience{
-			{Company: "Acme Corp", Highlights: []string{"Shipped feature X", "Led migration Y"}},
+			{Company: "Acme Corp", Highlights: []HighlightRef{{SourceIndex: 0}, {SourceIndex: 7}}},
 		},
 	}
-	merged, err := MergeTailored(master, payload, &TailoredSummary{Summary: "New tailored summary."})
+	merged, err := MergeTailored(master, payload, &TailoredSummary{Summary: "New tailored summary."}, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -114,8 +111,8 @@ func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 	}
 
 	skills := AsSliceOfMaps(sections["skills"])
-	if StringField(skills[0], "details") != "Go, Kubernetes" {
-		t.Fatalf("skill[0].details not replaced: %v", skills[0])
+	if StringField(skills[0], "details") != "Go, Postgres, Docker" {
+		t.Fatalf("skill[0].details must carry over from the master: %v", skills[0])
 	}
 	if StringField(skills[1], "label") != "Frontend" || StringField(skills[1], "details") != "React, TypeScript" {
 		t.Fatalf("skill[1] should be untouched: %v", skills[1])
@@ -125,9 +122,12 @@ func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 	if StringField(exp[0], "start_date") != "2020-01" || StringField(exp[0], "end_date") != "present" {
 		t.Fatalf("experience dates must be preserved verbatim: %v", exp[0])
 	}
+	// A reference with no rewording resolves to the master's own bullet, and an
+	// index pointing at a bullet that does not exist resolves to nothing.
+	masterHighlights := StringSliceField(AsSliceOfMaps(CvSections(master)["experience"])[0], "highlights")
 	highlights := StringSliceField(exp[0], "highlights")
-	if len(highlights) != 2 || highlights[0] != "Shipped feature X" {
-		t.Fatalf("highlights not replaced correctly: %v", highlights)
+	if len(highlights) != 1 || highlights[0] != masterHighlights[0] {
+		t.Fatalf("highlights not resolved from the master: %v", highlights)
 	}
 
 	origSections := CvSections(master)
@@ -151,12 +151,11 @@ func TestMergeTailoredPreservesBlockOrder(t *testing.T) {
 		},
 	}
 	payload := TailoredSelection{
-		Skills: []TailoredSkillGroup{{Index: 0, Details: "Go, Kubernetes"}},
 		Experience: []TailoredExperience{
-			{Company: "Acme Corp", Highlights: []string{"Shipped feature X"}},
+			{Company: "Acme Corp", Highlights: []HighlightRef{{SourceIndex: 0, Rephrased: "Did a thing well"}}},
 		},
 	}
-	merged, err := MergeTailored(master, payload, &TailoredSummary{Summary: "New tailored summary."})
+	merged, err := MergeTailored(master, payload, &TailoredSummary{Summary: "New tailored summary."}, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -193,7 +192,7 @@ func TestMergeTailoredPreservesBlockOrder(t *testing.T) {
 	if len(exp) != 1 {
 		t.Fatalf("experience entries changed: %v", exp)
 	}
-	if hl := StringSliceField(exp[0], "highlights"); len(hl) != 1 || hl[0] != "Shipped feature X" {
+	if hl := StringSliceField(exp[0], "highlights"); len(hl) != 1 || hl[0] != "Did a thing well" {
 		t.Fatalf("highlights not replaced: %v", exp[0])
 	}
 	if StringField(exp[0], "company") != "Acme Corp" || StringField(exp[0], "position") != "Senior Engineer" || StringField(exp[0], "start_date") != "2020-01" {
@@ -215,11 +214,11 @@ func TestMergeTailoredPreservesExperienceOrder(t *testing.T) {
 	}
 	payload := TailoredSelection{
 		Experience: []TailoredExperience{
-			{Company: "Initech", Highlights: []string{"Initech new bullet"}},
-			{Company: "Acme Corp", Highlights: []string{"Acme new bullet"}},
+			{Company: "Initech", Highlights: []HighlightRef{{SourceIndex: 0, Rephrased: "Initech new bullet"}}},
+			{Company: "Acme Corp", Highlights: []HighlightRef{{SourceIndex: 0, Rephrased: "Acme new bullet"}}},
 		},
 	}
-	merged, err := MergeTailored(master, payload, &TailoredSummary{Summary: "Summary"})
+	merged, err := MergeTailored(master, payload, &TailoredSummary{Summary: "Summary"}, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -256,9 +255,9 @@ func TestMergeTailoredPreservesDates(t *testing.T) {
 		},
 	}
 	payload := TailoredSelection{
-		Experience: []TailoredExperience{{Company: "Acme Corp", Highlights: []string{"New bullet"}}},
+		Experience: []TailoredExperience{{Company: "Acme Corp", Highlights: []HighlightRef{{SourceIndex: 0, Rephrased: "New bullet"}}}},
 	}
-	merged, err := MergeTailored(master, payload, &TailoredSummary{Summary: "Summary"})
+	merged, err := MergeTailored(master, payload, &TailoredSummary{Summary: "Summary"}, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -487,8 +486,8 @@ func projectEntry(t *testing.T, m RendercvMaster, name string) map[string]any {
 
 func TestMergeTailoredReplacesProjectHighlightsByName(t *testing.T) {
 	merged, err := MergeTailored(projectMaster(), TailoredSelection{
-		Projects: []TailoredProject{{Name: "Orbit", Highlights: []string{"Rewrote the scheduler in Go"}}},
-	}, nil)
+		Projects: []TailoredProject{{Name: "Orbit", Highlights: []HighlightRef{{SourceIndex: 0, Rephrased: "Rewrote the scheduler in Go"}}}},
+	}, nil, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -503,8 +502,8 @@ func TestMergeTailoredReplacesProjectHighlightsByName(t *testing.T) {
 
 func TestMergeTailoredKeepsProjectIdentityFieldsFromMaster(t *testing.T) {
 	merged, err := MergeTailored(projectMaster(), TailoredSelection{
-		Projects: []TailoredProject{{Name: "orbit", Highlights: []string{"Rewrote the scheduler"}}},
-	}, nil)
+		Projects: []TailoredProject{{Name: "orbit", Highlights: []HighlightRef{{SourceIndex: 0, Rephrased: "Rewrote the scheduler"}}}},
+	}, nil, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -524,8 +523,8 @@ func TestMergeTailoredKeepsProjectIdentityFieldsFromMaster(t *testing.T) {
 
 func TestMergeTailoredIgnoresUnknownProjectNames(t *testing.T) {
 	merged, err := MergeTailored(projectMaster(), TailoredSelection{
-		Projects: []TailoredProject{{Name: "Ghost Project", Highlights: []string{"Invented"}}},
-	}, nil)
+		Projects: []TailoredProject{{Name: "Ghost Project", Highlights: []HighlightRef{{SourceIndex: 0, Rephrased: "Invented"}}}},
+	}, nil, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}
@@ -540,7 +539,7 @@ func TestMergeTailoredIgnoresUnknownProjectNames(t *testing.T) {
 }
 
 func TestMergeTailoredEmptyProjectPayloadLeavesMasterUntouched(t *testing.T) {
-	merged, err := MergeTailored(projectMaster(), TailoredSelection{}, &TailoredSummary{Summary: "New summary."})
+	merged, err := MergeTailored(projectMaster(), TailoredSelection{}, &TailoredSummary{Summary: "New summary."}, GroundingModerate)
 	if err != nil {
 		t.Fatalf("MergeTailored: %v", err)
 	}

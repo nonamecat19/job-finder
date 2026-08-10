@@ -214,8 +214,8 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 			line += " | " + loc
 		}
 		expLines = append(expLines, line)
-		for _, h := range domain.StringSliceField(e, "highlights") {
-			expLines = append(expLines, "      • "+h)
+		for i, h := range domain.StringSliceField(e, "highlights") {
+			expLines = append(expLines, fmt.Sprintf("      [%d] %s", i, h))
 		}
 	}
 
@@ -226,25 +226,23 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	b.WriteString("\n\n")
 	b.WriteString(domain.LevelRules[level])
 	b.WriteString("\n\nHARD RULES (all levels):\n")
-	b.WriteString("- Return skills as one entry per group, using the SAME [index] shown below.\n")
 	b.WriteString("- Return experience keyed by the EXACT company name shown below; do not add companies.\n")
-	fmt.Fprintf(&b, "- For each experience entry, select the TOP %d-%d most relevant highlights and rephrase them to emphasize what the vacancy asks for.\n",
+	fmt.Fprintf(&b, "- For each experience entry, select the TOP %d-%d most relevant bullets by their [index], in the order they should appear.\n",
 		cfg.ExperienceBulletsMin, atLeastOne(cfg.ExperienceBulletsMax))
+	b.WriteString("- A highlight is {sourceIndex, rephrased}. sourceIndex is the [index] of the bullet as shown. rephrased is optional: set it only to reword THAT bullet for this vacancy, and omit it to keep the master's wording.\n")
+	b.WriteString("- A rewording never merges two bullets, never borrows from another entry, and never changes a number. A rewording that does is discarded and the original bullet is used.\n")
 	b.WriteString("- Keep every experience entry; never set drop to true. Do not omit any job.\n")
 	b.WriteString("- Keep experience entries in the EXACT order shown in the master; do not reorder.\n")
-	if cfg.SkillsMaxGroups > 0 {
-		fmt.Fprintf(&b, "- Reorder skills within each group: vacancy-required skills first, and return only the %d most vacancy-relevant skill groups.\n", cfg.SkillsMaxGroups)
-	} else {
-		b.WriteString("- Reorder skills within each group: vacancy-required skills first, keep all relevant keywords (do not trim).\n")
-	}
-	b.WriteString("- Return the \"Spoken Languages\" group exactly as given: same details, same order, no rewording. It is a fact about the candidate, not a tailoring target.\n")
-	b.WriteString("- Keep highlights concise, one achievement each, no fabricated numbers.\n")
+	b.WriteString("- Do NOT return skills. Skill selection and ordering are computed from the analysis above, not chosen here.\n")
+	b.WriteString("- Keep highlights concise, one achievement each.\n")
 	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given.\n")
 	b.WriteString("- Do NOT write a summary. A separate step writes it.\n\n")
 	// A disabled skills section is removed from the document after the merge,
-	// so there is no reason to spend tokens tailoring it.
+	// so there is no reason to spend tokens on it. When enabled it is still
+	// shown, as reference for wording the highlights and for the skill
+	// proposals the user reviews — but not as something to return applied.
 	if cfg.SkillsEnabled {
-		b.WriteString("SKILL GROUPS (master):\n")
+		b.WriteString("SKILL GROUPS (master, reference only):\n")
 		b.WriteString(strings.Join(skillLines, "\n"))
 		b.WriteString("\n")
 	}
@@ -260,8 +258,8 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 			b.WriteString("\n\nPROJECTS (master):\n")
 			for _, p := range projects {
 				b.WriteString("  - name: " + domain.StringField(p, "name") + "\n")
-				for _, h := range domain.StringSliceField(p, "highlights") {
-					b.WriteString("      • " + h + "\n")
+				for i, h := range domain.StringSliceField(p, "highlights") {
+					fmt.Fprintf(&b, "      [%d] %s\n", i, h)
 				}
 			}
 			if cfg.ProjectsMax > 0 {
@@ -273,7 +271,7 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 			if cfg.ProjectBulletsMax > 0 {
 				fmt.Fprintf(&b, "For each returned project, keep at most %d highlights.\n", cfg.ProjectBulletsMax)
 			}
-			b.WriteString("Draw every project highlight ONLY from that same project's own bullets above; never move a bullet between projects and never invent one.\n")
+			b.WriteString("Project highlights are indices into that same project's own bullet list above; an index cannot reach another project's bullets.\n")
 		}
 	}
 
@@ -429,8 +427,8 @@ func buildExpandPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 			line += " (" + pos + ")"
 		}
 		expLines = append(expLines, line)
-		for _, h := range domain.StringSliceField(e, "highlights") {
-			expLines = append(expLines, "      • "+h)
+		for i, h := range domain.StringSliceField(e, "highlights") {
+			expLines = append(expLines, fmt.Sprintf("      [%d] %s", i, h))
 		}
 	}
 
@@ -439,75 +437,12 @@ func buildExpandPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	fmt.Fprintf(&b, "The resume below is too short (only 1 page). Expand it to fill %s with more detail.\n\n", pageTargetPhrase(cfg))
 	b.WriteString("RULES:\n")
 	b.WriteString("- Leave the summary alone. It is written by a separate step and is not yours to change.\n")
-	fmt.Fprintf(&b, "- Experience highlights: add 2-3 more relevant bullets per job (aim for %d-%d per job) from the master's available highlights.\n", bulletsMin, bulletsMax)
-	b.WriteString("- Skill details: keep every keyword already in the group and reorder the vacancy-relevant ones first; don't fabricate.\n")
-	b.WriteString("- Do NOT drop any job entry or skill group.\n")
+	fmt.Fprintf(&b, "- Experience highlights: return 2-3 more bullet [index]es per job than are shown (aim for %d-%d per job).\n", bulletsMin, bulletsMax)
+	b.WriteString("- A highlight is {sourceIndex, rephrased}, where sourceIndex is the [index] shown for that entry and rephrased is an optional rewording of that one bullet.\n")
+	b.WriteString("- Leave skills alone. They are ordered by the pipeline, not returned here.\n")
+	b.WriteString("- Do NOT drop any job entry.\n")
 	b.WriteString("- Do NOT invent new content or change company names — only use what's in the master.\n")
-	b.WriteString("- Keep the same structure: same skill group indexes, same company keys.\n\n")
-	b.WriteString("CURRENT CONTENT:\n")
-	b.WriteString("Summary: ")
-	if summaryRaw, ok := sections["summary"]; ok {
-		if items, ok := summaryRaw.([]any); ok && len(items) > 0 {
-			if s, ok := items[0].(string); ok {
-				b.WriteString(s)
-			}
-		}
-	}
-	b.WriteString("\n\nExperience:\n")
-	b.WriteString(strings.Join(expLines, "\n"))
-	if cfg.SkillsEnabled {
-		writeSkillGroups(&b, sections)
-	}
-	b.WriteString("\n\nVACANCY ANALYSIS:\n")
-	b.WriteString("Required: " + strings.Join(analysis.RequiredSkills, ", ") + "\n")
-	b.WriteString("Level: " + analysis.ExperienceLevel + "\n")
-
-	return b.String()
-}
-
-// condenseContent asks the LLM to shorten the already-tailored content so
-// the resume fits on a single page. It takes the current merged master and
-// returns a new TailoredSelection with fewer highlights per
-// job, and more compact skill details.
-func condenseContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
-	maxT := generationMaxTokens
-	return llm.CompleteStructured[domain.TailoredSelection](ctx, lc, buildCondensePrompt(master, analysis, cfg), &llm.CompleteOptions{
-		System:       "You are an expert resume writer who makes content concise without losing impact. " + "Never fabricate information.",
-		Model:        model,
-		MaxTokens:    &maxT,
-		ResponseMode: llm.ResponseModeStrict,
-	})
-}
-
-func buildCondensePrompt(master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig) string {
-	sections := domain.CvSections(master)
-	experience := domain.AsSliceOfMaps(sections["experience"])
-
-	var expLines []string
-	for _, e := range experience {
-		line := "  - company: " + domain.StringField(e, "company")
-		if pos := domain.StringField(e, "position"); pos != "" {
-			line += " (" + pos + ")"
-		}
-		expLines = append(expLines, line)
-		for _, h := range domain.StringSliceField(e, "highlights") {
-			expLines = append(expLines, "      • "+h)
-		}
-	}
-
-	var b strings.Builder
-	// Per FR-016 the page target outranks the configured section lengths, so
-	// this path deliberately asks for less than the configured range.
-	bulletsMin, bulletsMax := bulletsCondenseRange(cfg)
-	fmt.Fprintf(&b, "The resume below is too long and overflows past %s. Shorten it to fit on %s.\n\n",
-		strings.ToLower(pageTargetPhrase(cfg)), pageTargetPhrase(cfg))
-	b.WriteString("RULES:\n")
-	b.WriteString("- Leave the summary alone. It is written by a separate step and is not yours to change.\n")
-	fmt.Fprintf(&b, "- Experience highlights: keep only the TOP %d-%d most relevant per job; make each bullet shorter (one line).\n", bulletsMin, bulletsMax)
-	b.WriteString("- Skill details: trim to the most vacancy-relevant keywords; remove generic filler.\n")
-	b.WriteString("- Do NOT drop any job entry or skill group — just make each one shorter.\n")
-	b.WriteString("- Do NOT invent new content or change company names.\n")
-	b.WriteString("- Keep the same structure: same skill group indexes, same company keys.\n\n")
+	b.WriteString("- Keep the same structure: same company keys.\n\n")
 	b.WriteString("CURRENT CONTENT:\n")
 	b.WriteString("Summary: ")
 	if summaryRaw, ok := sections["summary"]; ok {

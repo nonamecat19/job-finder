@@ -82,7 +82,7 @@ func analysisReply(t *testing.T) func(string) string {
 func selectionReply(t *testing.T) func(string) string {
 	return func(string) string {
 		return mustJSON(t, domain.TailoredSelection{Experience: []domain.TailoredExperience{
-			{Company: "Acme", Highlights: []string{"Did a thing"}},
+			{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0}}},
 		}})
 	}
 }
@@ -221,7 +221,7 @@ func TestLocalOnlyRunProducesAResume(t *testing.T) {
 			return mustJSON(t, domain.TailoredSummary{Summary: fmt.Sprintf("%d+ years of experience.", domain.DeriveTotalExperienceYears(stageMaster()))})
 		default:
 			return mustJSON(t, domain.TailoredSelection{Experience: []domain.TailoredExperience{
-				{Company: "Acme", Highlights: []string{"Did a thing"}},
+				{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0}}},
 			}})
 		}
 	}}

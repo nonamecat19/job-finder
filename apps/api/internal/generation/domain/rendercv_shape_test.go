@@ -738,3 +738,33 @@ func equalStringSlices(got, want []string) bool {
 	}
 	return true
 }
+
+func TestTrimHighlightsDropsTheLeastRelevantBullets(t *testing.T) {
+	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"experience": []any{map[string]any{"company": "Acme", "highlights": []any{"first", "second", "third"}}},
+		"projects":   []any{map[string]any{"name": "Orbit", "highlights": []any{"a", "b"}}},
+	}}}
+
+	if !TrimHighlights(doc, 2) {
+		t.Fatal("TrimHighlights reported no change on a document that overflows")
+	}
+	sections := CvSections(doc)
+	if got := StringSliceField(AsSliceOfMaps(sections["experience"])[0], "highlights"); len(got) != 2 || got[0] != "first" {
+		t.Errorf("experience highlights = %v, want the first two kept", got)
+	}
+	if got := StringSliceField(AsSliceOfMaps(sections["projects"])[0], "highlights"); len(got) != 2 {
+		t.Errorf("project highlights = %v, want them left alone at the cap", got)
+	}
+}
+
+// The page-fit loop uses the return value to stop: nothing left to trim means
+// another render would produce the same document.
+func TestTrimHighlightsReportsNoChangeAtTheFloor(t *testing.T) {
+	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"experience": []any{map[string]any{"company": "Acme", "highlights": []any{"only"}}},
+	}}}
+
+	if TrimHighlights(doc, 2) {
+		t.Error("TrimHighlights reported a change on a document already under the cap")
+	}
+}

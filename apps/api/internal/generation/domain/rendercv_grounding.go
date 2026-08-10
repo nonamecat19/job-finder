@@ -55,9 +55,25 @@ func VerifyTailoredSectionsGrounding(master RendercvMaster, payload TailoredSect
 			violations = append(violations, `experience "`+pe.Company+`" not in master`)
 			continue
 		}
-		for _, h := range pe.Highlights {
-			if !lcsCovered(h, masterHighlights) {
-				violations = append(violations, `experience "`+pe.Company+`" highlight not grounded in master: "`+truncateStr(h, 60)+`"`)
+		// A reference names the bullet it rephrases, so each rewording is held
+		// against that one bullet rather than against anything the company ever
+		// did. Merging two bullets into one claim used to satisfy this check;
+		// now it cannot be expressed.
+		for _, ref := range pe.Highlights {
+			if ref.SourceIndex < 0 || ref.SourceIndex >= len(masterHighlights) {
+				violations = append(violations, fmt.Sprintf(`experience %q highlight index %d has no bullet in the master`, pe.Company, ref.SourceIndex))
+				continue
+			}
+			h := strings.TrimSpace(ref.Rephrased)
+			if h == "" {
+				continue // the master's own wording, verbatim
+			}
+			source := []string{masterHighlights[ref.SourceIndex]}
+			if !lcsCovered(h, source) {
+				violations = append(violations, `experience "`+pe.Company+`" highlight not grounded in the bullet it rephrases: "`+truncateStr(h, 60)+`"`)
+			}
+			for _, m := range ungroundedMetrics(h, source) {
+				violations = append(violations, `experience "`+pe.Company+`" highlight asserts metric "`+m+`" absent from the bullet it rephrases: "`+truncateStr(h, 60)+`"`)
 			}
 		}
 	}

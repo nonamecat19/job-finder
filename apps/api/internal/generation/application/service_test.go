@@ -44,14 +44,16 @@ func (f *fakeRenderer) deps() renderDeps {
 				return domain.TailoredSelection{}, f.expandErr
 			}
 			return domain.TailoredSelection{Experience: []domain.TailoredExperience{
-				{Company: "Acme", Highlights: []string{"Did a thing", "expanded"}},
+				{Company: "Acme", Highlights: []domain.HighlightRef{{SourceIndex: 0}, {SourceIndex: 0, Rephrased: "Did a thing, expanded"}}},
 			}}, nil
 		},
-		condense: func(context.Context, domain.RendercvMaster, domain.VacancyAnalysis, domain.GroundingLevel, domain.ShapeConfig) (domain.TailoredSelection, error) {
+		condense: func(doc domain.RendercvMaster, cfg domain.ShapeConfig) (domain.RendercvMaster, bool, error) {
 			f.condenses++
-			return domain.TailoredSelection{Experience: []domain.TailoredExperience{
-				{Company: "Acme", Highlights: []string{"condensed"}},
-			}}, nil
+			shorter, err := domain.DeepCloneYAML(doc)
+			if err != nil {
+				return nil, false, err
+			}
+			return shorter, domain.TrimHighlights(shorter, 1), nil
 		},
 	}
 }
@@ -61,7 +63,7 @@ func testMaster() domain.RendercvMaster {
 		"summary": []any{"A summary."},
 		"experience": []any{map[string]any{
 			"company":    "Acme",
-			"highlights": []any{"Did a thing"},
+			"highlights": []any{"Did a thing", "Did another thing"},
 		}},
 	}}}
 }
