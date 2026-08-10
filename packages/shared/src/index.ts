@@ -56,13 +56,10 @@ export type ActivityListResponse = Omit<Gen.ActivityListResponse, 'active' | 're
 };
 export type AdhocVacancyDto = Gen.AdhocVacancyDto;
 export type AiFeatureSettingDto = Gen.AiFeatureSettingDto;
-export type BaselineSummaryDto = Gen.BaselineSummaryDto;
 export type BoardCandidateDto = Nullable<Gen.BoardCandidateDto, 'inferredFromJobId'>;
 export type ContactImportResultDto = Gen.ContactImportResultDto;
 export type CustomConnection = Gen.CustomConnection;
 export type EmployerBoardDto = Nullable<Gen.EmployerBoardDto, 'lastSuccessAt'>;
-export type ExportBlockDto = Gen.ExportBlockDto;
-export type ExportPdfRequestDto = Gen.ExportPdfRequestDto;
 export type GenerateRequestDto = Gen.GenerateRequestDto;
 export type GithubSyncResultDto = Omit<Gen.GithubSyncResultDto, 'contact'> & {
   contact: ReferralContactDto;
@@ -99,8 +96,6 @@ export type Section = Omit<Gen.Section, 'entryType' | 'entries'> & {
   entries: Entry[];
 };
 export type SocialNetwork = Gen.SocialNetwork;
-export type TailorResumeRequestDto = Gen.TailorResumeRequestDto;
-export type TraceabilityDto = Gen.TraceabilityDto;
 
 export type ActivityRunDto = Nullable<Gen.ActivityRunDto, 'elapsedMs' | 'error' | 'finishedAt' | 'heartbeatAt' | 'jobId' | 'refId' | 'sourceKey' | 'startedAt' | 'step' | 'timeoutMs'> & {
     op: import('./consumer-only').ActivityOp;
@@ -119,9 +114,6 @@ export type CompanyIntelDto = Nullable<Gen.CompanyIntelDto, 'funding' | 'glassdo
 export type DocumentStatusDto = Omit<Gen.DocumentStatusDto, 'type'> & {
   type: DocumentType;
 };
-
-export type EditProposalDto = Nullable<Gen.EditProposalDto,
-  'droppedReason' | 'acceptedAt' | 'rejectedAt'>;
 
 export type FreshMatchNotificationDto = Nullable<Gen.FreshMatchNotificationDto,
   'jobTitle' | 'company' | 'matchScore'>;
@@ -218,10 +210,6 @@ export type StatsDto = Omit<Gen.StatsDto, 'pipeline' | 'recentRuns'> & {
 };
 
 export type SubscriptionDto = Nullable<Gen.SubscriptionDto, 'lastRunAt' | 'name'>;
-
-export type TailoredDraftDto = Nullable<Gen.TailoredDraftDto,
-  'jobId' | 'vacancyCompany' | 'vacancyTitle' | 'parentDraftId'
-  | 'activityId' | 'exportStatus' | 'exportDocumentId'>;
 
 export type Entry = Omit<Gen.Entry, 'unrecognized'> & {
   unrecognized?: Record<string, unknown>;

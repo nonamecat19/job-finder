@@ -92,7 +92,17 @@ func offsetSuggestionItems(items []domain.Item, offset int) []domain.Item {
 // items, and the skills section gets its suggested skills appended the same
 // way. A section with no survivors for it is left untouched — the client
 // renders that as the suggestion group's empty state (T055), not an error.
-func (s *Service) persistSuggestions(ctx context.Context, runID pgtype.UUID, experience map[string][]domain.Item, skills []domain.Item) error {
+//
+// target restricts which sections get new suggestions at all — nil means
+// every section (a plain run); a rerun passes the set of sections it named,
+// so a suggestion for a section the user did not ask to rerun is never
+// appended (rest-api.md: "replaces the named sections' items", nothing
+// else). oldBySection is the same rerun-preservation input
+// applyRankedSections takes (T077): a matched AI item (by
+// domain.NormalizeText(SourceText)) keeps its Selected/Position/EditedText
+// rather than reverting to the freshly-suggested default. Both are nil for a
+// plain run, making this identical to the pre-rerun behaviour.
+func (s *Service) persistSuggestions(ctx context.Context, runID pgtype.UUID, experience map[string][]domain.Item, skills []domain.Item, target map[pgtype.UUID]bool, oldBySection map[pgtype.UUID][]domain.Item) error {
 	if len(experience) == 0 && len(skills) == 0 {
 		return nil
 	}
@@ -110,17 +120,22 @@ func (s *Service) persistSuggestions(ctx context.Context, runID pgtype.UUID, exp
 	}
 
 	for _, sec := range sections {
+		if target != nil && !target[sec.ID] {
+			continue
+		}
 		switch {
 		case sec.Kind == string(domain.SectionKindExperience) && sec.EntryKey != nil:
 			suggested, ok := experience[*sec.EntryKey]
 			if !ok || len(suggested) == 0 {
 				continue
 			}
-			if err := s.persistWorkspaceItems(ctx, sec.ID, offsetSuggestionItems(suggested, countBySection[sec.ID])); err != nil {
+			final := preserveMatchedSelections(oldBySection[sec.ID], offsetSuggestionItems(suggested, countBySection[sec.ID]))
+			if err := s.persistWorkspaceItems(ctx, sec.ID, final); err != nil {
 				return err
 			}
 		case sec.Kind == string(domain.SectionKindSkills) && len(skills) > 0:
-			if err := s.persistWorkspaceItems(ctx, sec.ID, offsetSuggestionItems(skills, countBySection[sec.ID])); err != nil {
+			final := preserveMatchedSelections(oldBySection[sec.ID], offsetSuggestionItems(skills, countBySection[sec.ID]))
+			if err := s.persistWorkspaceItems(ctx, sec.ID, final); err != nil {
 				return err
 			}
 		}

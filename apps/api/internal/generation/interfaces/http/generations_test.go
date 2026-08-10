@@ -86,6 +86,13 @@ func newWorkspaceHandler(t *testing.T, testDB *db.DB) (*generationhttp.Generatio
 			b, _ := json.Marshal(map[string]string{"summary": "Senior engineer with a track record of shipping."})
 			return string(b)
 		}},
+		// Select serves both the ranking stage (rankExperienceSections) and
+		// the suggestion stage (suggestContent) — both introduced in Phase 4/5
+		// (US2/US3), after this helper was first written. An empty reply is
+		// invalid input for VerifyRanking, so ranking falls back to master
+		// order after its one retry (FR-010) — the same shape these tests
+		// already assert on — rather than a nil-provider panic.
+		Select: &stubProvider{reply: func(string) string { return `{}` }},
 	}
 	svc := generationapp.NewService(testDB.Queries, profileSvc, nil, nil, routers, "", "", "moderate", nil)
 	// T025/T026: item/section mutation needs the row-locked transaction

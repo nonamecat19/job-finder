@@ -262,59 +262,65 @@ mechanism and must not overload the proposal accept/reject lifecycle.
 020-FR-009 restates Constitution I in this context: a tailoring run updates a local draft and
 nothing else. It never submits an application or contacts an employer.
 
-### 4.1 The tailoring REST surface
+### 4.1 The review surface, as it actually shipped (042)
 
-`internal/tailoring/`, mounted under `/api`. Auth, CORS and requestId middleware are inherited
-from `httpapi.NewRouter`; errors use the standard `{error, path?, message?}` shape; dates are
-ISO-8601 UTC.
+The `/api/tailoring` draft/proposal surface described in earlier revisions of this section was
+never built: `internal/tailoring/` held only field validators (`doc.go`, `proposals.go`), with
+no handler, no service and no route registration, and `GeneratePayload.TailoringDraftID` was
+declared and read nowhere. Migration `00036`'s `tailored_drafts`/`edit_proposals` tables were
+never written to by any caller and were dropped in `00043`. 042 (the resume generation
+workspace) supersedes that design with a different review model — a ranked-item list rather
+than an accept/reject diff — documented in full in
+`specs/042-resume-generation-workspace/contracts/rest-api.md` and summarised here so this
+domain doc stays true of the tree.
+
+`internal/generation/interfaces/http/generations.go`, mounted under `/v1` (and unversioned)
+through the same `httpapi.NewRouter` registration every other feature uses. Auth, CORS and
+requestId middleware are inherited; errors use the standard `{error, path?, message?}` shape;
+dates are ISO-8601 UTC.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/tailoring` | Enqueue a run — creates the draft, enqueues the `generate` job, returns `202 {draftId, activityId}` |
-| `GET` | `/api/tailoring/{draftId}` | The draft: state, baseline summary, all proposals (the UI groups by status). **`dropped` proposals are not included in this list.** |
-| `POST` | `/api/tailoring/{draftId}/proposals/{proposalId}` | `{action: "accept" \| "reject"}` |
-| `POST` | `/api/tailoring/{draftId}/finalize` | `200 {state: "finalized"}`; **precondition: zero `pending` proposals.** The handler never auto-finalizes — the user must click. |
-| `POST` | `/api/tailoring/{draftId}/export-pdf` | Starts the page fitter |
-| `GET` | `/api/tailoring/{draftId}/export-status` | Idempotent short-poll |
-| `POST` | `/api/tailoring/{draftId}/rerun` | `202` with a new draft seeded from the current baseline |
-| `DELETE` | `/api/tailoring/{draftId}` | `204`, draft `abandoned` |
+| `POST` | `/v1/generations` | Start a run — persists the run row, seeds items in master order, enqueues the background pipeline, returns `202 {runId, activityId}` |
+| `GET` | `/v1/generations/{runId}` | The whole run: sections and items, in `position` order |
+| `GET` | `/v1/generations?jobId=&limit=` | Recent runs, newest first |
+| `PATCH` | `/v1/generations/{runId}/items/{itemId}` | Toggle `selected`, move `position`, or edit `text` (AI items only) |
+| `PATCH` | `/v1/generations/{runId}/sections/{sectionId}/order` | Whole-section reorder in one call |
+| `POST` | `/v1/generations/{runId}/rerun` | `202`; replaces the named sections' items (or the whole run) in place, on the same run id |
+| `POST` | `/v1/generations/{runId}/export` | Render-once export: `202` rendering, or `200` with an overflow report |
+| `GET` | `/v1/generations/{runId}/export` | Idempotent short-poll for export status |
+| `DELETE` | `/v1/generations/{runId}` | `204` |
 
-The request body carries either a `jobId` or an ad-hoc `vacancy` (`{company, title, text}`)
-alongside `profileId`.
+There is no accept/reject proposal loop: an item is either selected or not, and its position
+is either where the ranking put it or where the user dragged it. A profile-sourced item's text
+is never a proposal to accept — it is byte-identical to the master bullet at its `sourceIndex`
+by construction (§2a), so there is nothing to review about its wording, only whether to
+include it.
 
 Status codes that encode real rules:
 
-- `POST /api/tailoring` → **400** when the profile has no master content, or when a draft is
-  already `review`/`finalized` for the same `(profile, job)` — **the caller must use `/rerun`
-  instead of starting a second draft.** → **409** when the master's `rendercv_config` checksum
-  no longer matches the existing draft's, meaning the master was edited mid-review; the caller
-  abandons and starts fresh.
-- Accept/reject → **409** when the proposal is already terminal or the draft is
-  `finalized`/`abandoned`; → **422** when the proposal is `dropped` (grounding- or
-  structure-suppressed). **A dropped proposal can never be accepted.**
-- `/export-pdf` → **409** when the draft is not `finalized`, still has pending proposals, or
-  already produced a `fit` (the caller fetches the existing `documentId`).
+- `POST /v1/generations` → **400** when neither `jobId` nor `vacancy.text` is given, or the
+  profile has no master content. **No 409 for an existing run** — unlike the never-built
+  `/api/tailoring` design, concurrent runs against the same vacancy are legal; the workspace
+  opens the newest by default.
+- `PATCH .../items/{itemId}` → **403** when `text` is sent for an `origin="profile"` item
+  (FR-009 at the API boundary); **409** when the run is `running` or the item is `unavailable`.
+- `POST .../rerun` → **409** when the run is already `running`.
+- `POST .../export` → **409** when the run is `running`, or every section has zero selected
+  items.
 
-**Accepting mutates the baseline in the same transaction**, so a subsequent poll already
-reflects it. Rejecting restores the baseline value for that field and changes no baseline.
-Every write endpoint takes a row-level `SELECT … FOR UPDATE` on the draft first
-(`GetDraftForUpdate`), and accept/reject is idempotent on terminal rows — a client may retry
-after a network flake without double-applying.
+Every write endpoint takes a row-level `SELECT … FOR UPDATE` on the run first
+(`GetRunForUpdate`), matching the discipline 020 specified for drafts. `PATCH .../items/{id}`
+is idempotent: re-sending the same body is a no-op landing on the same row.
 
-`/rerun` leaves the prior draft `finalized` and seeds the new draft's baseline from the
-prior's *current* baseline, so **already-accepted edits are not re-surfaced as fresh
-proposals.**
-
-**Worker wiring, reused rather than new.** `POST /api/tailoring` enqueues the existing asynq
-`TypeGenerate` task with a `tailoringDraftID` field added to `GeneratePayload` — wire-nullable,
-so old callers leave it nil and the merged-resume path is unchanged.
-`generation.Handler.ProcessTask` sees the field and dispatches to
-`tailoring.Service.RunProposals`. The existing `GET /api/activity` routes already carry the
-queued/running state the dashboard polls for 020-FR-013's progress indicator, so no new
-endpoint was needed. `generated_documents` rows from `/export-pdf` are indistinguishable from
-legacy-path rows, so `GET /api/documents` and the PDF download work unchanged. **The legacy
-`POST /api/documents/tailor` merge-and-render endpoint was not removed** — 020's flow is
-additive, and two export paths coexist by design.
+**Worker wiring.** `POST /v1/generations` enqueues the existing asynq `TypeGenerate` task with
+`GenerationRunID` set on `GeneratePayload` — wire-nullable, so old callers leave it nil and the
+merged-resume path is unchanged. `generation.Handler.ProcessTask` sees the field and dispatches
+to `application.Service.StartRun`, or to `RerunRun` when the payload also carries `IsRerun`.
+`generated_documents` rows from a workspace export are indistinguishable from legacy-path rows,
+so `GET /api/documents` and the PDF download work unchanged. **The legacy
+`POST /api/documents/tailor` merge-and-render endpoint was not removed** — it keeps its own
+request shape and today's grounding semantics, and the two paths coexist by design.
 
 ## 5. Configurable shape (031, 032)
 
@@ -462,61 +468,40 @@ range, or all available projects when fewer exist.
 - 020-FR-014: an unreachable local model, a timeout, or malformed model output surfaces a
   clear error — never a partial or corrupted resume.
 
-### 7.1 The page fitter
+### 7.1 The page fitter, as it actually shipped
 
-`internal/generation/singlepage`. Takes a finalized `dto.Resume` (the 009 structured shape),
-a draft id for artifact naming and audit, an output directory (default `/data/documents`) and
-an optional `storage.Store` for MinIO upload. Returns a `FitResult` whose `Status` is `fit`,
-`blocked` or `error`, carrying the document id and file path on a fit, ranked `feedback` when
-blocked, and — for telemetry — the measured content height and the density step that won.
+The chromedp density-ladder fitter earlier revisions of this section described —
+`internal/generation/singlepage`, a 9-step ladder over CSS custom properties, ranked
+blocked-feedback by re-measuring each candidate's removal — was never built. The package
+contains only `doc.go`. Page measurement and fitting are `RenderCvRenderer`
+(`internal/generation/infrastructure`), which shells out to the Typst-based `rendercv`
+binary (`RENDERCV_BIN`) rather than driving a headless Chrome instance, and `CountPages`
+measures the rendered PDF directly instead of estimating content height in CSS pixels.
 
-**The density ladder is deterministic and searched cheapest-first**, largest settings to
-smallest; the first step that fits wins:
+Two fitting strategies exist side by side, because two different rules govern what each may
+change (research.md R5, `specs/042-resume-generation-workspace/research.md`):
 
-| Step | Body pt | Margin mm | Line height | Bullet gap px |
-|---|---|---|---|---|
-| 1 | 11.0 | 14 | 1.4 | 4 |
-| 2 | 11.0 | 14 | 1.3 | 4 |
-| 3 | 11.0 | 14 | 1.3 | 2 |
-| 4 | 10.5 | 12 | 1.3 | 2 |
-| 5 | 10.5 | 10 | 1.2 | 2 |
-| 6 | 10.0 | 10 | 1.2 | 1 |
-| 7 | 10.0 | 8 | 1.2 | 1 |
-| 8 | 9.5 | 8 | 1.1 | 0 |
-| 9 | 9.0 | 8 | 1.1 | 0 — **minimum bound** |
+- **The legacy job-scoped and ad-hoc paths** (`/api/jobs/{id}/generate`,
+  `POST /api/documents/tailor`) use `Service.renderToPageTarget` (`service.go`): render, and if
+  over target, `ApplyFontSize` down a step, then `CompactDesign` (layout only), then
+  `expandContent` (a model call, when under target) or `TrimHighlights`/`condense` (silently
+  drops bullets from the end of each entry) when still over. This path may reword and may
+  drop content to make the page count.
+- **The 042 workspace export path**
+  (`POST /v1/generations/{runId}/export`, `internal/generation/application/workspace_export.go`)
+  is render-once and never reword-or-drop: `domain.Assemble` builds a `RendercvMaster` from
+  exactly the selected items (no model call), `ApplyFontSize` then `RenderCvRenderer.Render`
+  then `CountPages`; over target, one `CompactDesign` re-render (typography only — the exported
+  words are unchanged); still over, the export returns `status: "blocked"` with an overflow
+  report — pages rendered vs. target, and the lowest-ranked **selected** items as named drop
+  candidates the user acts on. `expandContent`, `TrimHighlights`, `padHighlights` and the
+  `ApplyHardLimits` truncation never run on this path; `generation_items.rank` already orders
+  each section by relevance, so "worst-ranked first" is a query over persisted rank, not a
+  re-measured search.
 
-Page size is A4 (210 × 297 mm), fixed; a configurable page size is out of scope. **Anything
-below the minimum bound is rejected as `blocked` rather than rendered**, because tighter than
-that stops being ATS-readable.
-
-Measurement per step, via chromedp: render the template with the density knobs exposed as CSS
-custom properties on `:root`, `SetDocumentContent`, evaluate
-`document.documentElement.scrollHeight`/`scrollWidth`, convert px to mm at 96 dpi
-(1 px = 0.2645 mm), and fit when the measured height is within `297 − 2×margin` **and** the
-width does not overflow. Exhausting the ladder produces `blocked` with computed feedback.
-
-There is a **5 s synchronous budget** per export. Beyond it the remaining steps run as a
-background task and `POST /export-pdf` returns `200 {status: "pending"}` for the dashboard to
-poll through `/export-status`.
-
-**Blocked feedback is ranked by space saved**, not listed arbitrarily: longest bullets first
-(identified as `experience:Acme:3`), then skill-group removals (`skill_group:Cloud`), then the
-summary. Each candidate's gain is measured at the minimum density step by removing it and
-re-measuring, and the returned array is the **shortest set whose removal achieves fit**.
-
-**The text-PDF guarantee** (020-FR-007) is structural, not incidental: `PrintToPDF` with
-`WithPrintBackground(true)`; no `<canvas>`, no image-of-text, no `user-select: none`; real
-`<p>` and `<ul>` elements throughout. An integration test opens the produced PDF and asserts
-the page count plus successful text extraction of the name, summary and first bullet.
-
-The template renders from `dto.Resume` alone and **does not import the legacy JSON-Resume
-`resume_view` struct**. It is ATS-clean by construction: single document flow, no columns, no
-flexbox a paper print cannot reproduce, with margins and skill order stable across every
-density step. It renders a header, then each `Section` in declared order by `entryType`
-(`experience`/`education`/`publication` structured entries; `normal`/`text`/`bullet`/
-`numbered`/`reversed_numbered`/`one_line` content entries; and `unrecognized` entries rendered
-from their raw fields per the 009 data model), with skill groups as label plus
-comma-separated details, one row per group and never stripping tokens.
+Every export, on either path, produces searchable/selectable text (020-FR-007): RenderCV's
+Typst output has no rasterised text and no image-of-text. Page size and margins come from the
+resolved `ShapeConfig` (§5), not a fixed density ladder.
 
 Three deliberate non-goals: it does **not** render the user's RenderCV Typst theme — the point
 of a tailored resume is to deviate from the master theme; it does **not** fall back to

@@ -278,6 +278,16 @@ export interface GenerationRunDto {
   updatedAt: string;
 }
 /**
+ * AdhocVacancyDto is a pasted, ad-hoc vacancy (no `Job` row) — moved here
+ * from the now-deleted dto/tailoring.go (T083): 020's tailoring surface
+ * never had a reader, but StartGenerationRequestDto's `vacancy` field does.
+ */
+export interface AdhocVacancyDto {
+  company: string;
+  title: string;
+  text: string;
+}
+/**
  * GenerationVacancyDto is the vacancy a run was made against. Text is
  * intentionally omitted from the list/get response summary fields where the
  * full run body isn't needed; the run detail response embeds this struct
@@ -953,71 +963,4 @@ export interface SummaryModelSettingDto {
 }
 export interface UpdateSummaryModelRequestDto {
   optionId: string;
-}
-
-//////////
-// source: tailoring.go
-
-export interface EditProposalDto {
-  id: string;
-  draftId: string;
-  fieldType: string;
-  fieldKey: string;
-  beforeValue: string;
-  afterValue: string;
-  traceability: TraceabilityDto;
-  status: string;
-  droppedReason?: string;
-  acceptedAt?: string;
-  rejectedAt?: string;
-}
-export interface TraceabilityDto {
-  source: string;
-  path: string;
-}
-export interface TailoredDraftDto {
-  id: string;
-  profileId: string;
-  jobId?: string;
-  vacancyCompany?: string;
-  vacancyTitle?: string;
-  state: string;
-  parentDraftId?: string;
-  model: string;
-  activityId?: string;
-  exportStatus?: string;
-  exportFeedback?: ExportBlockDto[];
-  exportDocumentId?: string;
-  baselineSummary: BaselineSummaryDto;
-  proposals: EditProposalDto[];
-  createdAt: string;
-  updatedAt: string;
-}
-export interface BaselineSummaryDto {
-  profileName: string;
-  skillGroups: string[];
-  companies: string[];
-}
-export interface ExportBlockDto {
-  field: string;
-  suggestion: string;
-}
-export interface TailorResumeRequestDto {
-  profileId: string;
-  jobId?: string;
-  vacancy?: AdhocVacancyDto;
-  /**
-   * SummaryOptionID is the 034 summary-model choice for this run. Optional:
-   * absent means "use my stored default", which is what every caller written
-   * before the feature sends.
-   */
-  summaryOptionId?: string;
-}
-export interface AdhocVacancyDto {
-  company: string;
-  title: string;
-  text: string;
-}
-export interface ExportPdfRequestDto {
-  draftId: string;
 }

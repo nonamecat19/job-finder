@@ -36,6 +36,20 @@ export function useStartGenerationRun() {
   });
 }
 
+// T078: rerun is a plain mutation — the run/named sections flip to `running`
+// on the server, and the poll useGenerationRun already runs while
+// `state === 'running'` picks that up with no new polling mechanism (T076
+// leaves those sections/run `running` synchronously, before the background
+// half even starts).
+export function useRerunGenerationRun(runId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sections?: string[]) => api.generations.rerun(runId!, sections),
+    onSettled: () => qc.invalidateQueries({ queryKey: generations.get(runId) }),
+  });
+}
+
 // T072: the export is a plain mutation, not a poll loop — the POST either
 // comes back with the finished document or with the overflow report, and the
 // run query is invalidated so the workspace picks up the new export state.

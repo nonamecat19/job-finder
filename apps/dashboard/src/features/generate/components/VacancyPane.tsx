@@ -26,7 +26,19 @@ interface VacancyPaneProps {
   exportState?: GenerationExportDto;
   exportError?: string;
   warnings?: string[];
+  // T076/T078: rerun — absent until a run exists, same as onExport. Calling
+  // onRerun() with no argument reruns the whole run; passing section ids
+  // reruns exactly those (a `failed` section's per-section retry).
+  onRerun?: (sections?: string[]) => void;
+  rerunPending?: boolean;
+  failedSections?: { id: string; label: string }[];
 }
+
+// FR-021's warning, shown before every rerun regardless of scope — the
+// server preserves matched selections either way, but the ranking/ordering
+// itself is genuinely replaced and the user should know that before they ask
+// for it.
+const RERUN_WARNING = "Re-running replaces the AI's ordering for this section. Your checkbox choices, positions and edits carry over where the same content still exists. Continue?";
 
 // T021: company/title/vacancy text plus the two controls that carry over
 // from /tailor — grounding level and the 034 summary writer — reused via the
@@ -42,6 +54,9 @@ export default function VacancyPane({
   exportState,
   exportError,
   warnings,
+  onRerun,
+  rerunPending,
+  failedSections,
 }: VacancyPaneProps) {
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
@@ -128,6 +143,43 @@ export default function VacancyPane({
         </Button>
         {pending ? <Spinner label="starting generation…" /> : null}
       </div>
+
+      {onRerun ? (
+        <div className="mt-4 border-t border-subtle pt-3">
+          <SectionTitle>Re-run</SectionTitle>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              disabled={rerunPending}
+              onClick={() => {
+                if (window.confirm(RERUN_WARNING)) onRerun();
+              }}
+            >
+              Re-run whole resume
+            </Button>
+            {rerunPending ? <Spinner label="re-running…" /> : null}
+          </div>
+          {failedSections && failedSections.length > 0 ? (
+            <div className="mt-2 space-y-1" data-testid="failed-sections">
+              <p className="text-xs text-danger">These sections failed to generate:</p>
+              {failedSections.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-muted">{s.label}</span>
+                  <Button
+                    variant="secondary"
+                    disabled={rerunPending}
+                    onClick={() => {
+                      if (window.confirm(RERUN_WARNING)) onRerun([s.id]);
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {onExport ? (
         <div className="mt-4 border-t border-subtle pt-3">

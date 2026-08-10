@@ -432,13 +432,30 @@ func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, 
 // recreate, the same pattern a section rerun uses); a fallback section is
 // left untouched and only has fallback_used recorded, per data-model.md §4's
 // state transition ("rejected twice -> ready (fallback_used = true)").
-func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, results []rankedSectionResult) error {
+//
+// oldBySection carries a section's pre-replacement items, keyed by section
+// id, so preserveMatchedSelections (T077) can carry a matched item's
+// selected/position/edited_text into its replacement. A plain run (not a
+// rerun) has nothing to preserve and passes nil — every lookup on a nil map
+// returns the zero value, so preserveMatchedSelections is a no-op identity
+// in that case.
+//
+// A section whose replacement items fail to persist is marked `failed` with
+// the error, rather than left silently emptied or silently stale (T081): the
+// delete already committed, so the old items are gone either way, and
+// `failed` is what tells the client the section needs the per-section retry
+// rather than showing an inexplicably-empty block. The caller folds the
+// returned anyFailed into the run's final state (`partial`, not `ready`).
+// A DeleteSectionItems failure, by contrast, leaves the section's existing
+// items completely untouched — nothing was lost, so the section keeps
+// whatever state it already had and is not counted as a failure.
+func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, results []rankedSectionResult, oldBySection map[pgtype.UUID][]domain.Item) (anyFailed bool) {
 	if len(results) == 0 {
-		return nil
+		return false
 	}
 	sections, err := s.q.ListSectionsByRun(ctx, runID)
 	if err != nil {
-		return err
+		return true
 	}
 	byEntryKey := make(map[string]sqlcgen.GenerationSection, len(sections))
 	for _, sec := range sections {
@@ -453,20 +470,104 @@ func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, re
 			continue
 		}
 		if r.items != nil {
+			items := preserveMatchedSelections(oldBySection[sec.ID], r.items)
 			if err := s.q.DeleteSectionItems(ctx, sec.ID); err != nil {
-				return err
+				// Nothing lost: the section's prior items are exactly as
+				// they were before this attempt. Leave its state alone.
+				continue
 			}
-			if err := s.persistWorkspaceItems(ctx, sec.ID, r.items); err != nil {
-				return err
+			if err := s.persistWorkspaceItems(ctx, sec.ID, items); err != nil {
+				anyFailed = true
+				msg := "ranking persistence failed: " + err.Error()
+				_ = s.q.SetSectionState(ctx, sqlcgen.SetSectionStateParams{ID: sec.ID, State: string(domain.SectionFailed), Error: &msg})
+				continue
 			}
 		}
 		if err := s.q.SetSectionState(ctx, sqlcgen.SetSectionStateParams{
 			ID: sec.ID, State: string(domain.SectionReady), FallbackUsed: r.fallbackUsed,
 		}); err != nil {
-			return err
+			anyFailed = true
 		}
 	}
-	return nil
+	return anyFailed
+}
+
+// preserveMatchedSelections is data-model.md §4's rerun rule: a profile item
+// is matched to its replacement by SourceIndex, an AI item by
+// domain.NormalizeText(SourceText); a matched item's Selected/Position and
+// (for an AI item) EditedText survive into the replacement. An old item with
+// no match in the new set is simply not carried forward — that is what
+// "re-running replaces the AI's ordering for this section" means (FR-021). A
+// new item with no match keeps the default state its seeder gave it.
+//
+// oldItems empty (nil, for a plain run with nothing to preserve, or a
+// section whose old items don't exist yet) makes this the identity function
+// on newItems.
+func preserveMatchedSelections(oldItems, newItems []domain.Item) []domain.Item {
+	if len(oldItems) == 0 {
+		return newItems
+	}
+	byIndex := make(map[int]domain.Item, len(oldItems))
+	byText := make(map[string]domain.Item, len(oldItems))
+	for _, old := range oldItems {
+		switch old.Origin {
+		case domain.OriginProfile:
+			if old.SourceIndex != nil {
+				byIndex[*old.SourceIndex] = old
+			}
+		case domain.OriginAI:
+			byText[domain.NormalizeText(old.SourceText)] = old
+		}
+	}
+
+	out := make([]domain.Item, len(newItems))
+	for i, it := range newItems {
+		var (
+			match domain.Item
+			ok    bool
+		)
+		switch it.Origin {
+		case domain.OriginProfile:
+			if it.SourceIndex != nil {
+				match, ok = byIndex[*it.SourceIndex]
+			}
+		case domain.OriginAI:
+			match, ok = byText[domain.NormalizeText(it.SourceText)]
+		}
+		if ok {
+			it.Selected = match.Selected
+			it.Position = match.Position
+			if it.Origin == domain.OriginAI {
+				it.EditedText = match.EditedText
+			}
+		}
+		out[i] = it
+	}
+	return out
+}
+
+// sqlcItemToDomain converts one persisted row into the domain.Item shape
+// preserveMatchedSelections matches against — the same conversion itemToDto
+// does, minus the DTO-only Edited/effective-text fields this caller doesn't
+// need.
+func sqlcItemToDomain(it sqlcgen.GenerationItem) domain.Item {
+	var sourceIndex *int
+	if it.SourceIndex != nil {
+		v := int(*it.SourceIndex)
+		sourceIndex = &v
+	}
+	return domain.Item{
+		ID:          dbutil.UUIDString(it.ID),
+		SectionID:   dbutil.UUIDString(it.SectionID),
+		Origin:      domain.ItemOrigin(it.Origin),
+		SourceIndex: sourceIndex,
+		SourceText:  it.SourceText,
+		EditedText:  it.EditedText,
+		Rank:        int(it.Rank),
+		Position:    int(it.Position),
+		Selected:    it.Selected,
+		Unavailable: it.Unavailable,
+	}
 }
 
 // applyRankedSkills replaces the skills section's master-order seed with the
@@ -478,7 +579,9 @@ func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, re
 // master and ordered within each group by the deterministic domain.RankSkills,
 // so the model's only influence on this section is which group comes first
 // and — through cfg.SkillsMaxGroups — which are pre-selected.
-func (s *Service) applyRankedSkills(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, groupOrder []int) error {
+// oldBySection is the same rerun-preservation input applyRankedSections
+// takes (T077); nil for a plain run.
+func (s *Service) applyRankedSkills(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, groupOrder []int, oldBySection map[pgtype.UUID][]domain.Item) error {
 	if len(groupOrder) == 0 {
 		return nil
 	}
@@ -494,10 +597,11 @@ func (s *Service) applyRankedSkills(ctx context.Context, runID pgtype.UUID, mast
 		if sec.Kind != string(domain.SectionKindSkills) {
 			continue
 		}
+		items := preserveMatchedSelections(oldBySection[sec.ID], domain.SeedSkillItems(groups, groupOrder, cfg.SkillsMaxGroups))
 		if err := s.q.DeleteSectionItems(ctx, sec.ID); err != nil {
 			return err
 		}
-		return s.persistWorkspaceItems(ctx, sec.ID, domain.SeedSkillItems(groups, groupOrder, cfg.SkillsMaxGroups))
+		return s.persistWorkspaceItems(ctx, sec.ID, items)
 	}
 	return nil
 }
@@ -562,18 +666,24 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		rec.Step(ctx, "ranking achievements", nil)
 	}
 	rankResults, skillOrder := rankExperienceSections(ctx, s.llm.Select, s.genModel, master, analysis, cfg)
-	if err := s.applyRankedSkills(ctx, rid, master, analysis, cfg, skillOrder); err != nil && rec != nil {
-		// Same posture as the experience ranking below: the master-order
-		// skills seed is already correct and stays in place.
-		rec.Step(ctx, "skills ranking persistence failed", map[string]any{"error": err.Error()})
-	}
-	if err := s.applyRankedSections(ctx, rid, rankResults); err != nil {
-		// Ranking persistence failing does not fail the run: the master-order
-		// seed StartGenerationRun already wrote is correct and stays in place
-		// (FR-010's fallback shape), so a run whose ranking step could not be
-		// applied still produces a usable, honest resume.
+	anyRankingFailed := false
+	if err := s.applyRankedSkills(ctx, rid, master, analysis, cfg, skillOrder, nil); err != nil {
+		anyRankingFailed = true
 		if rec != nil {
-			rec.Step(ctx, "ranking persistence failed", map[string]any{"error": err.Error()})
+			rec.Step(ctx, "skills ranking persistence failed", map[string]any{"error": err.Error()})
+		}
+	}
+	// A ranking persistence failure does not fail the whole run on its own
+	// (T081): a DeleteSectionItems failure leaves the master-order seed
+	// StartGenerationRun already wrote in place (FR-010's fallback shape),
+	// and a persistWorkspaceItems failure after a successful delete marks
+	// just that section `failed` — applyRankedSections's own doing — so the
+	// run reaches `partial` with every other section intact rather than
+	// discarding the whole thing.
+	if s.applyRankedSections(ctx, rid, rankResults, nil) {
+		anyRankingFailed = true
+		if rec != nil {
+			rec.Step(ctx, "ranking persistence failed for one or more sections", nil)
 		}
 	}
 
@@ -642,6 +752,9 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 
 	summarySectionID, hasSummarySection := s.summarySectionID(ctx, rid)
 	finalState := domain.RunReady
+	if anyRankingFailed {
+		finalState = domain.RunPartial
+	}
 	if summaryErr != nil {
 		finalState = domain.RunPartial
 		if hasSummarySection {
@@ -671,7 +784,7 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 	suggestWG.Wait()
 	if suggestErr == nil {
 		expItems, skillItems := buildSuggestionItems(suggestSet, master)
-		if err := s.persistSuggestions(ctx, rid, expItems, skillItems); err != nil && rec != nil {
+		if err := s.persistSuggestions(ctx, rid, expItems, skillItems, nil, nil); err != nil && rec != nil {
 			rec.Step(ctx, "suggestion persistence failed", map[string]any{"error": err.Error()})
 		}
 	} else if rec != nil {
@@ -752,7 +865,8 @@ func (s *Service) GetGenerationWorkspace(ctx context.Context, runID string) (dto
 	if err != nil {
 		return dto.GenerationRunDto{}, err
 	}
-	return s.runToDto(ctx, run, sections, items), nil
+	changed := s.syncMasterStaleness(ctx, run, sections, items)
+	return s.runToDto(run, sections, items, changed), nil
 }
 
 // ListGenerationRuns is `GET /v1/generations?jobId=&limit=`: recent runs for
@@ -800,7 +914,8 @@ func (s *Service) ListGenerationRuns(ctx context.Context, profileID string, jobI
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, s.runToDto(ctx, run, sections, items))
+		changed := s.syncMasterStaleness(ctx, run, sections, items)
+		out = append(out, s.runToDto(run, sections, items, changed))
 	}
 	return out, nil
 }
@@ -818,7 +933,7 @@ func (s *Service) DeleteGenerationRun(ctx context.Context, runID string) error {
 	return s.q.DeleteRun(ctx, rid)
 }
 
-func (s *Service) runToDto(ctx context.Context, run sqlcgen.GenerationRun, sections []sqlcgen.GenerationSection, items []sqlcgen.GenerationItem) dto.GenerationRunDto {
+func (s *Service) runToDto(run sqlcgen.GenerationRun, sections []sqlcgen.GenerationSection, items []sqlcgen.GenerationItem, masterChanged bool) dto.GenerationRunDto {
 	itemsBySection := make(map[pgtype.UUID][]sqlcgen.GenerationItem, len(sections))
 	for _, it := range items {
 		itemsBySection[it.SectionID] = append(itemsBySection[it.SectionID], it)
@@ -849,7 +964,7 @@ func (s *Service) runToDto(ctx context.Context, run sqlcgen.GenerationRun, secti
 		GroundingLevel:     run.GroundingLevel,
 		SummaryOptionID:    run.SummaryOptionID,
 		SummarySubstituted: false,
-		MasterChanged:      s.masterChanged(ctx, run),
+		MasterChanged:      masterChanged,
 		ShapeConfig:        shapeConfigToDto(cfg),
 		Export:             exportDtoFromRun(run),
 		Sections:           sectionDtos,
@@ -858,11 +973,19 @@ func (s *Service) runToDto(ctx context.Context, run sqlcgen.GenerationRun, secti
 	}
 }
 
-// masterChanged is FR-022: the run's snapshot hash compared against the
+// syncMasterStaleness is FR-022: the run's snapshot hash compared against the
 // profile's current master content hash. Best-effort — a profile that no
 // longer resolves (deleted, config cleared) reports unchanged rather than
 // failing the whole workspace response over a staleness check.
-func (s *Service) masterChanged(ctx context.Context, run sqlcgen.GenerationRun) bool {
+//
+// When the master has changed, it also marks unavailable (MarkItemsUnavailable)
+// every profile-origin item whose source_index no longer resolves against the
+// current master — a shrunk highlight list, a renamed or removed experience
+// entry, a shrunk skills group list — and updates `items` in place so the
+// caller's response reflects the mark without a second round trip. An item is
+// never deleted for this: data-model.md §4 requires it stay visible, badged
+// unavailable, not silently dropped.
+func (s *Service) syncMasterStaleness(ctx context.Context, run sqlcgen.GenerationRun, sections []sqlcgen.GenerationSection, items []sqlcgen.GenerationItem) bool {
 	prof, err := s.profiles.Get(ctx, dbutil.UUIDString(run.ProfileID))
 	if err != nil || prof.RendercvConfig == nil {
 		return false
@@ -875,7 +998,51 @@ func (s *Service) masterChanged(ctx context.Context, run sqlcgen.GenerationRun) 
 	if err != nil {
 		return false
 	}
-	return hash != run.MasterContentHash
+	if hash == run.MasterContentHash {
+		return false
+	}
+
+	availByCompany := make(map[string]int)
+	for _, e := range domain.AsSliceOfMaps(domain.CvSections(master)["experience"]) {
+		availByCompany[domain.StringField(e, "company")] = len(domain.StringSliceField(e, "highlights"))
+	}
+	skillGroupCount := len(domain.AsSliceOfMaps(domain.CvSections(master)["skills"]))
+
+	sectionByID := make(map[pgtype.UUID]sqlcgen.GenerationSection, len(sections))
+	for _, sec := range sections {
+		sectionByID[sec.ID] = sec
+	}
+
+	var toMark []pgtype.UUID
+	for i, it := range items {
+		if it.Origin != string(domain.OriginProfile) || it.Unavailable || it.SourceIndex == nil {
+			continue
+		}
+		sec, ok := sectionByID[it.SectionID]
+		if !ok {
+			continue
+		}
+		var avail int
+		switch domain.SectionKind(sec.Kind) {
+		case domain.SectionKindExperience:
+			if sec.EntryKey == nil {
+				continue
+			}
+			avail = availByCompany[*sec.EntryKey]
+		case domain.SectionKindSkills:
+			avail = skillGroupCount
+		default:
+			continue
+		}
+		if int(*it.SourceIndex) >= avail {
+			toMark = append(toMark, it.ID)
+			items[i].Unavailable = true
+		}
+	}
+	if len(toMark) > 0 {
+		_ = s.q.MarkItemsUnavailable(ctx, toMark)
+	}
+	return true
 }
 
 func itemToDto(sectionKind string, it sqlcgen.GenerationItem) dto.GenerationItemDto {

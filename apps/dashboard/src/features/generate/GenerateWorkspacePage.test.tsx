@@ -10,6 +10,7 @@ vi.mock('./hooks', () => ({
   useToggleGenerationItem: vi.fn(),
   useReorderGenerationSection: vi.fn(),
   useExportGenerationRun: vi.fn(),
+  useRerunGenerationRun: vi.fn(),
 }));
 vi.mock('../profile/hooks', () => ({
   useProfiles: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('../tailor/hooks', () => ({
 import {
   useExportGenerationRun,
   useGenerationRun,
+  useRerunGenerationRun,
   useReorderGenerationSection,
   useStartGenerationRun,
   useToggleGenerationItem,
@@ -33,6 +35,7 @@ const mockedUseStartGenerationRun = vi.mocked(useStartGenerationRun);
 const mockedUseToggleGenerationItem = vi.mocked(useToggleGenerationItem);
 const mockedUseReorderGenerationSection = vi.mocked(useReorderGenerationSection);
 const mockedUseExportGenerationRun = vi.mocked(useExportGenerationRun);
+const mockedUseRerunGenerationRun = vi.mocked(useRerunGenerationRun);
 const mockedUseProfiles = vi.mocked(useProfiles);
 const mockedUseSummaryModel = vi.mocked(useSummaryModel);
 
@@ -168,6 +171,11 @@ function setup() {
     isPending: false,
     isError: false,
     data: undefined,
+  } as any);
+  mockedUseRerunGenerationRun.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
   } as any);
 }
 

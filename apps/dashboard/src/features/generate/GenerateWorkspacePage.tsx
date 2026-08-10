@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import type { GenerationRunDto, GenerationSectionDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { EmptyState, ErrorState, LoadingRegion, SkeletonBlock, Spinner, Surface } from '../../components/ui';
+import { Button, EmptyState, ErrorState, LoadingRegion, SkeletonBlock, Spinner, Surface } from '../../components/ui';
 import { useProfiles } from '../profile/hooks';
 import SkillsBlock from './components/SkillsBlock';
 import SummaryBlock from './components/SummaryBlock';
@@ -10,6 +10,7 @@ import WorkEntryBlock from './components/WorkEntryBlock';
 import {
   useExportGenerationRun,
   useGenerationRun,
+  useRerunGenerationRun,
   useReorderGenerationSection,
   useStartGenerationRun,
   useToggleGenerationItem,
@@ -30,6 +31,7 @@ export default function GenerateWorkspacePage() {
   const toggleItem = useToggleGenerationItem(runId);
   const reorderSection = useReorderGenerationSection(runId);
   const exportRun = useExportGenerationRun(runId);
+  const rerunRun = useRerunGenerationRun(runId);
 
   const handleGenerate = (input: VacancyPaneInput) => {
     if (!profileId) return;
@@ -63,6 +65,7 @@ export default function GenerateWorkspacePage() {
             onToggle={(itemId, selected) => toggleItem.mutate({ itemId, selected })}
             onEditText={(itemId, text) => toggleItem.mutate({ itemId, text })}
             onReorder={(sectionId, itemIds) => reorderSection.mutate({ sectionId, itemIds })}
+            onRerun={() => rerunRun.mutate(undefined)}
           />
         </Surface>
 
@@ -77,14 +80,32 @@ export default function GenerateWorkspacePage() {
             exportState={exportRun.data ?? run?.export}
             exportError={exportRun.isError ? (exportRun.error as Error).message : undefined}
             warnings={run ? exportWarnings(run) : undefined}
+            onRerun={run ? (sections) => rerunRun.mutate(sections) : undefined}
+            rerunPending={rerunRun.isPending}
+            failedSections={run ? failedSections(run) : undefined}
           />
           {startRun.isError ? (
             <p className="mt-2 text-sm text-danger">{(startRun.error as Error).message}</p>
+          ) : null}
+          {rerunRun.isError ? (
+            <p className="mt-2 text-sm text-danger">{(rerunRun.error as Error).message}</p>
           ) : null}
         </div>
       </div>
     </div>
   );
+}
+
+// failedSections is T078's per-section-retry input: every `failed` section,
+// labelled for the control ("Acme Inc." for an experience block, "Summary" /
+// "Skills" for the singleton ones).
+function failedSections(run: GenerationRunDto): { id: string; label: string }[] {
+  return run.sections
+    .filter((s) => s.state === 'failed')
+    .map((s) => ({
+      id: s.id,
+      label: s.entryKey ?? s.entryLabel ?? (s.kind === 'summary' ? 'Summary' : s.kind === 'skills' ? 'Skills' : s.kind),
+    }));
 }
 
 // exportWarnings is T073: what the user should know before they export, said
@@ -130,6 +151,7 @@ function WorkspaceLeftPane({
   onToggle,
   onEditText,
   onReorder,
+  onRerun,
 }: {
   runId: string | undefined;
   run: GenerationRunDto | undefined;
@@ -138,6 +160,7 @@ function WorkspaceLeftPane({
   onToggle: (itemId: string, selected: boolean) => void;
   onEditText: (itemId: string, text: string) => void;
   onReorder: (sectionId: string, itemIds: string[]) => void;
+  onRerun: () => void;
 }) {
   if (!runId) {
     return <EmptyState>Fill in a vacancy on the right and generate a resume to see it here.</EmptyState>;
@@ -172,6 +195,25 @@ function WorkspaceLeftPane({
 
   return (
     <div className="space-y-4" data-testid="workspace-sections">
+      {run.masterChanged ? (
+        <div
+          className="flex items-center justify-between gap-2 rounded-md border border-warning/30 bg-warning-soft p-2 text-xs text-warning"
+          data-testid="master-changed-banner"
+        >
+          <span>
+            Your profile has changed since this run started. Selections that no longer match your profile are shown
+            as unavailable below. Re-run to pick up the current profile.
+          </span>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (window.confirm("Re-running replaces the AI's ordering for every section. Continue?")) onRerun();
+            }}
+          >
+            Re-run
+          </Button>
+        </div>
+      ) : null}
       {run.state === 'partial' ? (
         <p className="rounded-md border border-warning/30 bg-warning-soft p-2 text-xs text-warning">
           Some sections did not finish generating. Completed sections are shown below.

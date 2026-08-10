@@ -27,6 +27,9 @@ type WorkspaceGenerator interface {
 	// render-once export and its idempotent short-poll.
 	ExportGenerationRun(ctx context.Context, runID string) (dto.GenerationExportDto, error)
 	GetGenerationExport(ctx context.Context, runID string) (dto.GenerationExportDto, error)
+	// RerunGenerationRun is Phase 8 (T076): whole-run or named-section rerun,
+	// in place on the same run id.
+	RerunGenerationRun(ctx context.Context, runID string, req dto.RerunGenerationRequestDto) (runID2, activityID string, err error)
 }
 
 type GenerationsHandler struct {
@@ -40,6 +43,7 @@ func (h *GenerationsHandler) Mount(r chi.Router) {
 	r.Delete("/generations/{runId}", h.remove)
 	r.Patch("/generations/{runId}/items/{itemId}", h.patchItem)
 	r.Patch("/generations/{runId}/sections/{sectionId}/order", h.reorderSection)
+	r.Post("/generations/{runId}/rerun", h.rerun)
 	r.Post("/generations/{runId}/export", h.export)
 	r.Get("/generations/{runId}/export", h.exportStatus)
 }
@@ -139,6 +143,26 @@ func (h *GenerationsHandler) exportStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// rerun is `POST /v1/generations/{runId}/rerun` (rest-api.md): `202` with
+// the same run id. The body is optional — an empty or absent body reruns the
+// whole run, matching RerunGenerationRequestDto's `omitempty` Sections field.
+func (h *GenerationsHandler) rerun(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "runId")
+	var body dto.RerunGenerationRequestDto
+	if r.ContentLength != 0 {
+		if err := httpx.DecodeJSON(r, &body); err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+	}
+	newRunID, activityID, err := h.Workspace.RerunGenerationRun(r.Context(), runID, body)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]string{"runId": newRunID, "activityId": activityID})
 }
 
 func (h *GenerationsHandler) reorderSection(w http.ResponseWriter, r *http.Request) {

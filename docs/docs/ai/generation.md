@@ -171,6 +171,47 @@ from pasted vacancy text, with no `Job` row involved — migration
 This is the "I found this job elsewhere" path, and it is why `Documents` is a separate
 handler from `Jobs`.
 
+## The workspace path (042)
+
+`POST /v1/generations` starts a second, newer pipeline alongside the job-scoped path above:
+the **resume generation workspace**, `internal/generation/application/workspace.go` and
+`workspace_rerun.go`. It persists a `generation_runs` / `generation_sections` /
+`generation_items` row set (migration `00042`) that the user reviews and edits directly,
+rather than a single tailored document the model hands back whole.
+
+The workspace makes the same "the model never rewords a real bullet" rule true by a
+different, stronger mechanism than the job-scoped path's `{sourceIndex, rephrased}` check:
+
+- **Ranking by index, not rewording.** The selection stage's response
+  (`domain.RankedSelection`) carries `[]int` only — no `rephrased`, `summary`, `suggestions`
+  or `drop` field of any kind. A profile-sourced item's displayed and exported text is
+  therefore byte-identical to the master's, by construction rather than by a post-hoc
+  grounding check. `K = min(2N, A)` candidates are ranked per entry; the top `min(N, A)`
+  are pre-selected; the rest are shown, unselected, below them. A ranking that omits or
+  duplicates an index is rejected, retried once, and — if still invalid — falls back to
+  master order for that entry (`fallback_used`), never to failing the run.
+- **A separate suggestion channel.** AI-authored content (a bullet the model thinks belongs
+  but isn't in the profile, an extra skill) comes from its own LLM call
+  (`domain.SuggestionSet`, `rankcv_llm.go`'s `suggestContent`), routed through the same
+  `generation-select` task key. Every suggestion is created `origin='ai'`, `selected=false`
+  — off by default — and badged distinctly from a profile-sourced item so the two are never
+  visually confused. A suggestion that merely restates a master bullet is suppressed
+  deterministically (`domain.SuppressDuplicateSuggestions`) before it is ever persisted.
+- **Render-once export.** `POST /v1/generations/{runId}/export` assembles a `RendercvMaster`
+  from exactly the selected items in their displayed order (`domain.Assemble`, no model
+  call), renders it once, and — if it still overflows the page target after one
+  layout-only `CompactDesign` retry — reports the overflow with named, worst-ranked-first
+  drop candidates instead of silently trimming or re-rendering with different content.
+  `expandContent` and `TrimHighlights` never run on this path.
+- **Rerun in place.** `POST /v1/generations/{runId}/rerun` replaces a named section's (or
+  the whole run's) items in place, on the same run id. A profile item is matched to its
+  replacement by `source_index`, an AI item by normalised `source_text`; a match keeps its
+  `selected`/`position`/`edited_text`, so re-ranking one section does not silently discard
+  the user's decisions on the others.
+
+`POST /documents/tailor` and the rest of this page's job-scoped path are unaffected — they
+keep today's `{sourceIndex, rephrased}` semantics for as long as that endpoint exists.
+
 ## Automatic generation
 
 When `aifeature` has `resume` or `cover_letter` enabled and a `MatchResult` scores at or

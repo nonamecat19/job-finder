@@ -104,6 +104,15 @@ type Section struct {
 	Items        []Item
 }
 
+// NormalizeText exports grounding.go's norm() for callers outside this
+// package that need the same normalisation basis — currently the rerun
+// selection-preservation match (data-model.md §4: an AI item is matched to
+// its replacement "by normalised source_text"), which must agree with R6's
+// suppression check's idea of "the same text".
+func NormalizeText(s string) string {
+	return norm(s)
+}
+
 // ContentHash is a stable digest of a master resume, used for FR-022
 // staleness detection: a run's snapshot hash compared against the profile's
 // current hash. encoding/json sorts map keys on marshal, so this is

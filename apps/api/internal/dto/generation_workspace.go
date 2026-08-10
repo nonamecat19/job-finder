@@ -21,6 +21,15 @@ type GenerationRunDto struct {
 	UpdatedAt     string                 `json:"updatedAt"`
 }
 
+// AdhocVacancyDto is a pasted, ad-hoc vacancy (no `Job` row) — moved here
+// from the now-deleted dto/tailoring.go (T083): 020's tailoring surface
+// never had a reader, but StartGenerationRequestDto's `vacancy` field does.
+type AdhocVacancyDto struct {
+	Company string `json:"company"`
+	Title   string `json:"title"`
+	Text    string `json:"text"`
+}
+
 // GenerationVacancyDto is the vacancy a run was made against. Text is
 // intentionally omitted from the list/get response summary fields where the
 // full run body isn't needed; the run detail response embeds this struct
