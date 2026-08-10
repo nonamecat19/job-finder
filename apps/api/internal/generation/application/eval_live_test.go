@@ -194,6 +194,15 @@ func recordCase(t *testing.T, gw llm.Provider, c EvalCase) {
 		t.Fatalf("case %q: page fitting failed, nothing recorded: %v", c.Name, rerr)
 	}
 
+	// The ranking stage (042 T045/T046/T047): a second request against the
+	// same `generation-select` provider, over the same replay/record
+	// mechanism as the five stages above — runCase makes this identical call
+	// in the deterministic gate, so recording it here is what lets that call
+	// replay instead of missing.
+	if _, rerr := rankContent(t.Context(), providers["generation-select"], "", c.Master, analysis, c.Cfg, nil); rerr != nil {
+		t.Fatalf("case %q: ranking failed, nothing recorded: %v", c.Name, rerr)
+	}
+
 	dir := caseReplayDir(c.Name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", dir, err)

@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rendercv/rendercv/refs/tags/v2.8/schema.json
+# Synthetic fixture, closed date ranges only (038 corpus rule: no `present`).
+cv:
+  name: Alex Rivera
+  headline:
+  location: Austin, TX
+  email: alex.rivera@example.com
+  photo:
+  phone:
+  website:
+  social_networks:
+    - network: LinkedIn
+      username: alexrivera-synthetic
+    - network: GitHub
+      username: alexrivera-synthetic
+  custom_connections:
+  sections:
+    summary:
+      - Platform engineer with a decade building deployment tooling for backend teams.
+    experience:
+      - company: Northwind Systems
+        position: Staff Platform Engineer
+        date:
+        start_date: 2015-01
+        end_date: 2024-12
+        location: Austin, TX
+        summary:
+        highlights:
+          - Built the internal deployment pipeline used by every backend team
+          - Reduced average deploy time from 40 minutes to 6 minutes
+          - Migrated the fleet from a single datacenter to three regions
+          - Wrote the incident response runbook adopted company-wide
+          - Cut infrastructure spend by 30 percent through rightsizing
+          - Introduced canary releases for the payments service
+          - Mentored four engineers who were later promoted to senior
+          - Led the on-call rotation redesign that halved after-hours pages
+          - Automated certificate rotation across every production cluster
+          - Replaced the legacy config system with a typed, validated one
+          - Ran the postmortem process for every Sev1 incident in 2021
+          - Introduced load testing as a required pre-release gate
+          - Designed the multi-region failover drill run twice a year
+          - Built the internal CLI used to provision new services
+          - Standardized logging across 40 previously inconsistent services
+          - Negotiated the vendor contract that cut hosting costs 18 percent
+          - Wrote the onboarding guide new platform hires still use
+          - Set up the dashboards the leadership team reviews weekly
+          - Ran a cross-team working group on dependency upgrades
+          - Coordinated the database migration with zero downtime
+    skills:
+      - label: Infrastructure
+        details: Kubernetes, Terraform, AWS, Docker
+      - label: Languages
+        details: Go, Python, Bash
+      - label: Practices
+        details: On-call, incident response, capacity planning
+design:
+  theme: classic
+locale:
+  language: english
+settings:
+  current_date: today
+  render_command:
+    output_folder: rendercv_output
+    design:
+    locale:
+    typst_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.typ
+    pdf_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.pdf
+    markdown_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.md
+    html_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.html
+    png_path: OUTPUT_FOLDER/NAME_IN_SNAKE_CASE_CV.png
+    dont_generate_markdown: false
+    dont_generate_html: false
+    dont_generate_typst: false
+    dont_generate_pdf: false
+    dont_generate_png: false
+  bold_keywords: []
+  pdf_title: NAME - CV

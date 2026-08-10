@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:006945b250f19f5e08667bcc8c35f000369a1e796d715b8f57c8f12ac85a6b66",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write the professional summary for a tailored resume.  VACANCY REQUIRED SKILLS: building and operating deployment pipelines, reducing deploy time, reducing inci",
+    "prompt_len": 1180,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"9+ years of experience in infrastructure engineering, specializing in building and operating deployment pipelines using Kubernetes and Terraform in production. Skilled in infrastructure practices that reduce deploy time and lower incident frequency, applying sound engineering practices across the deployment lifecycle.\"}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-summary"
+}

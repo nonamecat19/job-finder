@@ -1,0 +1,17 @@
+Staff Platform Engineer — Deployment Systems
+
+We need a staff-level platform engineer to own our deployment pipeline and on-call
+practices as we scale past our current footprint.
+
+Required:
+- Deep experience building and operating deployment pipelines
+- Track record reducing deploy time and incident frequency
+- Kubernetes and Terraform in production
+- Experience mentoring engineers toward seniority
+
+Nice to have:
+- Multi-region failover experience
+- Cost optimization work on cloud infrastructure
+- Experience running incident postmortems
+
+You will report to the VP of Engineering and partner closely with every backend team.

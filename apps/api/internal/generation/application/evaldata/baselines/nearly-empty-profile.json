@@ -1,14 +1,15 @@
 {
   "case": "nearly-empty-profile",
-  "scorer_set_version": 2,
+  "scorer_set_version": 3,
   "recorded_at": "2026-08-10",
-  "reason": "scorer set v2: added duplicate_provenance, wrapping the new VerifyHighlightProvenance check; fixtures re-recorded for the 067903f select prompt/schema",
+  "reason": "042 T045/T047: add ranking_violations scorer (ScorerSetVersion 2 -\u003e 3), delegating to domain.VerifyRanking over the ranking stage's new RankedSelection response",
   "scores": {
     "bullet_shortfalls": 0,
     "duplicate_provenance": 0,
     "grounding_violations": 0,
     "highlight_drift": 0,
     "nice_to_have_retention": 1,
+    "ranking_violations": 0,
     "required_skills_missing": 0,
     "structural_violations": 0
   }

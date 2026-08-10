@@ -2,6 +2,7 @@ package application
 
 import (
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/job-finder/api/internal/generation/domain"
@@ -24,7 +25,7 @@ import (
 // A baseline recorded under a different version is not comparable: the delta
 // would be measured across two instruments and read as a quality change. The
 // comparator refuses rather than subtracting.
-const ScorerSetVersion = 2
+const ScorerSetVersion = 3
 
 // Direction says which way is worse, so the comparator never has to infer
 // whether 3 → 5 is good.
@@ -55,6 +56,12 @@ type scoreInput struct {
 	// report is one VerifyCompleteness per run, shared by the three scorers
 	// that read it so the verifier runs once.
 	report domain.CompletenessReport
+	// ranking is the ranking stage's raw response for this run (T045, 042).
+	// Unlike every other field here it is not read off `result` — a rejected
+	// ranking never reaches the document, only the fallback does — so this is
+	// the one place the corpus can see the response BEFORE VerifyRanking (and
+	// StartRun's retry/fallback) act on it.
+	ranking domain.RankedSelection
 }
 
 // Scorer is one measurement over a run.
@@ -146,6 +153,41 @@ var scorers = []Scorer{
 			return float64(len(in.report.BulletShortfalls))
 		},
 	},
+	{
+		Name:      "ranking_violations",
+		Direction: LowerIsBetter,
+		Score: func(in scoreInput) float64 {
+			return rankingViolationsTotal(in.master, in.cfg, in.ranking)
+		},
+	},
+}
+
+// rankingViolationsTotal sums domain.VerifyRanking's violations across every
+// master experience entry, matching a RankedSelection response's per-entry
+// ranking by company name (042 T045). The company match is the only new
+// logic here — everything that decides whether a ranking is valid is
+// domain.VerifyRanking itself, called once per entry exactly as
+// rankExperienceSections (workspace.go) calls it in production.
+func rankingViolationsTotal(master domain.RendercvMaster, cfg domain.ShapeConfig, sel domain.RankedSelection) float64 {
+	total := 0
+	for _, e := range domain.AsSliceOfMaps(domain.CvSections(master)["experience"]) {
+		company := domain.StringField(e, "company")
+		available := len(domain.StringSliceField(e, "highlights"))
+		// Containment, not equality — matching rankExperienceSections'
+		// findRanking (workspace.go): a model that echoes the whole "company
+		// (position) | location" header line back still names the right
+		// entry.
+		target := strings.ToLower(strings.TrimSpace(company))
+		var ranking []int
+		for _, re := range sel.Experience {
+			if strings.Contains(strings.ToLower(strings.TrimSpace(re.Company)), target) {
+				ranking = re.Ranking
+				break
+			}
+		}
+		total += len(domain.VerifyRanking(available, cfg.ExperienceBulletsMin, ranking))
+	}
+	return float64(total)
 }
 
 // overlappingScorers declares pairs that move on the same defect (FR-027).
@@ -190,13 +232,14 @@ func scorerNames() []string {
 // compared against a run with seven, and the missing scorer would read as
 // "unchanged" rather than "never measured".
 func TestScorerSetVersionMatchesTheSet(t *testing.T) {
-	const versionAtWhichThisWasWritten = 2
+	const versionAtWhichThisWasWritten = 3
 	wantNames := []string{
 		"bullet_shortfalls",
 		"duplicate_provenance",
 		"grounding_violations",
 		"highlight_drift",
 		"nice_to_have_retention",
+		"ranking_violations",
 		"required_skills_missing",
 		"structural_violations",
 	}
@@ -248,6 +291,14 @@ func scoringFixture() (master, merged domain.RendercvMaster, analysis domain.Vac
 	return build(), build(), analysis, cfg
 }
 
+// healthyRanking is a valid ranking response for scoringFixture's single
+// "Acme" entry: K = min(2*2, 2) = 2, so both of its bullets, in any order.
+func healthyRanking() domain.RankedSelection {
+	return domain.RankedSelection{
+		Experience: []domain.RankedExperience{{Company: "Acme", Ranking: []int{0, 1}}},
+	}
+}
+
 func baseScoreInput() scoreInput {
 	master, merged, analysis, cfg := scoringFixture()
 	return scoreInput{
@@ -256,6 +307,7 @@ func baseScoreInput() scoreInput {
 		analysis: analysis,
 		cfg:      cfg,
 		level:    domain.GroundingModerate,
+		ranking:  healthyRanking(),
 	}
 }
 
@@ -292,6 +344,9 @@ func TestScorerDelegationIsExact(t *testing.T) {
 	for _, m := range mutatedDocuments() {
 		in := baseScoreInput()
 		in.result = m.doc
+		if m.ranking != nil {
+			in.ranking = *m.ranking
+		}
 		inputs = append(inputs, in)
 	}
 
@@ -307,6 +362,7 @@ func TestScorerDelegationIsExact(t *testing.T) {
 			"required_skills_missing": float64(len(in.report.RequiredMissing)),
 			"nice_to_have_retention":  in.report.NiceToHaveRetained,
 			"bullet_shortfalls":       float64(len(in.report.BulletShortfalls)),
+			"ranking_violations":      rankingViolationsTotal(in.master, in.cfg, in.ranking),
 		}
 
 		for name, wantVal := range want {
@@ -329,6 +385,12 @@ type mutation struct {
 	name        string
 	doc         domain.RendercvMaster
 	worseScorer string
+	// ranking overrides scoreInput.ranking for this mutation. Every other
+	// scorer's defect lives entirely in `doc`; ranking_violations' does not —
+	// a rejected ranking never reaches the document — so this is the one
+	// mutation that needs a second axis. nil means "leave baseScoreInput's
+	// healthy ranking as-is".
+	ranking *domain.RankedSelection
 }
 
 // mutatedDocuments injects known defects into a copy of a healthy document.
@@ -401,13 +463,22 @@ func mutatedDocuments() []mutation {
 		return d
 	}()
 
+	// badRanking duplicates an index — one of the three VerifyRanking
+	// violations — so the ranking-stage response, not the merged document,
+	// carries this defect.
+	badRanking := domain.RankedSelection{
+		Experience: []domain.RankedExperience{{Company: "Acme", Ranking: []int{0, 0}}},
+	}
+	_, healthyDoc, _, _ := scoringFixture()
+
 	return []mutation{
-		{"a company absent from master", fabricatedCompany, "grounding_violations"},
-		{"one master bullet rendered as two accomplishments", oneBulletTwice, "duplicate_provenance"},
-		{"a highlight sharing no words with any master bullet", driftedHighlight, "highlight_drift"},
-		{"highlights stripped below ExperienceBulletsMin", strippedBullets, "bullet_shortfalls"},
-		{"a required skill removed", removedRequiredSkill, "required_skills_missing"},
-		{"a nice-to-have skill dropped", droppedNiceToHave, "nice_to_have_retention"},
+		{"a company absent from master", fabricatedCompany, "grounding_violations", nil},
+		{"one master bullet rendered as two accomplishments", oneBulletTwice, "duplicate_provenance", nil},
+		{"a highlight sharing no words with any master bullet", driftedHighlight, "highlight_drift", nil},
+		{"highlights stripped below ExperienceBulletsMin", strippedBullets, "bullet_shortfalls", nil},
+		{"a required skill removed", removedRequiredSkill, "required_skills_missing", nil},
+		{"a nice-to-have skill dropped", droppedNiceToHave, "nice_to_have_retention", nil},
+		{"a ranking response with a duplicated index", healthyDoc, "ranking_violations", &badRanking},
 	}
 }
 
@@ -425,6 +496,9 @@ func TestScorersDetectInjectedDefects(t *testing.T) {
 		t.Run(m.name, func(t *testing.T) {
 			in := baseScoreInput()
 			in.result = m.doc
+			if m.ranking != nil {
+				in.ranking = *m.ranking
+			}
 			got := scoreAll(in)
 
 			s := got[m.worseScorer]

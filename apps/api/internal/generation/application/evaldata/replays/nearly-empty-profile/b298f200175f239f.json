@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:b298f200175f239f9087425ab5bf89c404204e1cdf177a074099993644f39c50",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, rank the candidate's EXISTING resume content by relevance. You are ordering the candidate's own material, not writing anything new.",
+    "prompt_len": 2797,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 1294,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Small Studio\",\n      \"ranking\": [\n        0,\n        1\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skills\": {\n    \"groupOrder\": [\n      0,\n      1\n    ]\n  }\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

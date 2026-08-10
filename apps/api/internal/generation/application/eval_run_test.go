@@ -27,6 +27,12 @@ type evalRun struct {
 	// that failed for want of a fixture is distinguishable from one that failed
 	// on the pipeline's own terms.
 	misses int
+	// ranking is the ranking stage's raw response (T045/T046, 042): a single
+	// rankContent call against the same replayed `generation-select` provider
+	// selectContent used, so the corpus needs a second fixture per case for
+	// this request — recorded the same way every other fixture is
+	// (-eval.record).
+	ranking domain.RankedSelection
 }
 
 // stubRenderDeps builds render dependencies that need no PDF toolchain.
@@ -100,6 +106,20 @@ func runCase(t *testing.T, c EvalCase) evalRun {
 		}
 	}
 
+	// The ranking stage (042 T045/T046): a single call over the same replayed
+	// `generation-select` provider selectContent used above, so a request-hash
+	// miss here fails the case exactly the way any other stage's miss does —
+	// loudly, naming the re-record command — rather than silently skipping the
+	// ranking_violations scorer.
+	if run.err == nil {
+		ranked, rerr := rankContent(context.Background(), sel, "", c.Master, analysis, c.Cfg, nil)
+		if rerr != nil {
+			run.err = fmt.Errorf("ranking: %w", rerr)
+		} else {
+			run.ranking = ranked
+		}
+	}
+
 	for _, p := range []*ReplayProvider{analyze, sel, premium, summary, cover} {
 		run.misses += p.missCount()
 	}
@@ -114,5 +134,6 @@ func scoreRun(c EvalCase, r evalRun) map[string]Score {
 		cfg:      c.Cfg,
 		level:    c.Level,
 		runErr:   r.err,
+		ranking:  r.ranking,
 	})
 }

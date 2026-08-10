@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:c94284f425b84149f37610631a290c1e628facaa225fee2d5614eaaa3c5a7eec",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "Given this vacancy analysis, rank the candidate's EXISTING resume content by relevance. You are ordering the candidate's own material, not writing anything new.",
+    "prompt_len": 5033,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 1294,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Nexus AI (Co-Founder \u0026 CTO) | San Francisco, CA\",\n      \"ranking\": [\n        0,\n        3,\n        2,\n        1\n      ]\n    },\n    {\n      \"company\": \"NVIDIA Research (Research Intern) | Santa Clara, CA\",\n      \"ranking\": [\n        0,\n        1\n      ]\n    },\n    {\n      \"company\": \"Google DeepMind (Research Intern) | London, UK\",\n      \"ranking\": [\n        0,\n        1\n      ]\n    },\n    {\n      \"company\": \"Apple ML Research (Research Intern) | Cupertino, CA\",\n      \"ranking\": [\n        1,\n        0\n      ]\n    },\n    {\n      \"company\": \"Microsoft Research (Research Intern) | Redmond, WA\",\n      \"ranking\": [\n        0,\n        1\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skills\": {\n    \"groupOrder\": [\n      0,\n      1,\n      2,\n      3\n    ]\n  }\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-select"
+}

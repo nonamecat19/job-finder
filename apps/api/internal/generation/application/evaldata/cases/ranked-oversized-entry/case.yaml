@@ -1,0 +1,17 @@
+name: ranked-oversized-entry
+why: >
+  A single experience entry with far more bullets than the ranking stage can be asked to
+  rank — 20 available against a target of 3, so K = min(2*3, 20) = 6. This is where the
+  "rank up to 2N and reject an omission" rule (research.md R2) would silently break if K
+  were computed as a fixed cap instead of min(2N, A): a naive implementation would either
+  demand a full 20-item permutation (an unbounded, expensive prompt) or truncate the
+  candidate list to a hardcoded ceiling and drop bullets the ranking stage never got a
+  chance to consider. The baseline asserts K distinct in-range indices and zero
+  ranking_violations, which fails the moment either failure mode returns.
+grounding_level: moderate
+shape:
+  experience_bullets_min: 3
+  experience_bullets_max: 4
+  skills_max_groups: 3
+  summary_lines: 2
+page_counts: [2]

@@ -1,8 +1,8 @@
 {
-  "case": "baseline",
+  "case": "ranked-oversized-entry",
   "scorer_set_version": 3,
   "recorded_at": "2026-08-10",
-  "reason": "042 T045: fix ranking company matching to containment, lowering ranking_violations",
+  "reason": "042 T046: fix company matching to containment (findRanking), zero ranking_violations",
   "scores": {
     "bullet_shortfalls": 0,
     "duplicate_provenance": 0,

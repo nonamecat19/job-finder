@@ -118,21 +118,21 @@ twice, and the ordering differs from master order when the vacancy justifies it.
 
 ### Tests for User Story 2
 
-- [ ] T037 [P] [US2] Table tests for `VerifyRanking` in `apps/api/internal/generation/domain/ranking_verify_test.go`: `out_of_range`, `duplicate` and `short` each detected; `len(ranking) > K` accepted as valid; K computed as `min(2*target, available)`
-- [ ] T038 [P] [US2] Test in `apps/api/internal/generation/application/workspace_rank_test.go` that a twice-rejected ranking falls back to master order and sets `fallback_used = true` rather than failing the run (FR-010)
+- [X] T037 [P] [US2] Table tests for `VerifyRanking` in `apps/api/internal/generation/domain/ranking_verify_test.go`: `out_of_range`, `duplicate` and `short` each detected; `len(ranking) > K` accepted as valid; K computed as `min(2*target, available)`
+- [X] T038 [P] [US2] Test in `apps/api/internal/generation/application/workspace_rank_test.go` that a twice-rejected ranking falls back to master order and sets `fallback_used = true` rather than failing the run (FR-010)
 
 ### Implementation for User Story 2
 
-- [ ] T039 [P] [US2] Define `RankedExperience`, `RankedProject`, `RankedSkills` and `RankedSelection` in `apps/api/internal/generation/domain/ranking.go` exactly as `contracts/llm-contracts.md` §1 specifies — `[]int` only, with **no** `rephrased`, `summary`, `suggestions`, `drop` or skill-text field
-- [ ] T040 [P] [US2] Implement `VerifyRanking(available, target int, ranking []int) []RankingViolation` in `apps/api/internal/generation/domain/ranking_verify.go`
-- [ ] T041 [US2] Implement `buildRankPrompt` in `apps/api/internal/generation/application/rankcv_llm.go`, reusing `buildSelectPrompt`'s numbered-bullet rendering verbatim so there is exactly one index space, and printing `K = min(2N, A)` after each entry's bullet list
-- [ ] T042 [US2] Implement `rankContent` in the same file: `llm.CompleteStructured[domain.RankedSelection]` against the `generation-select` router with `selectStageTimeout` and `selectMaxTokens`
-- [ ] T043 [US2] Replace master-order seeding with ranked seeding in `apps/api/internal/generation/application/workspace.go`: rank → verify → retry once → fall back to master order; top `min(N, A)` selected; ranked remainder unselected; the unranked tail appended in master order, unselected and visible (`research.md` R2) (depends on T039–T042)
-- [ ] T044 [US2] Feed the summary stage's `SummaryBrief.Highlights` from the run's **selected profile items** instead of `SelectedHighlights(TailoredSelection)` in `apps/api/internal/generation/application/workspace.go`, keeping the summary otherwise unchanged (`contracts/llm-contracts.md` §3)
-- [ ] T045 [US2] Add a `ranking_violations` scorer delegating to `domain.VerifyRanking` in `apps/api/internal/generation/application/eval_scorer_test.go`, and extend `TestScorerDelegationIsExact` and `TestScorersDetectInjectedDefects` to cover it
-- [ ] T046 [US2] Add corpus case `apps/api/internal/generation/application/evaldata/cases/ranked-oversized-entry/` (`case.yaml` with a `why` and `page_counts`, `master.yaml`, `vacancy.txt`) — one entry with far more than 2N bullets, synthetic fixtures, closed date ranges only
-- [ ] T047 [US2] Bump `ScorerSetVersion` and re-record every baseline with a stated reason, per case, never for the whole corpus in one command: `go test ./internal/generation/application/ -run TestEvalCorpus -eval.update-baseline -eval.case <name> -eval.reason "…"` (depends on T045, T046)
-- [ ] T048 [US2] Add the ranked/unranked visual split to `apps/dashboard/src/features/generate/components/WorkEntryBlock.tsx`: selected top-N first, ranked-but-unselected below, then the master-order tail — all in one list the user can promote from
+- [X] T039 [P] [US2] Define `RankedExperience`, `RankedProject`, `RankedSkills` and `RankedSelection` in `apps/api/internal/generation/domain/ranking.go` exactly as `contracts/llm-contracts.md` §1 specifies — `[]int` only, with **no** `rephrased`, `summary`, `suggestions`, `drop` or skill-text field
+- [X] T040 [P] [US2] Implement `VerifyRanking(available, target int, ranking []int) []RankingViolation` in `apps/api/internal/generation/domain/ranking_verify.go`
+- [X] T041 [US2] Implement `buildRankPrompt` in `apps/api/internal/generation/application/rankcv_llm.go`, reusing `buildSelectPrompt`'s numbered-bullet rendering verbatim so there is exactly one index space, and printing `K = min(2N, A)` after each entry's bullet list
+- [X] T042 [US2] Implement `rankContent` in the same file: `llm.CompleteStructured[domain.RankedSelection]` against the `generation-select` router with `selectStageTimeout` and `selectMaxTokens`
+- [X] T043 [US2] Replace master-order seeding with ranked seeding in `apps/api/internal/generation/application/workspace.go`: rank → verify → retry once → fall back to master order; top `min(N, A)` selected; ranked remainder unselected; the unranked tail appended in master order, unselected and visible (`research.md` R2) (depends on T039–T042)
+- [X] T044 [US2] Feed the summary stage's `SummaryBrief.Highlights` from the run's **selected profile items** instead of `SelectedHighlights(TailoredSelection)` in `apps/api/internal/generation/application/workspace.go`, keeping the summary otherwise unchanged (`contracts/llm-contracts.md` §3)
+- [X] T045 [US2] Add a `ranking_violations` scorer delegating to `domain.VerifyRanking` in `apps/api/internal/generation/application/eval_scorer_test.go`, and extend `TestScorerDelegationIsExact` and `TestScorersDetectInjectedDefects` to cover it
+- [X] T046 [US2] Add corpus case `apps/api/internal/generation/application/evaldata/cases/ranked-oversized-entry/` (`case.yaml` with a `why` and `page_counts`, `master.yaml`, `vacancy.txt`) — one entry with far more than 2N bullets, synthetic fixtures, closed date ranges only
+- [X] T047 [US2] Bump `ScorerSetVersion` and re-record every baseline with a stated reason, per case, never for the whole corpus in one command: `go test ./internal/generation/application/ -run TestEvalCorpus -eval.update-baseline -eval.case <name> -eval.reason "…"` (depends on T045, T046)
+- [X] T048 [US2] Add the ranked/unranked visual split to `apps/dashboard/src/features/generate/components/WorkEntryBlock.tsx`: selected top-N first, ranked-but-unselected below, then the master-order tail — all in one list the user can promote from
 
 **Checkpoint**: Ranking is grounded by construction. `rg 'rephrased|Rephrased' apps/api/internal/generation/` returns nothing on the workspace path.
 

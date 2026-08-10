@@ -169,6 +169,65 @@ const (
 	summaryStageTimeout = 120 * time.Second
 )
 
+// renderAnalysisLines formats a VacancyAnalysis the way every selection-style
+// prompt (select, rank) presents it. Extracted so both share the exact same
+// rendering rather than keeping two texts in sync by hand.
+func renderAnalysisLines(analysis domain.VacancyAnalysis) []string {
+	var lines []string
+	lines = append(lines, "REQUIRED SKILLS: "+strings.Join(analysis.RequiredSkills, ", "))
+	if len(analysis.NiceToHaveSkills) > 0 {
+		lines = append(lines, "NICE-TO-HAVE: "+strings.Join(analysis.NiceToHaveSkills, ", "))
+	}
+	lines = append(lines, "EXPERIENCE LEVEL: "+analysis.ExperienceLevel)
+	if len(analysis.KeyResponsibilities) > 0 {
+		lines = append(lines, "KEY RESPONSIBILITIES:")
+		for _, r := range analysis.KeyResponsibilities {
+			lines = append(lines, "  - "+r)
+		}
+	}
+	if len(analysis.IndustryKeywords) > 0 {
+		lines = append(lines, "INDUSTRY: "+strings.Join(analysis.IndustryKeywords, ", "))
+	}
+	if len(analysis.SeniorityKeywords) > 0 {
+		lines = append(lines, "SENIORITY SIGNALS: "+strings.Join(analysis.SeniorityKeywords, ", "))
+	}
+	return lines
+}
+
+// renderSkillGroupLines renders the master's skill groups as "[index] label:
+// details" — the one index space every prompt that references a skill group
+// addresses. Reused verbatim by buildRankPrompt (T041) so ranking's group
+// indices are the same numbering the select prompt already shows.
+func renderSkillGroupLines(skills []map[string]any) []string {
+	var lines []string
+	for i, s := range skills {
+		lines = append(lines, fmt.Sprintf("  [%d] %s: %s", i, domain.StringField(s, "label"), domain.StringField(s, "details")))
+	}
+	return lines
+}
+
+// renderExperienceEntryLines renders one master experience entry as its
+// "- company: ..." header line followed by its numbered bullet list — the
+// index space HighlightRef.SourceIndex addresses today and
+// RankedExperience.Ranking addresses in the ranking stage. Reused verbatim by
+// buildRankPrompt (T041, research.md R2) so there is exactly one numbering to
+// keep in sync.
+func renderExperienceEntryLines(e map[string]any) []string {
+	var lines []string
+	line := "  - company: " + domain.StringField(e, "company")
+	if pos := domain.StringField(e, "position"); pos != "" {
+		line += " (" + pos + ")"
+	}
+	if loc := domain.StringField(e, "location"); loc != "" {
+		line += " | " + loc
+	}
+	lines = append(lines, line)
+	for i, h := range domain.StringSliceField(e, "highlights") {
+		lines = append(lines, fmt.Sprintf("      [%d] %s", i, h))
+	}
+	return lines
+}
+
 // buildSelectPrompt constructs the prompt for Step 2. It receives the vacancy
 // analysis from Step 1 and the full master resume content, and asks the LLM
 // to select, reorder, rephrase and optionally drop content.
@@ -177,46 +236,12 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	skills := domain.AsSliceOfMaps(sections["skills"])
 	experience := domain.AsSliceOfMaps(sections["experience"])
 
-	// Format vacancy analysis
-	var analysisLines []string
-	analysisLines = append(analysisLines, "REQUIRED SKILLS: "+strings.Join(analysis.RequiredSkills, ", "))
-	if len(analysis.NiceToHaveSkills) > 0 {
-		analysisLines = append(analysisLines, "NICE-TO-HAVE: "+strings.Join(analysis.NiceToHaveSkills, ", "))
-	}
-	analysisLines = append(analysisLines, "EXPERIENCE LEVEL: "+analysis.ExperienceLevel)
-	if len(analysis.KeyResponsibilities) > 0 {
-		analysisLines = append(analysisLines, "KEY RESPONSIBILITIES:")
-		for _, r := range analysis.KeyResponsibilities {
-			analysisLines = append(analysisLines, "  - "+r)
-		}
-	}
-	if len(analysis.IndustryKeywords) > 0 {
-		analysisLines = append(analysisLines, "INDUSTRY: "+strings.Join(analysis.IndustryKeywords, ", "))
-	}
-	if len(analysis.SeniorityKeywords) > 0 {
-		analysisLines = append(analysisLines, "SENIORITY SIGNALS: "+strings.Join(analysis.SeniorityKeywords, ", "))
-	}
+	analysisLines := renderAnalysisLines(analysis)
+	skillLines := renderSkillGroupLines(skills)
 
-	// Format skill groups
-	var skillLines []string
-	for i, s := range skills {
-		skillLines = append(skillLines, fmt.Sprintf("  [%d] %s: %s", i, domain.StringField(s, "label"), domain.StringField(s, "details")))
-	}
-
-	// Format experience
 	var expLines []string
 	for _, e := range experience {
-		line := "  - company: " + domain.StringField(e, "company")
-		if pos := domain.StringField(e, "position"); pos != "" {
-			line += " (" + pos + ")"
-		}
-		if loc := domain.StringField(e, "location"); loc != "" {
-			line += " | " + loc
-		}
-		expLines = append(expLines, line)
-		for i, h := range domain.StringSliceField(e, "highlights") {
-			expLines = append(expLines, fmt.Sprintf("      [%d] %s", i, h))
-		}
+		expLines = append(expLines, renderExperienceEntryLines(e)...)
 	}
 
 	var b strings.Builder

@@ -9,10 +9,19 @@ export interface WorkEntryBlockProps {
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
 }
 
-// T029: one work entry — its label, the profile's ranked achievements in
+// T029/T048: one work entry — its label, the profile's ranked achievements in
 // `position` order, and an explicit empty state when the master profile has
 // zero bullets for this role. Never a fabricated bullet standing in for one
 // — an empty section renders as empty, not as invented content.
+//
+// T048 adds the ranked/unranked visual split (research.md R2): the ranking
+// stage selects the top min(N, A) of its K candidates, leaves the rest of the
+// K ranking unselected, and appends any bullet beyond K in master order,
+// unselected — all already delivered in `position` order by the seeding
+// (SeedRankedItems/SeedFromMaster). The client's only observable signal for
+// "included vs not" is `selected`, so that is the divider: selected items
+// first (the resume as it stands), then everything else the user can
+// promote — one continuous, draggable list, not two separate ones.
 export default function WorkEntryBlock({ section, onToggle, onReorder }: WorkEntryBlockProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -21,14 +30,17 @@ export default function WorkEntryBlock({ section, onToggle, onReorder }: WorkEnt
   // in this block once suggestions do exist — a suggestion group renders
   // separately rather than interleaved.
   const profileItems = section.items.filter((it) => it.origin === 'profile');
+  const selectedItems = profileItems.filter((it) => it.selected);
+  const unselectedItems = profileItems.filter((it) => !it.selected);
+  const orderedItems = [...selectedItems, ...unselectedItems];
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = profileItems.findIndex((it) => it.id === active.id);
-    const newIndex = profileItems.findIndex((it) => it.id === over.id);
+    const oldIndex = orderedItems.findIndex((it) => it.id === active.id);
+    const newIndex = orderedItems.findIndex((it) => it.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(profileItems, oldIndex, newIndex);
+    const reordered = arrayMove(orderedItems, oldIndex, newIndex);
     onReorder(
       section.id,
       reordered.map((it) => it.id),
@@ -46,9 +58,20 @@ export default function WorkEntryBlock({ section, onToggle, onReorder }: WorkEnt
         <p className="text-xs text-muted">No bullets in your profile for this role.</p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={profileItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={orderedItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
             <ul className="space-y-1.5">
-              {profileItems.map((item) => (
+              {selectedItems.map((item) => (
+                <ItemRow key={item.id} item={item} onToggle={(selected) => onToggle(item.id, selected)} />
+              ))}
+              {selectedItems.length > 0 && unselectedItems.length > 0 ? (
+                <li
+                  data-testid="unselected-divider"
+                  className="pt-1 text-[11px] font-medium uppercase tracking-wide text-faint"
+                >
+                  Ranked, not included — promote to add
+                </li>
+              ) : null}
+              {unselectedItems.map((item) => (
                 <ItemRow key={item.id} item={item} onToggle={(selected) => onToggle(item.id, selected)} />
               ))}
             </ul>

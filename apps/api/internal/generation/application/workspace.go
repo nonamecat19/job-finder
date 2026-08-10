@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation/domain"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -288,12 +290,162 @@ func (s *Service) persistWorkspaceItems(ctx context.Context, sectionID pgtype.UU
 	return err
 }
 
+// rankedSectionResult is one experience section's outcome from the ranking
+// stage (T043): either a verified ranking ready to replace the master-order
+// seed, or a signal to leave the section exactly as StartGenerationRun's
+// SeedFromMaster already left it — master order, top min(N, A) selected —
+// and record that the FR-010 fallback fired. That seed IS the fallback
+// (research.md R2: "ranking = [0,1,…,K-1]" is master order), so a fallback
+// entry has no items to persist.
+type rankedSectionResult struct {
+	entryKey     string
+	items        []domain.Item // nil when falling back to the existing master-order seed
+	fallbackUsed bool
+}
+
+// rankExperienceSections runs the ranking stage once for every master
+// experience entry in a single call (mirroring buildSelectPrompt/selectContent,
+// which also rank/select every entry together), verifies each entry's
+// ranking independently, retries the whole call once when any entry is
+// invalid (the existing groundingAttempts idiom — service.go's retry ladders
+// all cap at 2 attempts), and falls back to master order per entry rather
+// than failing the run (FR-010).
+//
+// No I/O beyond the two LLM calls: it takes the master and analysis already
+// resolved by the caller and returns a decision per entry, so it can be
+// tested without a database (T038).
+func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig) []rankedSectionResult {
+	sections := domain.CvSections(master)
+	experience := domain.AsSliceOfMaps(sections["experience"])
+	if len(experience) == 0 {
+		return nil
+	}
+
+	type entry struct {
+		company    string
+		highlights []string
+	}
+	entries := make([]entry, len(experience))
+	for i, e := range experience {
+		entries[i] = entry{
+			company:    domain.StringField(e, "company"),
+			highlights: domain.StringSliceField(e, "highlights"),
+		}
+	}
+
+	// findRanking matches by containment, not just equality: the prompt asks
+	// for the EXACT company name, but a model that echoes the whole "company
+	// (position) | location" header line back (observed with the entry-line
+	// rendering renderExperienceEntryLines produces, shared with the select
+	// prompt) still names the right entry — a stricter match would turn a
+	// cosmetic prompt-following slip into an unnecessary FR-010 fallback.
+	findRanking := func(sel domain.RankedSelection, company string) []int {
+		target := strings.ToLower(strings.TrimSpace(company))
+		for _, re := range sel.Experience {
+			if strings.Contains(strings.ToLower(strings.TrimSpace(re.Company)), target) {
+				return re.Ranking
+			}
+		}
+		return nil
+	}
+
+	type attempt struct {
+		ranking []int
+		valid   bool
+	}
+	evaluate := func(sel domain.RankedSelection, callErr error, e entry) attempt {
+		if callErr != nil {
+			return attempt{}
+		}
+		ranking := findRanking(sel, e.company)
+		return attempt{ranking: ranking, valid: len(domain.VerifyRanking(len(e.highlights), cfg.ExperienceBulletsMin, ranking)) == 0}
+	}
+
+	first, firstErr := rankContent(ctx, lc, model, master, analysis, cfg, nil)
+	firstAttempts := make([]attempt, len(entries))
+	var needRetry []string
+	for i, e := range entries {
+		firstAttempts[i] = evaluate(first, firstErr, e)
+		if !firstAttempts[i].valid {
+			needRetry = append(needRetry, e.company)
+		}
+	}
+
+	var second domain.RankedSelection
+	secondErr := fmt.Errorf("ranking retry not attempted")
+	if len(needRetry) > 0 {
+		violationMsgs := make([]string, len(needRetry))
+		for i, c := range needRetry {
+			violationMsgs[i] = fmt.Sprintf("the ranking for company %q was rejected: it must name exactly K distinct in-range indices", c)
+		}
+		second, secondErr = rankContent(ctx, lc, model, master, analysis, cfg, violationMsgs)
+	}
+
+	results := make([]rankedSectionResult, len(entries))
+	for i, e := range entries {
+		if firstAttempts[i].valid {
+			results[i] = rankedSectionResult{entryKey: e.company, items: domain.SeedRankedItems(e.highlights, cfg.ExperienceBulletsMin, firstAttempts[i].ranking)}
+			continue
+		}
+		retry := evaluate(second, secondErr, e)
+		if retry.valid {
+			results[i] = rankedSectionResult{entryKey: e.company, items: domain.SeedRankedItems(e.highlights, cfg.ExperienceBulletsMin, retry.ranking)}
+			continue
+		}
+		results[i] = rankedSectionResult{entryKey: e.company, fallbackUsed: true}
+	}
+	return results
+}
+
+// applyRankedSections persists rankExperienceSections' decisions: a section
+// with a verified ranking has its master-order seed replaced (delete then
+// recreate, the same pattern a section rerun uses); a fallback section is
+// left untouched and only has fallback_used recorded, per data-model.md §4's
+// state transition ("rejected twice -> ready (fallback_used = true)").
+func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, results []rankedSectionResult) error {
+	if len(results) == 0 {
+		return nil
+	}
+	sections, err := s.q.ListSectionsByRun(ctx, runID)
+	if err != nil {
+		return err
+	}
+	byEntryKey := make(map[string]sqlcgen.GenerationSection, len(sections))
+	for _, sec := range sections {
+		if sec.Kind == string(domain.SectionKindExperience) && sec.EntryKey != nil {
+			byEntryKey[*sec.EntryKey] = sec
+		}
+	}
+
+	for _, r := range results {
+		sec, ok := byEntryKey[r.entryKey]
+		if !ok {
+			continue
+		}
+		if r.items != nil {
+			if err := s.q.DeleteSectionItems(ctx, sec.ID); err != nil {
+				return err
+			}
+			if err := s.persistWorkspaceItems(ctx, sec.ID, r.items); err != nil {
+				return err
+			}
+		}
+		if err := s.q.SetSectionState(ctx, sqlcgen.SetSectionStateParams{
+			ID: sec.ID, State: string(domain.SectionReady), FallbackUsed: r.fallbackUsed,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // StartRun is the background half of a workspace run, dispatched by
-// worker.Handler on payload.GenerationRunID (T012). This phase runs only the
-// existing summary stage — no ranking or suggestion LLM calls yet (those are
-// Phase 4/5) — so the experience and skills sections are already `ready` from
-// StartGenerationRun's seeding; only the summary section is still `running`
-// when this is called.
+// worker.Handler on payload.GenerationRunID (T012). Ranking runs here, after
+// analysis and before the summary highlights are read (T044): the experience
+// sections start `ready` in master order from StartGenerationRun's seeding
+// (FR-010's own fallback shape), and this stage upgrades them to a real
+// ranking where one verifies, leaving the fallback in place — and recording
+// it — where it does not.
 func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Recorder) error {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -324,6 +476,24 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		_ = s.q.SetRunAnalysis(ctx, sqlcgen.SetRunAnalysisParams{ID: rid, Analysis: analysisJSON})
 	}
 
+	if rec != nil {
+		rec.Step(ctx, "ranking achievements", nil)
+	}
+	rankResults := rankExperienceSections(ctx, s.llm.Select, s.genModel, master, analysis, cfg)
+	if err := s.applyRankedSections(ctx, rid, rankResults); err != nil {
+		// Ranking persistence failing does not fail the run: the master-order
+		// seed StartGenerationRun already wrote is correct and stays in place
+		// (FR-010's fallback shape), so a run whose ranking step could not be
+		// applied still produces a usable, honest resume.
+		if rec != nil {
+			rec.Step(ctx, "ranking persistence failed", map[string]any{"error": err.Error()})
+		}
+	}
+
+	// selectedProfileHighlights reads the run's currently-selected profile
+	// items, so it picks up whatever rankExperienceSections/applyRankedSections
+	// just wrote — real ranking where it verified, the master-order fallback
+	// where it did not (T044, contracts/llm-contracts.md §3).
 	highlights, err := s.selectedProfileHighlights(ctx, rid)
 	if err != nil {
 		highlights = nil
@@ -395,9 +565,12 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 }
 
 // selectedProfileHighlights gathers the selected experience achievements
-// already persisted by StartGenerationRun's seeding, in section-then-item
-// position order — the summary brief's input, standing in for
-// SelectedHighlights(TailoredSelection) until US2 wires real ranking (T044).
+// currently persisted for the run, in section-then-item position order — the
+// summary brief's input. By the time StartRun calls this, rankExperienceSections
+// / applyRankedSections have already run, so this reads real ranking where it
+// verified and the master-order fallback where it did not (T044,
+// contracts/llm-contracts.md §3): the same data SelectedHighlights(TailoredSelection)
+// used to supply, read over the run's items instead of a TailoredSelection.
 func (s *Service) selectedProfileHighlights(ctx context.Context, runID pgtype.UUID) ([]string, error) {
 	sections, err := s.q.ListSectionsByRun(ctx, runID)
 	if err != nil {

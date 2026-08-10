@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:1906fa8dd5abb0bc037ae606ce30ad7a44feef172e9b4d4ed899b8969f3a74a9",
+  "request_summary": {
+    "model_key": "generation-analyze",
+    "prompt_prefix": "Analyze this job vacancy and extract structured requirements.  VACANCY TEXT: Staff Platform Engineer — Deployment Systems  We need a staff-level platform engi",
+    "prompt_len": 2110,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "8192",
+    "response_mode": 0,
+    "schema_len": 0,
+    "json_output": true
+  },
+  "response": "{\n  \"requiredSkills\": [\n    \"building and operating deployment pipelines\",\n    \"reducing deploy time\",\n    \"reducing incident frequency\",\n    \"Kubernetes\",\n    \"Terraform in production\"\n  ],\n  \"niceToHaveSkills\": [\n    \"multi-region failover experience\",\n    \"cost optimization work on cloud infrastructure\",\n    \"experience running incident postmortems\"\n  ],\n  \"experienceLevel\": \"staff\",\n  \"keyResponsibilities\": [\n    \"own deployment pipeline\",\n    \"own on-call practices\",\n    \"scaling deployment systems\",\n    \"building deployment pipelines\",\n    \"operating deployment pipelines\",\n    \"reducing deploy time\",\n    \"reducing incident frequency\",\n    \"mentoring engineers toward seniority\"\n  ],\n  \"industryKeywords\": [],\n  \"seniorityKeywords\": [\n    \"staff-level\",\n    \"own\",\n    \"scale\",\n    \"mentoring engineers toward seniority\",\n    \"partner closely with every backend team\"\n  ]\n}",
+  "recorded_at": "2026-08-10",
+  "recorded_from": "generation-analyze"
+}
