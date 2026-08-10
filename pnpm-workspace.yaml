@@ -1,6 +1,21 @@
 packages:
   - apps/*
   - packages/*
+# Advisory exceptions for `make vuln-web` / the `vulnerability scan (web)` gate.
+#
+# Lives here, not in package.json: pnpm 11 stopped reading the `pnpm` field
+# from package.json and warns that `pnpm.auditConfig` is ignored there.
+#
+# YAML comments are allowed, but keep the *reason* for each id in
+# specs/domains/platform-operations.md as well — an id here with no row there
+# is a review defect, and the domain doc is what survives when this feature's
+# spec folds away.
+#
+# Empty is the expected steady state. Only add an id when the advisory has no
+# released fix; otherwise bump the package.
+auditConfig:
+  ignoreCves: []
+
 allowBuilds:
   esbuild: true
   msgpackr-extract: true

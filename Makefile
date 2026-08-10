@@ -2,7 +2,8 @@
 	test test-go test-react test-integration test-e2e test-lint test-db-setup \
 	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install \
 	tygo-generate tygo-check tygo-install \
-	setup-hooks lint lint-go lint-web golangci-install
+	setup-hooks lint lint-go lint-web golangci-install \
+	audit vuln-go vuln-web secrets images
 
 ifneq (,$(wildcard .env))
 include .env
@@ -108,6 +109,49 @@ lint-web:
 lint: lint-go lint-web
 
 test-lint: lint-go lint-web test-go test-react
+
+# --- supply-chain gates (039, specs/domains/platform-operations.md) ---
+# Deliberately NOT part of `test-lint`, and that is an exemption from the
+# coverage invariant rather than an oversight. Two reasons:
+#
+#   1. These gates are not deterministic in time. An advisory published this
+#      afternoon turns this morning's green run red with no code change, so
+#      "local success predicts CI" — the property the invariant exists to
+#      protect — was never available here.
+#   2. They need the network, and `images` needs Docker: the same exemption
+#      `test-integration` and `test-e2e` already hold.
+#
+# `make images` additionally costs 6-8 minutes cold, which would make the
+# pre-push loop slower than CI and push people to skip it entirely.
+vuln-go:
+	./scripts/govulncheck-check.sh
+
+vuln-web:
+	pnpm audit --audit-level=high --prod=false
+
+secrets:
+	@command -v gitleaks >/dev/null 2>&1 || { \
+		echo "error: gitleaks is not installed."; \
+		echo ""; \
+		echo "Install the pinned version:"; \
+		echo ""; \
+		echo "  VERSION=$$(tr -d '[:space:]' < .gitleaks-version); \\"; \
+		echo "  curl -sSfL \"https://github.com/gitleaks/gitleaks/releases/download/v\$$VERSION/gitleaks_\$${VERSION}_linux_x64.tar.gz\" \\"; \
+		echo "    | sudo tar -xz -C /usr/local/bin gitleaks"; \
+		echo ""; \
+		echo "The version is pinned so a local run and a CI run reach the same verdict."; \
+		exit 1; \
+	}
+	gitleaks git . --redact --no-banner --config .gitleaks.toml
+
+# Build only — never pushes, never needs a registry credential.
+images:
+	docker build -f apps/api/Dockerfile       -t job-finder-api:local-check       .
+	docker build -f apps/dashboard/Dockerfile -t job-finder-dashboard:local-check .
+
+# The audit-class gates as one entry point, first non-zero wins — the same
+# shape as `make lint`. `images` stays out: it is the slow one.
+audit: vuln-go vuln-web secrets
 
 # --- run all (infra + backend + frontend) ---
 run-all: up

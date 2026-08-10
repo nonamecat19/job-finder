@@ -85,6 +85,16 @@ is ever committed.
   in seconds. `make test-integration` and `make test-e2e` are separate
   targets (they need containers/a browser) and are not part of
   `test-lint`.
+- `make audit` — the supply-chain gates: `vuln-go` (govulncheck, reachability
+  filtered, pinned in `apps/api/.govulncheck-version`) + `vuln-web` (`pnpm
+  audit` at severity `high`) + `secrets` (gitleaks over history, redacted).
+  **Deliberately not part of `test-lint`**: these depend on the network and on
+  an advisory database that changes without any commit, so a green local run
+  cannot promise a green CI run — the property `test-lint` exists to give.
+  Run it when you touch dependencies. `make images` builds both container
+  images and is separate again, because a cold build is 6–8 minutes.
+  See `specs/domains/platform-operations.md` § 3.1–3.2 for the runbook,
+  including how to record an expiring advisory exception.
 - `make sqlc-generate` — regenerate sqlc code after editing `apps/api/internal/db/queries/*.sql`
 - `make tygo-generate` — regenerate `packages/shared/src/generated.ts` from Go DTOs after editing any `apps/api/internal/dto/*.go` file
 - `pnpm --filter @job-finder/shared build` — rebuild the shared package's `dist/` (the dashboard imports the built package, not source)

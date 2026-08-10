@@ -1,0 +1,98 @@
+# Automated dependency updates (039).
+#
+# Preventive rather than detective: the three scanning gates in
+# .github/workflows/api-ci.yml stop a bad dependency merging, and this file
+# reduces how often the tree drifts far enough for that to happen. It is
+# deliberately configured LAST of the four supply-chain changes — automated
+# bumps landing without a vulnerability gate and an image-build gate would be
+# less safe than manual ones, not more.
+#
+# Every update pull request runs the full required check set with no bypass.
+#
+# Cadence and caps live here rather than in a service-side setting, so the
+# review load this repository accepts is a reviewable fact in the diff.
+
+version: 2
+
+updates:
+  # The Go module. `directory` is /apps/api, NOT / — apps/api is its own module
+  # and there is no root go.mod. This is worth stating because Dependabot does
+  # not report an error when it finds no manifest at the configured directory:
+  # a wrong path here produces silence, not a failure, so the misconfiguration
+  # is invisible until someone notices no Go updates have ever arrived.
+  - package-ecosystem: gomod
+    directory: /apps/api
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Minor and patch arrive as one reviewable batch. Majors are deliberately
+      # excluded from the group so each lands on its own — a breaking change
+      # hidden behind a diff of twenty other bumps is a breaking change nobody
+      # reviews.
+      go-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # The pnpm workspace. Dependabot reads pnpm-lock.yaml at the root and updates
+  # whichever member package.json owns each dependency. This entry does nothing
+  # until that lockfile is tracked — it was gitignored before 039, which is why
+  # tracking it was task zero of this feature.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # The actions used by .github/workflows/api-ci.yml. One group: these are
+  # small, frequent, and individually uninteresting.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Base images. The docker ecosystem scans a DIRECTORY for Dockerfiles, so
+  # each Dockerfile's directory needs its own entry.
+  #
+  # apps/api: golang:1.26-bookworm, python:3.12-slim-bookworm
+  - package-ecosystem: docker
+    directory: /apps/api
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+
+  # apps/dashboard: node:22-bookworm, nginx:alpine
+  - package-ecosystem: docker
+    directory: /apps/dashboard
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+
+# NOT covered by anything above: the images pinned in docker-compose.yml and
+# docker-compose.prod.yml — pgvector/pgvector:pg16, redis:7-alpine,
+# minio/minio:latest, ghcr.io/flaresolverr/flaresolverr:latest, the ClickHouse
+# image and the Langfuse images. Dependabot's docker ecosystem reads
+# Dockerfiles, not compose files, so these stay manual. Recorded in
+# specs/domains/platform-operations.md so the gap is a known fact rather than a
+# silent assumption. (Two of them are pinned to :latest, which is its own
+# problem and out of 039's scope.)
