@@ -4,39 +4,29 @@ Context for AI coding agents working in this repo.
 
 ## Branching and pull requests
 
-Every change — agent-authored or human-authored — goes on a feature branch
-and merges via a pull request whose CI is green. **Never commit or push
-directly to `master`.** Create a branch first:
+**The trunk is not protected.** Nothing mechanical stops a commit or push to
+`master` — not a git hook, not an agent hook, not a server-side rule. Work
+lands where the maintainer says it lands; `CLAUDE.md` is the current word on
+that, and it says to work directly on `master` unless asked otherwise.
+
+Use a branch when the change wants review before it lands, or when CI on a
+pull request is the point:
 
 ```
 git checkout -b <nnn>-<slug>
 ```
 
-This is enforced, not just documented: `make setup-hooks` (run once per
-clone; the config is shared across worktrees) installs committed git hooks
-(`.githooks/pre-commit`, `.githooks/pre-push`) that reject a commit or push
-targeting `master`, and a Claude Code `PreToolUse` hook
-(`scripts/hooks/guard-master.sh`) stops the agent before it even reaches
-git. Server-side branch protection is not available on the current GitHub
-plan (private repo, Free tier) — see
-`specs/domains/platform-operations.md` § 2.2 for the
-ruleset recorded to apply the moment that changes.
+This is a deliberate reversal. The repository used to enforce a branch-only
+trunk in three places — `.githooks/pre-commit`, `.githooks/pre-push`, and a
+Claude Code `PreToolUse` hook — and all three were removed rather than left
+contradicting the working instruction in `CLAUDE.md`. Server-side branch
+protection remains unavailable on the current GitHub plan (private repo, Free
+tier); `specs/domains/platform-operations.md` § 2.2 keeps the ruleset recorded
+against the day that changes and someone decides to restore the gate.
 
-**Emergency override**: if the trunk itself is broken and the normal branch
-workflow can't repair it, `git commit --no-verify` / `git push --no-verify`
-bypasses both git hooks. This is the documented, deliberate escape hatch —
-its use is visible in shell history and in the agent's transcript, so it is
-a traceable act, not a silent bypass. Reach for it only to restore a broken
-trunk, never as a way to skip review. The expectation is that the trunk can
-be restored from a broken state within one hour using this override — if
-recovery is taking longer than that, stop and reconsider the approach
-rather than accumulating more direct-to-master commits.
-
-**New clone or new worktree**: run `make setup-hooks` once — it is not
-automatic, and an unactivated hook is an absent gate. It sets
-`core.hooksPath` at the repository-config level, so a single run in the
-main working tree covers every worktree that shares this clone; a fresh
-`git clone` elsewhere needs its own run.
+The consequence worth naming: a mistake on `master` is now caught by review or
+not at all. CI still runs on pull requests, so a change that wants a green
+check before it lands still needs a branch to get one.
 
 ## Worktrees
 

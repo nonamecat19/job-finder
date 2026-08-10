@@ -39,7 +39,7 @@ jobs:
             #
             # Documentation and repo-workflow paths deliberately appear in NO
             # filter, so a change confined to them skips every job:
-            #   specs/**, docs/**, .specify/**, .githooks/**, scripts/hooks/**,
+            #   specs/**, docs/**, .specify/**, scripts/hooks/**,
             #   AGENTS.md, README.md, Makefile, .github/workflows/**
             #
             # Makefile and the workflow files used to force the whole set on the

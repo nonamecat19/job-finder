@@ -4,7 +4,7 @@ Consolidates **023** enforced workflow quality gates, **007** CI test gate (supe
 023), **008** health/readiness checks, **018** asynqmon queue monitoring, **026** DB
 connection capacity.
 
-Implementation: `.github/workflows/`, `.githooks/`, `Makefile`, `.claude/settings.json`,
+Implementation: `.github/workflows/`, `Makefile`, `.claude/settings.json`,
 `apps/api/internal/health/`, `internal/dbutil/`, `docker-compose*.yml`. How it works:
 [`docs/operations/ci-cd.md`](../../docs/docs/operations/ci-cd.md),
 [`docs/operations/testing.md`](../../docs/docs/operations/testing.md),
@@ -15,26 +15,35 @@ they exist and what they must guarantee.
 
 ---
 
-## 1. Trunk protection (023-FR-001..006)
+## 1. Trunk protection (023-FR-001..006) — **withdrawn**
 
-- 023-FR-001: the trunk rejects direct writes; every change arrives via a branch and a pull
-  request. Enforcement is **local** — server-side branch protection is unavailable on the
-  repository's current GitHub plan. `.githooks/pre-commit` and `.githooks/pre-push` reject a
-  commit or push targeting `master`; a Claude Code `PreToolUse` hook
-  (`scripts/hooks/guard-master.sh`) stops the agent earlier still. § 2.2 records the ruleset
-  to apply the moment a paid plan makes it mechanical.
-- 023-FR-004: when mechanical enforcement is adopted it must **not** require a second
-  person's approval — the project has one maintainer and a review requirement would deadlock
-  it.
-- 023-FR-005: a documented override exists for emergency trunk repair, and using it leaves a
-  visible trace. `--no-verify` bypasses both hooks; its use is visible in shell history and
-  in the agent transcript. 023-SC-012 bounds it: the trunk can be restored from a broken
-  state within one hour, so the gate never makes the repository unrecoverable.
-- 023-FR-006: the repository's agent instructions state the branch-and-PR rule.
+The trunk is unprotected. 023-FR-001 required it to reject direct writes and was enforced in
+three places: `.githooks/pre-commit`, `.githooks/pre-push`, and a Claude Code `PreToolUse`
+hook (`scripts/hooks/guard-master.sh`). All three are deleted, the `make setup-hooks` target
+that activated them is gone, and `core.hooksPath` is unset.
 
-`make setup-hooks` sets `core.hooksPath` at repository-config level — one run covers every
-worktree sharing the clone, but it is **not** automatic, and an unactivated hook is an absent
-gate.
+The reason is a contradiction rather than a change of mind about branches. `CLAUDE.md`
+instructs work to happen directly on `master`; the gate refused exactly that, so every agent
+session either stopped at the guard or worked around it, and a gate routinely worked around
+protects nothing while still costing a failed tool call each time. Given one maintainer and a
+single instruction file to keep true, the enforcement went rather than the instruction.
+
+What each of the withdrawn requirements now means:
+
+- 023-FR-001 (trunk rejects direct writes): **withdrawn**. Nothing mechanical stops a commit
+  or push to `master`. Correctness on the trunk rests on review, or on nothing.
+- 023-FR-004 (no second-approver requirement): still holds for any future mechanical
+  enforcement — the project has one maintainer and a review requirement would deadlock it.
+- 023-FR-005 (documented emergency override): **moot**. `--no-verify` bypassed hooks that no
+  longer exist. 023-SC-012's one-hour trunk-recovery bound is likewise no longer a constraint
+  the gate imposes.
+- 023-FR-006 (agent instructions state the rule): **restated**, not deleted. `AGENTS.md` now
+  records that the trunk is unprotected and points at `CLAUDE.md` for where work should land.
+
+§ 2.2 keeps the branch-protection ruleset recorded against the day a paid plan makes
+server-side enforcement available and someone decides the gate is worth restoring. Note that
+it would need restoring on both sides: server-side protection alone does not stop a local
+commit, only a push.
 
 ## 2. The declared check set (023-FR-002, 003, 014, 018, 021)
 
@@ -76,7 +85,7 @@ Current jobs — `.github/workflows/api-ci.yml`:
 
 **Path filtering.** Every job carries `needs: changes` and an `if:` on a
 `dorny/paths-filter` output, so a change touching only documentation or repo workflow —
-`specs/**`, `docs/**`, `.specify/**`, `.githooks/**`, `scripts/hooks/**`, `AGENTS.md`,
+`specs/**`, `docs/**`, `.specify/**`, `scripts/hooks/**`, `AGENTS.md`,
 `README.md`, `Makefile`, `.github/workflows/**` — matches no filter and skips the entire
 set. Two rules keep this from weakening the gate:
 
@@ -359,8 +368,7 @@ version, installed version, why it matters, install line.
 config, ignoring `**/dist/**`, `packages/shared/src/generated.ts` and `node_modules`. **A
 missing `node_modules` fails with that instruction rather than silently passing.**
 
-`make lint` = `lint-go` then `lint-web`, first non-zero wins. `make setup-hooks` sets
-`core.hooksPath` and is idempotent.
+`make lint` = `lint-go` then `lint-web`, first non-zero wins.
 
 **Nothing else may invoke a linter binary directly.** The constitution names `make` targets
 as the canonical entry point precisely so the four callers cannot drift:
@@ -409,12 +417,11 @@ version, breakage is detectable by running the script directly. Each is
 with an install line if absent** (a missing tool must never read as a pass), is idempotent and
 hand-runnable, and never writes outside the repository.
 
-**Layer 1 — git hooks**, activated by `make setup-hooks`. `pre-commit` reads the current
-branch and exits 1 on `master`, printing the branch-and-PR rule and the branch-creation
-command. `pre-push` reads the `<local ref> <local sha> <remote ref> <remote sha>` lines on
-stdin and exits 1 if any pushed ref is `refs/heads/master`. **Both gate destination only and
-never inspect content**, and both must be no-ops on any other branch. `--no-verify` is the
-023-FR-005 override for either.
+**Layer 1 — git hooks: removed.** `pre-commit` and `pre-push` rejected `master` as
+destination; both are deleted along with the `make setup-hooks` target that set
+`core.hooksPath`, and § 1 records why. A future restoration wants the same shape they had —
+gate destination only, never inspect content, no-op on every other branch — because a content
+check in a git hook is a test that runs at a moment nobody chose.
 
 **Layer 2 — agent hooks.** Four facts about the hooks API shaped the design: matchers filter
 on **tool name only** (path filtering uses the per-entry `if` field); `PostToolUse` **cannot
@@ -424,18 +431,19 @@ carrying `tool_input.file_path`, `tool_input.command`, `cwd` and `session_id`.
 
 | Hook | Bound to | Behaviour |
 |---|---|---|
-| `guard-master.sh` | `PreToolUse` on `Bash(git commit*)`, `Bash(git push*)` | Exit 2 on master — **blocks the tool call**, with stderr fed back to the agent: "On master. Create a branch first: `git checkout -b <nnn>-<slug>`" |
 | `go-postedit.sh` | `PostToolUse` on `Edit(apps/api/**/*.go)` | `gofmt -w <file>`, `go vet ./<package>`. Always exit 0; reports through `hookSpecificOutput.additionalContext`. Scoped to the file's package, never the repository |
 | `regen-sqlc.sh` | `PostToolUse` on `Edit(apps/api/internal/db/queries/*.sql)` | `make sqlc-generate`, refreshing `internal/db/sqlcgen/` in the working tree for review |
 | `regen-tygo.sh` | `PostToolUse` on `Edit(apps/api/internal/dto/*.go)` | `make tygo-generate`, refreshing `packages/shared/src/generated.ts` |
 | `session-verify.sh` | `Stop` (no matcher support — fires every time) | Scopes off `git diff --name-only`: Go paths → `make lint-go test-go`; dashboard/shared paths → `make lint-web test-react`; neither → immediate exit 0. Exit 2 **blocks the stop** |
 
-> **`guard-master.sh` reads the branch of the checkout the command writes to** — a `git -C
-> <dir>` or `cd <dir>` inside the command itself, else `cwd`, else `$CLAUDE_PROJECT_DIR` — not
-> the session's branch. Agents routinely commit from a worktree while `$CLAUDE_PROJECT_DIR`
-> still points at a main checkout sitting on master. Reading only the project dir gets it wrong
-> in **both** directions: blocking commits bound for a feature branch, and passing commits that
-> really do land on master whenever the session itself runs from a worktree.
+> **A restored branch guard must read the branch of the checkout the command writes to** — a
+> `git -C <dir>` or `cd <dir>` inside the command itself, else `cwd`, else
+> `$CLAUDE_PROJECT_DIR` — not the session's branch. Agents routinely commit from a worktree
+> while `$CLAUDE_PROJECT_DIR` still points at a main checkout sitting on master. Reading only
+> the project dir gets it wrong in **both** directions: blocking commits bound for a feature
+> branch, and passing commits that really do land on master whenever the session itself runs
+> from a worktree. The deleted `guard-master.sh` got this right and the detail is worth
+> keeping.
 
 > **`session-verify.sh` blocks at most once per `session_id`.** A blocking `Stop` re-enters the
 > agent loop, which can end in another `Stop`. The script records a marker under the system

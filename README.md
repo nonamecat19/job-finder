@@ -66,17 +66,14 @@ pnpm install
 pnpm --filter @job-finder/shared build
 make run-backend           # api :3000 — runs embedded goose migrations on startup
 make run-frontend          # dashboard :5173 (proxies /api)
-make setup-hooks           # once per clone — activates the branch-protection git hooks
 ```
 
 `make run-all` starts both. Migrations are embedded in the binary and applied by
 `cmd/server` at startup — there is no separate migrate command.
 
-`make setup-hooks` (`git config core.hooksPath .githooks`) is a repository-level config
-value, so one run covers every worktree sharing this clone — but it does not happen
-automatically, and an unactivated hook is an absent gate. See
-[`specs/domains/platform-operations.md`](specs/domains/platform-operations.md) for what it
-enforces.
+The trunk is not protected: nothing rejects a commit or push to `master`. See
+[`specs/domains/platform-operations.md`](specs/domains/platform-operations.md) § 1 for what
+was withdrawn and why.
 
 Useful:
 

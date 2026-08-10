@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Shared helpers for Claude Code hook scripts under scripts/hooks/.
 #
-# Every hook script (guard-master.sh, go-postedit.sh, regen-sqlc.sh,
-# regen-tygo.sh, session-verify.sh) sources this file instead of duplicating
-# the same stdin-parsing and tool-guard boilerplate five times over. See
+# Every hook script (go-postedit.sh, regen-sqlc.sh, regen-tygo.sh,
+# session-verify.sh) sources this file instead of duplicating
+# the same stdin-parsing and tool-guard boilerplate four times over. See
 # specs/domains/platform-operations.md § 4.1 for the full contract.
 #
 # Conventions enforced here (contracts/hooks.md "Shared rules"):
