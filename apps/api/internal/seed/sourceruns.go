@@ -63,6 +63,7 @@ func seedSourceRuns(ctx context.Context, pool *pgxpool.Pool, q *sqlcgen.Queries)
 		_, err = q.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
 			SourceId: sourceIDs[sr.sourceKey].ID,
 			SearchId: &searchID,
+			Trigger:  "scheduled",
 		})
 		if err != nil {
 			return err

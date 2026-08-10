@@ -680,7 +680,7 @@ func TestSubscriptionCRUD(t *testing.T) {
 
 	mustInsertJobSource(t, "js-sub", "api")
 
-	sub, err := testDB.Queries.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{
+	sub, err := testDB.Queries.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{Kind: "crawl",
 		SourceKey: "js-sub",
 		Name:      strPtr("Djinni Go jobs"),
 		Url:       "https://djinni.example.com/jobs?lang=go",
@@ -985,7 +985,7 @@ func TestSourceRunCRUD(t *testing.T) {
 
 	src := mustInsertJobSource(t, "js-run", "api")
 
-	run, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
+	run, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{Trigger: "scheduled",
 		SourceId: src.ID,
 		SearchId: strPtr("search-abc"),
 	})
@@ -1045,7 +1045,7 @@ func TestSourceRunCRUD(t *testing.T) {
 		t.Fatal("expected ok=true in recent")
 	}
 
-	run2, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
+	run2, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{Trigger: "scheduled",
 		SourceId: src.ID,
 	})
 	if err != nil {
@@ -1396,7 +1396,7 @@ func TestCascadeDeletes(t *testing.T) {
 		t.Fatalf("expected 0 docs after cascade, got %d", len(docs))
 	}
 
-	sub, err := testDB.Queries.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{
+	sub, err := testDB.Queries.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{Kind: "crawl",
 		SourceKey: "js-cascade",
 		Url:       "https://example.com/sub",
 		Enabled:   true,

@@ -359,6 +359,8 @@ type SourceRun struct {
 	Verdict        *string          `json:"verdict"`
 	BlockedCount   int32            `json:"blockedCount"`
 	BlockReason    *string          `json:"blockReason"`
+	SubscriptionId pgtype.UUID      `json:"subscriptionId"`
+	Trigger        string           `json:"trigger"`
 }
 
 type StarStory struct {
@@ -383,6 +385,7 @@ type Subscription struct {
 	LastRunAt pgtype.Timestamp `json:"lastRunAt"`
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
 	Cron      string           `json:"cron"`
+	Kind      string           `json:"kind"`
 }
 
 type SummaryModelSetting struct {

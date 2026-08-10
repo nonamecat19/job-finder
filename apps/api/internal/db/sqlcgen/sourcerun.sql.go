@@ -43,18 +43,25 @@ func (q *Queries) FinishSourceRunOk(ctx context.Context, arg FinishSourceRunOkPa
 }
 
 const insertSourceRun = `-- name: InsertSourceRun :one
-INSERT INTO "SourceRun" ("sourceId", "searchId")
-VALUES ($1, $2)
-RETURNING id, "sourceId", "searchId", "startedAt", "finishedAt", ok, found, new, error, "employerDetail", verdict, "blockedCount", "blockReason"
+INSERT INTO "SourceRun" ("sourceId", "searchId", "subscriptionId", "trigger")
+VALUES ($1, $2, $3, $4)
+RETURNING id, "sourceId", "searchId", "startedAt", "finishedAt", ok, found, new, error, "employerDetail", verdict, "blockedCount", "blockReason", "subscriptionId", trigger
 `
 
 type InsertSourceRunParams struct {
-	SourceId pgtype.UUID `json:"sourceId"`
-	SearchId *string     `json:"searchId"`
+	SourceId       pgtype.UUID `json:"sourceId"`
+	SearchId       *string     `json:"searchId"`
+	SubscriptionId pgtype.UUID `json:"subscriptionId"`
+	Trigger        string      `json:"trigger"`
 }
 
 func (q *Queries) InsertSourceRun(ctx context.Context, arg InsertSourceRunParams) (SourceRun, error) {
-	row := q.db.QueryRow(ctx, insertSourceRun, arg.SourceId, arg.SearchId)
+	row := q.db.QueryRow(ctx, insertSourceRun,
+		arg.SourceId,
+		arg.SearchId,
+		arg.SubscriptionId,
+		arg.Trigger,
+	)
 	var i SourceRun
 	err := row.Scan(
 		&i.ID,
@@ -70,6 +77,8 @@ func (q *Queries) InsertSourceRun(ctx context.Context, arg InsertSourceRunParams
 		&i.Verdict,
 		&i.BlockedCount,
 		&i.BlockReason,
+		&i.SubscriptionId,
+		&i.Trigger,
 	)
 	return i, err
 }
@@ -79,6 +88,8 @@ SELECT
   sr."id" AS id,
   js."key" AS source_key,
   sr."searchId" AS search_id,
+  sr."subscriptionId" AS subscription_id,
+  sr."trigger" AS trigger,
   sr."startedAt" AS started_at,
   sr."finishedAt" AS finished_at,
   sr."ok" AS ok,
@@ -95,18 +106,20 @@ LIMIT $1
 `
 
 type RecentRunsJoinedRow struct {
-	ID           pgtype.UUID      `json:"id"`
-	SourceKey    string           `json:"source_key"`
-	SearchID     *string          `json:"search_id"`
-	StartedAt    pgtype.Timestamp `json:"started_at"`
-	FinishedAt   pgtype.Timestamp `json:"finished_at"`
-	Ok           *bool            `json:"ok"`
-	Found        int32            `json:"found"`
-	New          int32            `json:"new"`
-	Error        *string          `json:"error"`
-	Verdict      *string          `json:"verdict"`
-	BlockedCount int32            `json:"blocked_count"`
-	BlockReason  *string          `json:"block_reason"`
+	ID             pgtype.UUID      `json:"id"`
+	SourceKey      string           `json:"source_key"`
+	SearchID       *string          `json:"search_id"`
+	SubscriptionID pgtype.UUID      `json:"subscription_id"`
+	Trigger        string           `json:"trigger"`
+	StartedAt      pgtype.Timestamp `json:"started_at"`
+	FinishedAt     pgtype.Timestamp `json:"finished_at"`
+	Ok             *bool            `json:"ok"`
+	Found          int32            `json:"found"`
+	New            int32            `json:"new"`
+	Error          *string          `json:"error"`
+	Verdict        *string          `json:"verdict"`
+	BlockedCount   int32            `json:"blocked_count"`
+	BlockReason    *string          `json:"block_reason"`
 }
 
 func (q *Queries) RecentRunsJoined(ctx context.Context, limit int32) ([]RecentRunsJoinedRow, error) {
@@ -122,6 +135,8 @@ func (q *Queries) RecentRunsJoined(ctx context.Context, limit int32) ([]RecentRu
 			&i.ID,
 			&i.SourceKey,
 			&i.SearchID,
+			&i.SubscriptionID,
+			&i.Trigger,
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Ok,
@@ -144,7 +159,7 @@ func (q *Queries) RecentRunsJoined(ctx context.Context, limit int32) ([]RecentRu
 
 const recentSourceRunsForSource = `-- name: RecentSourceRunsForSource :many
 SELECT "ok" FROM "SourceRun"
-WHERE "sourceId" = $1 AND "ok" IS NOT NULL
+WHERE "sourceId" = $1 AND "ok" IS NOT NULL AND "trigger" <> 'manual'
 ORDER BY "startedAt" DESC
 LIMIT $2
 `
@@ -154,6 +169,10 @@ type RecentSourceRunsForSourceParams struct {
 	Limit    int32       `json:"limit"`
 }
 
+// Feeds the 3-consecutive-failure health threshold. Manual adds are excluded
+// (041 FR-017g): a host that refuses one hand-pasted URL has not gone down, and
+// letting those runs count would let an operator flag a source unhealthy by
+// pasting three bad links.
 func (q *Queries) RecentSourceRunsForSource(ctx context.Context, arg RecentSourceRunsForSourceParams) ([]*bool, error) {
 	rows, err := q.db.Query(ctx, recentSourceRunsForSource, arg.SourceId, arg.Limit)
 	if err != nil {
