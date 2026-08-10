@@ -1,6 +1,6 @@
 //go:build integration
 
-package worker
+package ingest
 
 import (
 	"context"
@@ -43,7 +43,7 @@ func startRun(t *testing.T, ctx context.Context, testDB *db.DB) sqlcgen.SourceRu
 	if err != nil {
 		t.Fatalf("get job source: %v", err)
 	}
-	run, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{SourceId: source.ID})
+	run, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{SourceId: source.ID, Trigger: "scheduled"})
 	if err != nil {
 		t.Fatalf("insert source run: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestPersistRollsBackWholeRun(t *testing.T) {
 	batch := NewPostingBatch(testPostings(20), pgtype.UUID{}, run.ID, false)
 
 	err := testDB.WithinTx(ctx, func(q *sqlcgen.Queries) error {
-		_, err := persistBatch(ctx, &failingRepo{BatchRepository: q, failOn: "BulkInsertActivities"}, batch, 500)
+		_, err := PersistBatch(ctx, &failingRepo{BatchRepository: q, failOn: "BulkInsertActivities"}, batch, 500)
 		return err
 	})
 	if !errors.Is(err, errInjected) {
@@ -174,7 +174,7 @@ func TestPersistRetryCountsEachSightingOnce(t *testing.T) {
 
 	first := NewPostingBatch(jobs, pgtype.UUID{}, run.ID, false)
 	if err := testDB.WithinTx(ctx, func(q *sqlcgen.Queries) error {
-		_, err := persistBatch(ctx, q, first, 500)
+		_, err := PersistBatch(ctx, q, first, 500)
 		return err
 	}); err != nil {
 		t.Fatalf("first attempt: %v", err)
@@ -184,7 +184,7 @@ func TestPersistRetryCountsEachSightingOnce(t *testing.T) {
 	for range 2 {
 		batch := NewPostingBatch(jobs, pgtype.UUID{}, run.ID, false)
 		if err := testDB.WithinTx(ctx, func(q *sqlcgen.Queries) error {
-			_, err := persistBatch(ctx, q, batch, 500)
+			_, err := PersistBatch(ctx, q, batch, 500)
 			return err
 		}); err != nil {
 			t.Fatalf("retry: %v", err)
@@ -197,7 +197,7 @@ func TestPersistRetryCountsEachSightingOnce(t *testing.T) {
 	next := startRun(t, ctx, testDB)
 	batch := NewPostingBatch(jobs, pgtype.UUID{}, next.ID, false)
 	if err := testDB.WithinTx(ctx, func(q *sqlcgen.Queries) error {
-		_, err := persistBatch(ctx, q, batch, 500)
+		_, err := PersistBatch(ctx, q, batch, 500)
 		return err
 	}); err != nil {
 		t.Fatalf("second run: %v", err)
@@ -220,7 +220,7 @@ func TestPersistStatementBudgetPerChunk(t *testing.T) {
 	if err := testDB.WithinTx(ctx, func(q *sqlcgen.Queries) error {
 		counter.BatchRepository = q
 		var err error
-		result, err = persistBatch(ctx, counter, batch, chunkSize)
+		result, err = PersistBatch(ctx, counter, batch, chunkSize)
 		return err
 	}); err != nil {
 		t.Fatalf("persist: %v", err)
@@ -258,7 +258,7 @@ func TestConcurrentRunsStoreOverlappingPostingOnce(t *testing.T) {
 			defer wg.Done()
 			batch := NewPostingBatch(shared, pgtype.UUID{}, run.ID, false)
 			errs[i] = testDB.WithinTx(ctx, func(q *sqlcgen.Queries) error {
-				result, err := persistBatch(ctx, q, batch, 500)
+				result, err := PersistBatch(ctx, q, batch, 500)
 				inserted[i] = len(result.Inserted)
 				return err
 			})

@@ -36,6 +36,8 @@ import (
 	"github.com/job-finder/api/internal/jobsources/roster"
 	"github.com/job-finder/api/internal/keyword"
 	keywordhttp "github.com/job-finder/api/internal/keyword/interfaces/http"
+	"github.com/job-finder/api/internal/manualadd"
+	manualaddhttp "github.com/job-finder/api/internal/manualadd/interfaces/http"
 	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/notifier"
 	notifierhttp "github.com/job-finder/api/internal/notifier/interfaces/http"
@@ -72,6 +74,7 @@ type App struct {
 	Jobs          *jobshttp.JobsHandler
 	Applications  *applicationshttp.ApplicationsHandler
 	Subs          *subscriptionshttp.SubscriptionsHandler
+	ManualAdd     *manualaddhttp.ManualAddHandler
 	Activity      *activityhttp.ActivityHandler
 	Keyword       *keywordhttp.KeywordHandler
 	PostAge       *postagehttp.PostAgeHandler
@@ -141,6 +144,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 		asAdapter,
 		wkAdapter,
 		srAdapter,
+		adapters.ManualAdapter{},
 	)
 	sourcesSvc := application.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
 	p.DjinniSession.Sources = sourcesSvc
@@ -357,6 +361,22 @@ func composeApplications(p *Platform) *applicationshttp.ApplicationsHandler {
 func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestionSvc *application.SearchService) *subscriptionshttp.SubscriptionsHandler {
 	subsSvc := subscriptions.NewService(p.DB.Queries, sourcesSvc)
 	return &subscriptionshttp.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
+}
+
+// composeManualAdd wires the synchronous add path. It shares the subscription
+// service with the CRUD endpoints so "at most one manual row per source" is one
+// rule in one place, and the ingest package with the crawl worker so a manual
+// vacancy is byte-for-byte what a crawl produces.
+func composeManualAdd(p *Platform, sources *sourcesHandles, jobsSvc *jobs.Service) *manualaddhttp.ManualAddHandler {
+	subsSvc := subscriptions.NewService(p.DB.Queries, sources.Sources)
+	manualSvc := manualadd.NewService(
+		p.DB.Queries, sources.Sources, subsSvc, sources.Registry, jobsSvc, p.AsynqClient,
+		manualadd.WithTxRunner(p.DB),
+		// User Story 3 has shipped, so no_reader and incomplete answer with a
+		// draft rather than dead-ending (FR-019, FR-023).
+		manualadd.WithFillIn(),
+	)
+	return &manualaddhttp.ManualAddHandler{Manual: manualSvc}
 }
 
 func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc retrieval.Service) *enrichment.Handler {
@@ -663,6 +683,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Jobs:          jobsHandler,
 		Applications:  composeApplications(p),
 		Subs:          composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
+		ManualAdd:     composeManualAdd(p, sources, matchingH.Jobs),
 		Activity:      activityhttp.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector, p.Policies, queueClassResolvers(p.Policies, llmH)),
 		Keyword:       keywordH.Handler,
 		PostAge:       composePostAge(p),

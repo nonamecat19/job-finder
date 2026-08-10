@@ -16,6 +16,7 @@ const countJobs = `-- name: CountJobs :one
 SELECT count(*)
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
+LEFT JOIN "Subscription" s ON s."id" = j."subscriptionId"
 WHERE ($1::text IS NULL OR j."sourceKey" = $1)
   AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
@@ -57,6 +58,7 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
       )
     )
   )
+  AND (NOT COALESCE($13::bool, false) OR s."kind" = 'manual')
 `
 
 type CountJobsParams struct {
@@ -72,6 +74,7 @@ type CountJobsParams struct {
 	MinScore       *int32      `json:"min_score"`
 	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
+	OnlyManual     *bool       `json:"only_manual"`
 }
 
 func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, error) {
@@ -88,6 +91,7 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 		arg.MinScore,
 		arg.OnlyBelowFloor,
 		arg.SalaryFloor,
+		arg.OnlyManual,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -143,6 +147,7 @@ SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j
   mr."createdAt" AS mr_created_at
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
+LEFT JOIN "Subscription" s ON s."id" = j."subscriptionId"
 WHERE ($1::text IS NULL OR j."sourceKey" = $1)
   AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
@@ -184,9 +189,10 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
       )
     )
   )
+  AND (NOT COALESCE($13::bool, false) OR s."kind" = 'manual')
 ORDER BY j."ingestedAt" DESC
-OFFSET $13
-LIMIT $14
+OFFSET $14
+LIMIT $15
 `
 
 type ListJobsByDateParams struct {
@@ -202,6 +208,7 @@ type ListJobsByDateParams struct {
 	MinScore       *int32      `json:"min_score"`
 	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
+	OnlyManual     *bool       `json:"only_manual"`
 	Offset         int32       `json:"offset"`
 	Limit          int32       `json:"limit"`
 }
@@ -266,6 +273,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 		arg.MinScore,
 		arg.OnlyBelowFloor,
 		arg.SalaryFloor,
+		arg.OnlyManual,
 		arg.Offset,
 		arg.Limit,
 	)
@@ -338,6 +346,7 @@ SELECT j.id, j."dedupeKey", j."sourceKey", j."externalId", j.title, j.company, j
   mr."createdAt" AS mr_created_at
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
+LEFT JOIN "Subscription" s ON s."id" = j."subscriptionId"
 WHERE ($1::text IS NULL OR j."sourceKey" = $1)
   AND ($2::uuid IS NULL OR j."subscriptionId" = $2)
   AND (
@@ -379,9 +388,11 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
       )
     )
   )
-ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
-OFFSET $13
-LIMIT $14
+  AND (NOT COALESCE($13::bool, false) OR s."kind" = 'manual')
+ORDER BY (s."kind" = 'manual' AND j."ingestedAt" > now() - interval '24 hours') DESC,
+         mr."score" DESC NULLS LAST, j."ingestedAt" DESC
+OFFSET $14
+LIMIT $15
 `
 
 type ListJobsByScoreParams struct {
@@ -397,6 +408,7 @@ type ListJobsByScoreParams struct {
 	MinScore       *int32      `json:"min_score"`
 	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
+	OnlyManual     *bool       `json:"only_manual"`
 	Offset         int32       `json:"offset"`
 	Limit          int32       `json:"limit"`
 }
@@ -461,6 +473,7 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 		arg.MinScore,
 		arg.OnlyBelowFloor,
 		arg.SalaryFloor,
+		arg.OnlyManual,
 		arg.Offset,
 		arg.Limit,
 	)

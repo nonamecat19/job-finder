@@ -2,10 +2,12 @@ package http
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/job-finder/api/internal/apperr"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/httpx"
 	"github.com/job-finder/api/internal/subscriptions"
@@ -14,7 +16,7 @@ import (
 type SubscriptionProvider interface {
 	List(ctx context.Context) ([]dto.SubscriptionDto, error)
 	ListBySource(ctx context.Context, sourceKey string) ([]dto.SubscriptionDto, error)
-	Create(ctx context.Context, sourceKey, url string, name *string, enabled bool, cron string) (*dto.SubscriptionDto, error)
+	Create(ctx context.Context, sourceKey, url string, name *string, enabled bool, cron, kind string) (*dto.SubscriptionDto, error)
 	Update(ctx context.Context, id string, in subscriptions.UpdateInput) (*dto.SubscriptionDto, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -63,6 +65,19 @@ type createSubscriptionBody struct {
 	Name      *string `json:"name"`
 	Enabled   *bool   `json:"enabled"`
 	Cron      *string `json:"cron"`
+	Kind      *string `json:"kind"`
+}
+
+// writeSubscriptionError keeps the pre-existing status for plain errors and
+// lets the 041 guards pick their own — 400 for an immutable field, 409 for a
+// delete that would orphan vacancies.
+func writeSubscriptionError(w http.ResponseWriter, err error, fallbackStatus int, fallbackMessage string) {
+	var ae *apperr.Error
+	if errors.As(err, &ae) {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteError(w, fallbackStatus, fallbackMessage)
 }
 
 func (h *SubscriptionsHandler) create(w http.ResponseWriter, r *http.Request) {
@@ -79,9 +94,13 @@ func (h *SubscriptionsHandler) create(w http.ResponseWriter, r *http.Request) {
 	if body.Cron != nil {
 		cron = *body.Cron
 	}
-	out, err := h.Subs.Create(r.Context(), body.SourceKey, body.URL, body.Name, enabled, cron)
+	var kind string
+	if body.Kind != nil {
+		kind = *body.Kind
+	}
+	out, err := h.Subs.Create(r.Context(), body.SourceKey, body.URL, body.Name, enabled, cron, kind)
 	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		writeSubscriptionError(w, err, http.StatusBadRequest, err.Error())
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
@@ -105,7 +124,7 @@ func (h *SubscriptionsHandler) update(w http.ResponseWriter, r *http.Request) {
 		Name: body.Name, URL: body.URL, Enabled: body.Enabled, Cron: body.Cron,
 	})
 	if err != nil {
-		httpx.WriteError(w, http.StatusNotFound, "subscription not found: "+id)
+		writeSubscriptionError(w, err, http.StatusNotFound, "subscription not found: "+id)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
@@ -114,7 +133,7 @@ func (h *SubscriptionsHandler) update(w http.ResponseWriter, r *http.Request) {
 func (h *SubscriptionsHandler) remove(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.Subs.Delete(r.Context(), id); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		writeSubscriptionError(w, err, http.StatusInternalServerError, err.Error())
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"deleted": true})
@@ -123,7 +142,7 @@ func (h *SubscriptionsHandler) remove(w http.ResponseWriter, r *http.Request) {
 func (h *SubscriptionsHandler) run(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.Ingestion.RunSubscription(r.Context(), id); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		writeSubscriptionError(w, err, http.StatusBadRequest, err.Error())
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"queued": true})

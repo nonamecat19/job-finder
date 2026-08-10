@@ -173,3 +173,34 @@ func TestServiceList_MarksBelowFloor(t *testing.T) {
 		}
 	}
 }
+
+// --- 041 Manual filter ---
+
+func TestList_OnlyManualIsThreadedToBothQueries(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := jobs.NewService(repo, &fakeEnqueuer{}, 0)
+
+	if _, err := svc.List(context.Background(), jobs.ListParams{OnlyManual: true}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	if repo.listParams.OnlyManual == nil || !*repo.listParams.OnlyManual {
+		t.Error("expected onlyManual to reach the list query")
+	}
+	if repo.countParams.OnlyManual == nil || !*repo.countParams.OnlyManual {
+		t.Error("expected onlyManual to reach the count query, or the page total lies")
+	}
+}
+
+func TestList_OnlyManualDefaultsOffSoTheFeedIsUnfiltered(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := jobs.NewService(repo, &fakeEnqueuer{}, 0)
+
+	if _, err := svc.List(context.Background(), jobs.ListParams{}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	if repo.listParams.OnlyManual == nil || *repo.listParams.OnlyManual {
+		t.Error("expected onlyManual to default to false")
+	}
+}

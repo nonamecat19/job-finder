@@ -14,6 +14,10 @@ type Repository interface {
 	ListSubscriptions(ctx context.Context) ([]sqlcgen.Subscription, error)
 	ListSubscriptionsBySource(ctx context.Context, sourceKey string) ([]sqlcgen.Subscription, error)
 	UpdateSubscription(ctx context.Context, arg sqlcgen.UpdateSubscriptionParams) (sqlcgen.Subscription, error)
+	GetSubscription(ctx context.Context, id pgtype.UUID) (sqlcgen.Subscription, error)
+	EnsureManualSubscription(ctx context.Context, arg sqlcgen.EnsureManualSubscriptionParams) (sqlcgen.Subscription, error)
+	CountJobsForSubscription(ctx context.Context, subscriptionID pgtype.UUID) (int64, error)
+	ManualSubscriptionStats(ctx context.Context, subscriptionID pgtype.UUID) (sqlcgen.ManualSubscriptionStatsRow, error)
 }
 
 type SourceEnsurer interface {

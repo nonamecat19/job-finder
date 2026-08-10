@@ -16,11 +16,16 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources/application"
+	"github.com/job-finder/api/internal/jobsources/application/ingest"
 	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/queue"
 )
 
 const unhealthyAfterConsecutiveFailures = 3
+
+// triggerScheduled marks a SourceRun written by this worker. Manual adds write
+// "manual" instead, which keeps them out of the health accounting above.
+const triggerScheduled = "scheduled"
 
 func permanent(err error) error {
 	return fmt.Errorf("%w: %w", asynq.SkipRetry, err)
@@ -55,7 +60,7 @@ func WithChunkSize(n int) HandlerOption {
 }
 
 func NewHandler(q domain.SearchRepository, registry *domain.Registry, sources *application.Service, client application.Enqueuer, opts ...HandlerOption) *Handler {
-	h := &Handler{q: q, registry: registry, sources: sources, client: client, chunkSize: defaultChunkSize}
+	h := &Handler{q: q, registry: registry, sources: sources, client: client, chunkSize: ingest.DefaultChunkSize}
 	for _, opt := range opts {
 		opt(h)
 	}
@@ -85,9 +90,26 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		return permanent(err)
 	}
 
+	// Parsed before the run is inserted so the run carries its subscription
+	// link from the start (041 D7). The subscription row itself is still
+	// fetched below, where its URL is needed.
+	var subscriptionID pgtype.UUID
+	if payload.SubscriptionID != nil {
+		uid, parseErr := dbutil.ParseUUID(*payload.SubscriptionID)
+		if parseErr != nil {
+			if rec != nil {
+				rec.Fail(ctx, parseErr)
+			}
+			return permanent(parseErr)
+		}
+		subscriptionID = uid
+	}
+
 	run, err := h.q.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
-		SourceId: source.ID,
-		SearchId: payload.SearchID,
+		SourceId:       source.ID,
+		SearchId:       payload.SearchID,
+		SubscriptionId: subscriptionID,
+		Trigger:        triggerScheduled,
 	})
 	if err != nil {
 		if rec != nil {
@@ -122,12 +144,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 
 	var subscription *sqlcgen.Subscription
 	if payload.SubscriptionID != nil {
-		uid, err := dbutil.ParseUUID(*payload.SubscriptionID)
-		if err != nil {
-			h.finishError(ctx, run.ID, source, payload.SourceKey, err)
-			return permanent(err)
-		}
-		sub, err := h.q.GetSubscription(ctx, uid)
+		sub, err := h.q.GetSubscription(ctx, subscriptionID)
 		if err != nil {
 			h.finishError(ctx, run.ID, source, payload.SourceKey, err)
 			return permanent(err)
@@ -164,14 +181,9 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		rec.Step(ctx, fmt.Sprintf("persisting %d found jobs", len(jobs)), nil)
 	}
 
-	var subscriptionID pgtype.UUID
-	if subscription != nil {
-		subscriptionID = subscription.ID
-	}
-
 	needsDetail := domain.NeedsDetail(adapter)
 
-	batch := NewPostingBatch(jobs, subscriptionID, run.ID, needsDetail)
+	batch := ingest.NewPostingBatch(jobs, subscriptionID, run.ID, needsDetail)
 	started := time.Now()
 	result, err := h.persist(ctx, batch)
 	if err != nil {
@@ -212,37 +224,37 @@ func (h *Handler) finishError(ctx context.Context, runID pgtype.UUID, source sql
 	slog.Error("ingest failed", "source", sourceKey, "error", msg)
 }
 
-func (h *Handler) persist(ctx context.Context, batch PostingBatch) (PersistResult, error) {
+func (h *Handler) persist(ctx context.Context, batch ingest.PostingBatch) (ingest.PersistResult, error) {
 	if h.tx == nil {
-		return persistBatch(ctx, h.q, batch, h.chunkSize)
+		return ingest.PersistBatch(ctx, h.q, batch, h.chunkSize)
 	}
-	var result PersistResult
+	var result ingest.PersistResult
 	err := h.tx.WithinTx(ctx, func(q *sqlcgen.Queries) error {
 		var err error
-		result, err = persistBatch(ctx, q, batch, h.chunkSize)
+		result, err = ingest.PersistBatch(ctx, q, batch, h.chunkSize)
 		return err
 	})
 	if err != nil {
-		return PersistResult{}, err
+		return ingest.PersistResult{}, err
 	}
 	return result, nil
 }
 
-func (h *Handler) enqueueInserted(ctx context.Context, result PersistResult, needsDetail bool) {
+func (h *Handler) enqueueInserted(ctx context.Context, result ingest.PersistResult, needsDetail bool) {
 	for _, ins := range result.Inserted {
 		jobID := dbutil.UUIDString(ins.JobID)
 		if needsDetail {
-			if err := h.enqueueEnrich(ctx, jobID, ins.Posting, activityID(ins, opEnrich)); err != nil {
+			if err := h.enqueueEnrich(ctx, jobID, ins.Posting, activityID(ins, ingest.OpEnrich)); err != nil {
 				slog.Warn("ingestion: enqueue enrich failed", "job", jobID, "error", err)
 			}
 			continue
 		}
-		h.enqueueMatch(ctx, jobID, activityID(ins, opMatch))
-		h.enqueueGhostScore(ctx, jobID, activityID(ins, opGhost))
+		h.enqueueMatch(ctx, jobID, activityID(ins, ingest.OpMatch))
+		h.enqueueGhostScore(ctx, jobID, activityID(ins, ingest.OpGhost))
 	}
 }
 
-func activityID(ins InsertedJob, op string) *string {
+func activityID(ins ingest.InsertedJob, op string) *string {
 	id, ok := ins.ActivityIDs[op]
 	if !ok || !id.Valid {
 		return nil

@@ -45,6 +45,7 @@ type ListParams struct {
 	OnlyHidden     bool
 	OnlyApplied    bool
 	OnlyBelowFloor bool
+	OnlyManual     bool
 }
 
 type jobRow struct {
@@ -101,11 +102,12 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	onlyApplied := &params.OnlyApplied
 	includeHidden := &params.IncludeHidden
 	includeApplied := &params.IncludeApplied
+	onlyManual := &params.OnlyManual
 
 	count, err := s.q.CountJobs(ctx, sqlcgen.CountJobsParams{
 		Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
 		SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
-		OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor,
+		OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, OnlyManual: onlyManual,
 	})
 	if err != nil {
 		return dto.JobListResponse{}, err
@@ -119,7 +121,8 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		r, err := s.q.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{
 			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
 			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
-			OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, Offset: offset, Limit: limit,
+			OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, OnlyManual: onlyManual,
+			Offset: offset, Limit: limit,
 		})
 		if err != nil {
 			return dto.JobListResponse{}, err
@@ -143,7 +146,8 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		r, err := s.q.ListJobsByScore(ctx, sqlcgen.ListJobsByScoreParams{
 			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
 			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
-			OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, Offset: offset, Limit: limit,
+			OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, OnlyManual: onlyManual,
+			Offset: offset, Limit: limit,
 		})
 		if err != nil {
 			return dto.JobListResponse{}, err

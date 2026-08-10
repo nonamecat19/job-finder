@@ -22,6 +22,7 @@ import (
 	jobshttp "github.com/job-finder/api/internal/jobs/interfaces/http"
 	jobsourceshttp "github.com/job-finder/api/internal/jobsources/interfaces/http"
 	keywordhttp "github.com/job-finder/api/internal/keyword/interfaces/http"
+	manualaddhttp "github.com/job-finder/api/internal/manualadd/interfaces/http"
 	notifierhttp "github.com/job-finder/api/internal/notifier/interfaces/http"
 	outreachhttp "github.com/job-finder/api/internal/outreach/interfaces/http"
 	postagehttp "github.com/job-finder/api/internal/postage/interfaces/http"
@@ -52,6 +53,7 @@ func allMounts() []func(chi.Router) {
 		(&jobshttp.JobsHandler{}).Mount,
 		(&applicationshttp.ApplicationsHandler{}).Mount,
 		(&subscriptionshttp.SubscriptionsHandler{}).Mount,
+		(&manualaddhttp.ManualAddHandler{}).Mount,
 		(&activityhttp.ActivityHandler{}).Mount,
 		(&keywordhttp.KeywordHandler{}).Mount,
 		(&postagehttp.PostAgeHandler{}).Mount,

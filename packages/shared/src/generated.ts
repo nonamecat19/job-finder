@@ -224,7 +224,12 @@ export interface StatsDto {
 export const SourceKindAPI = "api";
 export const SourceKindScrape = "scrape";
 export const SourceKindSidecar = "sidecar";
-export type SourceKind = typeof SourceKindAPI | typeof SourceKindScrape | typeof SourceKindSidecar;
+/**
+ * SourceKindManual backs hand-entered vacancies on hosts no adapter reads.
+ * It is never crawled — its adapter's Search fails permanently (041 D4).
+ */
+export const SourceKindManual = "manual";
+export type SourceKind = typeof SourceKindAPI | typeof SourceKindScrape | typeof SourceKindSidecar | typeof SourceKindManual;
 export type ApplicationStatus = string;
 export const StatusFound: ApplicationStatus = "found";
 export const StatusShortlisted: ApplicationStatus = "shortlisted";
@@ -422,11 +427,46 @@ export interface SubscriptionDto {
   enabled: boolean;
   cron: string;
   lastRunAt?: string;
+  /**
+   * Kind is "crawl" or "manual". Manual rows have no URL, are never
+   * scheduled, and carry the two counters below.
+   */
+  kind: string;
+  manualCount?: number /* int */;
+  lastAddedAt?: string;
+}
+/**
+ * ManualAddResultDto is the envelope every non-5xx manual-add response uses,
+ * discriminated by Outcome.
+ */
+export interface ManualAddResultDto {
+  outcome: string; // created | duplicate | needs_fill_in | failed
+  job?: JobDto;
+  reason?: string;
+  kind?: string;
+  draft?: ManualVacancyDraftDto;
+}
+/**
+ * ManualVacancyDraftDto carries whatever was extracted before the attempt
+ * stalled, so the operator completes the vacancy rather than retyping it.
+ */
+export interface ManualVacancyDraftDto {
+  url: string;
+  sourceKey?: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  remote: boolean;
+  salaryRaw?: string;
+  description?: string;
+  postedAt?: string;
 }
 export interface SourceRunDto {
   id: string;
   sourceKey: string;
   searchId?: string;
+  subscriptionId?: string;
+  trigger: string;
   startedAt: string;
   finishedAt?: string;
   ok?: boolean;

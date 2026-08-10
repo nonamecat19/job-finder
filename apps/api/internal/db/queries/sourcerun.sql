@@ -1,6 +1,6 @@
 -- name: InsertSourceRun :one
-INSERT INTO "SourceRun" ("sourceId", "searchId")
-VALUES ($1, $2)
+INSERT INTO "SourceRun" ("sourceId", "searchId", "subscriptionId", "trigger")
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: FinishSourceRunOk :exec
@@ -17,8 +17,12 @@ WHERE "id" = $1;
 UPDATE "SourceRun" SET "employerDetail" = $2 WHERE "id" = $1;
 
 -- name: RecentSourceRunsForSource :many
+-- Feeds the 3-consecutive-failure health threshold. Manual adds are excluded
+-- (041 FR-017g): a host that refuses one hand-pasted URL has not gone down, and
+-- letting those runs count would let an operator flag a source unhealthy by
+-- pasting three bad links.
 SELECT "ok" FROM "SourceRun"
-WHERE "sourceId" = $1 AND "ok" IS NOT NULL
+WHERE "sourceId" = $1 AND "ok" IS NOT NULL AND "trigger" <> 'manual'
 ORDER BY "startedAt" DESC
 LIMIT $2;
 
@@ -34,6 +38,8 @@ SELECT
   sr."id" AS id,
   js."key" AS source_key,
   sr."searchId" AS search_id,
+  sr."subscriptionId" AS subscription_id,
+  sr."trigger" AS trigger,
   sr."startedAt" AS started_at,
   sr."finishedAt" AS finished_at,
   sr."ok" AS ok,

@@ -5,6 +5,7 @@ SELECT j.*, mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr
   mr."createdAt" AS mr_created_at
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
+LEFT JOIN "Subscription" s ON s."id" = j."subscriptionId"
 WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
@@ -46,7 +47,9 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
       )
     )
   )
-ORDER BY mr."score" DESC NULLS LAST, j."ingestedAt" DESC
+  AND (NOT COALESCE(sqlc.narg('only_manual')::bool, false) OR s."kind" = 'manual')
+ORDER BY (s."kind" = 'manual' AND j."ingestedAt" > now() - interval '24 hours') DESC,
+         mr."score" DESC NULLS LAST, j."ingestedAt" DESC
 OFFSET sqlc.arg('offset')
 LIMIT sqlc.arg('limit');
 
@@ -57,6 +60,7 @@ SELECT j.*, mr."id" AS mr_id, mr."similarity" AS mr_similarity, mr."score" AS mr
   mr."createdAt" AS mr_created_at
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
+LEFT JOIN "Subscription" s ON s."id" = j."subscriptionId"
 WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
@@ -98,6 +102,7 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
       )
     )
   )
+  AND (NOT COALESCE(sqlc.narg('only_manual')::bool, false) OR s."kind" = 'manual')
 ORDER BY j."ingestedAt" DESC
 OFFSET sqlc.arg('offset')
 LIMIT sqlc.arg('limit');
@@ -106,6 +111,7 @@ LIMIT sqlc.arg('limit');
 SELECT count(*)
 FROM "Job" j
 LEFT JOIN "MatchResult" mr ON mr."jobId" = j."id"
+LEFT JOIN "Subscription" s ON s."id" = j."subscriptionId"
 WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
   AND (sqlc.narg('subscription_id')::uuid IS NULL OR j."subscriptionId" = sqlc.narg('subscription_id'))
   AND (
@@ -146,7 +152,8 @@ WHERE (sqlc.narg('source')::text IS NULL OR j."sourceKey" = sqlc.narg('source'))
         OR j."salaryMax" >= sqlc.narg('salary_floor')
       )
     )
-  );
+  )
+  AND (NOT COALESCE(sqlc.narg('only_manual')::bool, false) OR s."kind" = 'manual');
 
 -- name: GetJobDocuments :many
 SELECT * FROM "GeneratedDocument" WHERE "jobId" = $1 ORDER BY "createdAt" DESC;

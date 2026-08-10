@@ -50,3 +50,27 @@ export function useClearJobs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.jobs.all }),
   });
 }
+
+export function useAddVacancyByUrl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) => api.jobs.addManual(url),
+    onSuccess: (result) => {
+      if (result.outcome === 'created') {
+        qc.invalidateQueries({ queryKey: queryKeys.jobs.all });
+      }
+    },
+  });
+}
+
+export function useSaveManualVacancy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.jobs.saveManual,
+    onSuccess: (result) => {
+      if (result.outcome === 'created') {
+        qc.invalidateQueries({ queryKey: queryKeys.jobs.all });
+      }
+    },
+  });
+}

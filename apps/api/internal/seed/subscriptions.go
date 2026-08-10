@@ -87,6 +87,7 @@ func seedSubscriptions(ctx context.Context, q *sqlcgen.Queries) error {
 			Name:      &s.name,
 			Url:       s.url,
 			Enabled:   s.enabled,
+			Kind:      "crawl",
 		})
 		if err != nil {
 			return err

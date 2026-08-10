@@ -1,6 +1,6 @@
 //go:build integration
 
-package worker
+package ingest
 
 import (
 	"context"

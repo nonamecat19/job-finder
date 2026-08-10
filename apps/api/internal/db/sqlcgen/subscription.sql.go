@@ -33,10 +33,23 @@ func (q *Queries) ClaimSubscriptionRun(ctx context.Context, arg ClaimSubscriptio
 	return id, err
 }
 
+const countJobsForSubscription = `-- name: CountJobsForSubscription :one
+SELECT count(*) FROM "Job" WHERE "subscriptionId" = $1
+`
+
+// The FR-016 deletion guard: a subscription with vacancies attached cannot be
+// deleted or disabled, because doing so would orphan them.
+func (q *Queries) CountJobsForSubscription(ctx context.Context, subscriptionid pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countJobsForSubscription, subscriptionid)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createSubscription = `-- name: CreateSubscription :one
-INSERT INTO "Subscription" ("sourceKey", "name", "url", "enabled", "cron")
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron
+INSERT INTO "Subscription" ("sourceKey", "name", "url", "enabled", "cron", "kind")
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron, kind
 `
 
 type CreateSubscriptionParams struct {
@@ -45,6 +58,7 @@ type CreateSubscriptionParams struct {
 	Url       string  `json:"url"`
 	Enabled   bool    `json:"enabled"`
 	Cron      string  `json:"cron"`
+	Kind      string  `json:"kind"`
 }
 
 func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (Subscription, error) {
@@ -54,6 +68,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		arg.Url,
 		arg.Enabled,
 		arg.Cron,
+		arg.Kind,
 	)
 	var i Subscription
 	err := row.Scan(
@@ -65,6 +80,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		&i.LastRunAt,
 		&i.CreatedAt,
 		&i.Cron,
+		&i.Kind,
 	)
 	return i, err
 }
@@ -78,8 +94,62 @@ func (q *Queries) DeleteSubscription(ctx context.Context, id pgtype.UUID) error 
 	return err
 }
 
+const ensureManualSubscription = `-- name: EnsureManualSubscription :one
+INSERT INTO "Subscription" ("sourceKey", "name", "url", "enabled", "cron", "kind")
+VALUES ($1, 'Manual', '', true, $2, 'manual')
+ON CONFLICT ("sourceKey") WHERE "kind" = 'manual'
+DO UPDATE SET "kind" = 'manual'
+RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron, kind
+`
+
+type EnsureManualSubscriptionParams struct {
+	SourceKey string `json:"source_key"`
+	Cron      string `json:"cron"`
+}
+
+// Insert-or-return the single manual subscription for a source. The partial
+// unique index "Subscription_manual_per_source_idx" is what makes the conflict
+// target work, so two concurrent first-time adds settle on one row.
+func (q *Queries) EnsureManualSubscription(ctx context.Context, arg EnsureManualSubscriptionParams) (Subscription, error) {
+	row := q.db.QueryRow(ctx, ensureManualSubscription, arg.SourceKey, arg.Cron)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.SourceKey,
+		&i.Name,
+		&i.Url,
+		&i.Enabled,
+		&i.LastRunAt,
+		&i.CreatedAt,
+		&i.Cron,
+		&i.Kind,
+	)
+	return i, err
+}
+
+const getManualSubscription = `-- name: GetManualSubscription :one
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron, kind FROM "Subscription" WHERE "sourceKey" = $1 AND "kind" = 'manual'
+`
+
+func (q *Queries) GetManualSubscription(ctx context.Context, sourcekey string) (Subscription, error) {
+	row := q.db.QueryRow(ctx, getManualSubscription, sourcekey)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.SourceKey,
+		&i.Name,
+		&i.Url,
+		&i.Enabled,
+		&i.LastRunAt,
+		&i.CreatedAt,
+		&i.Cron,
+		&i.Kind,
+	)
+	return i, err
+}
+
 const getSubscription = `-- name: GetSubscription :one
-SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron FROM "Subscription" WHERE "id" = $1
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron, kind FROM "Subscription" WHERE "id" = $1
 `
 
 func (q *Queries) GetSubscription(ctx context.Context, id pgtype.UUID) (Subscription, error) {
@@ -94,14 +164,18 @@ func (q *Queries) GetSubscription(ctx context.Context, id pgtype.UUID) (Subscrip
 		&i.LastRunAt,
 		&i.CreatedAt,
 		&i.Cron,
+		&i.Kind,
 	)
 	return i, err
 }
 
 const listEnabledSubscriptions = `-- name: ListEnabledSubscriptions :many
-SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron FROM "Subscription" WHERE "enabled" ORDER BY "createdAt" ASC
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron, kind FROM "Subscription" WHERE "enabled" AND "kind" = 'crawl' ORDER BY "createdAt" ASC
 `
 
+// The scheduler's due-subscription query. Manual rows carry a cron they never
+// honour, so they are excluded by kind here rather than by being disabled —
+// disabled means "paused by the operator" and must keep that meaning (041 D3).
 func (q *Queries) ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error) {
 	rows, err := q.db.Query(ctx, listEnabledSubscriptions)
 	if err != nil {
@@ -120,6 +194,7 @@ func (q *Queries) ListEnabledSubscriptions(ctx context.Context) ([]Subscription,
 			&i.LastRunAt,
 			&i.CreatedAt,
 			&i.Cron,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -132,7 +207,7 @@ func (q *Queries) ListEnabledSubscriptions(ctx context.Context) ([]Subscription,
 }
 
 const listSubscriptions = `-- name: ListSubscriptions :many
-SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron FROM "Subscription" ORDER BY "createdAt" ASC
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron, kind FROM "Subscription" ORDER BY "createdAt" ASC
 `
 
 func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error) {
@@ -153,6 +228,7 @@ func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error)
 			&i.LastRunAt,
 			&i.CreatedAt,
 			&i.Cron,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -165,7 +241,7 @@ func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error)
 }
 
 const listSubscriptionsBySource = `-- name: ListSubscriptionsBySource :many
-SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron FROM "Subscription" WHERE "sourceKey" = $1 ORDER BY "createdAt" ASC
+SELECT id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron, kind FROM "Subscription" WHERE "sourceKey" = $1 ORDER BY "createdAt" ASC
 `
 
 func (q *Queries) ListSubscriptionsBySource(ctx context.Context, sourcekey string) ([]Subscription, error) {
@@ -186,6 +262,7 @@ func (q *Queries) ListSubscriptionsBySource(ctx context.Context, sourcekey strin
 			&i.LastRunAt,
 			&i.CreatedAt,
 			&i.Cron,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -195,6 +272,29 @@ func (q *Queries) ListSubscriptionsBySource(ctx context.Context, sourcekey strin
 		return nil, err
 	}
 	return items, nil
+}
+
+const manualSubscriptionStats = `-- name: ManualSubscriptionStats :one
+SELECT
+  COALESCE(SUM("new"), 0)::bigint AS added,
+  MAX("startedAt")::timestamp AS last_added_at
+FROM "SourceRun"
+WHERE "subscriptionId" = $1 AND "trigger" = 'manual' AND "new" > 0
+`
+
+type ManualSubscriptionStatsRow struct {
+	Added       int64            `json:"added"`
+	LastAddedAt pgtype.Timestamp `json:"last_added_at"`
+}
+
+// FR-013 / FR-017h: how many vacancies this manual subscription added, and when
+// the most recent one landed. Derived from run records, so failed attempts are
+// counted in the history without inflating the total.
+func (q *Queries) ManualSubscriptionStats(ctx context.Context, subscriptionid pgtype.UUID) (ManualSubscriptionStatsRow, error) {
+	row := q.db.QueryRow(ctx, manualSubscriptionStats, subscriptionid)
+	var i ManualSubscriptionStatsRow
+	err := row.Scan(&i.Added, &i.LastAddedAt)
+	return i, err
 }
 
 const touchSubscriptionLastRun = `-- name: TouchSubscriptionLastRun :exec
@@ -213,7 +313,7 @@ UPDATE "Subscription" SET
   "enabled" = COALESCE($3, "enabled"),
   "cron" = COALESCE($4, "cron")
 WHERE "id" = $5
-RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron
+RETURNING id, "sourceKey", name, url, enabled, "lastRunAt", "createdAt", cron, kind
 `
 
 type UpdateSubscriptionParams struct {
@@ -242,6 +342,7 @@ func (q *Queries) UpdateSubscription(ctx context.Context, arg UpdateSubscription
 		&i.LastRunAt,
 		&i.CreatedAt,
 		&i.Cron,
+		&i.Kind,
 	)
 	return i, err
 }

@@ -22,7 +22,7 @@ func (f *fakeSubProvider) ListBySource(ctx context.Context, sourceKey string) ([
 	return []dto.SubscriptionDto{{ID: "sub1", Name: &name, SourceKey: sourceKey}}, nil
 }
 
-func (f *fakeSubProvider) Create(ctx context.Context, sourceKey, url string, name *string, enabled bool, cron string) (*dto.SubscriptionDto, error) {
+func (f *fakeSubProvider) Create(ctx context.Context, sourceKey, url string, name *string, enabled bool, cron, kind string) (*dto.SubscriptionDto, error) {
 	n := "New Sub"
 	if name != nil {
 		n = *name

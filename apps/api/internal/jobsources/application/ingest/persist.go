@@ -1,4 +1,4 @@
-package worker
+package ingest
 
 import (
 	"context"
@@ -13,12 +13,12 @@ import (
 	"github.com/job-finder/api/internal/jobsources/domain"
 )
 
-const defaultChunkSize = 500
+const DefaultChunkSize = 500
 
 const (
-	opMatch  = "match"
-	opGhost  = "ghost_score"
-	opEnrich = "enrich"
+	OpMatch  = "match"
+	OpGhost  = "ghost_score"
+	OpEnrich = "enrich"
 )
 
 type PostingBatch struct {
@@ -73,9 +73,9 @@ func NewPostingBatch(jobs []dto.NormalizedJob, subscriptionID, runID pgtype.UUID
 	return batch
 }
 
-func persistBatch(ctx context.Context, q domain.BatchRepository, batch PostingBatch, chunkSize int) (PersistResult, error) {
+func PersistBatch(ctx context.Context, q domain.BatchRepository, batch PostingBatch, chunkSize int) (PersistResult, error) {
 	if chunkSize <= 0 {
-		chunkSize = defaultChunkSize
+		chunkSize = DefaultChunkSize
 	}
 
 	result := PersistResult{Skipped: batch.Skipped}
@@ -255,11 +255,11 @@ func attachActivities(ctx context.Context, q domain.BatchRepository, batch Posti
 	for _, ins := range inserted {
 		label := fmt.Sprintf("%s — %s", ins.Posting.Company, ins.Posting.Title)
 		if batch.NeedsDetail {
-			add(opEnrich, label, ins.Posting.SourceKey, ins.JobID)
+			add(OpEnrich, label, ins.Posting.SourceKey, ins.JobID)
 			continue
 		}
-		add(opMatch, label, "", ins.JobID)
-		add(opGhost, "ghost score", "", ins.JobID)
+		add(OpMatch, label, "", ins.JobID)
+		add(OpGhost, "ghost score", "", ins.JobID)
 	}
 
 	rows, err := q.BulkInsertActivities(ctx, params)
@@ -273,7 +273,7 @@ func attachActivities(ctx context.Context, q domain.BatchRepository, batch Posti
 	}
 	for i := range inserted {
 		jobID := dbutil.UUIDString(inserted[i].JobID)
-		for _, op := range []string{opEnrich, opMatch, opGhost} {
+		for _, op := range []string{OpEnrich, OpMatch, OpGhost} {
 			if id, ok := byJobOp[jobID+"|"+op]; ok {
 				if inserted[i].ActivityIDs == nil {
 					inserted[i].ActivityIDs = make(map[string]pgtype.UUID, 2)

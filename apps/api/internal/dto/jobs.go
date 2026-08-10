@@ -117,21 +117,52 @@ type SubscriptionDto struct {
 	Enabled   bool    `json:"enabled"`
 	Cron      string  `json:"cron"`
 	LastRunAt *string `json:"lastRunAt"`
+	// Kind is "crawl" or "manual". Manual rows have no URL, are never
+	// scheduled, and carry the two counters below.
+	Kind        string  `json:"kind"`
+	ManualCount *int    `json:"manualCount,omitempty"`
+	LastAddedAt *string `json:"lastAddedAt,omitempty"`
+}
+
+// ManualAddResultDto is the envelope every non-5xx manual-add response uses,
+// discriminated by Outcome.
+type ManualAddResultDto struct {
+	Outcome string                 `json:"outcome"` // created | duplicate | needs_fill_in | failed
+	Job     *JobDto                `json:"job,omitempty"`
+	Reason  *string                `json:"reason,omitempty"`
+	Kind    *string                `json:"kind,omitempty"`
+	Draft   *ManualVacancyDraftDto `json:"draft,omitempty"`
+}
+
+// ManualVacancyDraftDto carries whatever was extracted before the attempt
+// stalled, so the operator completes the vacancy rather than retyping it.
+type ManualVacancyDraftDto struct {
+	URL         string  `json:"url"`
+	SourceKey   *string `json:"sourceKey,omitempty"`
+	Title       *string `json:"title,omitempty"`
+	Company     *string `json:"company,omitempty"`
+	Location    *string `json:"location,omitempty"`
+	Remote      bool    `json:"remote"`
+	SalaryRaw   *string `json:"salaryRaw,omitempty"`
+	Description *string `json:"description,omitempty"`
+	PostedAt    *string `json:"postedAt,omitempty"`
 }
 
 type SourceRunDto struct {
-	ID           string  `json:"id"`
-	SourceKey    string  `json:"sourceKey"`
-	SearchID     *string `json:"searchId"`
-	StartedAt    string  `json:"startedAt"`
-	FinishedAt   *string `json:"finishedAt"`
-	OK           *bool   `json:"ok"`
-	Found        int     `json:"found"`
-	New          int     `json:"new"`
-	Error        *string `json:"error"`
-	Verdict      *string `json:"verdict"`
-	BlockedCount int     `json:"blockedCount"`
-	BlockReason  *string `json:"blockReason"`
+	ID             string  `json:"id"`
+	SourceKey      string  `json:"sourceKey"`
+	SearchID       *string `json:"searchId"`
+	SubscriptionID *string `json:"subscriptionId"`
+	Trigger        string  `json:"trigger"`
+	StartedAt      string  `json:"startedAt"`
+	FinishedAt     *string `json:"finishedAt"`
+	OK             *bool   `json:"ok"`
+	Found          int     `json:"found"`
+	New            int     `json:"new"`
+	Error          *string `json:"error"`
+	Verdict        *string `json:"verdict"`
+	BlockedCount   int     `json:"blockedCount"`
+	BlockReason    *string `json:"blockReason"`
 }
 
 type RunVerdictDto struct {

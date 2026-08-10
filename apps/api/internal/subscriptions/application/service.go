@@ -7,8 +7,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron/v3"
 
+	"github.com/job-finder/api/internal/apperr"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
@@ -29,7 +31,7 @@ func (s *Service) List(ctx context.Context) ([]dto.SubscriptionDto, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mapSubscriptions(rows), nil
+	return s.mapSubscriptions(ctx, rows), nil
 }
 
 func (s *Service) ListBySource(ctx context.Context, sourceKey string) ([]dto.SubscriptionDto, error) {
@@ -37,14 +39,45 @@ func (s *Service) ListBySource(ctx context.Context, sourceKey string) ([]dto.Sub
 	if err != nil {
 		return nil, err
 	}
-	return mapSubscriptions(rows), nil
+	return s.mapSubscriptions(ctx, rows), nil
 }
 
 const DefaultCron = "0 */6 * * *"
 
-func (s *Service) Create(ctx context.Context, sourceKey, rawURL string, name *string, enabled bool, cron string) (*dto.SubscriptionDto, error) {
+// A subscription is either a saved search the scheduler crawls, or the single
+// per-source row manual adds hang off. Manual rows have no URL and are never
+// scheduled (041 D3).
+const (
+	KindCrawl  = "crawl"
+	KindManual = "manual"
+)
+
+// EnsureManualSubscription returns the single manual subscription for a source,
+// creating it on first use. Manual rows are never created through Create — this
+// is the only path that makes one (FR-015). validateSubscriptionURL is skipped
+// because a manual row has no URL to validate.
+func (s *Service) EnsureManualSubscription(ctx context.Context, sourceKey string) (sqlcgen.Subscription, error) {
+	if sourceKey == "" {
+		return sqlcgen.Subscription{}, apperr.Validation("sourceKey is required")
+	}
+	if _, err := s.sources.GetByKey(ctx, sourceKey); err != nil {
+		return sqlcgen.Subscription{}, apperr.Validation(fmt.Sprintf("source '%s' not found", sourceKey))
+	}
+	return s.q.EnsureManualSubscription(ctx, sqlcgen.EnsureManualSubscriptionParams{
+		SourceKey: sourceKey,
+		Cron:      DefaultCron,
+	})
+}
+
+func (s *Service) Create(ctx context.Context, sourceKey, rawURL string, name *string, enabled bool, cron, kind string) (*dto.SubscriptionDto, error) {
+	if kind == KindManual {
+		return nil, apperr.Validation("manual subscriptions are created implicitly by the first manual add, not through this endpoint")
+	}
+	if kind != "" && kind != KindCrawl {
+		return nil, apperr.Validation(fmt.Sprintf("unknown subscription kind %q", kind))
+	}
 	if sourceKey == "" || rawURL == "" {
-		return nil, fmt.Errorf("sourceKey and url are required")
+		return nil, apperr.Validation("sourceKey and url are required")
 	}
 	if cron == "" {
 		cron = DefaultCron
@@ -64,6 +97,7 @@ func (s *Service) Create(ctx context.Context, sourceKey, rawURL string, name *st
 		Url:       rawURL,
 		Enabled:   enabled,
 		Cron:      cron,
+		Kind:      KindCrawl,
 	})
 	if err != nil {
 		return nil, err
@@ -89,6 +123,26 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*dto.S
 			return nil, err
 		}
 	}
+	current, err := s.q.GetSubscription(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	if current.Kind == KindManual {
+		// A manual row has nothing to crawl and no schedule to keep, so its URL
+		// and cron are meaningless to change (FR-015). Disabling it is refused
+		// on the same terms as deleting it — both would strand its vacancies.
+		if in.URL != nil {
+			return nil, apperr.Validation("a manual subscription has no url to change")
+		}
+		if in.Cron != nil {
+			return nil, apperr.Validation("a manual subscription is never scheduled, so its cron cannot be changed")
+		}
+		if in.Enabled != nil && !*in.Enabled {
+			if err := s.refuseWhileVacanciesAttached(ctx, uid, "disabled"); err != nil {
+				return nil, err
+			}
+		}
+	}
 	row, err := s.q.UpdateSubscription(ctx, sqlcgen.UpdateSubscriptionParams{
 		ID:      uid,
 		Name:    in.Name,
@@ -108,7 +162,30 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	current, err := s.q.GetSubscription(ctx, uid)
+	if err != nil {
+		return err
+	}
+	if current.Kind == KindManual {
+		if err := s.refuseWhileVacanciesAttached(ctx, uid, "deleted"); err != nil {
+			return err
+		}
+	}
 	return s.q.DeleteSubscription(ctx, uid)
+}
+
+// refuseWhileVacanciesAttached is the FR-016 guard. Hand-entered vacancies have
+// no crawl that would recreate them, so removing the row they hang off destroys
+// work the operator did by hand.
+func (s *Service) refuseWhileVacanciesAttached(ctx context.Context, id pgtype.UUID, verb string) error {
+	count, err := s.q.CountJobsForSubscription(ctx, id)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return apperr.Conflict(fmt.Sprintf("this manual subscription has %d vacancies attached and cannot be %s", count, verb))
+	}
+	return nil
 }
 
 func validateCron(expr string) error {
@@ -263,12 +340,29 @@ func validateJobgetherSubscriptionURL(rawURL string) error {
 	return nil
 }
 
-func mapSubscriptions(rows []sqlcgen.Subscription) []dto.SubscriptionDto {
+func (s *Service) mapSubscriptions(ctx context.Context, rows []sqlcgen.Subscription) []dto.SubscriptionDto {
 	out := make([]dto.SubscriptionDto, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, subscriptionDto(r))
+		item := subscriptionDto(r)
+		if r.Kind == KindManual {
+			s.attachManualStats(ctx, r.ID, &item)
+		}
+		out = append(out, item)
 	}
 	return out
+}
+
+// attachManualStats fills FR-013's two counters from the run records. A stats
+// read that fails leaves the counters absent rather than failing the list —
+// the subscription itself is still worth showing.
+func (s *Service) attachManualStats(ctx context.Context, id pgtype.UUID, item *dto.SubscriptionDto) {
+	stats, err := s.q.ManualSubscriptionStats(ctx, id)
+	if err != nil {
+		return
+	}
+	count := int(stats.Added)
+	item.ManualCount = &count
+	item.LastAddedAt = dbutil.TimestampPtr(stats.LastAddedAt)
 }
 
 func subscriptionDto(r sqlcgen.Subscription) dto.SubscriptionDto {
@@ -280,5 +374,6 @@ func subscriptionDto(r sqlcgen.Subscription) dto.SubscriptionDto {
 		Enabled:   r.Enabled,
 		Cron:      r.Cron,
 		LastRunAt: dbutil.TimestampPtr(r.LastRunAt),
+		Kind:      r.Kind,
 	}
 }

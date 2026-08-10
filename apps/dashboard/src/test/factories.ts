@@ -127,6 +127,7 @@ export function mockSubscription(overrides: Partial<SubscriptionDto> = {}): Subs
     url: 'https://remotive.com/rss',
     enabled: true,
     cron: '0 */6 * * *',
+    kind: 'crawl',
     lastRunAt: null,
     ...overrides,
   }
@@ -167,6 +168,8 @@ export function mockSourceRun(overrides: Partial<SourceRunDto> = {}): SourceRunD
     id: 'run-1',
     sourceKey: 'remotive',
     searchId: 'search-1',
+    subscriptionId: null,
+    trigger: 'scheduled',
     startedAt: '2025-01-15T12:00:00Z',
     finishedAt: '2025-01-15T12:01:00Z',
     ok: true,
