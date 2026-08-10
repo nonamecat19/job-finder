@@ -2,6 +2,7 @@ package worker_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -227,5 +228,73 @@ func TestTick_LostSubscriptionClaimSkipsRun(t *testing.T) {
 
 	if repo.subRunStarted {
 		t.Error("expected a lost subscription claim to skip the run entirely")
+	}
+}
+
+// manualSubRepo answers the two reads the run paths make, so a manual row can
+// be offered to them directly. The production due-query filters manual rows out
+// in SQL (ListEnabledSubscriptions); these tests cover the service-level refusal
+// that has to hold even when a caller reaches past the scheduler (041 FR-014).
+type manualSubRepo struct {
+	domain.SearchRepository
+	subs []sqlcgen.Subscription
+}
+
+func (f *manualSubRepo) ListSubscriptions(ctx context.Context) ([]sqlcgen.Subscription, error) {
+	return f.subs, nil
+}
+
+func (f *manualSubRepo) GetSubscription(ctx context.Context, id pgtype.UUID) (sqlcgen.Subscription, error) {
+	for _, s := range f.subs {
+		if s.ID == id {
+			return s, nil
+		}
+	}
+	return sqlcgen.Subscription{}, pgx.ErrNoRows
+}
+
+func manualSubscription() sqlcgen.Subscription {
+	return sqlcgen.Subscription{
+		ID:        pgtype.UUID{Bytes: [16]byte{11}, Valid: true},
+		SourceKey: "djinni",
+		Url:       "",
+		Enabled:   true,
+		Cron:      "0 */6 * * *",
+		Kind:      "manual",
+	}
+}
+
+func TestRunSubscription_RefusesManualRow(t *testing.T) {
+	repo := &manualSubRepo{subs: []sqlcgen.Subscription{manualSubscription()}}
+	enq := &countingEnqueuer{}
+	svc := application.NewSearchService(repo, nil, nil, enq)
+
+	err := svc.RunSubscription(context.Background(), "0b000000-0000-0000-0000-000000000000")
+
+	if err == nil {
+		t.Fatal("expected a manual subscription to be refused, got nil")
+	}
+	if !strings.Contains(err.Error(), "nothing to crawl") {
+		t.Fatalf("expected the refusal to name the reason, got %v", err)
+	}
+	if enq.count != 0 {
+		t.Errorf("expected nothing enqueued for a manual subscription, got %d tasks", enq.count)
+	}
+}
+
+func TestRunAllSubscriptions_SkipsManualRows(t *testing.T) {
+	repo := &manualSubRepo{subs: []sqlcgen.Subscription{manualSubscription()}}
+	enq := &countingEnqueuer{}
+	svc := application.NewSearchService(repo, nil, nil, enq)
+
+	queued, err := svc.RunAllSubscriptions(context.Background())
+	if err != nil {
+		t.Fatalf("RunAllSubscriptions: %v", err)
+	}
+	if queued != 0 {
+		t.Errorf("expected run-all to skip manual rows, got %d queued", queued)
+	}
+	if enq.count != 0 {
+		t.Errorf("expected nothing enqueued, got %d tasks", enq.count)
 	}
 }

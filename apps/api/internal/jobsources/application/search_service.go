@@ -10,12 +10,17 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/apperr"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/queue"
 )
+
+// subscriptionKindManual is the one kind this service refuses to run. Manual
+// rows exist to own hand-added vacancies, not to be crawled (041 FR-014).
+const subscriptionKindManual = "manual"
 
 const (
 	reconcileMinAge = 30 * time.Minute
@@ -122,16 +127,23 @@ func (s *SearchService) RecentRuns(ctx context.Context, limit int32) ([]dto.Sour
 	}
 	out := make([]dto.SourceRunDto, 0, len(rows))
 	for _, r := range rows {
+		var subscriptionID *string
+		if r.SubscriptionID.Valid {
+			id := dbutil.UUIDString(r.SubscriptionID)
+			subscriptionID = &id
+		}
 		out = append(out, dto.SourceRunDto{
-			ID:         dbutil.UUIDString(r.ID),
-			SourceKey:  r.SourceKey,
-			SearchID:   r.SearchID,
-			StartedAt:  dbutil.Timestamp(r.StartedAt),
-			FinishedAt: dbutil.TimestampPtr(r.FinishedAt),
-			OK:         r.Ok,
-			Found:      int(r.Found),
-			New:        int(r.New),
-			Error:      r.Error,
+			ID:             dbutil.UUIDString(r.ID),
+			SourceKey:      r.SourceKey,
+			SearchID:       r.SearchID,
+			SubscriptionID: subscriptionID,
+			Trigger:        r.Trigger,
+			StartedAt:      dbutil.Timestamp(r.StartedAt),
+			FinishedAt:     dbutil.TimestampPtr(r.FinishedAt),
+			OK:             r.Ok,
+			Found:          int(r.Found),
+			New:            int(r.New),
+			Error:          r.Error,
 		})
 	}
 	return out, nil
@@ -250,6 +262,9 @@ func (s *SearchService) RunSubscription(ctx context.Context, subscriptionID stri
 	if err != nil {
 		return fmt.Errorf("subscription %s not found", subscriptionID)
 	}
+	if sub.Kind == subscriptionKindManual {
+		return apperr.Validation("a manual subscription has nothing to crawl — it holds vacancies added by hand")
+	}
 	if !sub.Enabled {
 		return fmt.Errorf("subscription %s is disabled", subscriptionID)
 	}
@@ -291,7 +306,7 @@ func (s *SearchService) RunAllSubscriptions(ctx context.Context) (int, error) {
 	}
 	queued := 0
 	for _, sub := range subs {
-		if !sub.Enabled {
+		if !sub.Enabled || sub.Kind == subscriptionKindManual {
 			continue
 		}
 		id := dbutil.UUIDString(sub.ID)
