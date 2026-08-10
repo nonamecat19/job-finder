@@ -104,6 +104,9 @@ func (h *JobsHandler) list(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("onlyBelowFloor"); v != "" {
 		params.OnlyBelowFloor = v == "true"
 	}
+	if v := q.Get("onlyManual"); v != "" {
+		params.OnlyManual = v == "true"
+	}
 
 	out, err := h.Jobs.List(r.Context(), params)
 	if err != nil {
