@@ -172,6 +172,56 @@ type GeneratedDocument struct {
 	SummaryOptionId    *string          `json:"summaryOptionId"`
 }
 
+type GenerationItem struct {
+	ID          pgtype.UUID        `json:"id"`
+	SectionID   pgtype.UUID        `json:"section_id"`
+	Origin      string             `json:"origin"`
+	SourceIndex *int32             `json:"source_index"`
+	SourceText  string             `json:"source_text"`
+	EditedText  *string            `json:"edited_text"`
+	Rank        int32              `json:"rank"`
+	Position    int32              `json:"position"`
+	Selected    bool               `json:"selected"`
+	Unavailable bool               `json:"unavailable"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GenerationRun struct {
+	ID                pgtype.UUID        `json:"id"`
+	ProfileID         pgtype.UUID        `json:"profile_id"`
+	JobID             pgtype.UUID        `json:"job_id"`
+	VacancyCompany    *string            `json:"vacancy_company"`
+	VacancyTitle      *string            `json:"vacancy_title"`
+	VacancyText       string             `json:"vacancy_text"`
+	MasterSnapshot    []byte             `json:"master_snapshot"`
+	MasterContentHash string             `json:"master_content_hash"`
+	ShapeConfig       []byte             `json:"shape_config"`
+	GroundingLevel    string             `json:"grounding_level"`
+	SummaryOptionID   *string            `json:"summary_option_id"`
+	Analysis          []byte             `json:"analysis"`
+	State             string             `json:"state"`
+	ActivityID        pgtype.UUID        `json:"activity_id"`
+	ExportDocumentID  pgtype.UUID        `json:"export_document_id"`
+	ExportStatus      *string            `json:"export_status"`
+	ExportReport      []byte             `json:"export_report"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GenerationSection struct {
+	ID           pgtype.UUID `json:"id"`
+	RunID        pgtype.UUID `json:"run_id"`
+	Kind         string      `json:"kind"`
+	EntryKey     *string     `json:"entry_key"`
+	EntryLabel   *string     `json:"entry_label"`
+	Position     int32       `json:"position"`
+	TargetCount  int32       `json:"target_count"`
+	State        string      `json:"state"`
+	Error        *string     `json:"error"`
+	FallbackUsed bool        `json:"fallback_used"`
+}
+
 type HostRetrievalState struct {
 	ID                 pgtype.UUID        `json:"id"`
 	Host               string             `json:"host"`

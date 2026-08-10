@@ -249,6 +249,148 @@ export const DocumentTypeCoverLetter = "cover_letter";
 export type DocumentType = typeof DocumentTypeResume | typeof DocumentTypeCoverLetter;
 
 //////////
+// source: generation_workspace.go
+
+/**
+ * GenerationRunDto is the whole workspace: run, sections, items
+ * (`GET /v1/generations/{runId}`, contracts/rest-api.md).
+ */
+export interface GenerationRunDto {
+  id: string;
+  state: string; // running | ready | partial | failed
+  vacancy: GenerationVacancyDto;
+  jobId?: string;
+  groundingLevel: string;
+  summaryOptionId?: string;
+  /**
+   * SummarySubstituted is the 035 provenance flag, surfaced unchanged.
+   */
+  summarySubstituted: boolean;
+  /**
+   * MasterChanged is FR-022: the run's snapshot hash no longer matches the
+   * profile's current master content hash.
+   */
+  masterChanged: boolean;
+  shapeConfig: ResumeShapeConfigDto;
+  export: GenerationExportDto;
+  sections: GenerationSectionDto[];
+  createdAt: string;
+  updatedAt: string;
+}
+/**
+ * GenerationVacancyDto is the vacancy a run was made against. Text is
+ * intentionally omitted from the list/get response summary fields where the
+ * full run body isn't needed; the run detail response embeds this struct
+ * as-is (company/title only — vacancy_text isn't re-served, matching
+ * rest-api.md's example body).
+ */
+export interface GenerationVacancyDto {
+  company?: string;
+  title?: string;
+}
+/**
+ * GenerationSectionDto is one `generation_sections` row plus its items, in
+ * `position` order.
+ */
+export interface GenerationSectionDto {
+  id: string;
+  kind: string; // summary | experience | skills
+  entryKey?: string;
+  entryLabel?: string;
+  position: number /* int */;
+  targetCount: number /* int */;
+  state: string; // running | ready | failed
+  error?: string;
+  fallbackUsed: boolean;
+  items: GenerationItemDto[];
+}
+/**
+ * GenerationItemDto is one ranked candidate for inclusion — profile-sourced
+ * (origin="profile", text byte-identical to the master bullet at
+ * SourceIndex, per SC-001) or AI-suggested (origin="ai", unselected by
+ * default, editable, never presented as the user's material).
+ */
+export interface GenerationItemDto {
+  id: string;
+  origin: string; // profile | ai
+  kind: string; // achievement | skill_group | summary
+  text: string; // effective text: editedText ?? sourceText
+  sourceIndex?: number /* int */;
+  rank: number /* int */;
+  position: number /* int */;
+  selected: boolean;
+  edited: boolean;
+  unavailable: boolean;
+}
+/**
+ * GenerationExportDto is the run's export status, embedded in the run
+ * response and returned as-is by `GET /v1/generations/{runId}/export`.
+ */
+export interface GenerationExportDto {
+  status: string; // rendering | exported | blocked | error
+  documentId?: string;
+  report?: OverflowReportDto;
+}
+/**
+ * OverflowReportDto is FR-019's over-budget report: pages rendered vs
+ * target, and the lowest-ranked selected items as named drop candidates.
+ * The server never acts on these.
+ */
+export interface OverflowReportDto {
+  pagesRendered: number /* int */;
+  pagesTarget: number /* int */;
+  candidates: OverflowCandidateDto[];
+}
+/**
+ * OverflowCandidateDto is one named drop candidate, worst-ranked first.
+ */
+export interface OverflowCandidateDto {
+  itemId: string;
+  sectionId: string;
+  label: string;
+  rank: number /* int */;
+}
+/**
+ * StartGenerationRequestDto is the body of `POST /v1/generations`. Exactly
+ * one of JobID / Vacancy is expected; the handler validates that, not this
+ * struct (rest-api.md's 400 conditions).
+ */
+export interface StartGenerationRequestDto {
+  profileId: string;
+  jobId?: string;
+  vacancy?: AdhocVacancyDto;
+  /**
+   * GroundingLevel governs the summary only on this route (research.md
+   * R1). Optional: absent means the stored default.
+   */
+  groundingLevel?: string;
+  /**
+   * SummaryOptionID is the 034 summary-model choice for this run.
+   * Optional: absent means "use my stored default".
+   */
+  summaryOptionId?: string;
+}
+/**
+ * PatchGenerationItemRequestDto is the body of
+ * `PATCH /v1/generations/{runId}/items/{itemId}` — any subset of the three
+ * fields. Text is rejected with 403 for an origin="profile" item (FR-009 at
+ * the API boundary).
+ */
+export interface PatchGenerationItemRequestDto {
+  selected?: boolean;
+  position?: number /* int */;
+  text?: string;
+}
+/**
+ * RerunGenerationRequestDto is the body of
+ * `POST /v1/generations/{runId}/rerun`. Omitting Sections reruns the whole
+ * run.
+ */
+export interface RerunGenerationRequestDto {
+  sections?: string[];
+}
+
+//////////
 // source: intel.go
 
 export interface CompanyIntelDto {
