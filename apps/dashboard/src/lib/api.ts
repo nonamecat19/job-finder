@@ -10,6 +10,7 @@ import type {
   FitGapAssessment,
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
+  GenerationRunDto,
   GithubSyncResultDto,
   HostRetrievalStatusDto,
   InterviewPrepPack,
@@ -313,5 +314,49 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ optionId }),
       }),
+  },
+  // 042: the resume generation workspace. `start`/`get`/`list`/`remove` are
+  // live from Phase 2 (Foundational); `patchItem`/`reorder`/`rerun`/`export`/
+  // `exportStatus` are defined now per the contract and 404 until the phase
+  // that implements each one lands — that is expected, not a bug.
+  generations: {
+    start: (body: {
+      profileId: string;
+      jobId?: string;
+      vacancy?: { company: string; title: string; text: string };
+      groundingLevel?: string;
+      summaryOptionId?: string;
+    }) =>
+      request<{ runId: string; activityId: string }>('/v1/generations', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    get: (runId: string) => request<GenerationRunDto>(`/v1/generations/${runId}`),
+    list: (params?: { jobId?: string; limit?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.jobId) q.set('jobId', params.jobId);
+      if (params?.limit) q.set('limit', String(params.limit));
+      const qs = q.toString();
+      return request<GenerationRunDto[]>(`/v1/generations${qs ? `?${qs}` : ''}`);
+    },
+    patchItem: (runId: string, itemId: string, body: { selected?: boolean; position?: number; text?: string }) =>
+      request(`/v1/generations/${runId}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    reorder: (runId: string, sectionId: string, itemIds: string[]) =>
+      request(`/v1/generations/${runId}/sections/${sectionId}/order`, {
+        method: 'PATCH',
+        body: JSON.stringify({ itemIds }),
+      }),
+    rerun: (runId: string, sections?: string[]) =>
+      request<{ runId: string; activityId: string }>(`/v1/generations/${runId}/rerun`, {
+        method: 'POST',
+        body: JSON.stringify({ sections }),
+      }),
+    export: (runId: string) =>
+      request<{ status: string; documentId?: string; report?: unknown }>(`/v1/generations/${runId}/export`, {
+        method: 'POST',
+      }),
+    exportStatus: (runId: string) =>
+      request<{ status: string; documentId?: string; report?: unknown }>(`/v1/generations/${runId}/export`),
+    remove: (runId: string) => request<void>(`/v1/generations/${runId}`, { method: 'DELETE' }),
   },
 };

@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
@@ -109,6 +110,12 @@ type Service struct {
 	defaultLevel domain.GroundingLevel
 	shape        ShapeProvider
 	summaryModel SummaryModelProvider
+	// asynqClient enqueues a workspace run's background half (StartRun) onto
+	// the existing `generate` queue. Installed via SetAsynqClient for the same
+	// reason SetSummaryModelProvider is a setter: NewService already has nine
+	// parameters and most callers — every test that doesn't exercise the 042
+	// workspace — have no reason to grow one more.
+	asynqClient *asynq.Client
 }
 
 // SetSummaryModelProvider installs the 034 port. It is a setter rather than a

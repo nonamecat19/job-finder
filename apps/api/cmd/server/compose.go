@@ -70,6 +70,7 @@ type App struct {
 	Roster        *jobsourceshttp.RosterHandler
 	Searches      *jobsourceshttp.SearchesHandler
 	Documents     *generationhttp.DocumentsHandler
+	Generations   *generationhttp.GenerationsHandler
 	Profiles      *profilehttp.ProfilesHandler
 	Jobs          *jobshttp.JobsHandler
 	Applications  *applicationshttp.ApplicationsHandler
@@ -301,6 +302,7 @@ type generationHandles struct {
 	Generation   *generation.Service
 	Handler      *generation.Handler
 	Documents    *generationhttp.DocumentsHandler
+	Generations  *generationhttp.GenerationsHandler
 	ResumeShape  *resumeshapehttp.ResumeShapeHandler
 	SummaryModel *summarymodelhttp.SummaryModelHandler
 }
@@ -344,10 +346,15 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	}
 	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, routers, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl, shapeSvc)
 	generationSvc.SetSummaryModelProvider(summarySvc)
+	// 042: the workspace run's background half (StartRun) is dispatched the
+	// same way every other async pipeline in this codebase is — enqueued on
+	// the existing `generate` queue and picked up by generation.Handler.
+	generationSvc.SetAsynqClient(p.AsynqClient)
 	return &generationHandles{
 		Generation:   generationSvc,
 		Handler:      generation.NewHandler(generationSvc, p.DB.Queries),
 		Documents:    &generationhttp.DocumentsHandler{Generation: generationSvc, SummaryModel: summarySvc},
+		Generations:  &generationhttp.GenerationsHandler{Workspace: generationSvc},
 		ResumeShape:  &resumeshapehttp.ResumeShapeHandler{Settings: shapeSvc},
 		SummaryModel: &summarymodelhttp.SummaryModelHandler{Settings: summarySvc},
 	}, nil
@@ -679,6 +686,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Roster:        &jobsourceshttp.RosterHandler{Roster: roster.NewView(sources.Roster)},
 		Searches:      ingestionH.Searches,
 		Documents:     generationH.Documents,
+		Generations:   generationH.Generations,
 		Profiles:      profileH.Handler,
 		Jobs:          jobsHandler,
 		Applications:  composeApplications(p),

@@ -68,6 +68,20 @@ export type GithubSyncResultDto = Omit<Gen.GithubSyncResultDto, 'contact'> & {
   contact: ReferralContactDto;
 };
 export type GroundingTraceDto = Gen.GroundingTraceDto;
+// 042: the resume generation workspace's wire shapes. Every pointer field on
+// these DTOs already carries `omitempty` (dto/generation_workspace.go), so
+// none needs a Nullable<> narrowing here — adding a field there requires zero
+// edits here, per 024-FR-003 rule 3.
+export type GenerationRunDto = Gen.GenerationRunDto;
+export type GenerationVacancyDto = Gen.GenerationVacancyDto;
+export type GenerationSectionDto = Gen.GenerationSectionDto;
+export type GenerationItemDto = Gen.GenerationItemDto;
+export type GenerationExportDto = Gen.GenerationExportDto;
+export type OverflowReportDto = Gen.OverflowReportDto;
+export type OverflowCandidateDto = Gen.OverflowCandidateDto;
+export type StartGenerationRequestDto = Gen.StartGenerationRequestDto;
+export type PatchGenerationItemRequestDto = Gen.PatchGenerationItemRequestDto;
+export type RerunGenerationRequestDto = Gen.RerunGenerationRequestDto;
 export type HostPacingDto = Gen.HostPacingDto;
 export type JobListResponse = Omit<Gen.JobListResponse, 'items'> & { items: JobDto[] };
 export type JobSignalDto = Omit<Gen.JobSignalDto, 'signals'> & { signals: GhostSignalBreakdownDto };

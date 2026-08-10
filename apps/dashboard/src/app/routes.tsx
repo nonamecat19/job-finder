@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { RequireProfileConfig } from './RequireProfileConfig';
 import ContactsPage from '../features/contacts/ContactsPage';
 import FeedPage from '../features/feed/FeedPage';
+import GenerateWorkspacePage from '../features/generate/GenerateWorkspacePage';
 import JobDetailPage from '../features/job-detail/JobDetailPage';
 import ProfilePage from '../features/profile/ProfilePage';
 import SettingsPage from '../features/settings/SettingsPage';
@@ -15,6 +16,10 @@ export type LayoutMode = 'flow' | 'fit';
 export const routeLayoutModes: Record<string, LayoutMode> = {
   '/status': 'fit',
   '/tracker': 'fit',
+  // The two-pane workspace owns the viewport and scrolls its panes
+  // independently, like /tracker and /status, rather than flowing the page
+  // (contracts/rest-api.md's "Route" section).
+  '/generate': 'fit',
 };
 
 export function getLayoutMode(path: string): LayoutMode {
@@ -43,6 +48,14 @@ export function AppRoutes() {
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/contacts" element={<ContactsPage />} />
       <Route path="/tailor" element={<TailorPage />} />
+      <Route
+        path="/generate"
+        element={
+          <RequireProfileConfig>
+            <GenerateWorkspacePage />
+          </RequireProfileConfig>
+        }
+      />
       <Route path="/sources" element={<SourcesPage />} />
       <Route path="/status" element={<StatusPage />} />
       <Route path="/settings" element={<SettingsPage />} />

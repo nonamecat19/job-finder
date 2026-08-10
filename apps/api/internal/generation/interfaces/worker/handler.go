@@ -47,6 +47,20 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		}
 	}()
 
+	// 042: a workspace run carries its own id and is dispatched to the
+	// workspace pipeline instead of the legacy merged-resume path. This is the
+	// same wire-nullable additive pattern 020 specified for
+	// TailoringDraftID — every payload written before this field existed has
+	// it nil and takes the branch below unchanged.
+	if payload.GenerationRunID != nil && *payload.GenerationRunID != "" {
+		if err = h.svc.StartRun(ctx, *payload.GenerationRunID, rec); err != nil {
+			slog.Error("generation workspace run failed", "runId", *payload.GenerationRunID, "error", err)
+			return err
+		}
+		slog.Info("generation workspace run complete", "runId", *payload.GenerationRunID)
+		return nil
+	}
+
 	doc, err := h.svc.Generate(ctx, payload.JobID, payload.Type, payload.ProfileID, rec)
 	if err != nil {
 		if errors.Is(err, llm.ErrRateLimited) {

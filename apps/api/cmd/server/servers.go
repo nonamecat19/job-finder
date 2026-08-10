@@ -54,7 +54,7 @@ func (p *Platform) policyFor(taskType string) queue.TaskPolicy {
 func buildServers(p *Platform, app *App) *Servers {
 	router := httpapi.NewRouter(
 		p.Config.DBAcquireTimeout,
-		app.Sources.Mount, app.Roster.Mount, app.Searches.Mount, app.Documents.Mount,
+		app.Sources.Mount, app.Roster.Mount, app.Searches.Mount, app.Documents.Mount, app.Generations.Mount,
 		app.Profiles.Mount, app.Jobs.Mount, app.Applications.Mount,
 		app.Subs.Mount, app.ManualAdd.Mount, app.Activity.Mount, app.Keyword.Mount,
 		app.PostAge.Mount, app.Notification.Mount, app.Companies.Mount,

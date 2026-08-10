@@ -61,6 +61,10 @@ type GeneratePayload struct {
 	ProfileID        *string `json:"profileId,omitempty"`
 	ActivityID       *string `json:"activityId,omitempty"`
 	TailoringDraftID *string `json:"tailoringDraftId,omitempty"`
+	// GenerationRunID routes this task to the 042 workspace pipeline
+	// (application.Service.StartRun) instead of the legacy merged-resume path.
+	// Wire-nullable, so every caller written before this feature is unaffected.
+	GenerationRunID *string `json:"generationRunId,omitempty"`
 }
 
 func RedisOpt(redisURL string) (asynq.RedisClientOpt, error) {
