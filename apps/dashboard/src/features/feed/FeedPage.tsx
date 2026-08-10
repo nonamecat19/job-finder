@@ -20,6 +20,7 @@ import {
   SkeletonLine,
   Surface,
 } from '../../components/ui';
+import { AddVacancyForm } from './AddVacancyForm';
 import { useFeedSources, useFeedSubscriptions, useHideJob, useInfiniteJobs, useShortlistJob } from './hooks';
 import { postAgeLabel } from '../../lib/time';
 
@@ -42,6 +43,7 @@ function filtersFromParams(params: URLSearchParams): FeedFilters {
     onlyHidden: hidden === 'only' ? true : undefined,
     includeApplied: applied === 'all' ? true : undefined,
     onlyApplied: applied === 'only' ? true : undefined,
+    onlyManual: params.get('manual') === 'only' ? true : undefined,
   };
 }
 
@@ -61,6 +63,8 @@ function paramsFromFilters(filters: FeedFilters): URLSearchParams {
   params.delete('onlyHidden');
   params.delete('includeApplied');
   params.delete('onlyApplied');
+  params.delete('onlyManual');
+  if (filters.onlyManual) params.set('manual', 'only');
   if (floor !== 'above') params.set('floor', floor);
   if (hidden !== 'fit') params.set('hidden', hidden);
   if (applied !== 'unapplied') params.set('applied', applied);
@@ -98,6 +102,10 @@ export default function FeedPage() {
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
+  // The vacancy a manual add just created, so its card is findable in a feed
+  // that may already be long.
+  const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
+
   const [searchInput, setSearchInput] = useState(filters.q ?? '');
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -117,6 +125,10 @@ export default function FeedPage() {
           title="Job feed"
           description="Review fresh matches, filter by source or fit, and move promising roles into the tracker."
         />
+
+        <Surface className="mb-3 max-w-none w-full">
+          <AddVacancyForm onCreated={setHighlightedJobId} />
+        </Surface>
 
         <Surface className="mb-4 max-w-none w-full">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(11rem,0.8fr))_auto] lg:items-end">
@@ -223,6 +235,16 @@ export default function FeedPage() {
               <option value="only">only applied</option>
             </Select>
           </Field>
+          <Field label="Added by hand">
+            <Select
+              value={filters.onlyManual ? 'only' : 'all'}
+              onChange={(e) => set({ onlyManual: e.target.value === 'only' ? true : undefined })}
+              className="w-full"
+            >
+              <option value="all">all vacancies</option>
+              <option value="only">only manual</option>
+            </Select>
+          </Field>
           <Field label="Non-fit">
             <Select
               value={filters.onlyHidden ? 'only' : filters.includeHidden ? 'all' : 'fit'}
@@ -257,6 +279,7 @@ export default function FeedPage() {
             <JobCard
               key={job.id}
               job={job}
+              highlighted={job.id === highlightedJobId}
               onShortlist={() => shortlist.mutate(job.id)}
               onHide={() => hide.mutate(job.id)}
             />
@@ -354,15 +377,21 @@ function JobCardSkeleton() {
 
 function JobCard({
   job,
+  highlighted,
   onShortlist,
   onHide,
 }: {
   job: JobDto;
+  highlighted?: boolean;
   onShortlist: () => void;
   onHide: () => void;
 }) {
   return (
-    <div className="group flex h-full flex-col rounded-xl border border-border bg-surface p-4 shadow-sm shadow-black/20 transition hover:border-accent/40 hover:bg-surface-secondary">
+    <div
+      className={`group flex h-full flex-col rounded-xl border bg-surface p-4 shadow-sm shadow-black/20 transition hover:border-accent/40 hover:bg-surface-secondary ${
+        highlighted ? 'border-accent ring-1 ring-accent/40' : 'border-border'
+      }`}
+    >
       <div className="flex flex-1 flex-col gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

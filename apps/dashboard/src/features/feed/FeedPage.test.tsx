@@ -10,9 +10,17 @@ vi.mock('./hooks', () => ({
   useFeedSubscriptions: vi.fn(),
   useShortlistJob: vi.fn(),
   useHideJob: vi.fn(),
+  useAddVacancyByUrl: vi.fn(),
 }));
 
-import { useInfiniteJobs, useFeedSources, useFeedSubscriptions, useShortlistJob, useHideJob } from './hooks';
+import {
+  useInfiniteJobs,
+  useFeedSources,
+  useFeedSubscriptions,
+  useShortlistJob,
+  useHideJob,
+  useAddVacancyByUrl,
+} from './hooks';
 
 const mockedUseJobs = vi.mocked(useInfiniteJobs);
 
@@ -21,6 +29,12 @@ function setupCommonMocks() {
   vi.mocked(useFeedSubscriptions).mockReturnValue({ data: [] } as any);
   vi.mocked(useShortlistJob).mockReturnValue({ mutate: vi.fn() } as any);
   vi.mocked(useHideJob).mockReturnValue({ mutate: vi.fn() } as any);
+  vi.mocked(useAddVacancyByUrl).mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+    data: undefined,
+  } as any);
 }
 
 function renderFeedPage() {

@@ -1,8 +1,7 @@
-import { AlertTriangle, CheckCircle, Clock, ListFilter, Play, Plus, RefreshCw, ToggleLeft, ToggleRight, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, Play, Plus, RefreshCw, ToggleLeft, ToggleRight, XCircle } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import type { JobSourceDto, SavedSearchDto, SearchQuery, SubscriptionDto } from '@job-finder/shared';
-import { summarizeDjinniBasicSearch } from './djinniSearchSummary';
+import type { JobSourceDto, SavedSearchDto, SearchQuery } from '@job-finder/shared';
+import { SubscriptionRow } from './SubscriptionRow';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { DashboardGrid, Tile } from '../../components/layout';
 import {
@@ -344,7 +343,7 @@ function SubscriptionsPanel() {
           <Button
             variant="secondary"
             onClick={() => runAll.mutate()}
-            disabled={runAll.isPending || !subs?.some((s) => s.enabled)}
+            disabled={runAll.isPending || !subs?.some((s) => s.enabled && s.kind !== 'manual')}
           >
             <Play className="h-3 w-3" /> run all
           </Button>
@@ -413,43 +412,6 @@ function NewSubscriptionForm({ onSubmit }: { onSubmit: (body: { sourceKey: strin
         </Button>
       </div>
     </div>
-  );
-}
-
-function SubscriptionRow({ sub, onRun, onDelete, running }: { sub: SubscriptionDto; onRun: () => void; onDelete: () => void; running: boolean }) {
-  const basicSearchLabel = sub.sourceKey === 'djinni' ? summarizeDjinniBasicSearch(sub.url) : null
-  const djinniModeMarker =
-    sub.sourceKey === 'djinni' && basicSearchLabel !== null ? (
-      <span className="ml-1 text-xs text-faint">· basic-search</span>
-    ) : null
-  return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface-secondary/60 p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <span className="font-medium text-foreground">{basicSearchLabel ?? sub.name ?? sub.sourceKey}</span>
-        <span className="ml-2 text-xs text-muted">{sub.sourceKey}</span>
-        {djinniModeMarker}
-        <div className="truncate text-xs text-faint" title={sub.url}>{sub.url}</div>
-        {sub.lastRunAt ? (
-          <span className="mr-2 text-xs text-faint">
-            last run {new Date(sub.lastRunAt).toLocaleString()}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Link
-          to={`/?source=${sub.sourceKey}&subscriptionId=${sub.id}`}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition hover:bg-surface-tertiary"
-        >
-          <ListFilter className="h-3 w-3" /> view jobs
-        </Link>
-        <Button variant="secondary" onClick={onRun} disabled={running}>
-          <Play className="h-3 w-3" /> run now
-        </Button>
-        <Button variant="ghost" onClick={onDelete}>
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
-    </li>
   );
 }
 

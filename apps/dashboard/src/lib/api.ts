@@ -19,6 +19,8 @@ import type {
   JobSignalDto,
   JobSourceDto,
   KeywordDiffResponse,
+  ManualAddResultDto,
+  ManualVacancyDraftDto,
   AiFeatureSettingDto,
   OutreachDraftDto,
   OutreachToneOptionDto,
@@ -77,6 +79,27 @@ export interface JobFilters {
   onlyHidden?: boolean;
   onlyApplied?: boolean;
   onlyBelowFloor?: boolean;
+  onlyManual?: boolean;
+}
+
+// A manual add answers with its outcome in the body even when the status is a
+// 4xx: `failed` and `needs_fill_in` are results the operator acts on, not
+// transport errors. Only a 5xx or an unparseable body is thrown.
+async function requestManualAdd(path: string, body: unknown): Promise<ManualAddResultDto> {
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (res.status >= 500 || !text) {
+    throw new ApiError(res.status, res.statusText, text);
+  }
+  const parsed = JSON.parse(text) as ManualAddResultDto;
+  if (typeof parsed?.outcome !== 'string') {
+    throw new ApiError(res.status, res.statusText, text);
+  }
+  return parsed;
 }
 
 export const api = {
@@ -108,6 +131,9 @@ export const api = {
     refreshContacts: (id: string) =>
       request<JobContactDto[]>(`/jobs/${id}/contacts/refresh`, { method: 'POST' }),
     referralPaths: (id: string) => request<ReferralPathDto[]>(`/jobs/${id}/referral-paths`),
+    addManual: (url: string) => requestManualAdd('/jobs/manual', { url }),
+    saveManual: (body: ManualVacancyDraftDto & { title: string; company: string; description: string }) =>
+      requestManualAdd('/jobs/manual/fill-in', body),
   },
   coach: {
     assess: (jobId: string) =>
