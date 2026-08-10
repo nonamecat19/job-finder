@@ -56,7 +56,7 @@ func buildServers(p *Platform, app *App) *Servers {
 		p.Config.DBAcquireTimeout,
 		app.Sources.Mount, app.Roster.Mount, app.Searches.Mount, app.Documents.Mount,
 		app.Profiles.Mount, app.Jobs.Mount, app.Applications.Mount,
-		app.Subs.Mount, app.Activity.Mount, app.Keyword.Mount,
+		app.Subs.Mount, app.ManualAdd.Mount, app.Activity.Mount, app.Keyword.Mount,
 		app.PostAge.Mount, app.Notification.Mount, app.Companies.Mount,
 		app.GhostJob.Mount, app.Coach.Mount,
 		app.Contacts.Mount, app.Referral.Mount,
