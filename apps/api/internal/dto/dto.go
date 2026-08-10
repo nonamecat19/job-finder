@@ -6,6 +6,9 @@ const (
 	SourceKindAPI     SourceKind = "api"
 	SourceKindScrape  SourceKind = "scrape"
 	SourceKindSidecar SourceKind = "sidecar"
+	// SourceKindManual backs hand-entered vacancies on hosts no adapter reads.
+	// It is never crawled — its adapter's Search fails permanently (041 D4).
+	SourceKindManual SourceKind = "manual"
 )
 
 type ApplicationStatus string

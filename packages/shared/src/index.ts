@@ -187,13 +187,16 @@ export type SummaryModelOptionDto = Gen.SummaryModelOptionDto;
 export type SummaryModelSettingDto = Gen.SummaryModelSettingDto;
 export type UpdateSummaryModelRequestDto = Gen.UpdateSummaryModelRequestDto;
 
+export type ManualAddResultDto = Gen.ManualAddResultDto;
+export type ManualVacancyDraftDto = Gen.ManualVacancyDraftDto;
+
 export type RunVerdictDto = Nullable<Gen.RunVerdictDto, 'blockReason'>;
 
 export type SavedSearchDto = Nullable<Gen.SavedSearchDto, 'lastRunAt'>;
 
 export type SearchQuery = Gen.SearchQuery;
 
-export type SourceRunDto = Nullable<Gen.SourceRunDto, 'blockReason' | 'error' | 'finishedAt' | 'ok' | 'searchId' | 'verdict'>;
+export type SourceRunDto = Nullable<Gen.SourceRunDto, 'blockReason' | 'error' | 'finishedAt' | 'ok' | 'searchId' | 'subscriptionId' | 'verdict'>;
 
 export type StatsDto = Omit<Gen.StatsDto, 'pipeline' | 'recentRuns'> & {
   pipeline: Record<string, number>;
