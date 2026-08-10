@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server 
 # Runtime: static Go binary + chromium (chromedp PDF rendering) + rendercv
 # (Python/Typst CLI, exec'd for the RenderCV tailoring path) + poppler
 # (pdftotext fallback for resume PDF import).
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       chromium \
