@@ -254,3 +254,55 @@ func TestVerifySummaryGroundingIgnoresOrdinaryEnglish(t *testing.T) {
 		t.Errorf("violations = %v, want none — ordinary English is not a skill claim", violations)
 	}
 }
+
+func metricMaster(bullets ...string) RendercvMaster {
+	entries := make([]any, 0, len(bullets))
+	for _, b := range bullets {
+		entries = append(entries, b)
+	}
+	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"experience": []any{map[string]any{"company": "Acme", "highlights": entries}},
+	}}}
+}
+
+// The failure this check exists for: a real bullet with a number bolted on.
+// The word overlap is untouched, so the drift check passes it — and the number
+// is exactly what a hiring manager asks about in the interview.
+func TestVerifyRendercvGroundingRejectsInventedMetric(t *testing.T) {
+	master := metricMaster("Cut checkout latency on the payments service")
+	merged := metricMaster("Cut checkout latency on the payments service by 40%")
+
+	violations := VerifyRendercvGrounding(master, merged, GroundingModerate, VacancyAnalysis{})
+	if !hasViolationContaining(violations, `asserts metric "40%"`) {
+		t.Errorf("invented metric not reported; violations = %v", violations)
+	}
+}
+
+func TestVerifyRendercvGroundingAllowsMetricsTheMasterClaims(t *testing.T) {
+	master := metricMaster("Cut checkout latency by 40% across 12 services")
+	merged := metricMaster("Reduced checkout latency 40% over 12 services")
+
+	if violations := VerifyRendercvGrounding(master, merged, GroundingModerate, VacancyAnalysis{}); len(violations) != 0 {
+		t.Errorf("rephrasing that keeps the master's own numbers must pass; got %v", violations)
+	}
+}
+
+// A scaled figure is a different claim, not a rewording.
+func TestVerifyRendercvGroundingRejectsAlteredMetric(t *testing.T) {
+	master := metricMaster("Cut checkout latency by 40%")
+	merged := metricMaster("Cut checkout latency by 60%")
+
+	if !hasViolationContaining(VerifyRendercvGrounding(master, merged, GroundingModerate, VacancyAnalysis{}), `asserts metric "60%"`) {
+		t.Error("a rounded-up metric must be reported; it is a claim the candidate never made")
+	}
+}
+
+// Digits inside an identifier name a technology rather than assert a quantity.
+func TestVerifyRendercvGroundingIgnoresDigitsInsideIdentifiers(t *testing.T) {
+	master := metricMaster("Tuned p95 latency", "Migrated storage to S3")
+	merged := metricMaster("Tuned p95 latency after migrating storage to S3")
+
+	if violations := VerifyRendercvGrounding(master, merged, GroundingModerate, VacancyAnalysis{}); len(violations) != 0 {
+		t.Errorf("p95/S3 are technology names, not metrics; got %v", violations)
+	}
+}

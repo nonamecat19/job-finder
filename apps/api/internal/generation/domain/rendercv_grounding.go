@@ -65,6 +65,77 @@ func VerifyTailoredSectionsGrounding(master RendercvMaster, payload TailoredSect
 	return violations
 }
 
+// ungroundedMetrics returns the numbers a proposed bullet asserts that none of
+// its master sources contain.
+//
+// This is the hole lcsCovered cannot see: wordSet drops tokens shorter than
+// three characters, so "40%" reduces to "40" and is discarded before the
+// overlap is counted. A model could take a real bullet, attach a metric the
+// candidate never claimed, and pass the drift check on the surrounding words
+// alone — which is the single most damaging thing a generated resume can do,
+// because the number is exactly what a hiring manager asks about.
+//
+// Sources are the master bullets the proposal may draw from — the single
+// bullet a reference names when checked pre-merge, and every bullet of the same
+// company or project when checked on the finished document, where the mapping
+// is no longer available.
+func ungroundedMetrics(proposed string, sources []string) []string {
+	if strings.IndexFunc(proposed, unicode.IsDigit) < 0 {
+		return nil
+	}
+	allowed := map[string]bool{}
+	for _, s := range sources {
+		for _, f := range metricFingerprints(s) {
+			allowed[f] = true
+		}
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, f := range metricFingerprints(proposed) {
+		if allowed[f] || seen[f] {
+			continue
+		}
+		seen[f] = true
+		out = append(out, f)
+	}
+	return out
+}
+
+// metricFingerprints reduces the numeric claims in a string to comparable
+// keys — "1,200" and "1200" are the same claim, "$2M" and "2" are not.
+//
+// Digits embedded in an identifier ("S3", "p95", "EC2") are skipped: they name
+// a technology rather than assert a quantity, and treating them as metrics
+// would flag a bullet for mentioning the same service the master mentions
+// elsewhere.
+func metricFingerprints(s string) []string {
+	var out []string
+	for _, m := range numberRe.FindAllStringSubmatchIndex(s, -1) {
+		start := m[0]
+		if start > 0 {
+			if prev := rune(s[start-1]); unicode.IsLetter(prev) || unicode.IsDigit(prev) {
+				continue
+			}
+		}
+		digits := strings.ReplaceAll(s[m[4]:m[5]], ",", "")
+		currency := s[m[2]:m[3]]
+		unit := ""
+		// The match itself can extend past the unit — the regex's optional
+		// separator consumes the space in "12 years" — so the boundary check
+		// uses the number's own end, not the match's.
+		end := m[5]
+		if m[6] >= 0 {
+			unit = s[m[6]:m[7]]
+			end = m[7]
+		}
+		if end < len(s) && unicode.IsLetter(rune(s[end])) {
+			continue
+		}
+		out = append(out, strings.ToLower(currency+digits+unit))
+	}
+	return out
+}
+
 func lcsCovered(proposed string, masterBullets []string) bool {
 	proposedWords := wordSet(proposed)
 	for _, b := range masterBullets {
@@ -149,6 +220,11 @@ func VerifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel
 			if !lcsCovered(h, masterBullets) {
 				violations = append(violations, `experience "`+company+`" highlight not grounded in master: "`+truncateStr(h, 60)+`"`)
 			}
+			// 5. Metric grounding: a number the master never claimed is a
+			// fabrication the word-overlap check above cannot detect.
+			for _, m := range ungroundedMetrics(h, masterBullets) {
+				violations = append(violations, `experience "`+company+`" highlight asserts metric "`+m+`" absent from the master's bullets: "`+truncateStr(h, 60)+`"`)
+			}
 		}
 	}
 
@@ -176,13 +252,25 @@ func VerifyRendercvGrounding(master, merged RendercvMaster, level GroundingLevel
 	// tailoring path, so they need the same no-fabrication guard companies
 	// have: the model may select among the master's projects, never add one.
 	masterProjects := map[string]bool{}
+	masterProjectHighlights := map[string][]string{}
 	for _, p := range AsSliceOfMaps(masterSections["projects"]) {
-		masterProjects[norm(StringField(p, "name"))] = true
+		key := norm(StringField(p, "name"))
+		masterProjects[key] = true
+		masterProjectHighlights[key] = StringSliceField(p, "highlights")
 	}
 	for _, p := range AsSliceOfMaps(mergedSections["projects"]) {
 		name := StringField(p, "name")
 		if !masterProjects[norm(name)] {
 			violations = append(violations, `project "`+name+`" not in master profile`)
+			continue
+		}
+		// Metrics are checked at every grounding level: an invented number is
+		// not a stylistic liberty that a looser level should tolerate.
+		own := masterProjectHighlights[norm(name)]
+		for _, h := range StringSliceField(p, "highlights") {
+			for _, m := range ungroundedMetrics(h, own) {
+				violations = append(violations, `project "`+name+`" highlight asserts metric "`+m+`" absent from the master's bullets: "`+truncateStr(h, 60)+`"`)
+			}
 		}
 	}
 
