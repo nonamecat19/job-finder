@@ -1,16 +1,14 @@
-package worker
+package ingest
 
 import (
 	"context"
 	"strconv"
 	"testing"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/queue"
 )
 
 type fakeBatchRepo struct {
@@ -138,9 +136,9 @@ func postings(n int) []dto.NormalizedJob {
 func persist(t *testing.T, repo *fakeBatchRepo, jobs []dto.NormalizedJob, run pgtype.UUID, chunkSize int) PersistResult {
 	t.Helper()
 	batch := NewPostingBatch(jobs, pgtype.UUID{}, run, false)
-	result, err := persistBatch(context.Background(), repo, batch, chunkSize)
+	result, err := PersistBatch(context.Background(), repo, batch, chunkSize)
 	if err != nil {
-		t.Fatalf("persistBatch: %v", err)
+		t.Fatalf("PersistBatch: %v", err)
 	}
 	return result
 }
@@ -279,67 +277,11 @@ func TestPersistBatchCorrelatesInsertsByKey(t *testing.T) {
 		if want := DedupeKey(ins.Posting.Company, ins.Posting.Title, ins.Posting.URL); ins.DedupeKey != want {
 			t.Fatalf("posting %q paired with key of another row", ins.Posting.Title)
 		}
-		if id, ok := ins.ActivityIDs[opMatch]; !ok || !id.Valid {
+		if id, ok := ins.ActivityIDs[OpMatch]; !ok || !id.Valid {
 			t.Fatalf("posting %q has no match activity id", ins.Posting.Title)
 		}
-		if id, ok := ins.ActivityIDs[opGhost]; !ok || !id.Valid {
+		if id, ok := ins.ActivityIDs[OpGhost]; !ok || !id.Valid {
 			t.Fatalf("posting %q has no ghost activity id", ins.Posting.Title)
 		}
-	}
-}
-
-type recordingEnqueuer struct {
-	types []string
-}
-
-func (r *recordingEnqueuer) EnqueueContext(_ context.Context, task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
-	r.types = append(r.types, task.Type())
-	return &asynq.TaskInfo{}, nil
-}
-
-func TestEnqueueInsertedRouting(t *testing.T) {
-	tests := []struct {
-		name        string
-		needsDetail bool
-		result      PersistResult
-		want        []string
-	}{
-		{
-			name:        "full postings queue match and ghost",
-			needsDetail: false,
-			result:      PersistResult{Inserted: []InsertedJob{{JobID: runID(9), Posting: posting("Acme", "Engineer")}}},
-			want:        []string{queue.TypeMatch, queue.TypeGhostScore},
-		},
-		{
-			name:        "list-only postings queue enrich only",
-			needsDetail: true,
-			result:      PersistResult{Inserted: []InsertedJob{{JobID: runID(9), Posting: posting("Acme", "Engineer")}}},
-			want:        []string{queue.TypeEnrich},
-		},
-		{
-			name:   "a rolled-back run queues nothing",
-			result: PersistResult{},
-		},
-		{
-			name:   "reposted and merged postings queue nothing",
-			result: PersistResult{Reposted: 7, Merged: 3, Skipped: 2},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			enq := &recordingEnqueuer{}
-			h := NewHandler(nil, nil, nil, enq)
-
-			h.enqueueInserted(context.Background(), tt.result, tt.needsDetail)
-
-			if len(enq.types) != len(tt.want) {
-				t.Fatalf("enqueued %v, want %v", enq.types, tt.want)
-			}
-			for i, want := range tt.want {
-				if enq.types[i] != want {
-					t.Fatalf("enqueued %v, want %v", enq.types, tt.want)
-				}
-			}
-		})
 	}
 }
