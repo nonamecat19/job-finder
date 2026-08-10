@@ -389,6 +389,15 @@ export interface PatchGenerationItemRequestDto {
 export interface RerunGenerationRequestDto {
   sections?: string[];
 }
+/**
+ * ReorderSectionItemsRequestDto is the body of
+ * `PATCH /v1/generations/{runId}/sections/{sectionId}/order` — the section's
+ * item ids in the caller's desired display order. The handler assigns
+ * `position` from each id's index in this array (T026).
+ */
+export interface ReorderSectionItemsRequestDto {
+  itemIds: string[];
+}
 
 //////////
 // source: intel.go

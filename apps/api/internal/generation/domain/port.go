@@ -46,3 +46,15 @@ type Repository interface {
 	ReorderSectionItems(ctx context.Context, arg sqlcgen.ReorderSectionItemsParams) error
 	MarkItemsUnavailable(ctx context.Context, itemIds []pgtype.UUID) error
 }
+
+// TxRunner runs a function inside one database transaction, giving it a
+// *sqlcgen.Queries bound to that transaction. Item/section mutations
+// (PatchGenerationItem, ReorderSection) need this rather than the plain
+// Repository above: rest-api.md requires "every write takes a row-level
+// SELECT ... FOR UPDATE on the run first", and a row lock only serializes
+// concurrent requests when the lock and the write it guards share one
+// transaction. *db.DB satisfies this directly (internal/db/db.go), the same
+// shape 020/manualadd's domain.TxRunner already established.
+type TxRunner interface {
+	WithinTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error
+}

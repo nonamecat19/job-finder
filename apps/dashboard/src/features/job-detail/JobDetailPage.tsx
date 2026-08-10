@@ -1,6 +1,6 @@
-import { ArrowLeft, ExternalLink, FileDown, X, FileText } from 'lucide-react';
+import { ArrowLeft, ExternalLink, FileDown, X, FileText, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -8,6 +8,8 @@ import { DashboardGrid, Tile } from '../../components/layout';
 import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
+import { useStartGenerationRun } from '../generate/hooks';
+import { useProfiles } from '../profile/hooks';
 import {
   useGenerateDocument,
   useJobDetail,
@@ -38,6 +40,7 @@ type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [generating, setGenerating] = useState<DocumentType | null>(null);
   const [countAtGenerate, setCountAtGenerate] = useState(0);
   const [editingDoc, setEditingDoc] = useState<{ id: string; text: string } | null>(null);
@@ -45,6 +48,16 @@ export default function JobDetailPage() {
 
   const qc = useQueryClient();
   const { data: job, isLoading } = useJobDetail(id);
+  const { data: profiles } = useProfiles();
+  const profileId = profiles?.[0]?.id;
+  const tailorForJob = useStartGenerationRun();
+  const handleTailorForJob = () => {
+    if (!profileId || !id) return;
+    tailorForJob.mutate(
+      { profileId, jobId: id },
+      { onSuccess: (data) => navigate(`/generate?runId=${data.runId}`) },
+    );
+  };
   const { data: documents } = useJobDocuments(id);
   const { data: statuses } = useJobDocumentStatuses(id, !!generating);
   const statusCountOfType = (type: DocumentType) => (statuses ?? []).filter((d) => d.type === type).length;
@@ -112,6 +125,14 @@ export default function JobDetailPage() {
                 open posting <ExternalLink className="h-4 w-4" aria-hidden="true" />
               </Button>
             </a>
+            <Button
+              variant="secondary"
+              onClick={handleTailorForJob}
+              disabled={!profileId || tailorForJob.isPending}
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              {tailorForJob.isPending ? 'starting…' : 'tailor for this job'}
+            </Button>
             {job.status === 'hidden' ? (
               <Button variant="secondary" onClick={() => undoNotFit.mutate()} disabled={undoNotFit.isPending}>
                 undo not fit

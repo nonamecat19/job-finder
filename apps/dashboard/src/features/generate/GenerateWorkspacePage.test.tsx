@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import type { GenerationRunDto } from '@job-finder/shared';
 import { renderWithProviders, screen } from '../../test/test-utils';
 import GenerateWorkspacePage from './GenerateWorkspacePage';
@@ -6,6 +7,8 @@ import GenerateWorkspacePage from './GenerateWorkspacePage';
 vi.mock('./hooks', () => ({
   useGenerationRun: vi.fn(),
   useStartGenerationRun: vi.fn(),
+  useToggleGenerationItem: vi.fn(),
+  useReorderGenerationSection: vi.fn(),
 }));
 vi.mock('../profile/hooks', () => ({
   useProfiles: vi.fn(),
@@ -14,12 +17,19 @@ vi.mock('../tailor/hooks', () => ({
   useSummaryModel: vi.fn(),
 }));
 
-import { useGenerationRun, useStartGenerationRun } from './hooks';
+import {
+  useGenerationRun,
+  useReorderGenerationSection,
+  useStartGenerationRun,
+  useToggleGenerationItem,
+} from './hooks';
 import { useProfiles } from '../profile/hooks';
 import { useSummaryModel } from '../tailor/hooks';
 
 const mockedUseGenerationRun = vi.mocked(useGenerationRun);
 const mockedUseStartGenerationRun = vi.mocked(useStartGenerationRun);
+const mockedUseToggleGenerationItem = vi.mocked(useToggleGenerationItem);
+const mockedUseReorderGenerationSection = vi.mocked(useReorderGenerationSection);
 const mockedUseProfiles = vi.mocked(useProfiles);
 const mockedUseSummaryModel = vi.mocked(useSummaryModel);
 
@@ -84,6 +94,8 @@ function setup() {
   mockedUseProfiles.mockReturnValue({ data: [{ id: 'profile-1' }] } as any);
   mockedUseSummaryModel.mockReturnValue({ data: undefined } as any);
   mockedUseStartGenerationRun.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false } as any);
+  mockedUseToggleGenerationItem.mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
+  mockedUseReorderGenerationSection.mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
 }
 
 describe('GenerateWorkspacePage', () => {
@@ -123,5 +135,27 @@ describe('GenerateWorkspacePage', () => {
     renderWithProviders(<GenerateWorkspacePage />);
 
     expect(screen.getByText('Shipped the thing')).toBeInTheDocument();
+  });
+
+  // T036 / SC-006: toggling an item previews the change through a PATCH
+  // mutation, never through the start-a-run mutation — toggling must not
+  // cost a model call.
+  it('toggling an item mutates the item, not a new generation run', async () => {
+    setup();
+    const toggleMutate = vi.fn();
+    mockedUseToggleGenerationItem.mockReturnValue({ mutate: toggleMutate, isPending: false } as any);
+    const startMutate = vi.fn();
+    mockedUseStartGenerationRun.mockReturnValue({ mutate: startMutate, isPending: false, isError: false } as any);
+    window.history.pushState({}, '', '/generate?runId=run-1');
+    mockedUseGenerationRun.mockReturnValue({ data: baseRun(), isLoading: false, error: null } as any);
+
+    const user = userEvent.setup();
+    renderWithProviders(<GenerateWorkspacePage />);
+
+    const checkbox = screen.getByRole('checkbox', { name: /included/i });
+    await user.click(checkbox);
+
+    expect(toggleMutate).toHaveBeenCalledWith({ itemId: 'item-1', selected: false });
+    expect(startMutate).not.toHaveBeenCalled();
   });
 });

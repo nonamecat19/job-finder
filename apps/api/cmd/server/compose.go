@@ -350,6 +350,10 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	// same way every other async pipeline in this codebase is — enqueued on
 	// the existing `generate` queue and picked up by generation.Handler.
 	generationSvc.SetAsynqClient(p.AsynqClient)
+	// 042 T025/T026: item/section mutations take a row-level lock on the run
+	// and write in the same transaction (rest-api.md) — *db.DB.WithinTx is
+	// the TxRunner.
+	generationSvc.SetTxRunner(p.DB)
 	return &generationHandles{
 		Generation:   generationSvc,
 		Handler:      generation.NewHandler(generationSvc, p.DB.Queries),

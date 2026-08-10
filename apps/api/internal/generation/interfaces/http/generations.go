@@ -19,6 +19,10 @@ type WorkspaceGenerator interface {
 	GetGenerationWorkspace(ctx context.Context, runID string) (dto.GenerationRunDto, error)
 	ListGenerationRuns(ctx context.Context, profileID string, jobID *string, limit int) ([]dto.GenerationRunDto, error)
 	DeleteGenerationRun(ctx context.Context, runID string) error
+	// PatchGenerationItem and ReorderSection are Phase 3 (US1): item
+	// toggle/edit/reorder and whole-section reorder (contracts/rest-api.md).
+	PatchGenerationItem(ctx context.Context, runID, itemID string, req dto.PatchGenerationItemRequestDto) (dto.GenerationItemDto, error)
+	ReorderSection(ctx context.Context, runID, sectionID string, itemIDs []string) (dto.GenerationSectionDto, error)
 }
 
 type GenerationsHandler struct {
@@ -30,6 +34,8 @@ func (h *GenerationsHandler) Mount(r chi.Router) {
 	r.Get("/generations", h.list)
 	r.Get("/generations/{runId}", h.get)
 	r.Delete("/generations/{runId}", h.remove)
+	r.Patch("/generations/{runId}/items/{itemId}", h.patchItem)
+	r.Patch("/generations/{runId}/sections/{sectionId}/order", h.reorderSection)
 }
 
 func (h *GenerationsHandler) start(w http.ResponseWriter, r *http.Request) {
@@ -83,4 +89,36 @@ func (h *GenerationsHandler) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *GenerationsHandler) patchItem(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "runId")
+	itemID := chi.URLParam(r, "itemId")
+	var body dto.PatchGenerationItemRequestDto
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	out, err := h.Workspace.PatchGenerationItem(r.Context(), runID, itemID, body)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *GenerationsHandler) reorderSection(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "runId")
+	sectionID := chi.URLParam(r, "sectionId")
+	var body dto.ReorderSectionItemsRequestDto
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	out, err := h.Workspace.ReorderSection(r.Context(), runID, sectionID, body.ItemIDs)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
 }

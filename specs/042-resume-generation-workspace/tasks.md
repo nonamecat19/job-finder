@@ -85,23 +85,23 @@ and back, assert the selection persisted.
 
 ### Tests for User Story 1
 
-- [ ] T023 [P] [US1] Contract test in `apps/api/internal/generation/interfaces/http/generations_items_test.go`: `PATCH …/items/{itemId}` returns `403` when `text` is sent for an `origin="profile"` item (FR-009 at the API boundary), `409` when the run is `running`, and is idempotent on a repeated identical body
-- [ ] T024 [P] [US1] Contract test in `apps/api/internal/generation/interfaces/http/generations_get_test.go`: `GET …/{runId}` returns items in `position` order, and every item with `origin: "profile"` has `text` byte-identical to the master bullet at its `sourceIndex` (SC-001's measurement)
+- [X] T023 [P] [US1] Contract test in `apps/api/internal/generation/interfaces/http/generations_items_test.go`: `PATCH …/items/{itemId}` returns `403` when `text` is sent for an `origin="profile"` item (FR-009 at the API boundary), `409` when the run is `running`, and is idempotent on a repeated identical body
+- [X] T024 [P] [US1] Contract test in `apps/api/internal/generation/interfaces/http/generations_get_test.go`: `GET …/{runId}` returns items in `position` order, and every item with `origin: "profile"` has `text` byte-identical to the master bullet at its `sourceIndex` (SC-001's measurement)
 
 ### Implementation for User Story 1
 
-- [ ] T025 [US1] Implement `PATCH /v1/generations/{runId}/items/{itemId}` in `apps/api/internal/generation/interfaces/http/generations.go`, taking a row-level `SELECT … FOR UPDATE` on the run first and rejecting `text` on a profile-origin item with `403`
-- [ ] T026 [US1] Implement `PATCH /v1/generations/{runId}/sections/{sectionId}/order` in the same file, applying a whole-section reorder in one transaction
-- [ ] T027 [P] [US1] Create `apps/dashboard/src/features/generate/components/OriginBadge.tsx` rendering three distinct states: "from your profile", "AI · unverified", and the summary's own grounded-prose state — the three are semantically different and must not share a badge
-- [ ] T028 [P] [US1] Create `apps/dashboard/src/features/generate/components/ItemRow.tsx`: checkbox, effective text, origin badge, dnd-kit drag handle, and an `unavailable` presentation
-- [ ] T029 [US1] Create `apps/dashboard/src/features/generate/components/WorkEntryBlock.tsx`: entry label, ranked profile items in `position` order, and an "no bullets in your profile for this role" empty state — never a fabricated bullet standing in for one (depends on T028)
-- [ ] T030 [P] [US1] Create `apps/dashboard/src/features/generate/components/SummaryBlock.tsx` rendering the single summary item as accept / edit / drop
-- [ ] T031 [P] [US1] Create `apps/dashboard/src/features/generate/components/SkillsBlock.tsx` rendering skill-group items with the same toggle affordance as achievements
-- [ ] T032 [US1] Assemble the three blocks into the left pane of `apps/dashboard/src/features/generate/GenerateWorkspacePage.tsx`, grouping items by `origin` client-side (the server returns them interleaved by `position`, per `contracts/rest-api.md`) (depends on T029, T030, T031)
-- [ ] T033 [US1] Wire optimistic toggle and reorder mutations in `apps/dashboard/src/features/generate/hooks.ts` — local state updates immediately and the PATCH persists asynchronously, which is what makes SC-006 (<1 s, zero model calls) true by construction rather than by measurement
-- [ ] T034 [US1] Add a "Tailor for this job" action to `apps/dashboard/src/features/job-detail/JobDetailPage.tsx` that starts a run with the `jobId` and navigates to `/generate?runId=…` (FR-001)
-- [ ] T035 [P] [US1] Vitest in `apps/dashboard/src/features/generate/components/WorkEntryBlock.test.tsx`: an entry with zero master bullets renders the explicit empty state, and every rendered profile item carries the profile badge
-- [ ] T036 [P] [US1] Vitest in `apps/dashboard/src/features/generate/GenerateWorkspacePage.test.tsx`: toggling an item changes the previewed selection without issuing a generation request (SC-006)
+- [X] T025 [US1] Implement `PATCH /v1/generations/{runId}/items/{itemId}` in `apps/api/internal/generation/interfaces/http/generations.go`, taking a row-level `SELECT … FOR UPDATE` on the run first and rejecting `text` on a profile-origin item with `403`
+- [X] T026 [US1] Implement `PATCH /v1/generations/{runId}/sections/{sectionId}/order` in the same file, applying a whole-section reorder in one transaction
+- [X] T027 [P] [US1] Create `apps/dashboard/src/features/generate/components/OriginBadge.tsx` rendering three distinct states: "from your profile", "AI · unverified", and the summary's own grounded-prose state — the three are semantically different and must not share a badge
+- [X] T028 [P] [US1] Create `apps/dashboard/src/features/generate/components/ItemRow.tsx`: checkbox, effective text, origin badge, dnd-kit drag handle, and an `unavailable` presentation
+- [X] T029 [US1] Create `apps/dashboard/src/features/generate/components/WorkEntryBlock.tsx`: entry label, ranked profile items in `position` order, and an "no bullets in your profile for this role" empty state — never a fabricated bullet standing in for one (depends on T028)
+- [X] T030 [P] [US1] Create `apps/dashboard/src/features/generate/components/SummaryBlock.tsx` rendering the single summary item as accept / edit / drop
+- [X] T031 [P] [US1] Create `apps/dashboard/src/features/generate/components/SkillsBlock.tsx` rendering skill-group items with the same toggle affordance as achievements
+- [X] T032 [US1] Assemble the three blocks into the left pane of `apps/dashboard/src/features/generate/GenerateWorkspacePage.tsx`, grouping items by `origin` client-side (the server returns them interleaved by `position`, per `contracts/rest-api.md`) (depends on T029, T030, T031)
+- [X] T033 [US1] Wire optimistic toggle and reorder mutations in `apps/dashboard/src/features/generate/hooks.ts` — local state updates immediately and the PATCH persists asynchronously, which is what makes SC-006 (<1 s, zero model calls) true by construction rather than by measurement
+- [X] T034 [US1] Add a "Tailor for this job" action to `apps/dashboard/src/features/job-detail/JobDetailPage.tsx` that starts a run with the `jobId` and navigates to `/generate?runId=…` (FR-001)
+- [X] T035 [P] [US1] Vitest in `apps/dashboard/src/features/generate/components/WorkEntryBlock.test.tsx`: an entry with zero master bullets renders the explicit empty state, and every rendered profile item carries the profile badge
+- [X] T036 [P] [US1] Vitest in `apps/dashboard/src/features/generate/GenerateWorkspacePage.test.tsx`: toggling an item changes the previewed selection without issuing a generation request (SC-006)
 
 **Checkpoint**: The workspace is a reviewable, structured, persistent surface — with items in master order. Independently demoable.
 

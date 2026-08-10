@@ -1,14 +1,17 @@
 import { useSearchParams } from 'react-router-dom';
+import type { GenerationRunDto, GenerationSectionDto } from '@job-finder/shared';
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { EmptyState, ErrorState, LoadingRegion, SkeletonBlock, Spinner, Surface } from '../../components/ui';
 import { useProfiles } from '../profile/hooks';
+import SkillsBlock from './components/SkillsBlock';
+import SummaryBlock from './components/SummaryBlock';
 import VacancyPane, { type VacancyPaneInput } from './components/VacancyPane';
-import { useGenerationRun, useStartGenerationRun } from './hooks';
+import WorkEntryBlock from './components/WorkEntryBlock';
+import { useGenerationRun, useReorderGenerationSection, useStartGenerationRun, useToggleGenerationItem } from './hooks';
 
-// T020: the two-pane shell — generated items on the left (a plain rendering
-// for Phase 2; US1 replaces this with the addressable SummaryBlock /
-// WorkEntryBlock / SkillsBlock components), vacancy and controls on the
-// right. `/generate` is a 'fit' route (routes.tsx), so this owns the
+// T020/T032: the two-pane shell — generated items on the left, assembled as
+// Summary / Work Experience / Skills blocks (US1), vacancy and controls on
+// the right. `/generate` is a 'fit' route (routes.tsx), so this owns the
 // viewport and its panes scroll independently rather than the page.
 export default function GenerateWorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -18,6 +21,8 @@ export default function GenerateWorkspacePage() {
   const { data: profiles } = useProfiles();
   const profileId = profiles?.[0]?.id;
   const startRun = useStartGenerationRun();
+  const toggleItem = useToggleGenerationItem(runId);
+  const reorderSection = useReorderGenerationSection(runId);
 
   const handleGenerate = (input: VacancyPaneInput) => {
     if (!profileId) return;
@@ -43,7 +48,15 @@ export default function GenerateWorkspacePage() {
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
         <Surface className="min-h-0 max-w-none flex-1 overflow-y-auto lg:basis-2/3">
           <SectionTitle>Generated resume</SectionTitle>
-          <WorkspaceLeftPane runId={runId} run={run} isLoading={isLoading} error={error} />
+          <WorkspaceLeftPane
+            runId={runId}
+            run={run}
+            isLoading={isLoading}
+            error={error}
+            onToggle={(itemId, selected) => toggleItem.mutate({ itemId, selected })}
+            onEditText={(itemId, text) => toggleItem.mutate({ itemId, text })}
+            onReorder={(sectionId, itemIds) => reorderSection.mutate({ sectionId, itemIds })}
+          />
         </Surface>
 
         <div className="min-h-0 w-full shrink-0 overflow-y-auto lg:w-96">
@@ -62,11 +75,17 @@ function WorkspaceLeftPane({
   run,
   isLoading,
   error,
+  onToggle,
+  onEditText,
+  onReorder,
 }: {
   runId: string | undefined;
-  run: ReturnType<typeof useGenerationRun>['data'];
+  run: GenerationRunDto | undefined;
   isLoading: boolean;
   error: unknown;
+  onToggle: (itemId: string, selected: boolean) => void;
+  onEditText: (itemId: string, text: string) => void;
+  onReorder: (sectionId: string, itemIds: string[]) => void;
 }) {
   if (!runId) {
     return <EmptyState>Fill in a vacancy on the right and generate a resume to see it here.</EmptyState>;
@@ -93,6 +112,12 @@ function WorkspaceLeftPane({
     );
   }
 
+  const summarySection = run.sections.find((s) => s.kind === 'summary');
+  const skillsSection = run.sections.find((s) => s.kind === 'skills');
+  const experienceSections = run.sections
+    .filter((s): s is GenerationSectionDto => s.kind === 'experience')
+    .sort((a, b) => a.position - b.position);
+
   return (
     <div className="space-y-4" data-testid="workspace-sections">
       {run.state === 'partial' ? (
@@ -105,33 +130,14 @@ function WorkspaceLeftPane({
           This generation run failed.
         </p>
       ) : null}
-      {run.sections.map((section) => (
-        <div key={section.id} className="rounded-md border border-border bg-surface-secondary/60 p-3">
-          <div className="mb-2 flex items-center justify-between text-sm font-semibold capitalize">
-            <span>{section.kind === 'experience' ? (section.entryLabel ?? section.entryKey) : section.kind}</span>
-            {section.state !== 'ready' ? <span className="text-xs font-normal text-muted">{section.state}</span> : null}
-          </div>
-          {section.items.length === 0 ? (
-            <p className="text-xs text-muted">
-              {section.kind === 'experience'
-                ? 'No bullets in your profile for this role.'
-                : 'Nothing here yet.'}
-            </p>
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {section.items.map((item) => (
-                <li
-                  key={item.id}
-                  className={item.selected ? undefined : 'text-faint line-through'}
-                  data-origin={item.origin}
-                >
-                  {item.text}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+
+      {summarySection ? <SummaryBlock section={summarySection} onToggle={onToggle} onEditText={onEditText} /> : null}
+
+      {experienceSections.map((section) => (
+        <WorkEntryBlock key={section.id} section={section} onToggle={onToggle} onReorder={onReorder} />
       ))}
+
+      {skillsSection ? <SkillsBlock section={skillsSection} onToggle={onToggle} onReorder={onReorder} /> : null}
     </div>
   );
 }

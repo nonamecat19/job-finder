@@ -116,6 +116,10 @@ type Service struct {
 	// parameters and most callers — every test that doesn't exercise the 042
 	// workspace — have no reason to grow one more.
 	asynqClient *asynq.Client
+	// tx runs the row-locked, multi-statement item/section mutations
+	// (PatchGenerationItem, ReorderSection) inside one transaction. Installed
+	// via SetTxRunner, same setter discipline as asynqClient.
+	tx domain.TxRunner
 }
 
 // SetSummaryModelProvider installs the 034 port. It is a setter rather than a

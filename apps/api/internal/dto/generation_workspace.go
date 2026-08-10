@@ -119,3 +119,11 @@ type PatchGenerationItemRequestDto struct {
 type RerunGenerationRequestDto struct {
 	Sections []string `json:"sections,omitempty"`
 }
+
+// ReorderSectionItemsRequestDto is the body of
+// `PATCH /v1/generations/{runId}/sections/{sectionId}/order` — the section's
+// item ids in the caller's desired display order. The handler assigns
+// `position` from each id's index in this array (T026).
+type ReorderSectionItemsRequestDto struct {
+	ItemIDs []string `json:"itemIds"`
+}

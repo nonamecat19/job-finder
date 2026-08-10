@@ -88,6 +88,10 @@ func newWorkspaceHandler(t *testing.T, testDB *db.DB) (*generationhttp.Generatio
 		}},
 	}
 	svc := generationapp.NewService(testDB.Queries, profileSvc, nil, nil, routers, "", "", "moderate", nil)
+	// T025/T026: item/section mutation needs the row-locked transaction
+	// runner; every test in this package shares this helper, so wiring it
+	// here (rather than per test) is what SetTxRunner is for.
+	svc.SetTxRunner(testDB)
 	return &generationhttp.GenerationsHandler{Workspace: svc}, svc
 }
 
