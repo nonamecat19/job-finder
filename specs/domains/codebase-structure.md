@@ -384,13 +384,15 @@ thin files where a whole engine used to be —
 - `service_impl.go` — one `NewService` that maps `config.Config` onto `retrieval.EngineOpts`
   and returns `jsretrieval.NewEngine(...)`. The ladder, rungs and cooling-off logic are gone
   from the app entirely.
-- `transport.go` — `ConfigureDefaultTransport` (would point the library's paced transport at
-  the app's host state) and `UsePacedHTTPJSONClient`. The second exists **because** of
+- `transport.go` — `ConfigureDefaultTransport` (points the library's paced transport at the
+  app's host state) and `UsePacedHTTPJSONClient`. The second exists **because** of
   043-FR-005: `httpjson` may not depend on `retrieval` inside the library, so the app
-  re-attaches the paced transport to the default JSON client at startup (`compose.go:616`).
-  Deleting that call silently unpaces every JSON-source request — it is load-bearing, not
-  boilerplate. `ConfigureDefaultTransport` has **no caller**; see
-  [`retrieval-and-ingestion.md`](retrieval-and-ingestion.md) § 3.1 for what that costs.
+  re-attaches the paced transport to the default JSON client at startup. Both are called
+  from `composeRetrieval`, and both are load-bearing rather than boilerplate: dropping the
+  first ignores every crawl delay, dropping the second unpaces every JSON-source request.
+  Neither omission breaks the build — see
+  [`retrieval-and-ingestion.md`](retrieval-and-ingestion.md) § 3.1 for the release-long
+  outage that followed the last time one went missing.
 
 **Regression guardrails** (043-FR-013/014/015, 043-SC-003/004/005): every adapter unit test
 and the `live_smoke_test` moved with their code and passed **unmodified** — no fixture or

@@ -19,6 +19,7 @@ import (
 	coachhttp "github.com/job-finder/api/internal/coach/interfaces/http"
 	"github.com/job-finder/api/internal/companyintel"
 	companyintelhttp "github.com/job-finder/api/internal/companyintel/interfaces/http"
+	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/enrichment"
@@ -607,12 +608,24 @@ func (a hostRetrievalAdapter) OverrideCoolingOff(ctx context.Context, host strin
 	return a.svc.OverrideCoolingOff(ctx, host)
 }
 
+// rateOverrides builds the operator-override half of the pacing precedence
+// (017 § 3.1 case 1). Without it a host falls through to its advertised crawl
+// delay, and then to the default rate.
+func rateOverrides(cfg *config.Config) map[string]float64 {
+	overrides := map[string]float64{}
+	if cfg.DjinniRateOverrideRPS > 0 {
+		overrides["djinni.co"] = cfg.DjinniRateOverrideRPS
+	}
+	return overrides
+}
+
 func composeRetrieval(p *Platform) (jsretrieval.Service, error) {
 	identity, err := jsretrieval.NewBrowserIdentity(p.Config.BrowserIdentityVersion)
 	if err != nil {
 		return nil, err
 	}
 	store := retrieval.NewStateStore(p.DB.Queries, p.Config.ConfigEncryptionKey)
+	retrieval.ConfigureDefaultTransport(store, rateOverrides(p.Config))
 	retrieval.UsePacedHTTPJSONClient()
 	return retrieval.NewService(identity, store, p.Config), nil
 }

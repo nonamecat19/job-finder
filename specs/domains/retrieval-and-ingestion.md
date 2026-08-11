@@ -196,24 +196,37 @@ Precedence:
 `crawl_delay_seconds == 0` means "we asked, the host advertised nothing" and falls to case 3.
 It must never resolve to an unbounded rate.
 
-> **Defect — the resolver is not wired in the running app.** `DefaultTransport` is
-> constructed as `NewTransport(nil)`, and its `RateResolver` is only set by
-> `ConfigureDefaultTransport`, which **nothing calls** outside tests
-> (`apps/api/internal/retrieval/transport.go` exposes it; no composer invokes it). So
-> precedence cases 1 and 2 never fire at runtime: every host is paced at `DefaultRPS`, an
-> advertised `crawl_delay_seconds` is stored but not honoured (**017-FR-009 is unmet in
-> practice**), and `HostStatus.Pacing.Source` always reports `default`. `RateFor` still reads
-> that same unconfigured transport (`retrieval/engine.go:280`), so § 3.2's status view is
-> consistent with the code and wrong about the world.
+**Resolution happens once per host, in `composeRetrieval`.** `DefaultTransport` is a
+package-level value constructed with a nil `RateResolver`; `ConfigureDefaultTransport(store,
+overrides)` is what makes precedence cases 1 and 2 real. `composeRetrieval` calls it with the
+state store and the override map from `rateOverrides(cfg)` — today one entry,
+`djinni.co` ← `DJINNI_RATE_OVERRIDE_RPS` (default `0.5`).
+
+> **This call went missing for several releases and nothing noticed.** It lived in
+> `platform.go` when 017 shipped (`4376e68`) and was dropped by the composition-root
+> extraction (`1e613fd`), leaving `RateResolver` nil: every host paced at `DefaultRPS`, an
+> advertised `crawl_delay_seconds` stored but ignored (017-FR-009 unmet in practice), the
+> `djinni.co` override inert, and `HostStatus.Pacing.Source` reporting `default` for
+> everything. 043 relocated the already-unwired code without changing the behaviour; the fix
+> landed separately. `apps/api/cmd/server/compose_pacing_test.go` now fails if the call
+> disappears again — nothing else could catch it, because the code compiles and runs
+> perfectly well unpaced.
+
+> ### ⚠ Known gap — only the JSON path is actually paced
 >
-> **This predates 043.** The call existed in `platform.go` when 017 shipped (`4376e68`) and
-> was dropped by the composition-root extraction (`1e613fd`); the extraction only relocated
-> the already-unwired code. There is also no `HostRPSOverrides` key in `internal/config`, so
-> operator overrides have no input path either.
+> The transport is an `http.RoundTripper`, so it paces exactly the requests that go through a
+> `http.Client` using it: the library's `httpjson` default client, which the app points at
+> `DefaultTransport` via `UsePacedHTTPJSONClient` (`compose.go`). **The retrieval rungs do
+> not go through it.** `direct` issues its requests with `bogdanfinn/tls-client`, `browser`
+> drives chromedp, and neither consults a limiter; the `scraping.HTTPScraper` client is a
+> plain `&http.Client{Timeout: 20s}`. So an HTML source fetched through the ladder is spaced
+> only by whatever inter-request delay its own adapter implements (§ 1.1's 500 ms rule), not
+> by the per-host limiter — which reads against **017-FR-006/007**, "every outbound
+> third-party request regardless of which source issued it".
 >
-> Fixing it is one call in `composeRetrieval` after the state store exists —
-> `retrieval.ConfigureDefaultTransport(stateStore, nil)` — plus a config key if overrides are
-> wanted. Recorded here rather than fixed silently, per § "record, don't drop" practice.
+> This predates 043 and predates the missing-call defect above: no rung has ever called the
+> limiter. Closing it is a library change (the rungs would take a pacer at construction),
+> not an app-side wiring fix, so it is recorded here rather than folded into the fix.
 
 Jitter is ±25% and is **deliberately not exposed** anywhere. It is anti-fingerprinting
 machinery; surfacing a fluctuating number would undercut 017-FR-016's requirement that the
