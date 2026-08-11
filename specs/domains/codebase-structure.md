@@ -318,7 +318,8 @@ the same rules, because only one version of each rule exists to find.
 The scraping stack is **not in this repository**. The adapter framework, the 25 site
 adapters, the retrieval ladder and the scraping helpers live in
 `github.com/nonamecat19/job-scraper`, a separate Go module consumed by `apps/api` as an
-ordinary tagged dependency (`v0.1.0` at extraction). There is **no `replace` directive** in
+ordinary tagged dependency (`v0.2.0`; `v0.1.0` predates the module rename and is unusable).
+There is **no `replace` directive** in
 `apps/api/go.mod` — local-path wiring was a development convenience during the move and was
 dropped to publish.
 
