@@ -1,6 +1,7 @@
 -- +goose Up
--- 042 supersedes the 020 accept/reject review model (research.md R8): the
--- ranked-item workspace (generation_runs/generation_sections/generation_items,
+-- 042 supersedes the 020 accept/reject review model (specs/domains/
+-- resume-generation.md § 4.1): the ranked-item workspace
+-- (generation_runs/generation_sections/generation_items,
 -- 00042) and the tailored_drafts/edit_proposals draft/proposal surface
 -- (00036) are two answers to the same "review AI-tailored content" question,
 -- and no code path writes these tables — internal/tailoring/ has validators
@@ -9,9 +10,7 @@
 -- Dropping them here rather than leaving two dead tables and a
 -- never-true REST surface documented against the tree (024-FR-015).
 --
--- Explicit user approval was obtained before this migration was written
--- (specs/042-resume-generation-workspace/tasks.md T083,
--- specs/042-resume-generation-workspace/research.md R8).
+-- Explicit user approval was obtained before this migration was written.
 DROP TABLE IF EXISTS edit_proposals;
 DROP TABLE IF EXISTS tailored_drafts;
 

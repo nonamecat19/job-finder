@@ -1,5 +1,5 @@
 -- +goose Up
--- Resume Generation Workspace (specs/042-resume-generation-workspace): a
+-- Resume Generation Workspace (specs/domains/resume-generation.md § 4.2): a
 -- generation_run is one tailoring attempt against one vacancy for one
 -- profile. generation_sections collapse "Section" and "Work Entry Block"
 -- into one row per section (a nullable entry_key distinguishes the two

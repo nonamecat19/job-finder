@@ -3,7 +3,7 @@ package domain
 import "strings"
 
 // SuppressDuplicateSuggestions removes suggestion content that duplicates
-// material the master already has (FR-017, research.md R6). It never
+// material the master already has (FR-017, resume-generation.md § 4.3). It never
 // touches the master or any profile item — only the candidates inside
 // `suggestions` are filtered, deterministically, so the same input produces
 // the same suppression on every machine (the 038 corpus requires this).
@@ -79,7 +79,7 @@ func duplicatesMasterSkill(skill string, masterTokens map[string]bool) bool {
 
 // wordSetContainment is the fraction of `a`'s words that also appear in `b`
 // — asymmetric, from the candidate's perspective, matching "word-set
-// containment against a master bullet" (research.md R6). An empty candidate
+// containment against a master bullet" (resume-generation.md § 4.3). An empty candidate
 // contains nothing to check, so it is never treated as a duplicate here.
 func wordSetContainment(a, b map[string]bool) float64 {
 	if len(a) == 0 {

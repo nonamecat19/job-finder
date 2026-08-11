@@ -3,7 +3,7 @@ package domain
 import "fmt"
 
 // RankingViolationKind names one of the three structural defects a ranking
-// response can carry (contracts/llm-contracts.md §1). There is no relevance
+// response can carry (resume-generation.md § 2b). There is no relevance
 // or quality check here — VerifyRanking is checkable in O(K) with no
 // reference to what "relevant" means, which is what makes it a verifier
 // rather than a judge (038 FR-003).
@@ -25,7 +25,7 @@ type RankingViolation struct {
 }
 
 // RankingK is K = min(2*target, available) — the exact candidate count
-// research.md R2 fixes so "rank up to 2N and reject an omission" is
+// resume-generation.md § 2b fixes so "rank up to 2N and reject an omission" is
 // checkable without superlinear cost: the response is invalid iff it fails
 // to name K distinct in-range indices.
 func RankingK(available, target int) int {
@@ -50,7 +50,7 @@ func RankingK(available, target int) int {
 // are accepted, and the display simply shows more ranked candidates than
 // required. Rejecting a model that ranked more material than asked would be
 // a rejection with no user-visible defect behind it
-// (contracts/llm-contracts.md §1).
+// (resume-generation.md § 2b).
 func VerifyRanking(available, target int, ranking []int) []RankingViolation {
 	var violations []RankingViolation
 	seen := make(map[int]bool, len(ranking))
@@ -82,7 +82,7 @@ func VerifyRanking(available, target int, ranking []int) []RankingViolation {
 }
 
 // VerifySkillGroupOrder applies VerifyRanking's three structural checks to
-// RankedSkills.GroupOrder (contracts/llm-contracts.md §1): every index in
+// RankedSkills.GroupOrder (resume-generation.md § 2b): every index in
 // [0, groupCount), none repeated, and none missing. The prompt asks for every
 // skill group index exactly once, so K here is groupCount itself — passing
 // target == available collapses min(2*target, available) to available, which

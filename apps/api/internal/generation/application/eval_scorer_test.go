@@ -180,7 +180,7 @@ var scorers = []Scorer{
 // Measured on the raw response rather than on the survivors, because the
 // survivors carry no duplicates by construction — SuppressDuplicateSuggestions
 // is what makes that true, so scoring them would be scoring a tautology. What
-// can regress is the prompt: research.md R4 withholds the master's bullet text
+// can regress is the prompt: resume-generation.md § 4.3 withholds the master's bullet text
 // and skill tokens from the suggestion stage precisely so the model cannot
 // duplicate them, and this is how much that withholding failed to prevent.
 func suggestionDuplicatesTotal(master domain.RendercvMaster, suggestions domain.SuggestionSet) float64 {

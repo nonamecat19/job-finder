@@ -40,7 +40,7 @@ type exportOutcome struct {
 	candidates []domain.OverflowCandidate
 }
 
-// renderExport is the whole export path (research.md R5): assemble, apply the
+// renderExport is the whole export path (resume-generation.md § 7.1): assemble, apply the
 // font size, render, count pages; over the target, apply the compact design —
 // typography only, never content — and render once more; still over, report.
 //

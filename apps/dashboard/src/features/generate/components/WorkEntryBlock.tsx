@@ -16,7 +16,7 @@ export interface WorkEntryBlockProps {
 // zero bullets for this role. Never a fabricated bullet standing in for one
 // — an empty section renders as empty, not as invented content.
 //
-// T048 adds the ranked/unranked visual split (research.md R2): the ranking
+// The ranked/unranked visual split (resume-generation.md § 2b): the ranking
 // stage selects the top min(N, A) of its K candidates, leaves the rest of the
 // K ranking unselected, and appends any bullet beyond K in master order,
 // unselected — all already delivered in `position` order by the seeding

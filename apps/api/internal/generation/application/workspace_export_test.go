@@ -44,7 +44,7 @@ func intPtr(i int) *int { return &i }
 // and condense fields fail the test rather than being left nil: nil would
 // prove only that the path did not panic, while a failing stub proves the
 // path never reaches for an LLM call (expand) or for TrimHighlights
-// (condense) — the two things research.md R5 forbids here.
+// (condense) — the two things resume-generation.md § 7.1 forbids here.
 func exportDeps(t *testing.T, pages []int) (renderDeps, *int) {
 	t.Helper()
 	renders := 0

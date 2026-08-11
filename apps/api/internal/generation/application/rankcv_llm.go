@@ -10,10 +10,10 @@ import (
 )
 
 // buildSuggestPrompt constructs the prompt for the suggestion stage
-// (contracts/llm-contracts.md §2, T053). Unlike buildRankPrompt, it is
+// (resume-generation.md § 4.3, T053). Unlike buildRankPrompt, it is
 // deliberately NOT given the master's bullet text or skill tokens — only
 // company names and skill group labels — so a model that cannot see the
-// candidate's wording cannot paraphrase it (research.md R4): the cheapest
+// candidate's wording cannot paraphrase it (resume-generation.md § 4.3): the cheapest
 // reduction of the FR-017 duplicate case is not showing the material that
 // would be duplicated. Remaining duplicates are suppressed deterministically
 // by SuppressDuplicateSuggestions after the response comes back.
@@ -51,7 +51,7 @@ func buildSuggestPrompt(companies []string, skillGroupLabels []string, analysis 
 
 // suggestContent calls the LLM to produce a SuggestionSet — a separate call
 // from rankContent, routed through the SAME `generation-select` router
-// (research.md R4: no new gateway model group). It runs concurrently with
+// (resume-generation.md § 4.3: no new gateway model group). It runs concurrently with
 // the summary stage (T054).
 func suggestContent(ctx context.Context, lc llm.Provider, model string, companies []string, skillGroupLabels []string, analysis domain.VacancyAnalysis) (domain.SuggestionSet, error) {
 	ctx, cancel := context.WithTimeout(ctx, selectStageTimeout)
@@ -69,11 +69,11 @@ func suggestContent(ctx context.Context, lc llm.Provider, model string, companie
 }
 
 // buildRankPrompt constructs the prompt for the ranking stage
-// (contracts/llm-contracts.md §1, T041). It reuses buildSelectPrompt's
+// (resume-generation.md § 2b, T041). It reuses buildSelectPrompt's
 // numbered-bullet rendering verbatim (renderExperienceEntryLines,
 // renderSkillGroupLines) so there is exactly one index space —
 // HighlightRef.SourceIndex today, RankedExperience.Ranking here — and prints
-// K = min(2N, A) after each entry's bullet list (research.md R2).
+// K = min(2N, A) after each entry's bullet list (resume-generation.md § 2b).
 func buildRankPrompt(master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, prevViolations []string) string {
 	sections := domain.CvSections(master)
 	skills := domain.AsSliceOfMaps(sections["skills"])
@@ -125,8 +125,8 @@ func buildRankPrompt(master domain.RendercvMaster, analysis domain.VacancyAnalys
 // rankContent calls the LLM to produce a RankedSelection from the master
 // resume content and the vacancy analysis. It is routed through the existing
 // `generation-select` router — the same task key selectContent uses — with
-// the same per-stage timeout and token cap (T042, contracts/llm-contracts.md
-// §1).
+// the same per-stage timeout and token cap (specs/domains/resume-generation.md
+// § 2b).
 func rankContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, prevViolations []string) (domain.RankedSelection, error) {
 	ctx, cancel := context.WithTimeout(ctx, selectStageTimeout)
 	defer cancel()

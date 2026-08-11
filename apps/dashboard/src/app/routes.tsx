@@ -18,7 +18,7 @@ export const routeLayoutModes: Record<string, LayoutMode> = {
   '/tracker': 'fit',
   // The two-pane workspace owns the viewport and scrolls its panes
   // independently, like /tracker and /status, rather than flowing the page
-  // (contracts/rest-api.md's "Route" section).
+  // (resume-generation.md § 4.1's "Route" section).
   '/generate': 'fit',
 };
 

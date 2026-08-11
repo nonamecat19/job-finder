@@ -27,7 +27,7 @@ detail here; link to `docs/` instead.
 | [`domains/job-sources.md`](domains/job-sources.md) | Every job source, the shared adapter contract, per-source deltas, employer ATS boards | 002, 003, 004, 005, 010, 011, 012, 013, 015, 016, 022, 043 |
 | [`domains/retrieval-and-ingestion.md`](domains/retrieval-and-ingestion.md) | Browser-fidelity fetch ladder, per-host pacing, batched atomic persistence | 014, 017, 025, 043 |
 | [`domains/llm-routing.md`](domains/llm-routing.md) | LiteLLM gateway, per-task failover chains, AI concurrency and stuck-run recovery | 019, 029, 030 (001-cerebras superseded) |
-| [`domains/resume-generation.md`](domains/resume-generation.md) | Grounded tailoring, structural invariants, configurable resume shape | 020, 028, 031, 032 |
+| [`domains/resume-generation.md`](domains/resume-generation.md) | Grounded tailoring, structural invariants, configurable resume shape, the ranked-item generation workspace | 020, 028, 031, 032, 042 |
 | [`domains/profile-and-dashboard.md`](domains/profile-and-dashboard.md) | Editable resume profile, tile grid, skeleton loading, monochrome token system | 009, 001-global-dashboard-grid, 006, 021 |
 | [`domains/platform-operations.md`](domains/platform-operations.md) | CI gates, health/readiness, queue monitoring, DB pool capacity, branch protection | 007, 008, 018, 023, 026 |
 | [`domains/codebase-structure.md`](domains/codebase-structure.md) | Feature-module layout, shared-type single-sourcing, doc ownership, the scraper-library boundary | 024, 027, 043 |
@@ -73,17 +73,19 @@ implementation is on `master`.
 | 030 | Gateway-Owned Model Routing | 2026-07-31 | Shipped | `domains/llm-routing.md` |
 | 031 | Configurable Resume Generation Shape | 2026-08-02 | Shipped | `domains/resume-generation.md` |
 | 032 | Certifications as Configurable Category | 2026-08-03 | Shipped | `domains/resume-generation.md` |
+| 042 | Resume Generation Workspace | 2026-08-10 | Shipped (supersedes 020's review model) | `domains/resume-generation.md` §§ 2b, 4.1–4.3, 7.1 |
 | 043 | Extract Job Scraper Library | 2026-08-10 | Shipped | `domains/codebase-structure.md` § 5, `domains/job-sources.md`, `domains/retrieval-and-ingestion.md` |
 
 **Number 001 was used twice** (`001-cerebras-model-toggle`, `001-global-dashboard-grid`) —
 a historical collision, left as-is because the directory names match the branch names that
 were actually used. **The next free number is 044.**
 
-**Rows 033–042 are missing from this table, and that is a real gap, not an oversight in the
+**Rows 033–041 are missing from this table, and that is a real gap, not an oversight in the
 numbering.** Those feature directories are still on disk under `specs/`, so their durable
 requirements have not been folded into a domain doc yet — each one is two copies of a binding
 rule waiting to drift, which is exactly what this arrangement exists to prevent. Fold them
-and delete the directories; add the rows here as each lands.
+and delete the directories; add the rows here as each lands. (041 additionally has two
+verification tasks that need a human and a running stack before it can be called shipped.)
 
 ## Working with specs
 

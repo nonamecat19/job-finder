@@ -12,7 +12,7 @@ import (
 )
 
 // WorkspaceGenerator is the 042 resume generation workspace's application
-// surface (contracts/rest-api.md). Phase 2 (Foundational) wires start / get /
+// surface (resume-generation.md § 4.1). Phase 2 (Foundational) wires start / get /
 // list / delete; item/section mutation, rerun and export are later phases.
 type WorkspaceGenerator interface {
 	StartGenerationRun(ctx context.Context, req dto.StartGenerationRequestDto) (runID, activityID string, err error)
@@ -20,7 +20,7 @@ type WorkspaceGenerator interface {
 	ListGenerationRuns(ctx context.Context, profileID string, jobID *string, limit int) ([]dto.GenerationRunDto, error)
 	DeleteGenerationRun(ctx context.Context, runID string) error
 	// PatchGenerationItem and ReorderSection are Phase 3 (US1): item
-	// toggle/edit/reorder and whole-section reorder (contracts/rest-api.md).
+	// toggle/edit/reorder and whole-section reorder (resume-generation.md § 4.1).
 	PatchGenerationItem(ctx context.Context, runID, itemID string, req dto.PatchGenerationItemRequestDto) (dto.GenerationItemDto, error)
 	ReorderSection(ctx context.Context, runID, sectionID string, itemIDs []string) (dto.GenerationSectionDto, error)
 	// ExportGenerationRun and GetGenerationExport are Phase 7 (US5): the

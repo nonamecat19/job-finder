@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 
 // Same activity-poll interval as `useJobDocumentStatuses`
 // (features/job-detail/hooks.ts) — there is no new polling mechanism, per
-// contracts/rest-api.md's "Client wiring" note.
+// resume-generation.md § 4.1's "Client wiring" note.
 const RUN_POLL_INTERVAL_MS = 3000;
 
 export const generations = {

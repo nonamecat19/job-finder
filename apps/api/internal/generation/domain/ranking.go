@@ -1,12 +1,12 @@
 package domain
 
 // RankedExperience is one master experience entry's ranking: the K bullet
-// indices (contracts/llm-contracts.md §1) the ranking stage judged most
+// indices (resume-generation.md § 2b) the ranking stage judged most
 // relevant, most relevant first.
 //
 // Deliberately absent: any free-text field. A field whose only legal value
 // equals its source is a field with no purpose except to carry a violation
-// (research.md R1) — the same move 028 made for SectionsToDrop/Drop and 035
+// (resume-generation.md § 2b) — the same move 028 made for SectionsToDrop/Drop and 035
 // made for TailoredSelection's summary field, applied here to the last text
 // channel that still reached the profile-sourced group.
 type RankedExperience struct {
@@ -32,7 +32,7 @@ type RankedSkills struct {
 // every master experience entry, project and the skill-group order. This is
 // what `llm.CompleteStructured[T]` unmarshals into, so the type is the
 // contract: a rephrased bullet, a suggestion or a drop cannot be expressed
-// because there is no field to hold one (contracts/llm-contracts.md §1).
+// because there is no field to hold one (resume-generation.md § 2b).
 type RankedSelection struct {
 	Experience []RankedExperience `json:"experience" jsonschema_description:"one entry per master experience entry, keyed by company, in the EXACT order shown"`
 	Projects   []RankedProject    `json:"projects" jsonschema_description:"one entry per master project, keyed by name"`
@@ -41,7 +41,7 @@ type RankedSelection struct {
 
 // ExperienceSuggestions is one master company's worth of suggested
 // achievement bullets — the suggestion stage's per-entry response
-// (contracts/llm-contracts.md §2). Deliberately absent: any index field. A
+// (resume-generation.md § 4.3). Deliberately absent: any index field. A
 // suggestion cannot claim to be one of the user's bullets, which is the
 // mirror image of RankedExperience's missing text field — together the two
 // types make the profile/AI distinction a property of the wire format.
@@ -52,7 +52,7 @@ type ExperienceSuggestions struct {
 
 // SuggestionSet is the suggestion stage's whole response: achievement
 // suggestions per company and a flat list of suggested skills. Routed
-// through the existing generation-select task key (research.md R4) and run
+// through the existing generation-select task key (resume-generation.md § 4.3) and run
 // concurrently with the summary stage — it never sees the master's bullet
 // text or skill tokens, only company names and skill group labels, so a
 // suggestion cannot be a paraphrase of material it was never shown.
@@ -62,7 +62,7 @@ type SuggestionSet struct {
 }
 
 // SeedRankedItems builds one experience (or project) section's items from a
-// verified ranking (research.md R2): the top min(target, available) ranked
+// verified ranking (resume-generation.md § 2b): the top min(target, available) ranked
 // indices are selected, the remainder of the ranking is unselected, and any
 // master bullet the ranking left out — when available exceeds K — is
 // appended afterward in master order, unselected. Nothing is ever hidden.

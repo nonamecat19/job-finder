@@ -35,7 +35,7 @@ func (s *Service) SetAsynqClient(c *asynq.Client) { s.asynqClient = c }
 
 // StartGenerationRun is the synchronous half of `POST /v1/generations`
 // (rest-api.md): it resolves the profile and vacancy, resolves ShapeConfig /
-// grounding level / summary option once (research.md R3), snapshots the
+// grounding level / summary option once (resume-generation.md § 4.2), snapshots the
 // master and its content hash, persists the run row and its master-order
 // seeded sections/items (SeedFromMaster, T009 — no LLM call), then enqueues
 // the background half (StartRun) on the existing `generate` queue.
@@ -103,7 +103,7 @@ func (s *Service) StartGenerationRun(ctx context.Context, req dto.StartGeneratio
 	// Resolved once, at the top of the run: shapeConfig/summaryOption already
 	// follow this discipline (service.go:120/:177); the workspace run
 	// snapshots the result so a later settings change cannot alter a run the
-	// user has already started reviewing (research.md R3).
+	// user has already started reviewing (resume-generation.md § 4.2).
 	cfg := s.shapeConfig(ctx)
 	level := s.defaultLevel
 	if req.GroundingLevel != nil {
@@ -296,7 +296,7 @@ func (s *Service) persistWorkspaceItems(ctx context.Context, sectionID pgtype.UU
 // seed, or a signal to leave the section exactly as StartGenerationRun's
 // SeedFromMaster already left it — master order, top min(N, A) selected —
 // and record that the FR-010 fallback fired. That seed IS the fallback
-// (research.md R2: "ranking = [0,1,…,K-1]" is master order), so a fallback
+// (resume-generation.md § 2b: "ranking = [0,1,…,K-1]" is master order), so a fallback
 // entry has no items to persist.
 type rankedSectionResult struct {
 	entryKey     string
@@ -690,7 +690,7 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 	// The suggestion stage (T053/T054) runs concurrently with the summary
 	// stage below — a separate LLM call, through the same generation-select
 	// provider, taking the analysis plus company names and skill-group
-	// labels but never the master's bullet text (research.md R4). It is
+	// labels but never the master's bullet text (resume-generation.md § 4.3). It is
 	// joined just before the run's final state is set, so it never delays
 	// the summary and never fails the run on its own.
 	if rec != nil {
@@ -710,7 +710,7 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 	// selectedProfileHighlights reads the run's currently-selected profile
 	// items, so it picks up whatever rankExperienceSections/applyRankedSections
 	// just wrote — real ranking where it verified, the master-order fallback
-	// where it did not (T044, contracts/llm-contracts.md §3).
+	// where it did not (T044, resume-generation.md § 0).
 	highlights, err := s.selectedProfileHighlights(ctx, rid)
 	if err != nil {
 		highlights = nil
@@ -803,7 +803,7 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 // summary brief's input. By the time StartRun calls this, rankExperienceSections
 // / applyRankedSections have already run, so this reads real ranking where it
 // verified and the master-order fallback where it did not (T044,
-// contracts/llm-contracts.md §3): the same data SelectedHighlights(TailoredSelection)
+// resume-generation.md § 0): the same data SelectedHighlights(TailoredSelection)
 // used to supply, read over the run's items instead of a TailoredSelection.
 func (s *Service) selectedProfileHighlights(ctx context.Context, runID pgtype.UUID) ([]string, error) {
 	sections, err := s.q.ListSectionsByRun(ctx, runID)
@@ -847,7 +847,7 @@ func (s *Service) summarySectionID(ctx context.Context, runID pgtype.UUID) (pgty
 }
 
 // GetGenerationWorkspace is `GET /v1/generations/{runId}`: the whole run,
-// its sections and their items, in position order (contracts/rest-api.md).
+// its sections and their items, in position order (resume-generation.md § 4.1).
 func (s *Service) GetGenerationWorkspace(ctx context.Context, runID string) (dto.GenerationRunDto, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {

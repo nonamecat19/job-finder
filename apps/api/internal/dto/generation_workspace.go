@@ -1,7 +1,7 @@
 package dto
 
 // GenerationRunDto is the whole workspace: run, sections, items
-// (`GET /v1/generations/{runId}`, contracts/rest-api.md).
+// (`GET /v1/generations/{runId}`, resume-generation.md § 4.1).
 type GenerationRunDto struct {
 	ID              string               `json:"id"`
 	State           string               `json:"state"` // running | ready | partial | failed

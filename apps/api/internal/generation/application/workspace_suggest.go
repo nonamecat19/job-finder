@@ -10,8 +10,8 @@ import (
 )
 
 // experienceCompanies lists the master's experience company names in master
-// order — the suggestion stage's entry identities (contracts/llm-contracts.md
-// §2), never its bullet text.
+// order — the suggestion stage's entry identities (specs/domains/resume-generation.md
+// § 4.3), never its bullet text.
 func experienceCompanies(master domain.RendercvMaster) []string {
 	entries := domain.AsSliceOfMaps(domain.CvSections(master)["experience"])
 	out := make([]string, 0, len(entries))

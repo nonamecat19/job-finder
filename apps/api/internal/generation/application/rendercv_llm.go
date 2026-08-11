@@ -210,7 +210,7 @@ func renderSkillGroupLines(skills []map[string]any) []string {
 // "- company: ..." header line followed by its numbered bullet list — the
 // index space HighlightRef.SourceIndex addresses today and
 // RankedExperience.Ranking addresses in the ranking stage. Reused verbatim by
-// buildRankPrompt (T041, research.md R2) so there is exactly one numbering to
+// buildRankPrompt (T041, resume-generation.md § 2b) so there is exactly one numbering to
 // keep in sync.
 func renderExperienceEntryLines(e map[string]any) []string {
 	var lines []string

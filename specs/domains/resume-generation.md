@@ -2,11 +2,14 @@
 
 Consolidates **020** constrained AI resume tailoring, **028** structure preservation,
 **031** configurable generation shape, **032** certifications as a configurable category,
-**035** split-model generation.
+**035** split-model generation, **042** the resume generation workspace.
 
-Implementation: `apps/api/internal/generation/`, `internal/tailoring/`,
-`internal/resumeshape/`. How it works:
+Implementation: `apps/api/internal/generation/`, `internal/resumeshape/`,
+`apps/dashboard/src/features/generate/`. How it works:
 [`docs/ai/generation.md`](../../docs/docs/ai/generation.md).
+
+`internal/tailoring/` and `dto/tailoring.go` no longer exist — 042 retired the unwired 020
+review surface rather than completing it (§ 4.1).
 
 This domain implements Constitution II (Grounded Generation). Every rule below exists
 because a resume is used in a real hiring decision, and a fabricated one damages the user in
@@ -160,6 +163,72 @@ Digits inside an identifier (`S3`, `p95`, `EC2`) name a technology rather than a
 quantity and are skipped. The check runs pre-merge on the selection payload and post-merge on
 the document, and covers project highlights as well as experience.
 
+### 2b. Ranking, not rewording — the workspace path (042)
+
+042 finished the move §2a started. On the workspace path the model does not write a bullet at
+all: it returns **indices**. `RankedSelection` (`generation/domain/ranking.go`) is what
+`llm.CompleteStructured[T]` unmarshals into, and it has no text field anywhere:
+
+```go
+type RankedExperience struct {
+    Company string `json:"company"`   // copied EXACTLY from the master
+    Ranking []int  `json:"ranking"`   // the K bullet indices, most relevant first
+}
+type RankedSkills struct { GroupOrder []int }   // between-group order only
+type RankedSelection struct {
+    Experience []RankedExperience
+    Projects   []RankedProject
+    Skills     RankedSkills
+}
+```
+
+| Absent field | Would have permitted |
+|---|---|
+| `rephrased` / any string under an entry | A bullet that merges two originals, borrows another employer's, or attaches a metric nobody claimed (042-FR-009) |
+| `summary` | A ranking pass silently rewriting the premium-written summary (035-FR-010, preserved) |
+| `suggestions` | A fabricated bullet landing in the profile-sourced group (042-FR-016) |
+| any `label`/`details` on skills | The silent skill deletion §2a records; group *contents* still come from the master, ordered by `RankSkills` |
+| `drop`/`sectionsToDrop`/`experienceOrder` | The 028 structural violations, still unrepresentable |
+
+This is the third application of the same principle — 028 deleted `SectionsToDrop`,
+`ExperienceOrder` and `Drop`; 035 deleted the summary field from `TailoredSelection`; 042
+deleted `rephrased`, the last free-text channel that still reached the profile-sourced group.
+**Make the violation unrepresentable rather than detectable.** Three checks collapse as a
+consequence: `lcsCovered` drift, `ungroundedMetrics` and `StripUngroundedHighlights` have
+nothing to catch against an index.
+
+**K, and what makes a ranking invalid.** For an entry with `A` available master bullets and
+target `N` (`cfg.ExperienceBulletsMin`, default 8), the prompt asks for exactly
+`K = min(2N, A)` distinct indices. `VerifyRanking(available, target, ranking)` returns
+structural violations only — `out_of_range`, `duplicate`, `short` — checkable in O(K) with no
+reference to what "relevant" means, which is what makes it a verifier rather than a judge.
+`len(ranking) > K` is deliberately **not** a violation: rejecting a model that ranked *more*
+material than asked would be a rejection with no user-visible defect behind it.
+
+`K = min(2N, A)` is what makes 042-FR-007 ("present up to 2N") and 042-FR-010 ("an omitting
+ranking is invalid") consistent. A full permutation of all `A` bullets would cost superlinearly
+on exactly the profiles that need the feature most, to order material below the fold; letting
+the model choose how many to return would make "omitted" unfalsifiable — the failure 035's
+completeness gate exists for.
+
+**Recovery is bounded (042-FR-010).** A violation retries the stage once; a second failure
+falls back to **master order** for that entry (`MasterOrderRanking`) and sets
+`generation_sections.fallback_used = true`. A lossy list never reaches the user, and 042-SC-007
+("rejected rankings in under 5% of runs") is measured from that column, not estimated.
+
+**Skill groups use the same verifier at a different K.** `VerifySkillGroupOrder(groupCount,
+order)` calls `VerifyRanking(groupCount, groupCount, order)`, which collapses `min(2*target,
+available)` to `available` — so `short` means "omitted a group" here while it means "ranked
+fewer than 2N candidates" on an achievement ranking. A group is never dropped over a bad
+ranking: order and membership are separate concerns, and the seeding emits every group whatever
+the order says.
+
+**What a grounding level still governs here.** With no rewording, `strict`/`moderate`/
+`aggressive` have nothing left to say about bullets — under all three, a profile-sourced bullet
+*is* the master's bullet. On the workspace route the level therefore governs **the summary
+only**, which remains written prose. The UI must say so rather than implying the old behaviour.
+`POST /api/documents/tailor` keeps today's semantics for as long as it exists.
+
 ## 3. Structural invariants (028)
 
 028 answers a failure the 020 allow-list did not close: the model can leave every field
@@ -270,9 +339,9 @@ no handler, no service and no route registration, and `GeneratePayload.Tailoring
 declared and read nowhere. Migration `00036`'s `tailored_drafts`/`edit_proposals` tables were
 never written to by any caller and were dropped in `00043`. 042 (the resume generation
 workspace) supersedes that design with a different review model — a ranked-item list rather
-than an accept/reject diff — documented in full in
-`specs/042-resume-generation-workspace/contracts/rest-api.md` and summarised here so this
-domain doc stays true of the tree.
+than an accept/reject diff. Shipping both would have left the repository with two review
+surfaces and one user, so `internal/tailoring/`, `dto/tailoring.go` and
+`queue.GeneratePayload.TailoringDraftID` were removed with it.
 
 `internal/generation/interfaces/http/generations.go`, mounted under `/v1` (and unversioned)
 through the same `httpapi.NewRouter` registration every other feature uses. Auth, CORS and
@@ -321,6 +390,122 @@ to `application.Service.StartRun`, or to `RerunRun` when the payload also carrie
 so `GET /api/documents` and the PDF download work unchanged. **The legacy
 `POST /api/documents/tailor` merge-and-render endpoint was not removed** — it keeps its own
 request shape and today's grounding semantics, and the two paths coexist by design.
+
+**Three response rules the client depends on**, guaranteed by the handler rather than
+reconstructed by the UI:
+
+1. Items come back in `position` order, profile-origin and AI-origin **interleaved and tagged**,
+   never pre-grouped — an included, repositioned AI bullet must be able to sit between two
+   profile bullets.
+2. Every master bullet for a rendered entry appears exactly once, selected or not. A client can
+   assert this without consulting the profile.
+3. `text` for `origin="profile"` is byte-identical to the master's bullet. This is the assertion
+   042-SC-001 is measured with.
+
+**Route and layout** (042-FR-001..005): `/generate` in the dashboard, `routeLayoutModes` `fit`
+(the two-pane workspace owns the viewport and scrolls its panes independently, like `/tracker`),
+wrapped in `RequireProfileConfig` — a run without master content is a 400, and the guard is how
+every profile-dependent route avoids that. Entry points are a nav item and a "Tailor for this
+job" action on the job detail view. The left pane groups items into Summary, Work Experience
+(one block per master entry) and Skills; every item is individually selectable, deselectable and
+reorderable **without re-running generation**; and every item shows its origin as a badge.
+
+**Client wiring.** `api.generations` mirrors the existing `settings` group; query keys follow the
+established convention (`['generations']`, `['generations', id]`) and mutations invalidate the
+run's key. **There is no new polling mechanism**: while `state === 'running'` the run poll reuses
+the activity-polling interval every other feature uses.
+
+### 4.2 What the workspace persists, and why (042)
+
+Three tables (migration `00042`), not five: **Section** and **Work Entry Block** are the same
+thing at two granularities, so they collapse into one `generation_sections` row per section with
+a nullable `entry_key`; **Selection State** is not a table at all but the `selected` + `position`
+columns on `generation_items`, because a selection that lives anywhere other than on the item it
+selects can drift from it.
+
+| Table | Holds | Rules it carries |
+|---|---|---|
+| `generation_runs` | vacancy, `master_snapshot`, `master_content_hash`, resolved `shape_config`, grounding level, summary option, analysis, `state`, export status/report | `state='ready'` requires every section ready; `partial` = at least one ready and one failed. **No uniqueness on `(profile_id, job_id)`** — concurrent runs against one vacancy are a comparison, not a conflict |
+| `generation_sections` | `kind` (`summary`/`experience`/`skills`), `entry_key`, `position`, `target_count`, `state`, `error`, `fallback_used` | `position` is master order, never model-chosen (028-FR-003); `CHECK (kind <> 'experience' OR entry_key IS NOT NULL)`; 042-SC-007 is measured from `fallback_used` |
+| `generation_items` | `origin`, `source_index`, `source_text`, `edited_text`, `rank`, `position`, `selected`, `unavailable` | `CHECK (origin <> 'profile' OR edited_text IS NULL)` — **042-FR-009 as a schema fact**; `UNIQUE (section_id, origin, source_index)` — no master bullet twice |
+
+`entry_key` is the master **company name**, not a synthetic row id: the master is an opaque
+`RendercvMaster` map with no stable per-entry identity, `MergeTailored` already keys experience
+by `norm(company)`, and the ranking prompt addresses entries the same way. A second identity
+scheme for the same thing is a second thing to keep in sync.
+
+Effective text is `COALESCE(edited_text, source_text)`, computed in the domain layer and
+**never stored** — a stored copy is a second source of truth that can drift from the edit that
+produced it.
+
+**The master is snapshotted, not referenced.** `master_snapshot` holds the whole
+`RendercvMaster` the run ranked and `source_text` is copied onto each item at creation. Without
+that, 042-FR-022 is unimplementable: the workspace would have no way to render an item whose
+source the user just deleted, and would have to drop it silently — the exact behaviour FR-022
+forbids. With it, staleness is a hash comparison (`master_content_hash` vs the profile's
+current), unavailability is per-item (`MarkItemsUnavailable`), and an export from a stale run
+still produces the document the user approved rather than one assembled from a profile they have
+since changed. The cost is a jsonb copy per run.
+
+**Rerun replaces ordering, not decisions** (042-FR-021). A rerun deletes and recreates the named
+sections' items on **the same run id** — forking would detach the user's selections on the
+sections they did not rerun. Explicit decisions are re-applied where the underlying item still
+exists: a profile item matched by `source_index`, an AI item by normalised `source_text`, and a
+match keeps its `selected`, `position` and `edited_text`. Anything unmatched is gone, which is
+what "re-running replaces the AI's ordering for that section" means. The client owns the warning;
+the server preserves matches regardless of whether it was shown.
+
+042-FR-023 (auditable provenance) needs no new table: `generation_items.origin` on the run
+reachable through `generation_runs.export_document_id` *is* the per-exported-item record, and the
+stage/model provenance columns from `00038` still record which model served each stage.
+
+### 4.3 Suggestions are a separate channel, not a looser mode (042)
+
+The AI may propose material the profile does not contain — that is the escape hatch that makes
+strict grounding livable — but it arrives through its own type, its own call, and its own badge.
+
+```go
+type ExperienceSuggestions struct { Company string; Bullets []string }
+type SuggestionSet        struct { Experience []ExperienceSuggestions; Skills []string }
+```
+
+**What is absent is the point**: no index field. A suggestion cannot claim to be one of the
+user's bullets, which is the mirror image of `RankedSelection`'s missing text field. Together the
+two types make the profile/AI distinction a property of the wire format rather than of a label
+the UI applies afterwards.
+
+| # | Rule |
+|---|---|
+| 042-FR-012 | Suggested bullets per work entry and suggested skills, derived from the vacancy, in groups separate from profile-sourced items. |
+| 042-FR-013 | **Unselected by default**, always. Inclusion requires an explicit user action. |
+| 042-FR-014 | Marked AI-written and unverified wherever they appear — **including after inclusion**. |
+| 042-FR-015 | An included suggestion's text is editable before export; the edit is what exports. |
+| 042-FR-016 | Suggestions are **not** subject to the grounding rules that bind profile-sourced items — running a grounding check on content defined as absent from the profile would be incoherent — but they are never presented as the user's own material. |
+| 042-FR-017 | A suggestion duplicating an existing profile item is suppressed from the suggestion group. The profile item is untouched; only the suggestion disappears. |
+
+The suggestion stage runs on the **existing `generation-select` task key**, concurrently with the
+summary stage. No new gateway model group: a suggestion is unverified by definition and
+unselected by default, so the stage where a premium model earns its price is the summary, not
+this one.
+
+It is **not shown the master's bullet text or skill tokens** — only the vacancy analysis, company
+names and skill group labels. A model not shown the material cannot paraphrase it, which reduces
+the FR-017 duplicate case at its source rather than catching it afterwards. What survives is
+suppressed deterministically in the domain layer (`domain/suggestions.go`): a bullet whose
+normalised form matches a master bullet for the same entry, or whose word-set containment against
+one is ≥0.9, is dropped; a suggested skill whose normalised token matches any master skill token
+is dropped. `norm()` and `tokens()` are the comparison basis everywhere else in this pipeline, so
+the same input suppresses the same way on every machine — which the 038 corpus requires. An
+embedding-similarity threshold was rejected for exactly that reason: non-deterministic across
+model versions, for a check whose false-negative cost is one redundant suggestion.
+
+Survivors become `generation_items` with `origin='ai'`, `selected=false`, ranked after every
+profile item in their section. **Zero suggestions is a normal outcome** and renders an empty
+state, not an error.
+
+The summary is the one AI-written item that is *not* badged "unverified suggestion": it is
+grounded output subject to the existing summary grounding checks, selected by default and
+editable. Different thing, different badge.
 
 ## 5. Configurable shape (031, 032)
 
@@ -479,7 +664,7 @@ binary (`RENDERCV_BIN`) rather than driving a headless Chrome instance, and `Cou
 measures the rendered PDF directly instead of estimating content height in CSS pixels.
 
 Two fitting strategies exist side by side, because two different rules govern what each may
-change (research.md R5, `specs/042-resume-generation-workspace/research.md`):
+change:
 
 - **The legacy job-scoped and ad-hoc paths** (`/api/jobs/{id}/generate`,
   `POST /api/documents/tailor`) use `Service.renderToPageTarget` (`service.go`): render, and if
@@ -487,9 +672,10 @@ change (research.md R5, `specs/042-resume-generation-workspace/research.md`):
   `expandContent` (a model call, when under target) or `TrimHighlights`/`condense` (silently
   drops bullets from the end of each entry) when still over. This path may reword and may
   drop content to make the page count.
-- **The 042 workspace export path**
-  (`POST /v1/generations/{runId}/export`, `internal/generation/application/workspace_export.go`)
-  is render-once and never reword-or-drop: `domain.Assemble` builds a `RendercvMaster` from
+- **The 042 workspace export path** (`POST /v1/generations/{runId}/export`,
+  `internal/generation/application/workspace_export.go`) is render-once and never
+  reword-or-drop — **042-FR-018** forbids post-selection rewording, condensing or re-ranking,
+  and **042-FR-019** requires overflow to be *reported with candidates* rather than resolved: `domain.Assemble` builds a `RendercvMaster` from
   exactly the selected items (no model call), `ApplyFontSize` then `RenderCvRenderer.Render`
   then `CountPages`; over target, one `CompactDesign` re-render (typography only — the exported
   words are unchanged); still over, the export returns `status: "blocked"` with an overflow
@@ -539,6 +725,26 @@ enforcement is mechanical rather than statistical:
 - 032-SC-007: a minimum the profile cannot meet produces a resume **plus a recorded shortfall**
   in 100% of such runs — never a failed generation, and never an invented certification.
 
+**The workspace (042)** — the first four are structural, so they are 100%/0% bars rather than
+targets:
+
+- 042-SC-001: 100% of profile-sourced items in an exported resume match the master text
+  exactly. Nothing fabricated can appear without an explicit user inclusion.
+- 042-SC-003: for an entry with N target bullets and ≥2N available, at least 2N ranked
+  candidates are shown, of which exactly N are pre-selected.
+- 042-SC-004: **0%** of AI-suggested items appear in an export where the user took no action on
+  them.
+- 042-SC-007: rejected/retried rankings occur in under 5% of runs — measured from
+  `generation_sections.fallback_used` and the `ranking_violations` scorer — and no such run
+  reaches the user with a lossy list.
+- 042-SC-002: pasted vacancy → approved, exported resume in under 3 minutes including review.
+- 042-SC-005: a user identifies any item's origin (theirs vs AI-written) without opening a
+  detail view, at 90% correct identification.
+- 042-SC-006: adjusting a selection updates the preview with **no additional model run** and
+  under 1 second of delay. This is a property of the design, not of tuning: selection state
+  lives on the item rows and export assembles from them, so nothing about a toggle can reach a
+  model.
+
 ## The evaluation harness (038)
 
 Resume quality had no regression gate: every check in the pipeline verified one run against
@@ -577,7 +783,7 @@ check exists in the domain). Adding either would mean writing the production ins
 here, which would make the harness the author of a quality rule it then grades. They return as
 scorers once that instrumentation lands in production on its own justification.
 
-### The six scorers
+### The seven scorers
 
 Every scorer delegates to a check production already enforces, so a green harness means
 something about production rather than about the harness. There is no LLM judge.
@@ -590,6 +796,7 @@ something about production rather than about the harness. There is no LLM judge.
 | `required_skills_missing` | `CompletenessReport.RequiredMissing` | lower |
 | `nice_to_have_retention` | `CompletenessReport.NiceToHaveRetained` | higher |
 | `bullet_shortfalls` | `CompletenessReport.BulletShortfalls` | lower |
+| `ranking_violations` (042) | `VerifyRanking` | lower |
 
 `grounding_violations` and `highlight_drift` move on the same defect — the grounding verifier
 performs the drift comparison inline — so the comparator reports a co-moving pair as **one
@@ -599,6 +806,15 @@ Two committed tripwires keep this honest: `TestScorerDelegationIsExact` calls ea
 function independently and asserts equality, and `TestScorersDetectInjectedDefects` injects a
 known defect and asserts the relevant scorer moves the wrong way. Without them, "scorers must
 delegate" is a rule with no detector.
+
+042 added the seventh scorer and two cases with it, per the standing rule below:
+`ranked-oversized-entry` (an entry with far more than 2N bullets — the baseline asserts K
+distinct in-range indices and zero violations) and `suggestion-duplicates-profile` (a vacancy
+whose obvious suggestions restate master bullets — the baseline asserts the suppression fires).
+Adding a scorer changes the scorer set, so `ScorerSetVersion` bumped and **every** baseline was
+re-recorded with a stated reason. The harness refusing to compare across scorer sets is the
+designed behaviour, not an obstacle: a delta measured across two instruments is not a quality
+signal.
 
 ### Adding a case
 
