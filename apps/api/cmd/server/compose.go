@@ -9,6 +9,28 @@ import (
 
 	activityhttp "github.com/job-finder/api/internal/activity/interfaces/http"
 	jsadapter "github.com/nonamecat19/jobscraper/adapter"
+	"github.com/nonamecat19/jobscraper/adapters/adzuna"
+	"github.com/nonamecat19/jobscraper/adapters/arbeitnow"
+	"github.com/nonamecat19/jobscraper/adapters/ashby"
+	"github.com/nonamecat19/jobscraper/adapters/djinni"
+	"github.com/nonamecat19/jobscraper/adapters/dou"
+	"github.com/nonamecat19/jobscraper/adapters/glassdoor"
+	"github.com/nonamecat19/jobscraper/adapters/greenhouse"
+	"github.com/nonamecat19/jobscraper/adapters/indeed"
+	"github.com/nonamecat19/jobscraper/adapters/jobgether"
+	"github.com/nonamecat19/jobscraper/adapters/jobleads"
+	"github.com/nonamecat19/jobscraper/adapters/jobspy"
+	"github.com/nonamecat19/jobscraper/adapters/jooble"
+	"github.com/nonamecat19/jobscraper/adapters/lever"
+	"github.com/nonamecat19/jobscraper/adapters/manual"
+	"github.com/nonamecat19/jobscraper/adapters/remoteok"
+	"github.com/nonamecat19/jobscraper/adapters/remotive"
+	"github.com/nonamecat19/jobscraper/adapters/robota"
+	"github.com/nonamecat19/jobscraper/adapters/smartrecruiters"
+	"github.com/nonamecat19/jobscraper/adapters/wellfound"
+	"github.com/nonamecat19/jobscraper/adapters/workable"
+	"github.com/nonamecat19/jobscraper/adapters/workua"
+	"github.com/nonamecat19/jobscraper/ports"
 	jsretrieval "github.com/nonamecat19/jobscraper/retrieval"
 
 	"github.com/job-finder/api/internal/aifeature"
@@ -65,7 +87,6 @@ import (
 	subscriptionshttp "github.com/job-finder/api/internal/subscriptions/interfaces/http"
 	"github.com/job-finder/api/internal/summarymodel"
 	summarymodelhttp "github.com/job-finder/api/internal/summarymodel/interfaces/http"
-	"github.com/nonamecat19/jobscraper/adapters"
 )
 
 type App struct {
@@ -114,52 +135,89 @@ type App struct {
 type sourcesHandles struct {
 	Registry *jsadapter.Registry
 	Sources  *application.Service
-	Djinni   adapters.DjinniAdapter
-	Dou      adapters.DouAdapter
-	Workua   adapters.WorkUaAdapter
+	Djinni   djinni.Source
+	Dou      dou.Source
+	Workua   workua.Source
 	Roster   *roster.Service
 }
 
-func composeJobSources(p *Platform) *sourcesHandles {
-	djinniAdapter := adapters.DjinniAdapter{Scraping: p.Scraping, Session: p.DjinniSession}
-	douAdapter := adapters.DouAdapter{Scraping: p.Scraping}
-	workuaAdapter := adapters.WorkUaAdapter{Scraping: p.Scraping}
+// composeJobSources builds the crawled sources by hand rather than through the
+// library's catalogue: the app runs a deliberate subset (the detail-only
+// sources below are reached through enrichment, not a search fan-out) and it
+// keeps the concrete source values, which is what lets enrichment call their
+// FetchDetail.
+func composeJobSources(p *Platform) (*sourcesHandles, error) {
+	djinniSrc := djinni.Source{Scraping: p.Scraping, Session: p.DjinniSession}
+	douSrc := dou.Source{Scraping: p.Scraping}
+	workuaSrc := workua.Source{Scraping: p.Scraping}
 
-	ghAdapter, lvAdapter, asAdapter, wkAdapter, srAdapter, checkers := adapters.NewBoardAdapters()
+	// The board probes are built straight from the vendor Fetchers, so the
+	// roster can validate a board before any source exists to crawl it.
+	checkers := map[string]ports.EmployerHealthChecker{
+		greenhouse.Key:      greenhouse.HealthChecker(),
+		lever.Key:           lever.HealthChecker(),
+		ashby.Key:           ashby.HealthChecker(),
+		workable.Key:        workable.HealthChecker(),
+		smartrecruiters.Key: smartrecruiters.HealthChecker(),
+	}
 	rosterSvc := roster.NewService(p.DB.Queries, checkers)
-	ghAdapter.Roster = rosterSvc
-	lvAdapter.Roster = rosterSvc
-	asAdapter.Roster = rosterSvc
-	wkAdapter.Roster = rosterSvc
-	srAdapter.Roster = rosterSvc
 
-	registry := jsadapter.NewRegistry(
-		adapters.AdzunaAdapter{AppID: p.Config.AdzunaAppID, AppKey: p.Config.AdzunaAppKey, Country: p.Config.AdzunaCountry},
-		adapters.RemotiveAdapter{},
-		adapters.ArbeitnowAdapter{},
-		djinniAdapter,
-		douAdapter,
-		workuaAdapter,
-		adapters.RobotaAdapter{},
-		adapters.JobSpyAdapter{URL: p.Config.JobspyURL},
-		adapters.JoobleAdapter{APIKey: p.Config.JoobleAPIKey},
-		ghAdapter,
-		lvAdapter,
-		asAdapter,
-		wkAdapter,
-		srAdapter,
-		adapters.ManualAdapter{},
+	ghSrc, err := greenhouse.New(rosterSvc)
+	if err != nil {
+		return nil, err
+	}
+	lvSrc, err := lever.New(rosterSvc)
+	if err != nil {
+		return nil, err
+	}
+	asSrc, err := ashby.New(rosterSvc)
+	if err != nil {
+		return nil, err
+	}
+	wkSrc, err := workable.New(rosterSvc)
+	if err != nil {
+		return nil, err
+	}
+	srSrc, err := smartrecruiters.New(rosterSvc)
+	if err != nil {
+		return nil, err
+	}
+
+	registry, err := jsadapter.NewRegistry(
+		adzuna.New(p.Config.AdzunaAppID, p.Config.AdzunaAppKey, p.Config.AdzunaCountry),
+		remotive.New(),
+		arbeitnow.New(),
+		djinniSrc,
+		douSrc,
+		workuaSrc,
+		robota.New(),
+		jobspy.New(p.Config.JobspyURL),
+		jooble.New(p.Config.JoobleAPIKey),
+		ghSrc,
+		lvSrc,
+		asSrc,
+		wkSrc,
+		srSrc,
+		manual.New(),
 	)
+	if err != nil {
+		return nil, err
+	}
+
 	sourcesSvc := application.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
-	p.DjinniSession.Sources = sourcesSvc
+	// The session was built before the store existed — the store needs the
+	// registry, and the registry needs the session — so it is handed its store
+	// here, once the cycle is closed.
+	p.SourceConfig.Bind(sourcesSvc)
+
 	return &sourcesHandles{
 		Registry: registry,
 		Sources:  sourcesSvc,
-		Djinni:   djinniAdapter,
-		Dou:      douAdapter,
-		Workua:   workuaAdapter,
+		Djinni:   djinniSrc,
+		Dou:      douSrc,
+		Workua:   workuaSrc,
 		Roster:   rosterSvc,
-	}
+	}, nil
 }
 
 type ingestionHandles struct {
@@ -393,19 +451,19 @@ func composeManualAdd(p *Platform, sources *sourcesHandles, jobsSvc *jobs.Servic
 	return &manualaddhttp.ManualAddHandler{Manual: manualSvc}
 }
 
-func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc jsretrieval.Service) *enrichment.Handler {
+func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc ports.Retriever) *enrichment.Handler {
 	cfg := p.Config
 	enrichDelay := time.Duration(cfg.DjinniDetailDelayMs) * time.Millisecond
 	enrichDelays := map[string]time.Duration{
 		"workua": time.Duration(cfg.WorkUaDetailDelayMs) * time.Millisecond,
 	}
 	return enrichment.NewHandler(p.DB.Queries, sources.Sources, sources.Djinni, sources.Dou, sources.Workua,
-		adapters.IndeedAdapter{Scraping: p.Scraping},
-		adapters.RemoteOKAdapter{Scraping: p.Scraping},
-		adapters.GlassdoorAdapter{Scraping: p.Scraping, Retrieval: retrievalSvc},
-		adapters.JobLeadsAdapter{Scraping: p.Scraping, Session: &adapters.JobLeadsSession{Email: p.Config.JobLeadsEmail, Password: p.Config.JobLeadsPassword, Key: "jobleads"}},
-		adapters.WellfoundAdapter{Scraping: p.Scraping, Retrieval: retrievalSvc},
-		adapters.JobgetherAdapter{Scraping: p.Scraping, Retrieval: retrievalSvc},
+		indeed.Source{Scraping: p.Scraping},
+		remoteok.Source{Scraping: p.Scraping},
+		glassdoor.Source{Scraping: p.Scraping, Retrieval: retrievalSvc},
+		jobleads.Source{Scraping: p.Scraping, Session: p.JobLeadsSession},
+		wellfound.Source{Scraping: p.Scraping, Retrieval: retrievalSvc},
+		jobgether.Source{Scraping: p.Scraping, Retrieval: retrievalSvc},
 		p.AsynqClient, enrichDelay, enrichDelays)
 }
 
@@ -569,7 +627,7 @@ func composeHealth(p *Platform) *health.HealthHandler {
 	}
 }
 
-type hostRetrievalAdapter struct{ svc jsretrieval.Service }
+type hostRetrievalAdapter struct{ svc ports.Retriever }
 
 func (a hostRetrievalAdapter) HostStatus(ctx context.Context, host string) (dto.HostRetrievalStatusDto, error) {
 	st, err := a.svc.HostStatus(ctx, host)
@@ -619,18 +677,17 @@ func rateOverrides(cfg *config.Config) map[string]float64 {
 	return overrides
 }
 
-func composeRetrieval(p *Platform) (jsretrieval.Service, error) {
+func composeRetrieval(p *Platform) (ports.Retriever, error) {
 	identity, err := jsretrieval.NewBrowserIdentity(p.Config.BrowserIdentityVersion)
 	if err != nil {
 		return nil, err
 	}
 	store := retrieval.NewStateStore(p.DB.Queries, p.Config.ConfigEncryptionKey)
 	retrieval.ConfigureDefaultTransport(store, rateOverrides(p.Config))
-	retrieval.UsePacedHTTPJSONClient()
 	return retrieval.NewService(identity, store, p.Config), nil
 }
 
-func composeHosts(retrievalSvc jsretrieval.Service) *jobsourceshttp.HostsHandler {
+func composeHosts(retrievalSvc ports.Retriever) *jobsourceshttp.HostsHandler {
 	return &jobsourceshttp.HostsHandler{Retrieval: hostRetrievalAdapter{svc: retrievalSvc}}
 }
 
@@ -652,7 +709,10 @@ func queueClassResolvers(policies []queue.TaskPolicy, llmH *llmHandles) map[stri
 }
 
 func buildContexts(ctx context.Context, p *Platform) (*App, error) {
-	sources := composeJobSources(p)
+	sources, err := composeJobSources(p)
+	if err != nil {
+		return nil, err
+	}
 	ingestionH := composeIngestion(p, sources)
 
 	llmH, err := composeLLM(p)

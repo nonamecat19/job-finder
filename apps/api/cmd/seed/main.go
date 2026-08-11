@@ -15,7 +15,16 @@ import (
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/seed"
-	"github.com/nonamecat19/jobscraper/adapters"
+	"github.com/nonamecat19/jobscraper/adapters/adzuna"
+	"github.com/nonamecat19/jobscraper/adapters/arbeitnow"
+	"github.com/nonamecat19/jobscraper/adapters/djinni"
+	"github.com/nonamecat19/jobscraper/adapters/dou"
+	"github.com/nonamecat19/jobscraper/adapters/jobspy"
+	"github.com/nonamecat19/jobscraper/adapters/jooble"
+	"github.com/nonamecat19/jobscraper/adapters/manual"
+	"github.com/nonamecat19/jobscraper/adapters/remotive"
+	"github.com/nonamecat19/jobscraper/adapters/robota"
+	"github.com/nonamecat19/jobscraper/adapters/workua"
 )
 
 func main() {
@@ -53,18 +62,24 @@ func run() error {
 		slog.Info("seed: truncated all tables")
 	}
 
-	registry := jsadapter.NewRegistry(
-		adapters.AdzunaAdapter{AppID: cfg.AdzunaAppID, AppKey: cfg.AdzunaAppKey, Country: cfg.AdzunaCountry},
-		adapters.RemotiveAdapter{},
-		adapters.ArbeitnowAdapter{},
-		adapters.DjinniAdapter{},
-		adapters.DouAdapter{},
-		adapters.WorkUaAdapter{},
-		adapters.RobotaAdapter{},
-		adapters.JobSpyAdapter{URL: cfg.JobspyURL},
-		adapters.JoobleAdapter{APIKey: cfg.JoobleAPIKey},
-		adapters.ManualAdapter{},
+	// Seeding only needs the source keys to exist as rows, so the sources are
+	// built with nothing behind them: an empty scraper is enough for a value
+	// that is never asked to crawl.
+	registry, err := jsadapter.NewRegistry(
+		adzuna.New(cfg.AdzunaAppID, cfg.AdzunaAppKey, cfg.AdzunaCountry),
+		remotive.New(),
+		arbeitnow.New(),
+		djinni.Source{},
+		dou.Source{},
+		workua.Source{},
+		robota.New(),
+		jobspy.New(cfg.JobspyURL),
+		jooble.New(cfg.JoobleAPIKey),
+		manual.New(),
 	)
+	if err != nil {
+		return err
+	}
 	sourcesSvc := application.NewService(database.Queries, registry, cfg.ConfigEncryptionKey)
 	for _, a := range registry.All() {
 		if _, err := sourcesSvc.GetByKey(ctx, a.Key()); err != nil {

@@ -2,16 +2,21 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/hibiken/asynq"
+
+	"github.com/nonamecat19/jobscraper/model"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/queue"
-	"github.com/nonamecat19/jobscraper/adapters"
-	"github.com/nonamecat19/jobscraper/scraping"
+	"github.com/job-finder/api/internal/scraping"
+	"github.com/nonamecat19/jobscraper/adapters/djinni"
+	"github.com/nonamecat19/jobscraper/adapters/jobleads"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 type Platform struct {
@@ -27,7 +32,41 @@ type Platform struct {
 
 	Sweeper *activity.Sweeper
 
-	DjinniSession *adapters.DjinniSession
+	// SourceConfig is where the credentialed sessions read their credentials
+	// and persist the cookie they obtain. It is bound to the job-sources
+	// service once that exists — see composeJobSources.
+	SourceConfig *lateSourceConfig
+
+	DjinniSession   ports.SessionProvider
+	JobLeadsSession ports.SessionProvider
+}
+
+// lateSourceConfig is a ports.SourceConfigStore that gets its real store after
+// construction, breaking the cycle between the sessions (which the sources
+// need), the sources (which the registry needs) and the job-sources service
+// (which needs the registry and *is* the store).
+//
+// Calls before binding fail rather than silently reading nothing: nothing
+// should reach a session that early, and a clear error beats a mystery
+// logged-out crawl.
+type lateSourceConfig struct{ inner ports.SourceConfigStore }
+
+var _ ports.SourceConfigStore = (*lateSourceConfig)(nil)
+
+func (l *lateSourceConfig) Bind(store ports.SourceConfigStore) { l.inner = store }
+
+func (l *lateSourceConfig) Config(ctx context.Context, key string) (map[string]any, error) {
+	if l.inner == nil {
+		return nil, fmt.Errorf("source config store for %q is not bound yet", key)
+	}
+	return l.inner.Config(ctx, key)
+}
+
+func (l *lateSourceConfig) Update(ctx context.Context, key string, enabled *bool, configPatch map[string]any) (*model.JobSourceDto, error) {
+	if l.inner == nil {
+		return nil, fmt.Errorf("source config store for %q is not bound yet", key)
+	}
+	return l.inner.Update(ctx, key, enabled, configPatch)
 }
 
 func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
@@ -59,6 +98,20 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 	sweeper := activity.NewSweeper(database.Queries, asynqInspector,
 		cfg.ActivityStaleAfter, cfg.ActivitySweepInterval, cfg.ActivityQueuedGrace)
 
+	sourceConfig := &lateSourceConfig{}
+	djinniSession, err := djinni.NewSession(sourceConfig, cfg.DjinniEmail, cfg.DjinniPassword)
+	if err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		return nil, err
+	}
+	jobLeadsSession, err := jobleads.NewSession(sourceConfig, cfg.JobLeadsEmail, cfg.JobLeadsPassword)
+	if err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		return nil, err
+	}
+
 	return &Platform{
 		Config:         cfg,
 		DB:             database,
@@ -69,7 +122,10 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		Scraping:       scrapingSvc,
 		Policies:       policies,
 		Sweeper:        sweeper,
-		DjinniSession:  &adapters.DjinniSession{Email: cfg.DjinniEmail, Password: cfg.DjinniPassword, Key: "djinni"},
+
+		SourceConfig:    sourceConfig,
+		DjinniSession:   djinniSession,
+		JobLeadsSession: jobLeadsSession,
 	}, nil
 }
 
