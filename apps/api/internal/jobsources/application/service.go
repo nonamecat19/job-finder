@@ -9,6 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	jsadapter "github.com/job-finder/jobscraper/adapter"
+
 	"github.com/job-finder/api/internal/crypto"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
@@ -20,11 +22,11 @@ var secretKeyRe = regexp.MustCompile(`(?i)cookie|key|secret|token|password`)
 
 type Service struct {
 	q        domain.Repository
-	registry *domain.Registry
+	registry *jsadapter.Registry
 	encKey   string
 }
 
-func NewService(q domain.Repository, registry *domain.Registry, encKey string) *Service {
+func NewService(q domain.Repository, registry *jsadapter.Registry, encKey string) *Service {
 	return &Service{q: q, registry: registry, encKey: encKey}
 }
 
@@ -107,7 +109,7 @@ func (s *Service) List(ctx context.Context) ([]dto.JobSourceDto, error) {
 func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, error) {
 	adapter, err := s.registry.Get(key)
 	if err != nil {
-		return sqlcgen.JobSource{}, domain.SourceNotFoundError{Key: key}
+		return sqlcgen.JobSource{}, jsadapter.SourceNotFoundError{Key: key}
 	}
 
 	row, err := s.q.GetJobSourceByKey(ctx, key)
@@ -131,7 +133,7 @@ func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, 
 	}
 	row, err = s.q.GetJobSourceByKey(ctx, key)
 	if err != nil {
-		return sqlcgen.JobSource{}, domain.SourceNotFoundError{Key: key}
+		return sqlcgen.JobSource{}, jsadapter.SourceNotFoundError{Key: key}
 	}
 	return row, nil
 }
@@ -190,7 +192,7 @@ func (s *Service) Update(ctx context.Context, key string, enabled *bool, configP
 			return &list[i], nil
 		}
 	}
-	return nil, domain.SourceNotFoundError{Key: key}
+	return nil, jsadapter.SourceNotFoundError{Key: key}
 }
 
 func (s *Service) Test(ctx context.Context, key string) (ok bool, errMsg string) {

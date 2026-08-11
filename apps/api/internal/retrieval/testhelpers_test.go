@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 
+	js "github.com/job-finder/jobscraper/retrieval"
+
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/dbtest"
@@ -20,7 +22,7 @@ import (
 type stubHost struct {
 	t        *testing.T
 	server   *httptest.Server
-	svc      *ServiceImpl
+	svc      js.Service
 	store    *StateStore
 	host     string
 	url      string
@@ -64,7 +66,7 @@ func newStubHost(t *testing.T) *stubHost {
 	sh.host = strings.TrimPrefix(strings.TrimPrefix(sh.url, "http://"), "https://")
 	sh.dbConn = database
 
-	identity, err := NewBrowserIdentity("chrome126")
+	identity, err := js.NewBrowserIdentity("chrome126")
 	if err != nil {
 		t.Fatalf("new browser identity: %v", err)
 	}
@@ -75,11 +77,10 @@ func newStubHost(t *testing.T) *stubHost {
 		CoolingOffBaseDuration: 0,
 	}
 
-	svc, err := NewServiceImpl(identity, sh.store, cfg)
-	if err != nil {
-		t.Fatalf("new service impl: %v", err)
+	svc := NewService(identity, sh.store, cfg)
+	if closer, ok := svc.(interface{ Close() }); ok {
+		t.Cleanup(closer.Close)
 	}
-	t.Cleanup(svc.Close)
 	sh.svc = svc
 
 	return sh
@@ -95,11 +96,11 @@ func (sh *stubHost) pageURL(path string) string {
 	return sh.url + path
 }
 
-func (sh *stubHost) fetchMany(t *testing.T, n int) []PageOutcome {
+func (sh *stubHost) fetchMany(t *testing.T, n int) []js.PageOutcome {
 	t.Helper()
-	outcomes := make([]PageOutcome, 0, n)
+	outcomes := make([]js.PageOutcome, 0, n)
 	for i := 0; i < n; i++ {
-		result, err := sh.svc.Fetch(context.Background(), FetchRequest{
+		result, err := sh.svc.Fetch(context.Background(), js.FetchRequest{
 			URL: sh.pageURL(fmt.Sprintf("/page-%d", i)),
 		})
 		if err != nil {
@@ -110,12 +111,12 @@ func (sh *stubHost) fetchMany(t *testing.T, n int) []PageOutcome {
 	return outcomes
 }
 
-func assertNoDeferralsOrBudgetLanguage(t *testing.T, outcomes []PageOutcome) {
+func assertNoDeferralsOrBudgetLanguage(t *testing.T, outcomes []js.PageOutcome) {
 	t.Helper()
 	banned := []string{"budget", "quota", "allowance", "limit"}
 	for i, o := range outcomes {
-		if o.Status == PageDeferred {
-			t.Errorf("outcome %d: unexpected PageDeferred, reason=%q", i, o.Reason)
+		if o.Status == js.PageDeferred {
+			t.Errorf("outcome %d: unexpected js.PageDeferred, reason=%q", i, o.Reason)
 		}
 		lower := strings.ToLower(o.Reason)
 		for _, word := range banned {

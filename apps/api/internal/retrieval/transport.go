@@ -1,42 +1,25 @@
 package retrieval
 
 import (
-	"context"
+	"net/http"
+	"time"
 
-	"github.com/job-finder/api/internal/ratelimit"
+	"github.com/job-finder/jobscraper/httpjson"
+	jsretrieval "github.com/job-finder/jobscraper/retrieval"
 )
 
-var DefaultTransport = ratelimit.NewTransport(nil)
-
-func ConfigureDefaultTransport(store *StateStore, overrides map[string]float64) {
-	DefaultTransport.RateResolver = NewRateResolver(store, overrides)
+// ConfigureDefaultTransport points the library's shared paced transport at the
+// app's host state, so a site-requested crawl delay becomes the per-host rate.
+func ConfigureDefaultTransport(store jsretrieval.StateStorePort, overrides map[string]float64) {
+	jsretrieval.NewDefaultTransport(store, overrides)
 }
 
-func NewRateResolver(store *StateStore, overrides map[string]float64) func(host string) (float64, string, bool) {
-	return func(host string) (float64, string, bool) {
-		if rps, ok := overrides[host]; ok && rps > 0 {
-			return rps, "override", true
-		}
-
-		ctx := context.Background()
-		state, err := store.Get(ctx, host)
-		if err != nil {
-			return 0, "", false
-		}
-
-		if state.CrawlDelaySeconds == nil {
-			return 0, "", false
-		}
-
-		delay := *state.CrawlDelaySeconds
-		if delay <= 0 {
-			return 0, "", false
-		}
-
-		candidate := 1 / float64(delay)
-		if candidate < ratelimit.DefaultRPS {
-			return candidate, "site-requested", true
-		}
-		return 0, "", false
-	}
+// UsePacedHTTPJSONClient routes the library's default JSON client through the
+// paced transport. httpjson lost that wiring when it moved into the library
+// (it must not depend on retrieval there), so the app restores it at startup.
+func UsePacedHTTPJSONClient() {
+	httpjson.SetDefaultClient(&http.Client{
+		Timeout:   30 * time.Second,
+		Transport: jsretrieval.DefaultTransport,
+	})
 }

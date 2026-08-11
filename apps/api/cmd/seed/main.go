@@ -9,12 +9,13 @@ import (
 	"os"
 	"strings"
 
+	jsadapter "github.com/job-finder/jobscraper/adapter"
+
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/application"
-	"github.com/job-finder/api/internal/jobsources/domain"
-	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	"github.com/job-finder/api/internal/seed"
+	"github.com/job-finder/jobscraper/adapters"
 )
 
 func main() {
@@ -52,7 +53,7 @@ func run() error {
 		slog.Info("seed: truncated all tables")
 	}
 
-	registry := domain.NewRegistry(
+	registry := jsadapter.NewRegistry(
 		adapters.AdzunaAdapter{AppID: cfg.AdzunaAppID, AppKey: cfg.AdzunaAppKey, Country: cfg.AdzunaCountry},
 		adapters.RemotiveAdapter{},
 		adapters.ArbeitnowAdapter{},

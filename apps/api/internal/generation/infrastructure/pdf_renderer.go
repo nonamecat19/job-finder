@@ -15,8 +15,8 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/platform/scraping"
 	"github.com/job-finder/api/internal/platform/storage"
+	"github.com/job-finder/jobscraper/scraping"
 )
 
 //go:embed templates/*.html
@@ -25,14 +25,14 @@ var templatesFS embed.FS
 func mmToInches(mm float64) float64 { return mm / 25.4 }
 
 type HtmlPdfRenderer struct {
-	scraping  *scraping.Service
+	scraping  *scraping.HTTPScraper
 	outDir    string
 	resumeTpl *template.Template
 	letterTpl *template.Template
 	Store     storage.Blobstore
 }
 
-func NewHtmlPdfRenderer(scrapingSvc *scraping.Service, outDir string) (*HtmlPdfRenderer, error) {
+func NewHtmlPdfRenderer(scrapingSvc *scraping.HTTPScraper, outDir string) (*HtmlPdfRenderer, error) {
 	if outDir == "" {
 		outDir = "/data/documents"
 	}

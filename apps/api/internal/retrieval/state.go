@@ -13,9 +13,16 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	jsretrieval "github.com/job-finder/jobscraper/retrieval"
+
 	"github.com/job-finder/api/internal/crypto"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
+
+// StateStore is the app-side implementation of the library's StateStorePort:
+// it owns the Postgres row shape and the cookie encryption, so the engine only
+// ever sees plaintext library types.
+var _ jsretrieval.StateStorePort = (*StateStore)(nil)
 
 type StateStore struct {
 	q             *sqlcgen.Queries
@@ -26,7 +33,7 @@ func NewStateStore(q *sqlcgen.Queries, encryptionKey string) *StateStore {
 	return &StateStore{q: q, encryptionKey: encryptionKey}
 }
 
-func (s *StateStore) Get(ctx context.Context, host string) (*sqlcgen.HostRetrievalState, error) {
+func (s *StateStore) Get(ctx context.Context, host string) (*jsretrieval.HostState, error) {
 	row, err := s.q.GetHostRetrievalState(ctx, host)
 	if err != nil {
 		return nil, fmt.Errorf("retrieval: get state for %s: %w", host, err)
@@ -38,10 +45,36 @@ func (s *StateStore) Get(ctx context.Context, host string) (*sqlcgen.HostRetriev
 			row.Cookies = data
 		}
 	}
-	return &row, nil
+	return &jsretrieval.HostState{
+		Host:               row.Host,
+		IdentityVersion:    row.IdentityVersion,
+		CurrentRung:        row.CurrentRung,
+		RungLastVerifiedAt: timestamptzPtr(row.RungLastVerifiedAt),
+		Cookies:            row.Cookies,
+		ConsecutiveBlocks:  row.ConsecutiveBlocks,
+		CoolingOffUntil:    timestamptzPtr(row.CoolingOffUntil),
+		LastBlockAt:        timestamptzPtr(row.LastBlockAt),
+		LastBlockReason:    row.LastBlockReason,
+		CrawlDelaySeconds:  row.CrawlDelaySeconds,
+	}, nil
 }
 
-func (s *StateStore) Upsert(ctx context.Context, host string, state *sqlcgen.HostRetrievalState) error {
+func timestamptzPtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	v := t.Time
+	return &v
+}
+
+func timestamptzFrom(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+func (s *StateStore) Upsert(ctx context.Context, host string, state *jsretrieval.HostState) error {
 	var cookies []byte
 	if state.Cookies != nil {
 		if s.encryptionKey != "" {
@@ -63,11 +96,11 @@ func (s *StateStore) Upsert(ctx context.Context, host string, state *sqlcgen.Hos
 		Host:               host,
 		IdentityVersion:    state.IdentityVersion,
 		CurrentRung:        state.CurrentRung,
-		RungLastVerifiedAt: state.RungLastVerifiedAt,
+		RungLastVerifiedAt: timestamptzFrom(state.RungLastVerifiedAt),
 		Cookies:            cookies,
 		ConsecutiveBlocks:  state.ConsecutiveBlocks,
-		CoolingOffUntil:    state.CoolingOffUntil,
-		LastBlockAt:        state.LastBlockAt,
+		CoolingOffUntil:    timestamptzFrom(state.CoolingOffUntil),
+		LastBlockAt:        timestamptzFrom(state.LastBlockAt),
 		LastBlockReason:    state.LastBlockReason,
 		CrawlDelaySeconds:  state.CrawlDelaySeconds,
 	}

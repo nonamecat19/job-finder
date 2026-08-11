@@ -7,8 +7,8 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
-	jobsources "github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/manualadd/domain"
+	jobsources "github.com/job-finder/jobscraper/adapter"
 )
 
 // FillIn is a vacancy the operator completed by hand. Nothing is fetched.

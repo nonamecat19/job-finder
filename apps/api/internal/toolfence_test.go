@@ -72,6 +72,14 @@ var declaredToolPackages = map[string]bool{
 // FlareSolverr. A lookup importing it would have reached the open internet from
 // inside a model's decision loop while passing a fence that only checked for
 // the obvious write paths (FR-008b).
+//
+// The engine, the site adapters and the browser scraper now live in the
+// jobscraper library (043). The app packages of the same name are thin wrappers
+// over them, so listing only the app paths would leave the fence bypassable by
+// importing the library directly — the library paths carry the same capability
+// and belong here for the same reason. jobscraper/adapter and jobscraper/model
+// are deliberately absent: they are interface and struct declarations with no
+// I/O, the same way internal/dto is not forbidden.
 var forbiddenPrefixes = []string{
 	"github.com/job-finder/api/internal/notifier",
 	"github.com/job-finder/api/internal/outreach",
@@ -79,6 +87,9 @@ var forbiddenPrefixes = []string{
 	"github.com/job-finder/api/internal/applications",
 	"github.com/job-finder/api/internal/retrieval",
 	"github.com/job-finder/api/internal/jobsources",
+	"github.com/job-finder/jobscraper/retrieval",
+	"github.com/job-finder/jobscraper/adapters",
+	"github.com/job-finder/jobscraper/scraping",
 }
 
 func TestToolPackagesAreReadOnly(t *testing.T) {

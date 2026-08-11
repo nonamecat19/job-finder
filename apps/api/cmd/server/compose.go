@@ -8,6 +8,9 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	activityhttp "github.com/job-finder/api/internal/activity/interfaces/http"
+	jsadapter "github.com/job-finder/jobscraper/adapter"
+	jsretrieval "github.com/job-finder/jobscraper/retrieval"
+
 	"github.com/job-finder/api/internal/aifeature"
 	aifeaturehttp "github.com/job-finder/api/internal/aifeature/interfaces/http"
 	"github.com/job-finder/api/internal/applications"
@@ -29,8 +32,6 @@ import (
 	"github.com/job-finder/api/internal/jobs"
 	jobshttp "github.com/job-finder/api/internal/jobs/interfaces/http"
 	"github.com/job-finder/api/internal/jobsources/application"
-	"github.com/job-finder/api/internal/jobsources/domain"
-	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
 	jobsourceshttp "github.com/job-finder/api/internal/jobsources/interfaces/http"
 	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/jobsources/roster"
@@ -63,6 +64,7 @@ import (
 	subscriptionshttp "github.com/job-finder/api/internal/subscriptions/interfaces/http"
 	"github.com/job-finder/api/internal/summarymodel"
 	summarymodelhttp "github.com/job-finder/api/internal/summarymodel/interfaces/http"
+	"github.com/job-finder/jobscraper/adapters"
 )
 
 type App struct {
@@ -109,7 +111,7 @@ type App struct {
 }
 
 type sourcesHandles struct {
-	Registry *domain.Registry
+	Registry *jsadapter.Registry
 	Sources  *application.Service
 	Djinni   adapters.DjinniAdapter
 	Dou      adapters.DouAdapter
@@ -130,7 +132,7 @@ func composeJobSources(p *Platform) *sourcesHandles {
 	wkAdapter.Roster = rosterSvc
 	srAdapter.Roster = rosterSvc
 
-	registry := domain.NewRegistry(
+	registry := jsadapter.NewRegistry(
 		adapters.AdzunaAdapter{AppID: p.Config.AdzunaAppID, AppKey: p.Config.AdzunaAppKey, Country: p.Config.AdzunaCountry},
 		adapters.RemotiveAdapter{},
 		adapters.ArbeitnowAdapter{},
@@ -390,7 +392,7 @@ func composeManualAdd(p *Platform, sources *sourcesHandles, jobsSvc *jobs.Servic
 	return &manualaddhttp.ManualAddHandler{Manual: manualSvc}
 }
 
-func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc retrieval.Service) *enrichment.Handler {
+func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc jsretrieval.Service) *enrichment.Handler {
 	cfg := p.Config
 	enrichDelay := time.Duration(cfg.DjinniDetailDelayMs) * time.Millisecond
 	enrichDelays := map[string]time.Duration{
@@ -566,7 +568,7 @@ func composeHealth(p *Platform) *health.HealthHandler {
 	}
 }
 
-type hostRetrievalAdapter struct{ svc retrieval.Service }
+type hostRetrievalAdapter struct{ svc jsretrieval.Service }
 
 func (a hostRetrievalAdapter) HostStatus(ctx context.Context, host string) (dto.HostRetrievalStatusDto, error) {
 	st, err := a.svc.HostStatus(ctx, host)
@@ -605,16 +607,17 @@ func (a hostRetrievalAdapter) OverrideCoolingOff(ctx context.Context, host strin
 	return a.svc.OverrideCoolingOff(ctx, host)
 }
 
-func composeRetrieval(p *Platform) (retrieval.Service, error) {
-	identity, err := retrieval.NewBrowserIdentity(p.Config.BrowserIdentityVersion)
+func composeRetrieval(p *Platform) (jsretrieval.Service, error) {
+	identity, err := jsretrieval.NewBrowserIdentity(p.Config.BrowserIdentityVersion)
 	if err != nil {
 		return nil, err
 	}
 	store := retrieval.NewStateStore(p.DB.Queries, p.Config.ConfigEncryptionKey)
-	return retrieval.NewServiceImpl(identity, store, p.Config)
+	retrieval.UsePacedHTTPJSONClient()
+	return retrieval.NewService(identity, store, p.Config), nil
 }
 
-func composeHosts(retrievalSvc retrieval.Service) *jobsourceshttp.HostsHandler {
+func composeHosts(retrievalSvc jsretrieval.Service) *jobsourceshttp.HostsHandler {
 	return &jobsourceshttp.HostsHandler{Retrieval: hostRetrievalAdapter{svc: retrievalSvc}}
 }
 

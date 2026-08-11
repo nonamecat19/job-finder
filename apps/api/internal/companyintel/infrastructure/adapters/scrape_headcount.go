@@ -11,7 +11,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/job-finder/api/internal/companyintel/domain"
-	"github.com/job-finder/api/internal/platform/scraping"
+	"github.com/job-finder/jobscraper/scraping"
 )
 
 var headcountRe = regexp.MustCompile(`(?i)([\d][\d,]*)\+?\s*employees`)

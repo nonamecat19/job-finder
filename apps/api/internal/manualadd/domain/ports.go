@@ -6,6 +6,8 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	jsadapter "github.com/job-finder/jobscraper/adapter"
+
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
 	jobsources "github.com/job-finder/api/internal/jobsources/domain"
@@ -45,7 +47,7 @@ type SubscriptionEnsurer interface {
 // AdapterRegistry is the ordered set of adapters URL resolution walks. Order is
 // deterministic and the first PostingReader to claim a URL wins (D2).
 type AdapterRegistry interface {
-	All() []jobsources.Adapter
+	All() []jsadapter.Adapter
 }
 
 // JobReader turns a freshly written row into the same JobDto the feed and

@@ -4,8 +4,6 @@ go 1.26.5
 
 require (
 	github.com/PuerkitoBio/goquery v1.12.0
-	github.com/bogdanfinn/fhttp v0.6.8
-	github.com/bogdanfinn/tls-client v1.15.1
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
 	github.com/go-chi/chi/v5 v5.3.1
@@ -23,7 +21,6 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/viper v1.21.0
 	golang.org/x/sync v0.22.0
-	golang.org/x/time v0.15.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -35,7 +32,9 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/bdandy/go-errors v1.2.2 // indirect
 	github.com/bdandy/go-socks4 v1.2.3 // indirect
+	github.com/bogdanfinn/fhttp v0.6.8 // indirect
 	github.com/bogdanfinn/quic-go-utls v1.0.9-utls // indirect
+	github.com/bogdanfinn/tls-client v1.15.1 // indirect
 	github.com/bogdanfinn/utls v1.7.7-barnius // indirect
 	github.com/bogdanfinn/websocket v1.5.5-barnius // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
@@ -80,6 +79,7 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/ini.v1 v1.67.2 // indirect
 )

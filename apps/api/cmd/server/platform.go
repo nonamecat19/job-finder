@@ -9,9 +9,9 @@ import (
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
-	"github.com/job-finder/api/internal/jobsources/infrastructure/adapters"
-	"github.com/job-finder/api/internal/platform/scraping"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/jobscraper/adapters"
+	"github.com/job-finder/jobscraper/scraping"
 )
 
 type Platform struct {
@@ -21,7 +21,7 @@ type Platform struct {
 	RedisOpt       asynq.RedisClientOpt
 	AsynqClient    *asynq.Client
 	AsynqInspector *asynq.Inspector
-	Scraping       *scraping.Service
+	Scraping       *scraping.HTTPScraper
 
 	Policies []queue.TaskPolicy
 

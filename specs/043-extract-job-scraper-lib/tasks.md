@@ -144,35 +144,35 @@
 
 #### App-side StateStorePort implementation
 
-- [ ] T057 [P] [US3] Update `apps/api/internal/retrieval/state.go`: `StateStore` now implements `jobscraper/retrieval.StateStorePort`; `Get` returns `*retrieval.HostState` (field-copy from `sqlcgen.HostRetrievalState`, decrypt cookies with `internal/crypto`); `Upsert` accepts `*retrieval.HostState` (field-copy to `sqlcgen.UpsertHostRetrievalStateParams`, encrypt cookies); `LoadCookies`/`SaveCookies` unchanged; keep `FetchAndSetCrawlDelay`/`RecordBlock`/`RecordSuccess`/`ClearRung`/`ClearCookies` (already thin)
-- [ ] T058 [US3] Replace `apps/api/internal/retrieval/service_impl.go` with a thin constructor: drop the `ServiceImpl` struct + `Fetch`/`tryRung`/`tryDirect`/`tryBrowser`/`tryFlareSolverr`/`rungAvailable`/`recordBlock`/`HostStatus`/`ClearRungPreference`/`ClearCookies`/`OverrideCoolingOff` methods (all moved to the library's `engine.go`); keep only a `NewService(identity, store, cfg) jobscraper.Service` that calls `jobscraper.NewEngine(identity, store, EngineOpts{...from cfg...})` and returns the library's `Service`
-- [ ] T059 [P] [US3] Replace `apps/api/internal/retrieval/transport.go` with a 3-line wiring helper: `jobscraper.NewDefaultTransport(stateStorePort, cfg.HostRPSOverrides)`; delete `apps/api/internal/ratelimit/` entirely (vendored into the library)
+- [X] T057 [P] [US3] Update `apps/api/internal/retrieval/state.go`: `StateStore` now implements `jobscraper/retrieval.StateStorePort`; `Get` returns `*retrieval.HostState` (field-copy from `sqlcgen.HostRetrievalState`, decrypt cookies with `internal/crypto`); `Upsert` accepts `*retrieval.HostState` (field-copy to `sqlcgen.UpsertHostRetrievalStateParams`, encrypt cookies); `LoadCookies`/`SaveCookies` unchanged; keep `FetchAndSetCrawlDelay`/`RecordBlock`/`RecordSuccess`/`ClearRung`/`ClearCookies` (already thin)
+- [X] T058 [US3] Replace `apps/api/internal/retrieval/service_impl.go` with a thin constructor: drop the `ServiceImpl` struct + `Fetch`/`tryRung`/`tryDirect`/`tryBrowser`/`tryFlareSolverr`/`rungAvailable`/`recordBlock`/`HostStatus`/`ClearRungPreference`/`ClearCookies`/`OverrideCoolingOff` methods (all moved to the library's `engine.go`); keep only a `NewService(identity, store, cfg) jobscraper.Service` that calls `jobscraper.NewEngine(identity, store, EngineOpts{...from cfg...})` and returns the library's `Service`
+- [X] T059 [P] [US3] Replace `apps/api/internal/retrieval/transport.go` with a 3-line wiring helper: `jobscraper.NewDefaultTransport(stateStorePort, cfg.HostRPSOverrides)`; delete `apps/api/internal/ratelimit/` entirely (vendored into the library)
 
 #### App-side RosterPort implementation
 
-- [ ] T060 [P] [US3] Update `apps/api/internal/jobsources/roster/service.go`: `Service` now implements `jobscraper/rosterport.RosterPort`; `ListForRun` returns `[]rosterport.EmployerBoard` (field-copy from `sqlcgen.EmployerBoard` via `dbutil.UUIDString`); `RecordRunOutcome`/`GetByVendorAndEmployer`/`InsertEmployerBoard`/`DeleteEmployerBoard`/candidate methods thin wrappers with UUID conversion; keep the discovery/candidate orchestration in `candidates.go` (calls port methods on `Service`)
-- [ ] T061 [P] [US3] Keep `apps/api/internal/jobsources/roster/view.go` and `candidates.go` app-side (they produce `dto.EmployerBoardDto`/`dto.BoardCandidateDto` — dashboard contracts); they call port methods on `Service` unchanged
+- [X] T060 [P] [US3] Update `apps/api/internal/jobsources/roster/service.go`: `Service` now implements `jobscraper/rosterport.RosterPort`; `ListForRun` returns `[]rosterport.EmployerBoard` (field-copy from `sqlcgen.EmployerBoard` via `dbutil.UUIDString`); `RecordRunOutcome`/`GetByVendorAndEmployer`/`InsertEmployerBoard`/`DeleteEmployerBoard`/candidate methods thin wrappers with UUID conversion; keep the discovery/candidate orchestration in `candidates.go` (calls port methods on `Service`)
+- [X] T061 [P] [US3] Keep `apps/api/internal/jobsources/roster/view.go` and `candidates.go` app-side (they produce `dto.EmployerBoardDto`/`dto.BoardCandidateDto` — dashboard contracts); they call port methods on `Service` unchanged
 
 #### App-side cleanup of moved files
 
-- [ ] T062 [US3] Delete from the app (already moved): `apps/api/internal/jobsources/htmlutil.go`(+test), `httpjson.go`(+test), `util.go`(+test), `apps/api/internal/jobsources/domain/adapter.go`(+test), `apps/api/internal/jobsources/domain/errors.go`, `apps/api/internal/retrieval/{ladder,challenge,outcome,identity,service,direct,browser,flaresolverr}.go`(+tests), `apps/api/internal/platform/scraping/` (whole tree)
-- [ ] T063 [P] [US3] Update `apps/api/internal/jobsources/domain/job_source.go`: `JobSource.Kind` now `model.SourceKind` (alias is fine); `ToDTO` unchanged (produces `dto.JobSourceDto` which is an alias of `model.JobSourceDto`)
-- [ ] T064 [US3] Update `apps/api/internal/jobsources/domain/repository.go` and `search_repository.go`: no change (they stay sqlcgen-typed, app-internal); if they referenced `domain.Adapter`/`Registry` (moved), re-import from `jobscraper/adapter` via a re-export alias in `domain/` or update call sites directly
-- [ ] T065 [US3] Update `apps/api/internal/jobsources/application/service.go` + `search_service.go`: replace `jobsources/domain` adapter-registry imports with `jobscraper/adapter`; keep `domain.Repository`/`SearchRepository` references (app-internal); keep `crypto`/`dbutil`/`db/sqlcgen`/`queue` imports
-- [ ] T066 [US3] Update `apps/api/internal/jobsources/interfaces/worker/handler.go` + `scheduler.go`: replace adapter-framework imports with `jobscraper/adapter`; keep `queue`/`activity`/`db` imports
-- [ ] T067 [P] [US3] Update `apps/api/internal/jobsources/interfaces/http/` handlers: replace any `jobsources/domain` adapter-type imports with `jobscraper/adapter`; keep `httpx`/`dto`/`apperr` imports
-- [ ] T068 [US3] Update `apps/api/cmd/server/` wiring: construct `jobscraper.NewEngine(...)` (or the app's `NewService` wrapper), construct `roster.NewService(q, checkers)` with the `checkers` map from `jobscraper/adapters.NewBoardAdapters()`, inject `RosterPort` into the board adapters at construction
+- [X] T062 [US3] Delete from the app (already moved): `apps/api/internal/jobsources/htmlutil.go`(+test), `httpjson.go`(+test), `util.go`(+test), `apps/api/internal/jobsources/domain/adapter.go`(+test), `apps/api/internal/jobsources/domain/errors.go`, `apps/api/internal/retrieval/{ladder,challenge,outcome,identity,service,direct,browser,flaresolverr}.go`(+tests), `apps/api/internal/platform/scraping/` (whole tree)
+- [X] T063 [P] [US3] Update `apps/api/internal/jobsources/domain/job_source.go`: `JobSource.Kind` now `model.SourceKind` (alias is fine); `ToDTO` unchanged (produces `dto.JobSourceDto` which is an alias of `model.JobSourceDto`)
+- [X] T064 [US3] Update `apps/api/internal/jobsources/domain/repository.go` and `search_repository.go`: no change (they stay sqlcgen-typed, app-internal); if they referenced `domain.Adapter`/`Registry` (moved), re-import from `jobscraper/adapter` via a re-export alias in `domain/` or update call sites directly
+- [X] T065 [US3] Update `apps/api/internal/jobsources/application/service.go` + `search_service.go`: replace `jobsources/domain` adapter-registry imports with `jobscraper/adapter`; keep `domain.Repository`/`SearchRepository` references (app-internal); keep `crypto`/`dbutil`/`db/sqlcgen`/`queue` imports
+- [X] T066 [US3] Update `apps/api/internal/jobsources/interfaces/worker/handler.go` + `scheduler.go`: replace adapter-framework imports with `jobscraper/adapter`; keep `queue`/`activity`/`db` imports
+- [X] T067 [P] [US3] Update `apps/api/internal/jobsources/interfaces/http/` handlers: replace any `jobsources/domain` adapter-type imports with `jobscraper/adapter`; keep `httpx`/`dto`/`apperr` imports
+- [X] T068 [US3] Update `apps/api/cmd/server/` wiring: construct `jobscraper.NewEngine(...)` (or the app's `NewService` wrapper), construct `roster.NewService(q, checkers)` with the `checkers` map from `jobscraper/adapters.NewBoardAdapters()`, inject `RosterPort` into the board adapters at construction
 
 #### arch_test and exemption list
 
-- [ ] T069 [P] [US3] Verify `apps/api/internal/arch_test.go` exemption list: `testutil` still in the tree (out of scope), `httpapi`/`httpx`/`health` still present and correct; no new exemption added; confirm no moved package imported `chi` (grep `go-chi/chi` in `../jobscraper/` — empty)
+- [X] T069 [P] [US3] Verify `apps/api/internal/arch_test.go` exemption list: `testutil` still in the tree (out of scope), `httpapi`/`httpx`/`health` still present and correct; no new exemption added; confirm no moved package imported `chi` (grep `go-chi/chi` in `../jobscraper/` — empty)
 
 #### App validation
 
-- [ ] T070 [US3] Run `cd apps/api && go mod tidy && go build ./...` — fix import-path issues; the app should build against the library via the `replace` directive
-- [ ] T071 [US3] Snapshot tygo output: `cp packages/shared/src/generated.ts /tmp/generated.before.ts` (if not already snapshotted), then `make tygo-generate`, then `diff /tmp/generated.before.ts packages/shared/src/generated.ts` — must be empty (FR-015/SC-005)
-- [ ] T072 [US3] Run `cd apps/api && go test ./internal/jobsources/... ./internal/retrieval/...` — adapter + retrieval tests pass unchanged (FR-013/SC-003)
-- [ ] T073 [US3] Run `make test-lint` — `lint-go` + `lint-web` + `test-go` + `test-react` all green (FR-014/SC-004)
+- [X] T070 [US3] Run `cd apps/api && go mod tidy && go build ./...` — fix import-path issues; the app should build against the library via the `replace` directive
+- [X] T071 [US3] Snapshot tygo output: `cp packages/shared/src/generated.ts /tmp/generated.before.ts` (if not already snapshotted), then `make tygo-generate`, then `diff /tmp/generated.before.ts packages/shared/src/generated.ts` — must be empty (FR-015/SC-005)
+- [X] T072 [US3] Run `cd apps/api && go test ./internal/jobsources/... ./internal/retrieval/...` — adapter + retrieval tests pass unchanged (FR-013/SC-003)
+- [X] T073 [US3] Run `make test-lint` — `lint-go` + `lint-web` + `test-go` + `test-react` all green (FR-014/SC-004)
 
 **Checkpoint**: App consumes the library; all tests green; tygo byte-identical; merge gate passes.
 
@@ -185,10 +185,10 @@
 - [X] T074 [P] Run quickstart scenario 1: `cd ../jobscraper && grep -E 'pgx|asynq|viper|minio|pgvector|goose|job-finder/api' go.mod` returns empty (SC-002)
 - [X] T075 Run quickstart scenario 2: create `/tmp/jobscraper-smoke/` throwaway Go project importing `jobscraper`, construct a registry with `AdzunaAdapter` + `RemoteokAdapter`, call `Search`, print results; verify `go.sum` has no `pgx`/`asynq` (SC-001)
 - [X] T076 Run quickstart scenario 3: in the throwaway project, import only `jobscraper/retrieval`, construct `NewEngine` with an in-memory `StateStorePort`, `Fetch` a URL; verify `go.sum` has no `goquery` (SC-006/US2). NOTE: `chromedp` IS present and must be — `retrieval/browser.go` is the browser rung, so the engine depends on chromedp by design (plan.md). Only the adapter/HTML stack (`goquery`) must stay out.
-- [ ] T077 Run quickstart scenario 5: `cd apps/api && go test ./internal/jobsources/infrastructure/adapters/ -run 'Greenhouse|Lever|Ashby|Workable|SmartRecruiters|ATSBoard'` — all 6 board adapter tests green through `RosterPort` (SC-007)
-- [ ] T078 [P] Remove now-empty app directories: `apps/api/internal/ratelimit/` (deleted in T059), `apps/api/internal/platform/scraping/` (deleted in T062), `apps/api/internal/retrieval/retrieval.go` (empty stub); confirm `git status` shows deletions only for moved files
-- [ ] T079 [P] Update `apps/api/internal/arch_test.go` if the `exemptDirs` map references any removed directory (it should not — `testutil` stays — but verify)
-- [ ] T080 Run `make test-lint` one final time on the merged state (library + app wired) — full green gate before the feature ships
+- [X] T077 Run quickstart scenario 5: `cd apps/api && go test ./internal/jobsources/infrastructure/adapters/ -run 'Greenhouse|Lever|Ashby|Workable|SmartRecruiters|ATSBoard'` — all 6 board adapter tests green through `RosterPort` (SC-007)
+- [X] T078 [P] Remove now-empty app directories: `apps/api/internal/ratelimit/` (deleted in T059), `apps/api/internal/platform/scraping/` (deleted in T062), `apps/api/internal/retrieval/retrieval.go` (empty stub); confirm `git status` shows deletions only for moved files
+- [X] T079 [P] Update `apps/api/internal/arch_test.go` if the `exemptDirs` map references any removed directory (it should not — `testutil` stays — but verify)
+- [X] T080 Run `make test-lint` one final time on the merged state (library + app wired) — full green gate before the feature ships
 
 ---
 

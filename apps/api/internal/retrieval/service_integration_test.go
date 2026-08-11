@@ -2,7 +2,11 @@
 
 package retrieval
 
-import "testing"
+import (
+	"testing"
+
+	js "github.com/job-finder/jobscraper/retrieval"
+)
 
 func TestIntegration_NoDailyCap_250SequentialFetchesAllAttempted(t *testing.T) {
 	sh := newStubHost(t)
@@ -12,8 +16,8 @@ func TestIntegration_NoDailyCap_250SequentialFetchesAllAttempted(t *testing.T) {
 		t.Fatalf("expected 250 outcomes, got %d", len(outcomes))
 	}
 	for i, o := range outcomes {
-		if o.Status != PageRead {
-			t.Errorf("outcome %d: expected PageRead, got %s (reason=%q)", i, o.Status, o.Reason)
+		if o.Status != js.PageRead {
+			t.Errorf("outcome %d: expected js.PageRead, got %s (reason=%q)", i, o.Status, o.Reason)
 		}
 	}
 }

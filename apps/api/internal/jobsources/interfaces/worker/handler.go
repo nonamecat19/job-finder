@@ -11,6 +11,8 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	jsadapter "github.com/job-finder/jobscraper/adapter"
+
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
@@ -42,7 +44,7 @@ func lastAttempt(ctx context.Context) bool {
 
 type Handler struct {
 	q         domain.SearchRepository
-	registry  *domain.Registry
+	registry  *jsadapter.Registry
 	sources   *application.Service
 	client    application.Enqueuer
 	tx        domain.TxRunner
@@ -59,7 +61,7 @@ func WithChunkSize(n int) HandlerOption {
 	return func(h *Handler) { h.chunkSize = n }
 }
 
-func NewHandler(q domain.SearchRepository, registry *domain.Registry, sources *application.Service, client application.Enqueuer, opts ...HandlerOption) *Handler {
+func NewHandler(q domain.SearchRepository, registry *jsadapter.Registry, sources *application.Service, client application.Enqueuer, opts ...HandlerOption) *Handler {
 	h := &Handler{q: q, registry: registry, sources: sources, client: client, chunkSize: ingest.DefaultChunkSize}
 	for _, opt := range opts {
 		opt(h)
@@ -166,7 +168,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 
 	jobs, err = adapter.Search(ctx, query, config)
 
-	if reporter, ok := adapter.(domain.EmployerReporter); ok {
+	if reporter, ok := adapter.(jsadapter.EmployerReporter); ok {
 		if detail, mErr := json.Marshal(reporter.LastRunDetail()); mErr == nil {
 			_ = h.q.SetSourceRunEmployerDetail(ctx, sqlcgen.SetSourceRunEmployerDetailParams{ID: run.ID, EmployerDetail: detail})
 		}
@@ -181,7 +183,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		rec.Step(ctx, fmt.Sprintf("persisting %d found jobs", len(jobs)), nil)
 	}
 
-	needsDetail := domain.NeedsDetail(adapter)
+	needsDetail := jsadapter.NeedsDetail(adapter)
 
 	batch := ingest.NewPostingBatch(jobs, subscriptionID, run.ID, needsDetail)
 	started := time.Now()

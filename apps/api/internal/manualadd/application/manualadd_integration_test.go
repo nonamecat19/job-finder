@@ -14,10 +14,10 @@ import (
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/jobs"
 	"github.com/job-finder/api/internal/jobsources/application/ingest"
-	jobsources "github.com/job-finder/api/internal/jobsources/domain"
 	"github.com/job-finder/api/internal/manualadd/application"
 	"github.com/job-finder/api/internal/manualadd/domain"
 	"github.com/job-finder/api/internal/subscriptions"
+	jobsources "github.com/job-finder/jobscraper/adapter"
 )
 
 func setupManualAdd(t *testing.T) (context.Context, *db.DB, func()) {

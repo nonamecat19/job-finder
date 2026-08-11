@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/platform/scraping"
+	"github.com/job-finder/jobscraper/scraping"
 )
 
 func strp2(s string) *string { return &s }

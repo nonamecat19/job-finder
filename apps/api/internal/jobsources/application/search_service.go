@@ -9,6 +9,8 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	jsadapter "github.com/job-finder/jobscraper/adapter"
+
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/apperr"
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -30,12 +32,12 @@ const (
 
 type SearchService struct {
 	q        domain.SearchRepository
-	registry *domain.Registry
+	registry *jsadapter.Registry
 	sources  *Service
 	client   Enqueuer
 }
 
-func NewSearchService(q domain.SearchRepository, registry *domain.Registry, sources *Service, client Enqueuer) *SearchService {
+func NewSearchService(q domain.SearchRepository, registry *jsadapter.Registry, sources *Service, client Enqueuer) *SearchService {
 	return &SearchService{q: q, registry: registry, sources: sources, client: client}
 }
 
