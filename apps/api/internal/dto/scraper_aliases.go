@@ -1,6 +1,6 @@
 package dto
 
-// The scraping stack lives in the jobscraper library; these aliases keep every
+// The scraping stack lives in the job-scraper library; these aliases keep every
 // existing dto.X reference in the app working against the library's canonical
 // types.
 //
@@ -9,7 +9,7 @@ package dto
 // four types is generated from the library package into generated-model.ts and
 // re-exported from generated.ts.
 
-import "github.com/nonamecat19/jobscraper/model"
+import "github.com/nonamecat19/job-scraper/model"
 
 type (
 	NormalizedJob = model.NormalizedJob

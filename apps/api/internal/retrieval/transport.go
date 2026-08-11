@@ -1,8 +1,8 @@
 package retrieval
 
 import (
-	"github.com/nonamecat19/jobscraper/ports"
-	jsretrieval "github.com/nonamecat19/jobscraper/retrieval"
+	"github.com/nonamecat19/job-scraper/ports"
+	jsretrieval "github.com/nonamecat19/job-scraper/retrieval"
 )
 
 // ConfigureDefaultTransport points the library's shared paced transport at the

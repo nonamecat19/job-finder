@@ -7,16 +7,16 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	"github.com/nonamecat19/jobscraper/model"
+	"github.com/nonamecat19/job-scraper/model"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/scraping"
-	"github.com/nonamecat19/jobscraper/adapters/djinni"
-	"github.com/nonamecat19/jobscraper/adapters/jobleads"
-	"github.com/nonamecat19/jobscraper/ports"
+	"github.com/nonamecat19/job-scraper/adapters/djinni"
+	"github.com/nonamecat19/job-scraper/adapters/jobleads"
+	"github.com/nonamecat19/job-scraper/ports"
 )
 
 type Platform struct {

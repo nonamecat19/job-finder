@@ -5,7 +5,7 @@ package retrieval
 import (
 	"testing"
 
-	"github.com/nonamecat19/jobscraper/ports"
+	"github.com/nonamecat19/job-scraper/ports"
 )
 
 func TestIntegration_NoDailyCap_250SequentialFetchesAllAttempted(t *testing.T) {

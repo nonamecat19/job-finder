@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	jsadapter "github.com/nonamecat19/jobscraper/adapter"
+	jsadapter "github.com/nonamecat19/job-scraper/adapter"
 
 	"github.com/job-finder/api/internal/crypto"
 	"github.com/job-finder/api/internal/db/sqlcgen"

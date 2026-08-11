@@ -17,8 +17,8 @@ import (
 	"github.com/job-finder/api/internal/manualadd/application"
 	"github.com/job-finder/api/internal/manualadd/domain"
 	"github.com/job-finder/api/internal/subscriptions"
-	jsadapter "github.com/nonamecat19/jobscraper/adapter"
-	"github.com/nonamecat19/jobscraper/ports"
+	jsadapter "github.com/nonamecat19/job-scraper/adapter"
+	"github.com/nonamecat19/job-scraper/ports"
 )
 
 func setupManualAdd(t *testing.T) (context.Context, *db.DB, func()) {

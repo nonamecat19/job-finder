@@ -9,22 +9,22 @@ import (
 	"os"
 	"strings"
 
-	jsadapter "github.com/nonamecat19/jobscraper/adapter"
+	jsadapter "github.com/nonamecat19/job-scraper/adapter"
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/seed"
-	"github.com/nonamecat19/jobscraper/adapters/adzuna"
-	"github.com/nonamecat19/jobscraper/adapters/arbeitnow"
-	"github.com/nonamecat19/jobscraper/adapters/djinni"
-	"github.com/nonamecat19/jobscraper/adapters/dou"
-	"github.com/nonamecat19/jobscraper/adapters/jobspy"
-	"github.com/nonamecat19/jobscraper/adapters/jooble"
-	"github.com/nonamecat19/jobscraper/adapters/manual"
-	"github.com/nonamecat19/jobscraper/adapters/remotive"
-	"github.com/nonamecat19/jobscraper/adapters/robota"
-	"github.com/nonamecat19/jobscraper/adapters/workua"
+	"github.com/nonamecat19/job-scraper/adapters/adzuna"
+	"github.com/nonamecat19/job-scraper/adapters/arbeitnow"
+	"github.com/nonamecat19/job-scraper/adapters/djinni"
+	"github.com/nonamecat19/job-scraper/adapters/dou"
+	"github.com/nonamecat19/job-scraper/adapters/jobspy"
+	"github.com/nonamecat19/job-scraper/adapters/jooble"
+	"github.com/nonamecat19/job-scraper/adapters/manual"
+	"github.com/nonamecat19/job-scraper/adapters/remotive"
+	"github.com/nonamecat19/job-scraper/adapters/robota"
+	"github.com/nonamecat19/job-scraper/adapters/workua"
 )
 
 func main() {

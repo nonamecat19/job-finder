@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nonamecat19/jobscraper/ports"
-	js "github.com/nonamecat19/jobscraper/retrieval"
+	"github.com/nonamecat19/job-scraper/ports"
+	js "github.com/nonamecat19/job-scraper/retrieval"
 )
 
 // The ladder, the outcome vocabulary and the fetch/status types moved into the
-// jobscraper library. These tests came with the app and stay here as the app's
+// job-scraper library. These tests came with the app and stay here as the app's
 // regression gate on the library surface it depends on.
 
 func TestPageOutcome(t *testing.T) {

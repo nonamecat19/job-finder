@@ -14,7 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/minio/minio-go/v7 v7.2.1
-	github.com/nonamecat19/jobscraper v0.1.0
+	github.com/nonamecat19/job-scraper v0.1.0
 	github.com/pgvector/pgvector-go v0.4.1
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/redis/go-redis/v9 v9.22.0
@@ -82,4 +82,4 @@ require (
 	gopkg.in/ini.v1 v1.67.2 // indirect
 )
 
-replace github.com/nonamecat19/jobscraper => ../../../jobscraper
+replace github.com/nonamecat19/job-scraper => ../../../job-scraper

@@ -8,15 +8,15 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/enrichment"
-	djinnisrc "github.com/nonamecat19/jobscraper/adapters/djinni"
-	dousrc "github.com/nonamecat19/jobscraper/adapters/dou"
-	glassdoorsrc "github.com/nonamecat19/jobscraper/adapters/glassdoor"
-	indeedsrc "github.com/nonamecat19/jobscraper/adapters/indeed"
-	jobgethersrc "github.com/nonamecat19/jobscraper/adapters/jobgether"
-	jobleadssrc "github.com/nonamecat19/jobscraper/adapters/jobleads"
-	remoteoksrc "github.com/nonamecat19/jobscraper/adapters/remoteok"
-	wellfoundsrc "github.com/nonamecat19/jobscraper/adapters/wellfound"
-	workuasrc "github.com/nonamecat19/jobscraper/adapters/workua"
+	djinnisrc "github.com/nonamecat19/job-scraper/adapters/djinni"
+	dousrc "github.com/nonamecat19/job-scraper/adapters/dou"
+	glassdoorsrc "github.com/nonamecat19/job-scraper/adapters/glassdoor"
+	indeedsrc "github.com/nonamecat19/job-scraper/adapters/indeed"
+	jobgethersrc "github.com/nonamecat19/job-scraper/adapters/jobgether"
+	jobleadssrc "github.com/nonamecat19/job-scraper/adapters/jobleads"
+	remoteoksrc "github.com/nonamecat19/job-scraper/adapters/remoteok"
+	wellfoundsrc "github.com/nonamecat19/job-scraper/adapters/wellfound"
+	workuasrc "github.com/nonamecat19/job-scraper/adapters/workua"
 )
 
 var (

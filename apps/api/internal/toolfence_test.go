@@ -73,14 +73,14 @@ var declaredToolPackages = map[string]bool{
 // inside a model's decision loop while passing a fence that only checked for
 // the obvious write paths (FR-008b).
 //
-// The engine and the site sources now live in the jobscraper library (043).
+// The engine and the site sources now live in the job-scraper library (043).
 // The app packages of the same name are thin wrappers over them, so listing
 // only the app paths would leave the fence bypassable by importing the library
 // directly — the library paths carry the same capability and belong here for
 // the same reason. The scraper moved back into the app when the library made
 // its own internal, so internal/scraping is listed too.
 //
-// jobscraper/adapter, jobscraper/ports and jobscraper/model are deliberately
+// job-scraper/adapter, job-scraper/ports and job-scraper/model are deliberately
 // absent: they are interface and struct declarations with no I/O, the same way
 // internal/dto is not forbidden.
 var forbiddenPrefixes = []string{
@@ -91,9 +91,9 @@ var forbiddenPrefixes = []string{
 	"github.com/job-finder/api/internal/retrieval",
 	"github.com/job-finder/api/internal/jobsources",
 	"github.com/job-finder/api/internal/scraping",
-	"github.com/nonamecat19/jobscraper/retrieval",
-	"github.com/nonamecat19/jobscraper/adapters",
-	"github.com/nonamecat19/jobscraper/session",
+	"github.com/nonamecat19/job-scraper/retrieval",
+	"github.com/nonamecat19/job-scraper/adapters",
+	"github.com/nonamecat19/job-scraper/session",
 }
 
 func TestToolPackagesAreReadOnly(t *testing.T) {

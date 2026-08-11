@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/nonamecat19/jobscraper/ports"
-	js "github.com/nonamecat19/jobscraper/retrieval"
+	"github.com/nonamecat19/job-scraper/ports"
+	js "github.com/nonamecat19/job-scraper/retrieval"
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"

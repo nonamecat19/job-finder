@@ -6,13 +6,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nonamecat19/jobscraper/ports"
+	"github.com/nonamecat19/job-scraper/ports"
 
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/jobsources/roster"
 )
 
-// The board adapters moved into the jobscraper library and now reach the
+// The board adapters moved into the job-scraper library and now reach the
 // database only through ports.Roster. The library's own tests drive
 // that port with an in-memory fake, which cannot catch a mistake in the one
 // thing the app still owns: translating sqlcgen rows and pgtype UUIDs to and

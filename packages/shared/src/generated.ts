@@ -246,7 +246,7 @@ export type DocumentType = typeof DocumentTypeResume | typeof DocumentTypeCoverL
 
 /**
  * GenerationRunDto is the whole workspace: run, sections, items
- * (`GET /v1/generations/{runId}`, contracts/rest-api.md).
+ * (`GET /v1/generations/{runId}`, resume-generation.md § 4.1).
  */
 export interface GenerationRunDto {
   id: string;

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	jsretrieval "github.com/nonamecat19/jobscraper/retrieval"
+	jsretrieval "github.com/nonamecat19/job-scraper/retrieval"
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
