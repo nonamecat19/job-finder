@@ -19,7 +19,8 @@ import (
 	"github.com/job-finder/api/internal/jobsources/application/ingest"
 	"github.com/job-finder/api/internal/manualadd/domain"
 	"github.com/job-finder/api/internal/queue"
-	jobsources "github.com/nonamecat19/jobscraper/adapter"
+	jsadapter "github.com/nonamecat19/jobscraper/adapter"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 // AddTimeout is the whole budget for one manual add: resolution, per-host
@@ -79,8 +80,8 @@ func NewService(
 // resolution is what walking the registry produced: either a reader that
 // claimed the URL, or the reason nobody did.
 type resolution struct {
-	adapter   jobsources.Adapter
-	reader    jobsources.PostingReader
+	adapter   ports.JobSource
+	reader    ports.PostingReader
 	sourceKey string
 }
 
@@ -97,7 +98,7 @@ func (s *Service) resolve(rawURL string) (resolution, *domain.Failure) {
 
 	hostClaimed := false
 	for _, adapter := range s.registry.All() {
-		reader, ok := jobsources.AsPostingReader(adapter)
+		reader, ok := jsadapter.AsPostingReader(adapter)
 		if !ok {
 			continue
 		}
@@ -181,7 +182,7 @@ func (s *Service) Add(ctx context.Context, rawURL string) (domain.Result, error)
 		return s.logged(rawURL, resolved.sourceKey, s.failureResult(rawURL, failure, draft), started), nil
 	}
 
-	result, err := s.persist(ctx, posting, subscription.ID, run.ID, jobsources.NeedsDetail(resolved.adapter))
+	result, err := s.persist(ctx, posting, subscription.ID, run.ID, jsadapter.NeedsDetail(resolved.adapter))
 	if err != nil {
 		failure := classifyReadError(ctx, resolved.sourceKey, err)
 		s.finishRunError(ctx, run.ID, failure)

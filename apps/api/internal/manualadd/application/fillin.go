@@ -8,7 +8,8 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/manualadd/domain"
-	jobsources "github.com/nonamecat19/jobscraper/adapter"
+	jsadapter "github.com/nonamecat19/jobscraper/adapter"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 // FillIn is a vacancy the operator completed by hand. Nothing is fetched.
@@ -80,7 +81,7 @@ func (s *Service) SaveFillIn(ctx context.Context, in FillIn) (domain.Result, err
 
 	needsDetail := false
 	if adapter, err := s.adapterFor(sourceKey); err == nil {
-		needsDetail = jobsources.NeedsDetail(adapter)
+		needsDetail = jsadapter.NeedsDetail(adapter)
 	}
 
 	result, err := s.persist(ctx, posting, subscription.ID, run.ID, needsDetail)
@@ -94,7 +95,7 @@ func (s *Service) SaveFillIn(ctx context.Context, in FillIn) (domain.Result, err
 	return result, nil
 }
 
-func (s *Service) adapterFor(sourceKey string) (jobsources.Adapter, error) {
+func (s *Service) adapterFor(sourceKey string) (ports.JobSource, error) {
 	for _, adapter := range s.registry.All() {
 		if adapter.Key() == sourceKey {
 			return adapter, nil

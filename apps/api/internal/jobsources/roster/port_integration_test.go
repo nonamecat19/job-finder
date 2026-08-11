@@ -6,20 +6,20 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nonamecat19/jobscraper/rosterport"
+	"github.com/nonamecat19/jobscraper/ports"
 
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/jobsources/roster"
 )
 
 // The board adapters moved into the jobscraper library and now reach the
-// database only through rosterport.RosterPort. The library's own tests drive
+// database only through ports.Roster. The library's own tests drive
 // that port with an in-memory fake, which cannot catch a mistake in the one
 // thing the app still owns: translating sqlcgen rows and pgtype UUIDs to and
 // from the port's plain-string, library-struct shapes. These tests exercise
 // roster.Service — the real implementation — against a real database.
 
-func newPortService(t *testing.T) (rosterport.RosterPort, context.Context) {
+func newPortService(t *testing.T) (ports.Roster, context.Context) {
 	t.Helper()
 	database := dbtest.New(t)
 	return roster.NewService(database.Queries, nil), context.Background()
@@ -76,7 +76,7 @@ func TestPortListForRunReturnsInsertedBoard(t *testing.T) {
 		t.Fatalf("ListForRun: %v", err)
 	}
 
-	var found *rosterport.EmployerBoard
+	var found *ports.EmployerBoard
 	for i := range boards {
 		if boards[i].ID == inserted.ID {
 			found = &boards[i]
@@ -113,7 +113,7 @@ func TestPortRecordRunOutcomeUpdatesCountAndTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListForRun: %v", err)
 	}
-	var found *rosterport.EmployerBoard
+	var found *ports.EmployerBoard
 	for i := range boards {
 		if boards[i].ID == inserted.ID {
 			found = &boards[i]

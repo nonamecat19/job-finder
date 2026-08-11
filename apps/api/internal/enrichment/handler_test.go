@@ -13,8 +13,16 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/queue"
-	"github.com/nonamecat19/jobscraper/adapters"
-	"github.com/nonamecat19/jobscraper/scraping"
+	"github.com/job-finder/api/internal/scraping"
+	djinnisrc "github.com/nonamecat19/jobscraper/adapters/djinni"
+	dousrc "github.com/nonamecat19/jobscraper/adapters/dou"
+	glassdoorsrc "github.com/nonamecat19/jobscraper/adapters/glassdoor"
+	indeedsrc "github.com/nonamecat19/jobscraper/adapters/indeed"
+	jobgethersrc "github.com/nonamecat19/jobscraper/adapters/jobgether"
+	jobleadssrc "github.com/nonamecat19/jobscraper/adapters/jobleads"
+	remoteoksrc "github.com/nonamecat19/jobscraper/adapters/remoteok"
+	wellfoundsrc "github.com/nonamecat19/jobscraper/adapters/wellfound"
+	workuasrc "github.com/nonamecat19/jobscraper/adapters/workua"
 )
 
 type enrichFakeRepo struct {
@@ -75,8 +83,8 @@ func TestEnrichIndeed_Success(t *testing.T) {
 		Title:     "Go Developer",
 		Company:   "Acme",
 	}}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{Scraping: scraping.New()}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{Scraping: scraping.New()}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -102,8 +110,8 @@ func TestEnrichIndeed_FetchDetailFailureDoesNotPropagate(t *testing.T) {
 		SourceKey: "indeed",
 		Url:       srv.URL + "/viewjob?jk=gone",
 	}}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{Scraping: scraping.New()}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{Scraping: scraping.New()}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -131,8 +139,8 @@ func TestEnrichRemoteOK_Success(t *testing.T) {
 		Title:     "Senior Golang Developer",
 		Company:   "NovaTech LLC",
 	}}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{}, remoteoksrc.Source{Scraping: scraping.New(), APIURL: srv.URL}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -158,8 +166,8 @@ func TestEnrichRemoteOK_RotatedOutDoesNotUpdate(t *testing.T) {
 		SourceKey: "remoteok",
 		Url:       "https://remoteok.com/remote-jobs/9999999-gone",
 	}}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{Scraping: scraping.New(), APIURL: srv.URL}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{}, remoteoksrc.Source{Scraping: scraping.New(), APIURL: srv.URL}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -191,9 +199,9 @@ func TestEnrichJobLeads_Success(t *testing.T) {
 		Title:     "Senior Golang Engineer",
 		Company:   "NovaTech LLC",
 	}}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{},
-		adapters.JobLeadsAdapter{Scraping: scraping.New(), Session: &enrichJobLeadsFakeSession{cookie: "cookie-xyz"}}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{}, remoteoksrc.Source{}, glassdoorsrc.Source{},
+		jobleadssrc.Source{Scraping: scraping.New(), Session: &enrichJobLeadsFakeSession{cookie: "cookie-xyz"}}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -218,9 +226,9 @@ func TestEnrichJobLeads_UnavailableDoesNotUpdate(t *testing.T) {
 		SourceKey: "jobleads",
 		Url:       srv.URL + "/job/gone",
 	}}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{},
-		adapters.JobLeadsAdapter{Scraping: scraping.New(), Session: &enrichJobLeadsFakeSession{cookie: "cookie-xyz"}}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{}, remoteoksrc.Source{}, glassdoorsrc.Source{},
+		jobleadssrc.Source{Scraping: scraping.New(), Session: &enrichJobLeadsFakeSession{cookie: "cookie-xyz"}}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -248,9 +256,9 @@ func TestEnrichWellfound_Success(t *testing.T) {
 		Title:     "Senior Golang Engineer",
 		Company:   "NovaTech Labs",
 	}}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{},
-		adapters.WellfoundAdapter{Scraping: scraping.New()}, adapters.JobgetherAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{},
+		wellfoundsrc.Source{Scraping: scraping.New()}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -276,9 +284,9 @@ func TestEnrichWellfound_UnavailableDoesNotUpdate(t *testing.T) {
 		SourceKey: "wellfound",
 		Url:       srv.URL + "/jobs/gone",
 	}}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{},
-		adapters.WellfoundAdapter{Scraping: scraping.New()}, adapters.JobgetherAdapter{}, &enrichFakeEnqueuer{}, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{},
+		wellfoundsrc.Source{Scraping: scraping.New()}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -302,8 +310,8 @@ func TestEnrich_EnqueuesDownstreamEvenWhenFetchDetailFails(t *testing.T) {
 		Url:       srv.URL + "/viewjob?jk=gone",
 	}}
 	enq := &enrichFakeEnqueuer{}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{Scraping: scraping.New()}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, enq, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{Scraping: scraping.New()}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, enq, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
@@ -324,8 +332,8 @@ func TestEnrich_UnknownSourceStillEnqueuesDownstream(t *testing.T) {
 		Url:       "https://example.test/job/1",
 	}}
 	enq := &enrichFakeEnqueuer{}
-	h := enrichment.NewHandler(repo, nil, adapters.DjinniAdapter{}, adapters.DouAdapter{}, adapters.WorkUaAdapter{},
-		adapters.IndeedAdapter{}, adapters.RemoteOKAdapter{}, adapters.GlassdoorAdapter{}, adapters.JobLeadsAdapter{}, adapters.WellfoundAdapter{}, adapters.JobgetherAdapter{}, enq, 0, nil)
+	h := enrichment.NewHandler(repo, nil, djinnisrc.Source{}, dousrc.Source{}, workuasrc.Source{},
+		indeedsrc.Source{}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, enq, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
 	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {

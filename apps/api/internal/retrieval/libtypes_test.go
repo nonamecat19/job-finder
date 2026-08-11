@@ -1,9 +1,11 @@
 package retrieval
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/nonamecat19/jobscraper/ports"
 	js "github.com/nonamecat19/jobscraper/retrieval"
 )
 
@@ -12,8 +14,8 @@ import (
 // regression gate on the library surface it depends on.
 
 func TestPageOutcome(t *testing.T) {
-	o := js.PageOutcome{
-		Status: js.PageRead,
+	o := ports.PageOutcome{
+		Status: ports.PageRead,
 		Method: "direct",
 		URL:    "https://example.com/foo",
 	}
@@ -23,75 +25,87 @@ func TestPageOutcome(t *testing.T) {
 }
 
 func TestRunVerdict(t *testing.T) {
-	if js.VerdictSuccess != "success" {
-		t.Error("js.VerdictSuccess should be 'success'")
+	if ports.VerdictSuccess != "success" {
+		t.Error("ports.VerdictSuccess should be 'success'")
 	}
-	if js.VerdictPartial != "partial" {
-		t.Error("js.VerdictPartial should be 'partial'")
+	if ports.VerdictPartial != "partial" {
+		t.Error("ports.VerdictPartial should be 'partial'")
 	}
-	if js.VerdictBlocked != "blocked" {
-		t.Error("js.VerdictBlocked should be 'blocked'")
+	if ports.VerdictBlocked != "blocked" {
+		t.Error("ports.VerdictBlocked should be 'blocked'")
 	}
 }
 
-func TestRungForKey(t *testing.T) {
-	r, ok := js.RungForKey("direct")
-	if !ok || r.Order != 0 {
-		t.Errorf("direct rung: ok=%v order=%d", ok, r.Order)
+// stubRung stands in for a real strategy: the ladder cares only about a rung's
+// key and its position, so escalation can be exercised without a browser or a
+// sidecar.
+type stubRung struct{ key string }
+
+func (r stubRung) Key() string { return r.key }
+
+func (r stubRung) Fetch(context.Context, ports.FetchRequest) (ports.PageOutcome, string) {
+	return ports.PageOutcome{Status: ports.PageRead, Method: r.key}, ""
+}
+
+func (r stubRung) Available(context.Context) bool { return true }
+
+func (r stubRung) Close() error { return nil }
+
+func newTestLadder() *js.Ladder {
+	return js.NewLadder(
+		stubRung{js.KeyDirect},
+		stubRung{js.KeyBrowser},
+		stubRung{js.KeyFlareSolverr},
+	)
+}
+
+func TestLadderFind(t *testing.T) {
+	ladder := newTestLadder()
+	for _, key := range []string{js.KeyDirect, js.KeyBrowser, js.KeyFlareSolverr} {
+		if _, ok := ladder.Find(key); !ok {
+			t.Errorf("%s rung: not found", key)
+		}
 	}
-	r, ok = js.RungForKey("browser")
-	if !ok || r.Order != 1 {
-		t.Errorf("browser rung: ok=%v order=%d", ok, r.Order)
-	}
-	r, ok = js.RungForKey("flaresolverr")
-	if !ok || r.Order != 2 {
-		t.Errorf("flaresolverr rung: ok=%v order=%d", ok, r.Order)
-	}
-	r, ok = js.RungForKey("nonexistent")
-	if ok {
+	if _, ok := ladder.Find("nonexistent"); ok {
 		t.Error("nonexistent rung should not be found")
 	}
+	if !ladder.IsCheapest(js.KeyDirect) {
+		t.Error("direct should be the cheapest rung")
+	}
 }
 
-func TestRetrievalMethodNext(t *testing.T) {
+func TestLadderNext(t *testing.T) {
 	tests := []struct {
 		key      string
 		wantNext string
 		wantOk   bool
 	}{
-		{"direct", "browser", true},
-		{"browser", "flaresolverr", true},
-		{"flaresolverr", "", false},
+		{js.KeyDirect, js.KeyBrowser, true},
+		{js.KeyBrowser, js.KeyFlareSolverr, true},
+		{js.KeyFlareSolverr, "", false},
 	}
+	ladder := newTestLadder()
 	for _, tt := range tests {
-		r, _ := js.RungForKey(tt.key)
-		next, ok := r.Next()
+		next, ok := ladder.Next(tt.key)
 		if ok != tt.wantOk {
-			t.Errorf("%s.Next() ok=%v, want %v", tt.key, ok, tt.wantOk)
+			t.Errorf("Next(%s) ok=%v, want %v", tt.key, ok, tt.wantOk)
 		}
-		if ok && next.Key != tt.wantNext {
-			t.Errorf("%s.Next().Key=%s, want %s", tt.key, next.Key, tt.wantNext)
+		if ok && next.Key() != tt.wantNext {
+			t.Errorf("Next(%s).Key()=%s, want %s", tt.key, next.Key(), tt.wantNext)
 		}
 	}
 }
 
-func TestRetrievalMethodAvailable(t *testing.T) {
-	r, _ := js.RungForKey("direct")
-	if !r.Available() {
-		t.Error("direct should be available")
-	}
-	r, _ = js.RungForKey("browser")
-	if !r.Available() {
-		t.Error("browser should be available")
-	}
-	r, _ = js.RungForKey("flaresolverr")
-	if !r.Available() {
-		t.Error("flaresolverr should be available")
+func TestLadderRungsAvailable(t *testing.T) {
+	for _, r := range newTestLadder().Rungs() {
+		if !r.Available(context.Background()) {
+			t.Errorf("%s should be available", r.Key())
+		}
 	}
 }
 
 func TestFetchRequest(t *testing.T) {
-	req := js.FetchRequest{
+	req := ports.FetchRequest{
 		URL:             "https://example.com",
 		Headers:         map[string]string{"Accept": "text/html"},
 		UsesUserAccount: true,
@@ -108,14 +122,14 @@ func TestFetchRequest(t *testing.T) {
 func TestHostStatus(t *testing.T) {
 	now := time.Now()
 	cd := 2
-	s := js.HostStatus{
+	s := ports.HostStatus{
 		Host:              "example.com",
 		IdentityVersion:   "v1",
 		CurrentRung:       "direct",
 		LastBlockAt:       &now,
 		LastBlockReason:   "403",
 		CrawlDelaySeconds: &cd,
-		Pacing:            js.HostPacing{RequestsPerSecond: 0.2, IntervalSeconds: 5, Source: "site-requested"},
+		Pacing:            ports.HostPacing{RequestsPerSecond: 0.2, IntervalSeconds: 5, Source: "site-requested"},
 	}
 	if s.Host != "example.com" {
 		t.Error("Host not set")

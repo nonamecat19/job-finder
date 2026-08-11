@@ -109,7 +109,7 @@ func (s *Service) List(ctx context.Context) ([]dto.JobSourceDto, error) {
 func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, error) {
 	adapter, err := s.registry.Get(key)
 	if err != nil {
-		return sqlcgen.JobSource{}, jsadapter.SourceNotFoundError{Key: key}
+		return sqlcgen.JobSource{}, jsadapter.NotRegisteredError{Key: key}
 	}
 
 	row, err := s.q.GetJobSourceByKey(ctx, key)
@@ -133,7 +133,7 @@ func (s *Service) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, 
 	}
 	row, err = s.q.GetJobSourceByKey(ctx, key)
 	if err != nil {
-		return sqlcgen.JobSource{}, jsadapter.SourceNotFoundError{Key: key}
+		return sqlcgen.JobSource{}, jsadapter.NotRegisteredError{Key: key}
 	}
 	return row, nil
 }
@@ -192,7 +192,7 @@ func (s *Service) Update(ctx context.Context, key string, enabled *bool, configP
 			return &list[i], nil
 		}
 	}
-	return nil, jsadapter.SourceNotFoundError{Key: key}
+	return nil, jsadapter.NotRegisteredError{Key: key}
 }
 
 func (s *Service) Test(ctx context.Context, key string) (ok bool, errMsg string) {

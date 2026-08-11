@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/nonamecat19/jobscraper/ports"
 	js "github.com/nonamecat19/jobscraper/retrieval"
 
 	"github.com/job-finder/api/internal/config"
@@ -22,7 +23,7 @@ import (
 type stubHost struct {
 	t        *testing.T
 	server   *httptest.Server
-	svc      js.Service
+	svc      ports.Retriever
 	store    *StateStore
 	host     string
 	url      string
@@ -96,11 +97,11 @@ func (sh *stubHost) pageURL(path string) string {
 	return sh.url + path
 }
 
-func (sh *stubHost) fetchMany(t *testing.T, n int) []js.PageOutcome {
+func (sh *stubHost) fetchMany(t *testing.T, n int) []ports.PageOutcome {
 	t.Helper()
-	outcomes := make([]js.PageOutcome, 0, n)
+	outcomes := make([]ports.PageOutcome, 0, n)
 	for i := 0; i < n; i++ {
-		result, err := sh.svc.Fetch(context.Background(), js.FetchRequest{
+		result, err := sh.svc.Fetch(context.Background(), ports.FetchRequest{
 			URL: sh.pageURL(fmt.Sprintf("/page-%d", i)),
 		})
 		if err != nil {
@@ -111,12 +112,12 @@ func (sh *stubHost) fetchMany(t *testing.T, n int) []js.PageOutcome {
 	return outcomes
 }
 
-func assertNoDeferralsOrBudgetLanguage(t *testing.T, outcomes []js.PageOutcome) {
+func assertNoDeferralsOrBudgetLanguage(t *testing.T, outcomes []ports.PageOutcome) {
 	t.Helper()
 	banned := []string{"budget", "quota", "allowance", "limit"}
 	for i, o := range outcomes {
-		if o.Status == js.PageDeferred {
-			t.Errorf("outcome %d: unexpected js.PageDeferred, reason=%q", i, o.Reason)
+		if o.Status == ports.PageDeferred {
+			t.Errorf("outcome %d: unexpected ports.PageDeferred, reason=%q", i, o.Reason)
 		}
 		lower := strings.ToLower(o.Reason)
 		for _, word := range banned {

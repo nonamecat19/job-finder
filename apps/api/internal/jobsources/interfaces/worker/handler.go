@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	jsadapter "github.com/nonamecat19/jobscraper/adapter"
+	"github.com/nonamecat19/jobscraper/ports"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -168,7 +169,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 
 	jobs, err = adapter.Search(ctx, query, config)
 
-	if reporter, ok := adapter.(jsadapter.EmployerReporter); ok {
+	if reporter, ok := adapter.(ports.EmployerReporter); ok {
 		if detail, mErr := json.Marshal(reporter.LastRunDetail()); mErr == nil {
 			_ = h.q.SetSourceRunEmployerDetail(ctx, sqlcgen.SetSourceRunEmployerDetailParams{ID: run.ID, EmployerDetail: detail})
 		}

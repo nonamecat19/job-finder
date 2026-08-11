@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/nonamecat19/jobscraper/rosterport"
+	"github.com/nonamecat19/jobscraper/ports"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
@@ -22,7 +22,7 @@ const MaxEmployersPerRun = 200
 
 // EmployerHealthChecker is the library's checker signature; the app aliases it
 // so wiring can pass the map adapters.NewBoardAdapters returns straight through.
-type EmployerHealthChecker = rosterport.EmployerHealthChecker
+type EmployerHealthChecker = ports.EmployerHealthChecker
 
 type UnsupportedVendorError struct{ URL string }
 
@@ -43,7 +43,7 @@ func (e *UnreadableError) Unwrap() error { return e.Cause }
 // Service is the app-side implementation of the library's RosterPort: it owns
 // the sqlcgen row shapes and the UUID conversions, so the board adapters only
 // ever see plain-string IDs and library structs.
-var _ rosterport.RosterPort = (*Service)(nil)
+var _ ports.Roster = (*Service)(nil)
 
 type Service struct {
 	q        Repository
@@ -58,7 +58,7 @@ func (s *Service) List(ctx context.Context) ([]sqlcgen.EmployerBoard, error) {
 	return s.q.ListEmployerBoards(ctx)
 }
 
-func (s *Service) ListForRun(ctx context.Context, vendor string) ([]rosterport.EmployerBoard, error) {
+func (s *Service) ListForRun(ctx context.Context, vendor string) ([]ports.EmployerBoard, error) {
 	all, err := s.q.ListEmployerBoardsByVendor(ctx, vendor)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (s *Service) ListForRun(ctx context.Context, vendor string) ([]rosterport.E
 	if len(all) > MaxEmployersPerRun {
 		all = all[:MaxEmployersPerRun]
 	}
-	out := make([]rosterport.EmployerBoard, 0, len(all))
+	out := make([]ports.EmployerBoard, 0, len(all))
 	for _, e := range all {
 		out = append(out, toPortEmployerBoard(e))
 	}
@@ -126,13 +126,13 @@ func (s *Service) getByVendorAndEmployer(ctx context.Context, vendor, employerId
 	return board, err
 }
 
-// --- rosterport.RosterPort ---
+// --- ports.Roster ---
 //
 // The port speaks plain strings and library structs; these wrappers are the
 // only place UUIDs and sqlcgen rows cross the boundary.
 
-func toPortEmployerBoard(e sqlcgen.EmployerBoard) rosterport.EmployerBoard {
-	out := rosterport.EmployerBoard{
+func toPortEmployerBoard(e sqlcgen.EmployerBoard) ports.EmployerBoard {
+	out := ports.EmployerBoard{
 		ID:                   dbutil.UUIDString(e.ID),
 		Vendor:               e.Vendor,
 		EmployerIdentifier:   e.EmployerIdentifier,
@@ -149,8 +149,8 @@ func toPortEmployerBoard(e sqlcgen.EmployerBoard) rosterport.EmployerBoard {
 	return out
 }
 
-func toPortBoardCandidate(c sqlcgen.BoardCandidate) rosterport.BoardCandidate {
-	return rosterport.BoardCandidate{
+func toPortBoardCandidate(c sqlcgen.BoardCandidate) ports.BoardCandidate {
+	return ports.BoardCandidate{
 		ID:                 dbutil.UUIDString(c.ID),
 		Vendor:             c.Vendor,
 		EmployerIdentifier: c.EmployerIdentifier,
@@ -159,15 +159,15 @@ func toPortBoardCandidate(c sqlcgen.BoardCandidate) rosterport.BoardCandidate {
 	}
 }
 
-func (s *Service) GetByVendorAndEmployer(ctx context.Context, vendor, employerIdentifier string) (rosterport.EmployerBoard, error) {
+func (s *Service) GetByVendorAndEmployer(ctx context.Context, vendor, employerIdentifier string) (ports.EmployerBoard, error) {
 	board, err := s.getByVendorAndEmployer(ctx, vendor, employerIdentifier)
 	if err != nil {
-		return rosterport.EmployerBoard{}, err
+		return ports.EmployerBoard{}, err
 	}
 	return toPortEmployerBoard(board), nil
 }
 
-func (s *Service) InsertEmployerBoard(ctx context.Context, vendor, employerIdentifier, displayName, addedVia string) (rosterport.EmployerBoard, error) {
+func (s *Service) InsertEmployerBoard(ctx context.Context, vendor, employerIdentifier, displayName, addedVia string) (ports.EmployerBoard, error) {
 	board, err := s.q.InsertEmployerBoard(ctx, sqlcgen.InsertEmployerBoardParams{
 		Vendor:             vendor,
 		EmployerIdentifier: employerIdentifier,
@@ -175,7 +175,7 @@ func (s *Service) InsertEmployerBoard(ctx context.Context, vendor, employerIdent
 		AddedVia:           addedVia,
 	})
 	if err != nil {
-		return rosterport.EmployerBoard{}, err
+		return ports.EmployerBoard{}, err
 	}
 	return toPortEmployerBoard(board), nil
 }
@@ -188,48 +188,48 @@ func (s *Service) DeleteEmployerBoard(ctx context.Context, id string) error {
 	return s.q.DeleteEmployerBoard(ctx, uid)
 }
 
-func (s *Service) ListBoardCandidates(ctx context.Context) ([]rosterport.BoardCandidate, error) {
+func (s *Service) ListBoardCandidates(ctx context.Context) ([]ports.BoardCandidate, error) {
 	rows, err := s.q.ListBoardCandidates(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]rosterport.BoardCandidate, 0, len(rows))
+	out := make([]ports.BoardCandidate, 0, len(rows))
 	for _, c := range rows {
 		out = append(out, toPortBoardCandidate(c))
 	}
 	return out, nil
 }
 
-func (s *Service) GetBoardCandidate(ctx context.Context, vendor, employerIdentifier string) (rosterport.BoardCandidate, error) {
+func (s *Service) GetBoardCandidate(ctx context.Context, vendor, employerIdentifier string) (ports.BoardCandidate, error) {
 	cand, err := s.q.GetBoardCandidate(ctx, sqlcgen.GetBoardCandidateParams{Vendor: vendor, EmployerIdentifier: employerIdentifier})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return rosterport.BoardCandidate{}, nil
+		return ports.BoardCandidate{}, nil
 	}
 	if err != nil {
-		return rosterport.BoardCandidate{}, err
+		return ports.BoardCandidate{}, err
 	}
 	return toPortBoardCandidate(cand), nil
 }
 
-func (s *Service) GetBoardCandidateByID(ctx context.Context, id string) (rosterport.BoardCandidate, error) {
+func (s *Service) GetBoardCandidateByID(ctx context.Context, id string) (ports.BoardCandidate, error) {
 	cid, err := dbutil.ParseUUID(id)
 	if err != nil {
-		return rosterport.BoardCandidate{}, err
+		return ports.BoardCandidate{}, err
 	}
 	cand, err := s.q.GetBoardCandidateByID(ctx, cid)
 	if err != nil {
-		return rosterport.BoardCandidate{}, err
+		return ports.BoardCandidate{}, err
 	}
 	return toPortBoardCandidate(cand), nil
 }
 
-func (s *Service) InsertBoardCandidate(ctx context.Context, vendor, employerIdentifier string) (rosterport.BoardCandidate, error) {
+func (s *Service) InsertBoardCandidate(ctx context.Context, vendor, employerIdentifier string) (ports.BoardCandidate, error) {
 	cand, err := s.q.InsertBoardCandidate(ctx, sqlcgen.InsertBoardCandidateParams{
 		Vendor:             vendor,
 		EmployerIdentifier: employerIdentifier,
 	})
 	if err != nil {
-		return rosterport.BoardCandidate{}, err
+		return ports.BoardCandidate{}, err
 	}
 	return toPortBoardCandidate(cand), nil
 }

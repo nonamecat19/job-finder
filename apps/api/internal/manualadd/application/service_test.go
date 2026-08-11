@@ -15,7 +15,7 @@ import (
 	"github.com/job-finder/api/internal/jobsources/application/ingest"
 	"github.com/job-finder/api/internal/manualadd/application"
 	"github.com/job-finder/api/internal/manualadd/domain"
-	jobsources "github.com/nonamecat19/jobscraper/adapter"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 const postingURL = "https://djinni.co/jobs/123456-senior-go-engineer/"
@@ -179,9 +179,9 @@ func (a blindAdapter) Search(context.Context, dto.SearchQuery, map[string]any) (
 }
 func (a blindAdapter) HealthCheck(context.Context, map[string]any) (bool, error) { return true, nil }
 
-type fakeRegistry struct{ adapters []jobsources.Adapter }
+type fakeRegistry struct{ adapters []ports.JobSource }
 
-func (r fakeRegistry) All() []jobsources.Adapter { return r.adapters }
+func (r fakeRegistry) All() []ports.JobSource { return r.adapters }
 
 func uuidOf(b byte) pgtype.UUID {
 	id := pgtype.UUID{Valid: true}
@@ -212,7 +212,7 @@ func newHarness(t *testing.T, adapter *stubAdapter, opts ...application.Option) 
 	repo := newFakeRepo()
 	subs := &fakeSubs{}
 	enq := &fakeEnqueuer{}
-	adapters := []jobsources.Adapter{blindAdapter{key: "adzuna"}}
+	adapters := []ports.JobSource{blindAdapter{key: "adzuna"}}
 	if adapter != nil {
 		adapters = append(adapters, adapter)
 	}

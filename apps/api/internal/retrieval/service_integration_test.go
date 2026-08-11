@@ -5,7 +5,7 @@ package retrieval
 import (
 	"testing"
 
-	js "github.com/nonamecat19/jobscraper/retrieval"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 func TestIntegration_NoDailyCap_250SequentialFetchesAllAttempted(t *testing.T) {
@@ -16,8 +16,8 @@ func TestIntegration_NoDailyCap_250SequentialFetchesAllAttempted(t *testing.T) {
 		t.Fatalf("expected 250 outcomes, got %d", len(outcomes))
 	}
 	for i, o := range outcomes {
-		if o.Status != js.PageRead {
-			t.Errorf("outcome %d: expected js.PageRead, got %s (reason=%q)", i, o.Status, o.Reason)
+		if o.Status != ports.PageRead {
+			t.Errorf("outcome %d: expected ports.PageRead, got %s (reason=%q)", i, o.Status, o.Reason)
 		}
 	}
 }

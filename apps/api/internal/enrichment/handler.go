@@ -17,27 +17,35 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/queue"
-	"github.com/nonamecat19/jobscraper/adapters"
+	djinnisrc "github.com/nonamecat19/jobscraper/adapters/djinni"
+	dousrc "github.com/nonamecat19/jobscraper/adapters/dou"
+	glassdoorsrc "github.com/nonamecat19/jobscraper/adapters/glassdoor"
+	indeedsrc "github.com/nonamecat19/jobscraper/adapters/indeed"
+	jobgethersrc "github.com/nonamecat19/jobscraper/adapters/jobgether"
+	jobleadssrc "github.com/nonamecat19/jobscraper/adapters/jobleads"
+	remoteoksrc "github.com/nonamecat19/jobscraper/adapters/remoteok"
+	wellfoundsrc "github.com/nonamecat19/jobscraper/adapters/wellfound"
+	workuasrc "github.com/nonamecat19/jobscraper/adapters/workua"
 )
 
 type Handler struct {
 	q            Repository
 	sources      *application.Service
-	djinni       adapters.DjinniAdapter
-	dou          adapters.DouAdapter
-	workua       adapters.WorkUaAdapter
-	indeed       adapters.IndeedAdapter
-	remoteok     adapters.RemoteOKAdapter
-	glassdoor    adapters.GlassdoorAdapter
-	jobleads     adapters.JobLeadsAdapter
-	wellfound    adapters.WellfoundAdapter
-	jobgether    adapters.JobgetherAdapter
+	djinni       djinnisrc.Source
+	dou          dousrc.Source
+	workua       workuasrc.Source
+	indeed       indeedsrc.Source
+	remoteok     remoteoksrc.Source
+	glassdoor    glassdoorsrc.Source
+	jobleads     jobleadssrc.Source
+	wellfound    wellfoundsrc.Source
+	jobgether    jobgethersrc.Source
 	client       Enqueuer
 	defaultDelay time.Duration
 	delays       map[string]time.Duration
 }
 
-func NewHandler(q Repository, sources *application.Service, djinni adapters.DjinniAdapter, dou adapters.DouAdapter, workua adapters.WorkUaAdapter, indeed adapters.IndeedAdapter, remoteok adapters.RemoteOKAdapter, glassdoor adapters.GlassdoorAdapter, jobleads adapters.JobLeadsAdapter, wellfound adapters.WellfoundAdapter, jobgether adapters.JobgetherAdapter, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
+func NewHandler(q Repository, sources *application.Service, djinni djinnisrc.Source, dou dousrc.Source, workua workuasrc.Source, indeed indeedsrc.Source, remoteok remoteoksrc.Source, glassdoor glassdoorsrc.Source, jobleads jobleadssrc.Source, wellfound wellfoundsrc.Source, jobgether jobgethersrc.Source, client Enqueuer, defaultDelay time.Duration, delays map[string]time.Duration) *Handler {
 	return &Handler{
 		q: q, sources: sources,
 		djinni: djinni, dou: dou, workua: workua,
@@ -227,8 +235,8 @@ func (h *Handler) enrichDOU(ctx context.Context, payload queue.EnrichPayload, ui
 
 func (h *Handler) enrichWorkUa(ctx context.Context, payload queue.EnrichPayload, uid pgtype.UUID, job sqlcgen.Job) error {
 	delay := h.delayFor("workua")
-	if delay < adapters.WorkUaMinDelay {
-		delay = adapters.WorkUaMinDelay
+	if delay < workuasrc.WorkUaMinDelay {
+		delay = workuasrc.WorkUaMinDelay
 	}
 	time.Sleep(delay)
 

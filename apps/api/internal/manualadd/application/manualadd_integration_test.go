@@ -17,7 +17,8 @@ import (
 	"github.com/job-finder/api/internal/manualadd/application"
 	"github.com/job-finder/api/internal/manualadd/domain"
 	"github.com/job-finder/api/internal/subscriptions"
-	jobsources "github.com/nonamecat19/jobscraper/adapter"
+	jsadapter "github.com/nonamecat19/jobscraper/adapter"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 func setupManualAdd(t *testing.T) (context.Context, *db.DB, func()) {
@@ -44,7 +45,7 @@ func (p realSourceProvider) GetByKey(ctx context.Context, key string) (sqlcgen.J
 
 func (p realSourceProvider) DecryptConfig([]byte) map[string]any { return map[string]any{} }
 
-func newManualService(t *testing.T, testDB *db.DB, adapter jobsources.Adapter) *application.Service {
+func newManualService(t *testing.T, testDB *db.DB, adapter ports.JobSource) *application.Service {
 	t.Helper()
 	subsSvc := subscriptions.NewService(testDB.Queries, realSourceProvider{testDB.Queries})
 	jobsSvc := jobs.NewService(testDB.Queries, nil, 0)
@@ -52,7 +53,7 @@ func newManualService(t *testing.T, testDB *db.DB, adapter jobsources.Adapter) *
 		testDB.Queries,
 		realSourceProvider{testDB.Queries},
 		subsSvc,
-		jobsources.NewRegistry(adapter),
+		jsadapter.MustRegistry(adapter),
 		jobsSvc,
 		nil,
 		application.WithTxRunner(testDB),
@@ -138,7 +139,7 @@ func TestIntegration_ConcurrentAddsOfTheSameURLYieldOneVacancy(t *testing.T) {
 	posting := integrationPosting()
 	key := ingest.DedupeKey(posting.Company, posting.Title, posting.URL)
 
-	newAdapter := func() jobsources.Adapter {
+	newAdapter := func() ports.JobSource {
 		return &stubAdapter{key: "djinni", matches: func(string) bool { return true }, posting: posting}
 	}
 
