@@ -334,10 +334,10 @@ key arrives through a port the app implements.
 | 043-FR-004 | The adapter framework (`Adapter`, `PostingReader`, `Credentialed`, `DetailNeeder`, `Registry`, adapter errors) references only library model types — never `dto`, never `sqlcgen`. |
 | 043-FR-005 | HTML helpers and the JSON HTTP client are library packages with no dependency on the retrieval package; the default HTTP client is **injectable** rather than hard-wired to a package-level transport. |
 | 043-FR-006 | The retrieval engine — ladder, challenge detection, page outcomes, browser identity, the three rungs, the `Service` interface — is library-owned. See [`retrieval-and-ingestion.md`](retrieval-and-ingestion.md) § 2.1. |
-| 043-FR-007 | The engine reads and writes host state through a **library-owned** `StateStorePort`, so a consumer can back it with an in-memory map and no DB. |
+| 043-FR-007 | The engine reads and writes host state through a **library-owned** state store port (`ports.StateStore` since the library's ports/adapters restructure), so a consumer can back it with an in-memory map and no DB. |
 | 043-FR-008 | The engine imports none of the app's `config`, `db`, `crypto` or `ratelimit`; per-host pacing is library-internal (`ratelimit` was vendored into `retrieval/pacing.go` and deleted from the app). |
-| 043-FR-009 | The `Scraper` port and its chromedp-backed implementation are library-owned (`scraping/`), with no project-internal imports. |
-| 043-FR-010 | The 6 board adapters moved **whole**, roster concerns included, and persist through a library-owned `RosterPort`. See [`job-sources.md`](job-sources.md) § 3. |
+| 043-FR-009 | The `Scraper` port is library-owned (`ports.Scraper`). Its chromedp-backed implementation moved to the library's `internal/`, so the app brings its own (`apps/api/internal/scraping`) and hands it to the sources — the same value also serves company-intel and PDF rendering, which touch no job source at all. |
+| 043-FR-010 | The 6 board adapters moved **whole**, roster concerns included, and persist through a library-owned roster port (`ports.Roster`). See [`job-sources.md`](job-sources.md) § 3. |
 | 043-FR-011 | The app retains the application services, the sqlcgen-typed repository interfaces, the `roster` package (now a port implementation), the HTTP interfaces, the worker handler and scheduler, and the retrieval state/wiring files. |
 | 043-FR-012 | Stored cookies are still encrypted app-side with `internal/crypto` and `CONFIG_ENCRYPTION_KEY`. **The library never sees the key**; cookie bytes cross the port as plaintext JSON. |
 | 043-FR-016 | The library's package graph allows importing the engine **without** transitively importing the adapters — a consumer who wants only the fetch ladder pays for nothing else (043-SC-006). |
@@ -349,30 +349,37 @@ key arrives through a port the app implements.
 code on the engine's dependency path and break 043-FR-016.
 
 ```
-model      ← everything (types only, stdlib)
-adapter    → model                                    (framework; stdlib only besides)
-htmlutil / httpjson / strutil / scraping              (helpers, no library-internal deps
-                                                       beyond stdlib + goquery/chromedp)
-retrieval  → (stdlib, bogdanfinn/*, chromedp, x/time) — NEVER adapter, NEVER adapters
-rosterport → (stdlib)                                  (port types only)
-adapters   → adapter, model, retrieval, rosterport, htmlutil, httpjson, strutil, scraping
+model        ← everything (types only, stdlib)
+ports        → model                     (every interface; nothing else)
+adapter      → ports, model              (registry, Provider/Catalog, capability helpers)
+  middleware → ports                     (recover, observe, timeout, retry, log)
+retrieval    → ports                     (the engine; NEVER adapter, NEVER adapters)
+session      → ports                     (one login implementation for every site)
+store/*      → ports                     (in-memory reference implementations)
+internal/*   → (helpers with no public contract: htmlutil, httpjson, strutil, scraping)
+adapters/*   → adapter, ports, model, internal/*   (one package per site)
+adapters/all → every vendor package      (side-effect registration only)
+jobscraper   → all of the above          (the Client facade)
 ```
 
-`adapters` is the heavyweight package and the only one that knows about specific sites.
-`adapter` (singular, the framework) and `retrieval` (the engine) are each usable alone.
+`adapters/*` are the heavyweight packages and the only ones that know about specific sites;
+importing a single vendor package pulls in only that site. `adapter` (singular, the
+framework) and `retrieval` (the engine) are each usable alone, and `ports` is the only
+package everything shares.
 
 **The two ports, and who implements them.** Both are declared by the library in library-owned
 types and satisfied by an existing app struct — no new adapter layer was introduced.
 
 | Port | Declared in | Implemented by | Carries |
 |---|---|---|---|
-| `retrieval.StateStorePort` (9 methods) | `retrieval/state_port.go` | `apps/api/internal/retrieval.StateStore` | Per-host rung preference, crawl delay, block/cooling-off timestamps, cookies. `HostState` is a plain struct — no `pgtype`, no `sqlcgen`. |
-| `rosterport.RosterPort` (11 methods) | `rosterport/roster_port.go` | `apps/api/internal/jobsources/roster.Service` | Employer boards and board candidates. IDs are `string` (UUID form) at the boundary; the app converts via `dbutil`. |
+| `ports.StateStore` (9 methods) | `ports/state.go` | `apps/api/internal/retrieval.StateStore` | Per-host rung preference, crawl delay, block/cooling-off timestamps, cookies. `HostState` is a plain struct — no `pgtype`, no `sqlcgen`. |
+| `ports.Roster` (11 methods) | `ports/roster.go` | `apps/api/internal/jobsources/roster.Service` | Employer boards and board candidates. IDs are `string` (UUID form) at the boundary; the app converts via `dbutil`. |
+| `ports.SourceConfigStore` (2 methods) | `ports/session.go` | `apps/api/internal/jobsources/application.Service` | Per-source settings, and where a credentialed session persists its cookie. |
 
-Both implementations assert conformance at compile time (`var _ jsretrieval.StateStorePort =
+All three implementations assert conformance at compile time (`var _ ports.StateStore =
 (*StateStore)(nil)`) — the port breaking is a build failure, not a runtime surprise.
 
-`RosterPort` includes the candidate/discovery methods even though **no library adapter calls
+`ports.Roster` includes the candidate/discovery methods even though **no library adapter calls
 them**. That is deliberate: it keeps `roster.Service` the single implementer instead of
 forcing a second struct for the app-only half of the surface. `roster/view.go` and
 `roster/candidates.go` stay app-side — they produce dashboard DTOs.
@@ -381,18 +388,23 @@ forcing a second struct for the app-only half of the surface. `roster/view.go` a
 holds only the wiring: `state.go` (the port implementation, with the encryption), plus two
 thin files where a whole engine used to be —
 
-- `service_impl.go` — one `NewService` that maps `config.Config` onto `retrieval.EngineOpts`
-  and returns `jsretrieval.NewEngine(...)`. The ladder, rungs and cooling-off logic are gone
-  from the app entirely.
-- `transport.go` — `ConfigureDefaultTransport` (points the library's paced transport at the
-  app's host state) and `UsePacedHTTPJSONClient`. The second exists **because** of
-  043-FR-005: `httpjson` may not depend on `retrieval` inside the library, so the app
-  re-attaches the paced transport to the default JSON client at startup. Both are called
-  from `composeRetrieval`, and both are load-bearing rather than boilerplate: dropping the
-  first ignores every crawl delay, dropping the second unpaces every JSON-source request.
-  Neither omission breaks the build — see
-  [`retrieval-and-ingestion.md`](retrieval-and-ingestion.md) § 3.1 for the release-long
-  outage that followed the last time one went missing.
+- `service_impl.go` — one `NewService` that maps `config.Config` onto the engine's
+  functional options (`WithIdentity`, `WithBrowser`, `WithFlareSolverr`,
+  `WithCheapRungRetest`, `WithCoolingOff`) and returns `jsretrieval.NewEngine(store, ...)`.
+  The ladder, rungs and cooling-off logic are gone from the app entirely. Options rather
+  than an opts struct means a knob the app leaves alone keeps the library's default instead
+  of being zeroed.
+- `transport.go` — `ConfigureDefaultTransport`, which points the library's paced transport
+  at the app's host state. It is called from `composeRetrieval` and is load-bearing rather
+  than boilerplate: dropping it ignores every crawl delay, and the omission does not break
+  the build — see [`retrieval-and-ingestion.md`](retrieval-and-ingestion.md) § 3.1 for the
+  release-long outage that followed the last time it went missing.
+
+  `UsePacedHTTPJSONClient` is **gone** — and so is the need for it. `httpjson` moved into
+  the library's `internal/`, putting its default client out of the app's reach, so the
+  library now installs the paced client itself (`retrieval/jsonclient.go`). Importing
+  `retrieval` is what paces the JSON path; the app contributes only the resolver, through
+  `ConfigureDefaultTransport`.
 
 **Regression guardrails** (043-FR-013/014/015, 043-SC-003/004/005): every adapter unit test
 and the `live_smoke_test` moved with their code and passed **unmodified** — no fixture or

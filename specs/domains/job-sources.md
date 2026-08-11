@@ -53,10 +53,14 @@ Quality bars that applied per-source and now apply to all:
 - Adding a source does not increase the median end-to-end ingestion cycle time for
   pre-existing sources.
 
-**Adding a source is one adapter file + one registry entry.** No downstream change. Enforced
-by `adapter.Adapter` in the library's `adapter/adapter.go` and the variadic
-`adapter.NewRegistry(...)` call in `apps/api/cmd/server/compose.go`. Since 043 the adapter
-file lands in the **library** and only the registry entry is an app-side edit.
+**Adding a source is one source package + one registry entry.** No downstream change.
+Enforced by `ports.JobSource` in the library's `ports/source.go` and the variadic
+`adapter.NewRegistry(...)` call in `apps/api/cmd/server/compose.go`, which now returns an
+error on a duplicate key. Since 043 the source lands in the **library** (one package per
+site, registering its own `adapter.Provider` from `init`) and only the registry entry is an
+app-side edit. The app builds its sources by hand rather than from the library catalogue: it
+runs a deliberate subset, and it keeps the concrete source values so enrichment can call
+their `FetchDetail`.
 
 ### 1.1 The Go adapter surface
 
@@ -64,8 +68,8 @@ Every per-source spec (002, 003, 004, 005, 010, 011, 012) shipped an identical a
 contract. Stated once, it binds every adapter:
 
 ```go
-// package adapter — github.com/nonamecat19/jobscraper/adapter
-type Adapter interface {
+// package ports — github.com/nonamecat19/jobscraper/ports
+type JobSource interface {
     Key() string
     Kind() model.SourceKind
     Search(ctx context.Context, query model.SearchQuery, config map[string]any) ([]model.NormalizedJob, error)
@@ -73,8 +77,9 @@ type Adapter interface {
 }
 ```
 
-The optional interfaces an adapter may also satisfy, and the framework's helpers, come from
-the same package (043-FR-004):
+The optional interfaces a source may also satisfy live in the same package; the framework's
+helpers (`adapter.As[T]`, `NeedsDetail`, `AsPostingReader`, `AsEmployerReporter`) live in
+`adapter` and walk the middleware chain to find them (043-FR-004):
 
 ```go
 type DetailNeeder interface   { NeedsDetail() bool }
@@ -224,12 +229,12 @@ therefore runnable; "Enrich" = wired into `enrichment.NewHandler` for detail fet
 
 Five vendors — Greenhouse, Lever, Ashby, Workable, SmartRecruiters — read open postings
 straight from employer-hosted boards. They share one `roster.Service`
-(`internal/jobsources/roster/`), health-checked through the checkers map that
-`adapters.NewBoardAdapters()` returns.
+(`internal/jobsources/roster/`), health-checked through a checkers map the app assembles
+from each vendor's `HealthChecker()`.
 
 **Since 043 the board adapters live in the library and persist through a port** (043-FR-010).
 They moved **whole** — roster concerns included, no adapter was split — and every DB call
-they used to make now goes through `rosterport.RosterPort`, an 11-method interface in
+they used to make now goes through `ports.Roster`, an 11-method interface in
 library-owned types. `roster.Service` implements it and owns the whole `pgtype` translation:
 board IDs cross the boundary as `string` UUIDs, timestamps as `*time.Time`. The library
 declares no `pgx`, `pgtype` or `sqlcgen` dependency (043-FR-002), so a consumer can run the
@@ -242,11 +247,13 @@ calls** (`ListBoardCandidates`, `GetBoardCandidate`, `GetBoardCandidateByID`,
 half of the surface. `roster/view.go` (dashboard DTOs) and `roster/candidates.go` (discovery
 orchestration) stay app-side and call those methods on the same struct.
 
-The board-run helpers moved with the adapters: `runBoardVendor`, `vendorHealthCheck`,
-`healthCheckEmployer`, `classifyOutcome` and `NewBoardAdapters` are library-internal to
-`jobscraper/adapters`. `NewBoardAdapters()` still returns the five adapters plus the
-`map[string]EmployerHealthChecker`, and the app still passes that map into
-`roster.NewService(q, checkers)` — the wiring shape 013 established did not change.
+The board-run machinery moved with the adapters and is now a Template Method: the roster
+walk, the per-employer outcome classification and the runaway-board cap live once in
+`jobscraper/adapters/atsboard`, and each vendor is an `atsboard.Fetcher` differing only in a
+URL and a JSON shape. Each vendor package exposes `New(roster)` and `HealthChecker()`, so
+the app builds the checkers map itself and still passes it into
+`roster.NewService(q, checkers)` — the wiring shape 013 established did not change, only
+where the five entries come from.
 
 A boundary this mechanical is where a silent translation bug lives, so it carries its own
 integration test app-side (`internal/jobsources/roster`, real database): the library's own

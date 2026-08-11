@@ -84,9 +84,10 @@ retains only a stale virtualenv and test directory. No registered adapter uses t
 
 ## ATS boards and the roster
 
-The five ATS vendors share one `atsboard.go` implementation and are constructed together
-by `adapters.NewBoardAdapters()`, which also returns board *checkers* used by the roster
-service (`compose_sources.go:23-25`).
+The five ATS vendors share one `atsboard` implementation in the jobscraper library and are
+constructed one call each — `greenhouse.New(roster)`, `lever.New(roster)`, and so on. Each
+vendor package also exposes a `HealthChecker()`, and `composeJobSources` collects those five
+into the checkers map the roster service takes (`cmd/server/compose.go`).
 
 ```mermaid
 flowchart TD

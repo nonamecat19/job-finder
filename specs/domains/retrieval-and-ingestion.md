@@ -7,7 +7,7 @@ the scraper library.
 Implementation: **the fetch machinery is in the `github.com/nonamecat19/jobscraper`
 library** (`retrieval/`, `scraping/`) after 043 — see
 [`codebase-structure.md`](codebase-structure.md) § 5. What remains app-side:
-`apps/api/internal/retrieval/` (the `StateStorePort` implementation and the engine wiring)
+`apps/api/internal/retrieval/` (the `ports.StateStore` implementation and the engine wiring)
 and `internal/jobsources/` (ingest persistence). `internal/ratelimit/` and
 `internal/platform/scraping/` no longer exist — both were vendored into the library. How it
 works:
@@ -111,7 +111,7 @@ the operator what risk they are taking.
 
 The engine no longer reaches a database. It reads and writes host state — rung preference,
 crawl delay, consecutive blocks, cooling-off window, cookies — through
-`retrieval.StateStorePort`, a 9-method interface in library-owned types (043-FR-007). The
+`ports.StateStore`, a 9-method interface in library-owned types (043-FR-007). The
 app's `retrieval.StateStore` implements it against `sqlcgen`, and **the encryption stays on
 the app side of that line**: cookies cross the port as plaintext JSON and are encrypted with
 `internal/crypto` and `CONFIG_ENCRYPTION_KEY` before they reach Postgres (043-FR-012). The
@@ -183,7 +183,7 @@ RateResolver func(host string) (rps float64, source string, ok bool)
   query in the hot path.
 - `ok == false` falls through to `DefaultRPS`.
 - **The pacing code must not import `db` or any Postgres type.** Since 043 it reads host
-  state through `StateStorePort` like the rest of the engine, and the resolver is still
+  state through `ports.StateStore` like the rest of the engine, and the resolver is still
   injected by the composition layer.
 
 Precedence:
@@ -215,18 +215,23 @@ state store and the override map from `rateOverrides(cfg)` — today one entry,
 > ### ⚠ Known gap — only the JSON path is actually paced
 >
 > The transport is an `http.RoundTripper`, so it paces exactly the requests that go through a
-> `http.Client` using it: the library's `httpjson` default client, which the app points at
-> `DefaultTransport` via `UsePacedHTTPJSONClient` (`compose.go`). **The retrieval rungs do
-> not go through it.** `direct` issues its requests with `bogdanfinn/tls-client`, `browser`
-> drives chromedp, and neither consults a limiter; the `scraping.HTTPScraper` client is a
-> plain `&http.Client{Timeout: 20s}`. So an HTML source fetched through the ladder is spaced
+> `http.Client` using it: the JSON path, and only the JSON path. `httpjson` moved into the
+> library's `internal/` when the library restructured, putting `SetDefaultClient` out of the
+> app's reach, so the app's `UsePacedHTTPJSONClient` was deleted; the library now installs
+> the paced client itself from `retrieval/jsonclient.go` (`PacedClient`, wired in an `init`),
+> which is why the app needs no startup call for it. The dependency still runs one way —
+> `retrieval` imports `httpjson`, never the reverse. **The retrieval rungs do not go through
+> it:** `direct` issues its requests with `bogdanfinn/tls-client`, `browser` drives chromedp,
+> and neither consults a limiter; the `scraping.HTTPScraper` client is a plain
+> `&http.Client{Timeout: 20s}`. So an HTML source fetched through the ladder is spaced
 > only by whatever inter-request delay its own adapter implements (§ 1.1's 500 ms rule), not
 > by the per-host limiter — which reads against **017-FR-006/007**, "every outbound
 > third-party request regardless of which source issued it".
 >
-> This predates 043 and predates the missing-call defect above: no rung has ever called the
-> limiter. Closing it is a library change (the rungs would take a pacer at construction),
-> not an app-side wiring fix, so it is recorded here rather than folded into the fix.
+> This predates 043: no rung has ever called the limiter. Closing it is a library change —
+> the rungs would take a pacer at construction — not an app-side fix, so it is recorded
+> here. `ConfigureDefaultTransport` remains load-bearing: it is what gives `PacedClient` a
+> resolver, and without it the JSON path falls back to `DefaultRPS` for every host.
 
 Jitter is ±25% and is **deliberately not exposed** anywhere. It is anti-fingerprinting
 machinery; surfacing a fluctuating number would undercut 017-FR-016's requirement that the
