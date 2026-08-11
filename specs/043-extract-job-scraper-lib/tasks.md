@@ -182,9 +182,9 @@
 
 **Purpose**: Final validation, throwaway-consumer proof, cleanup.
 
-- [ ] T074 [P] Run quickstart scenario 1: `cd ../jobscraper && grep -E 'pgx|asynq|viper|minio|pgvector|goose|job-finder/api' go.mod` returns empty (SC-002)
-- [ ] T075 Run quickstart scenario 2: create `/tmp/jobscraper-smoke/` throwaway Go project importing `jobscraper`, construct a registry with `AdzunaAdapter` + `RemoteokAdapter`, call `Search`, print results; verify `go.sum` has no `pgx`/`asynq` (SC-001)
-- [ ] T076 Run quickstart scenario 3: in the throwaway project, import only `jobscraper/retrieval`, construct `NewEngine` with an in-memory `StateStorePort`, `Fetch` a URL; verify `go.sum` has no `chromedp`/`goquery` (SC-006/US2)
+- [X] T074 [P] Run quickstart scenario 1: `cd ../jobscraper && grep -E 'pgx|asynq|viper|minio|pgvector|goose|job-finder/api' go.mod` returns empty (SC-002)
+- [X] T075 Run quickstart scenario 2: create `/tmp/jobscraper-smoke/` throwaway Go project importing `jobscraper`, construct a registry with `AdzunaAdapter` + `RemoteokAdapter`, call `Search`, print results; verify `go.sum` has no `pgx`/`asynq` (SC-001)
+- [X] T076 Run quickstart scenario 3: in the throwaway project, import only `jobscraper/retrieval`, construct `NewEngine` with an in-memory `StateStorePort`, `Fetch` a URL; verify `go.sum` has no `goquery` (SC-006/US2). NOTE: `chromedp` IS present and must be — `retrieval/browser.go` is the browser rung, so the engine depends on chromedp by design (plan.md). Only the adapter/HTML stack (`goquery`) must stay out.
 - [ ] T077 Run quickstart scenario 5: `cd apps/api && go test ./internal/jobsources/infrastructure/adapters/ -run 'Greenhouse|Lever|Ashby|Workable|SmartRecruiters|ATSBoard'` — all 6 board adapter tests green through `RosterPort` (SC-007)
 - [ ] T078 [P] Remove now-empty app directories: `apps/api/internal/ratelimit/` (deleted in T059), `apps/api/internal/platform/scraping/` (deleted in T062), `apps/api/internal/retrieval/retrieval.go` (empty stub); confirm `git status` shows deletions only for moved files
 - [ ] T079 [P] Update `apps/api/internal/arch_test.go` if the `exemptDirs` map references any removed directory (it should not — `testutil` stays — but verify)
