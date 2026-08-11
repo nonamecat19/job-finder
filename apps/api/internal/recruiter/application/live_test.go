@@ -9,7 +9,7 @@ import (
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/platform/llm"
-	"github.com/nonamecat19/jobscraper/scraping"
+	"github.com/job-finder/api/internal/scraping"
 )
 
 func TestLive_CompanyPage(t *testing.T) {

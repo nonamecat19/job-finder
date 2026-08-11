@@ -11,13 +11,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/job-finder/api/internal/companyintel/domain"
-	"github.com/nonamecat19/jobscraper/scraping"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 var headcountRe = regexp.MustCompile(`(?i)([\d][\d,]*)\+?\s*employees`)
 
 type HeadcountScraper struct {
-	Scraping scraping.Scraper
+	Scraping ports.Scraper
 }
 
 func (HeadcountScraper) Kind() string { return domain.KindHeadcount }

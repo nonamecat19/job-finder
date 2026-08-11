@@ -9,13 +9,13 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/job-finder/api/internal/companyintel/domain"
-	"github.com/nonamecat19/jobscraper/scraping"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 const glassdoorDomain = "glassdoor.com"
 
 type GlassdoorScraper struct {
-	Scraping scraping.Scraper
+	Scraping ports.Scraper
 }
 
 func (GlassdoorScraper) Kind() string   { return domain.KindGlassdoorRating }

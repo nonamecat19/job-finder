@@ -9,7 +9,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/job-finder/api/internal/companyintel/domain"
-	"github.com/nonamecat19/jobscraper/scraping"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 const crunchbaseDomain = "crunchbase.com"
@@ -17,7 +17,7 @@ const crunchbaseDomain = "crunchbase.com"
 var crunchbaseSlugRe = regexp.MustCompile(`[^a-z0-9]+`)
 
 type CrunchbaseScraper struct {
-	Scraping scraping.Scraper
+	Scraping ports.Scraper
 }
 
 func (CrunchbaseScraper) Kind() string   { return domain.KindFunding }

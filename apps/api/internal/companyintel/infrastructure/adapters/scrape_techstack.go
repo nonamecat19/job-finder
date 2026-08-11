@@ -10,7 +10,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/job-finder/api/internal/companyintel/domain"
-	"github.com/nonamecat19/jobscraper/scraping"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 const builtwithDomain = "builtwith.com"
@@ -42,7 +42,7 @@ func compileTechKeywordRes(keywords []string) map[string]*regexp.Regexp {
 }
 
 type TechStackScraper struct {
-	Scraping scraping.Scraper
+	Scraping ports.Scraper
 }
 
 func (TechStackScraper) Kind() string   { return domain.KindTechStack }

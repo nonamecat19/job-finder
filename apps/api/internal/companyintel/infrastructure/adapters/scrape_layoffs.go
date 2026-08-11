@@ -8,7 +8,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/job-finder/api/internal/companyintel/domain"
-	"github.com/nonamecat19/jobscraper/scraping"
+	"github.com/nonamecat19/jobscraper/ports"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 )
 
 type LayoffsScraper struct {
-	Scraping scraping.Scraper
+	Scraping ports.Scraper
 }
 
 func (LayoffsScraper) Kind() string   { return domain.KindLayoffs }
