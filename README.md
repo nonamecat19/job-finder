@@ -152,10 +152,9 @@ card alone changes nothing.
 
 ## Adding a job source
 
-One type implementing `domain.Adapter`
-(`apps/api/internal/jobsources/domain/adapter.go`) in
-`apps/api/internal/jobsources/infrastructure/adapters/`, plus one entry in the
-`domain.NewRegistry(...)` call in `apps/api/cmd/server/compose.go`. Nothing downstream
+One type implementing `ports.JobSource` (`ports/source.go` in the job-scraper library) in
+that library's `adapters/<key>/`, plus one entry in the `adapter.NewRegistry(...)` call in
+`apps/api/cmd/server/compose.go`. Nothing downstream
 changes — retrieval, pacing, challenge handling and persistence are all shared.
 
 The requirements every source must meet are in

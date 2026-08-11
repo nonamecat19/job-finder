@@ -46,7 +46,7 @@ uses them points at the test database, never at development data.
 
 Every adapter under `internal/jobsources/adapters` has a `_test.go` and shares
 `adapters/testdata`. Parser regressions are caught offline and deterministically; the
-opt-in `live_smoke_test.go` is the tripwire for "the site changed its markup".
+opt-in `adapters/live/live_test.go` is the tripwire for "the site changed its markup".
 
 ```mermaid
 flowchart LR
@@ -105,8 +105,9 @@ Recreates the test database, brings up compose, waits, then runs the three Playw
 
 | File | Hits |
 | --- | --- |
-| `internal/jobsources/adapters/live_smoke_test.go` | real job boards |
-| `internal/llm/cerebras_live_test.go` | the real Cerebras API |
+| `adapters/live/live_test.go` (job-scraper library) | real job boards |
+| `internal/*/application/live_test.go` — ghostjob, recruiter, salary | the real chat provider |
+| `internal/generation/**/`*`_live_test.go` | RenderCV, PDF rendering, eval corpus |
 | `internal/generation/rendercv_live_test.go` | the real RenderCV binary |
 | `internal/generation/pdf_renderer_live_test.go` | real PDF rendering |
 | `internal/retrieval/service_integration_test.go` | the real fetch ladder |

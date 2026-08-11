@@ -48,7 +48,7 @@ flowchart TB
         RD[("Redis — asynq")]
         FS[("Documents: MinIO or disk")]
     end
-    SIDE["jobspy-sidecar (Python)"]
+    SIDE["JobSpy service (external, JOBSPY_URL)"]
     U --> DASH --> HTTP
     HTTP --> PG
     HTTP -->|enqueue| RD
@@ -61,7 +61,7 @@ flowchart TB
 ```
 
 Everything inside `Process` is a goroutine started by `runServers`
-(`cmd/server/servers.go:113-137`). There is no inter-service RPC to configure, secure or
+(`cmd/server/servers.go:86-114`). There is no inter-service RPC to configure, secure or
 debug.
 
 ## Why one binary
@@ -75,7 +75,7 @@ debug.
 
 The last row is the interesting one. Rather than one worker pool with weighted queues,
 each task type gets its own `asynq.Server` so `Concurrency` is a hard per-type ceiling
-(`internal/queue/queue.go:22-37`, `cmd/server/servers.go:36-51`).
+(`internal/queue/queue.go:22-37`, `cmd/server/servers.go:29-44`).
 
 ## Runtime boundaries
 

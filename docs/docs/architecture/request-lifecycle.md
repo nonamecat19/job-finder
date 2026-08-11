@@ -120,10 +120,10 @@ Response envelope (`internal/httpapi/helpers.go:12-16`):
 
 ## Timeouts and shutdown
 
-`http.Server` sets `ReadHeaderTimeout: 10s` (`cmd/server/servers.go:75-79`). On SIGINT or
-SIGTERM the context from `signal.NotifyContext` (`main.go:33`) cancels; workers shut down
+`http.Server` sets `ReadHeaderTimeout: 10s` (`cmd/server/servers.go:71`). On SIGINT or
+SIGTERM the context from `signal.NotifyContext` (`main.go:31`) cancels; workers shut down
 first, then the HTTP server drains with a 10-second timeout
-(`servers.go:129-136`).
+(`servers.go:108-114`).
 
 ```mermaid
 stateDiagram-v2

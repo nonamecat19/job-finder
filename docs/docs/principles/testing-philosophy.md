@@ -19,7 +19,7 @@ flowchart TD
     U["Unit tests: go test ./..."] --> CI1["CI job: go-test"]
     D["DB-backed tests: internal/dbtest"] --> LOC["make test-integration"]
     I["Integration tests: -tags integration"] --> LOC
-    L["Live smoke tests: adapters/live_smoke_test.go, llm/cerebras_live_test.go"] --> MAN["Manual, opt-in"]
+    L["Live smoke tests: library adapters/live, internal/*/application/live_test.go"] --> MAN["Manual, opt-in"]
     F["Frontend: vitest"] --> CI2["CI job: frontend-test"]
     E["E2E: playwright"] --> LOC2["make test-e2e"]
 ```
@@ -31,12 +31,12 @@ flowchart TD
 | Unit | `internal/**/ *_test.go` | nothing | `make test-go`, CI `go-test` |
 | Repository / DB | helpers in `internal/dbtest` | Postgres | `make test-integration` |
 | Integration | files behind `//go:build integration` | Postgres, sometimes Redis | `make test-integration` |
-| Live smoke | `adapters/live_smoke_test.go`, `llm/cerebras_live_test.go` | real network + credentials | manual |
+| Live smoke | `adapters/live/live_test.go` (library), `internal/*/application/live_test.go` | real network + credentials | manual |
 | Frontend unit | `apps/dashboard/**/*.test.ts(x)` | jsdom | `make test-react`, CI `frontend-test` |
 | E2E | `apps/dashboard/tests` (Playwright) | full stack up | `make test-e2e` |
 
 :::warning Live tests are opt-in on purpose
-`live_smoke_test.go` hits real job boards. It exists so an adapter break is diagnosable,
+The library's `adapters/live/live_test.go` hits real job boards. It exists so an adapter break is diagnosable,
 not to run on every commit — CI never executes it.
 :::
 
@@ -62,7 +62,7 @@ sequenceDiagram
 ## Rule: test the boundary you own
 
 - **HTTP handlers** are tested through the router with `httptest` — see
-  `internal/httpapi/*_test.go` (for example `activity_test.go`, `llm_settings_test.go`) —
+  `internal/*/interfaces/http/*_test.go` (for example `jobsources/interfaces/http/sources_test.go`) —
   so route wiring, decoding and status mapping are covered together.
 - **Policies and middleware** get table tests: `internal/queue/policy_test.go` asserts
   that invalid concurrency and liveness settings are rejected at startup.

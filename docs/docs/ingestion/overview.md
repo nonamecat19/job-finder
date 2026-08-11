@@ -34,18 +34,20 @@ flowchart TD
 
 ### One retrieval path for every adapter
 
-`internal/retrieval` is the single shared HTTP retrieval interface. The package comment is
-explicit (`retrieval.go:1-5`): *"Every scraped adapter fetches through this package so no
-source implements its own request strategy or challenge handling (FR-020)."*
+`ports.Retriever` is the single shared HTTP retrieval interface, implemented by the
+library's `retrieval.Engine` and configured here by `internal/retrieval`. The port package
+is explicit about why (`ports/doc.go`): every other package depends on the port rather
+than on a concrete implementation, so no source implements its own request strategy or
+challenge handling.
 
 An adapter therefore cannot accidentally bypass pacing, identity, cookies, or challenge
 handling — those are properties of the transport, not of adapter discipline.
 
 ### Adding a source is one file plus one registry line
 
-From `jobsources/adapter.go:1-5`: *"Adding a job site = one adapter implementing Adapter +
-one entry in the registry's constructor list."* The registry list lives in
-`cmd/server/compose_sources.go:26-44`.
+Adding a job site is one adapter package implementing `ports.JobSource` in the job-scraper
+library (`adapters/<key>/`), plus one entry in the registry constructor list — the
+`adapter.NewRegistry(...)` call in `cmd/server/compose.go:186-201`.
 
 ### Capabilities are optional interfaces, not flags
 
@@ -90,8 +92,8 @@ apart, so one transient failure used to cost a source its entire cron window.
 
 ### Credentialed sources never escalate
 
-`MaxRungForAccount(usesUserAccount)` caps a logged-in source at the `direct` rung
-(`retrieval/ladder.go:43-48`). The browser and FlareSolverr rungs cannot carry the session
+A request with `UsesUserAccount` set stops at the rung it is on rather than escalating
+(`retrieval/engine.go:135-141`). The browser and FlareSolverr rungs cannot carry the session
 cookie and would land on a login page — and driving a challenge solver through someone's
 account is not something to do quietly.
 

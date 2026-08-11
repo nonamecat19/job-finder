@@ -12,14 +12,25 @@ or challenge handling.
 
 ## The ladder
 
+The ladder lives in the job-scraper library — `retrieval/rung.go`:
+
 ```go
-// internal/retrieval/ladder.go
-var (
-    RungDirect       = RetrievalMethod{Key: "direct", Order: 0}
-    RungBrowser      = RetrievalMethod{Key: "browser", Order: 1}
-    RungFlareSolverr = RetrievalMethod{Key: "flaresolverr", Order: 2}
+// Rung keys. A key is stored in HostState.CurrentRung, so renaming one
+// is a data migration.
+const (
+    KeyDirect       = "direct"
+    KeyBrowser      = "browser"
+    KeyFlareSolverr = "flaresolverr"
 )
+
+// Rung is one strategy for fetching a page. A caller can add its own
+// (a proxy pool, a commercial unblocking API) by implementing this
+// interface and passing WithRung.
+type Rung interface { ... }
 ```
+
+This repo only configures it: `retrieval.NewService` builds the engine with the browser
+and FlareSolverr rungs and the cooling-off knobs (`internal/retrieval/service_impl.go:16-24`).
 
 ```mermaid
 flowchart LR
@@ -33,8 +44,8 @@ flowchart LR
 | Rung | Cost | Availability |
 | --- | --- | --- |
 | `direct` | lowest | always |
-| `browser` | high | only if the headless browser initialises; otherwise skipped with a warning (`service_impl.go:33-38`) |
-| `flaresolverr` | highest | only when `FLARESOLVERR_URL` is set (`service_impl.go:40-43`) |
+| `browser` | high | requested by `WithBrowser(true)`; a rung reports `Available()` false when its browser cannot initialise, and is skipped |
+| `flaresolverr` | highest | only when `FLARESOLVERR_URL` is set — `WithFlareSolverr("")` adds no rung |
 
 The service degrades rather than failing: an unavailable rung is simply absent from the
 ladder.
@@ -44,10 +55,11 @@ ladder.
 1. **Start at the host's remembered rung.** `host_retrieval_state.current_rung` persists
    what worked last time, so a host that always challenges is not probed from `direct`
    every run.
-2. **Escalate one rung at a time.** `RetrievalMethod.Next()` walks by `Order`
-   (`ladder.go:26-35`).
-3. **Never escalate a credentialed source.** `MaxRungForAccount(true)` returns `direct`
-   (`ladder.go:43-48`) — the higher rungs cannot carry the session cookie.
+2. **Escalate one rung at a time.** `Ladder.Next(key)` walks the rungs in cost order
+   (`retrieval/rung.go:99`).
+3. **Never escalate a credentialed source.** A request with `UsesUserAccount` records the
+   block and returns instead of climbing (`retrieval/engine.go:135-141`) — replaying an
+   authenticated session through another transport invalidates it and risks the account.
 4. **Retest the cheap rung periodically.** `CHEAP_RUNG_RETEST_INTERVAL` governs when a
    host pinned to an expensive rung is tried at `direct` again.
 5. **Cool off after repeated blocks.** `COOLING_OFF_THRESHOLD` consecutive blocks set

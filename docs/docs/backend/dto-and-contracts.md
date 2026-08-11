@@ -62,7 +62,7 @@ cd apps/api && tygo generate     # or: make tygo-generate
 ## The hand-maintained side
 
 `packages/shared/src/index.ts` declares the enums and interfaces the dashboard imports —
-`SOURCE_KINDS`, `APPLICATION_STATUSES`, `DOCUMENT_TYPES`, `NormalizedJob`, and the rest.
+`APPLICATION_STATUSES`, `ENTRY_TYPES`, and narrowing aliases over the generated shapes.
 It is where const-tuple enums live, which Go cannot express and tygo therefore cannot
 generate:
 

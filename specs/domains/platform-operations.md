@@ -197,7 +197,7 @@ go test -tags integration ./...                                # 2. everything e
 
 `go test ./...` runs packages in parallel and the other integration-tagged packages assume an
 existing schema, so a single combined invocation can start a dependent package before
-migration finishes. The advisory lock in `internal/dbtest/lock.go` serialises `TRUNCATE`
+migration finishes. The advisory lock in `internal/dbtest/database.go:112-116` serialises `TRUNCATE`
 between suites but does nothing for schema ordering. CI needs no
 `COMPOSE_PROJECT_NAME`/`POSTGRES_HOST_PORT` handling — those exist to stop local worktrees
 colliding on one host, and a runner is a fresh container.

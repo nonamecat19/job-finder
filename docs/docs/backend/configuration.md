@@ -42,7 +42,7 @@ flowchart LR
 | Core | `PORT`, `DATABASE_URL`, `REDIS_URL` |
 | Inference | `OLLAMA_URL`, `OLLAMA_KEY`, `EMBED_URL`, `EMBED_MODEL`, `EMBED_DIMS`, `OLLAMA_KEEP_ALIVE`, `LLM_MAX_IDLE_CONNS_PER_HOST` |
 | Models per task | `LLM_MODEL`, `LLM_MODEL_MATCH`, `LLM_MODEL_GENERATION`, `LLM_MODEL_REPHRASE`, `LLM_MODEL_GHOST` |
-| Cerebras | `CEREBRAS_API_KEY`, `CEREBRAS_BASE_URL` |
+| Gateway | `GATEWAY_URL`, `LITELLM_MASTER_KEY` — provider keys (`CEREBRAS_API_KEY`, `GROQ_API_KEY`, …) belong to the gateway, never to the API; `config_test.go:158-165` fails the build if a compose file grants them |
 | Matching | `MATCH_SIMILARITY_THRESHOLD`, `MATCH_NOTIFY_SCORE_THRESHOLD`, `MATCH_NOTIFY_RATE_LIMIT` |
 | Throughput | `AI_CONCURRENCY_CLOUD`, `AI_CONCURRENCY_LOCAL`, `INGEST_CONCURRENCY`, `ENRICH_CONCURRENCY` |
 | Deadlines | `AI_TASK_TIMEOUT_MATCH`, `_GENERATE`, `_SALARY`, `_GHOST`, `_ENRICH`, `_INGEST` |
@@ -62,15 +62,15 @@ The annotated per-variable reference — purpose, default, required — is in
 
 ```mermaid
 flowchart TD
-    Q1{"CEREBRAS_API_KEY set?"} -->|no| A1["Cerebras provider is nil; every task resolves to Ollama"]
+    Q1{"GATEWAY_URL set?"} -->|no| A1["gateway provider is nil; every task resolves to Ollama"]
     Q2{"MINIO_ENDPOINT set?"} -->|no| A2["documents go to DOCUMENTS_DIR; readiness skips MinIO"]
     Q3{"LEVELS_FYI_CSV set?"} -->|no| A3["levels.fyi salary source disabled, warn logged"]
     Q4{"FLARESOLVERR_URL set?"} -->|no| A4["ladder tops out at the browser rung"]
 ```
 
-Each of those is a real branch in the code: `llm/factory.go:44-51`,
-`cmd/server/platform.go:100-110`, `compose_features.go` (`composeSalary`), and the
-retrieval ladder.
+Each of those is a real branch in the code: `internal/platform/llm/llm.go:101-113`,
+`cmd/server/platform.go:100-110`, `compose.go` (`composeSalary`), and the retrieval
+ladder.
 
 ## Rule: validate at startup, not at use
 

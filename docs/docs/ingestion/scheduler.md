@@ -79,9 +79,12 @@ running.
 | Trigger | Entry point | Payload |
 | --- | --- | --- |
 | Cron | `Scheduler.Tick` every 5 minutes | `IngestPayload{SearchID, SourceKey}` |
-| Manual search | `POST /api/searches/{id}/run` → `Service.RunSearch` (`runner.go:17`) | same |
-| Manual source | `POST /api/sources/{key}/run` → `Service.RunSource` (`runner.go:86`) | `IngestPayload{SourceKey}` with no search |
-| Subscription | subscription cron → `subscription_runner.go` | `IngestPayload{SubscriptionID, SourceKey}` |
+| Manual search | `POST /api/searches/{id}/run` → `SearchService.RunSearch`
+(`jobsources/application/search_service.go:167`) | same |
+| Manual source | `POST /api/sources/{key}/run` → `SearchService.RunSource`
+(`search_service.go:231`) | `IngestPayload{SourceKey}` with no search |
+| Subscription | subscription cron → `SearchService.RunSubscription`
+(`search_service.go:258`) | `IngestPayload{SubscriptionID, SourceKey}` |
 
 `IngestPayload` documents the invariant (`internal/queue/queue.go:51-59`): exactly one of
 `SearchID` / `SubscriptionID` is set; both nil means "scrape with an empty query", which
@@ -151,7 +154,7 @@ Two tables observe a run:
 
 ## Reconciliation
 
-`internal/ingestion/reconcile.go` handles the drift between what a source reports now and
+`SearchService.ReconcileUnmatched` (`search_service.go:323`) handles the drift between what a source reports now and
 what is already stored — the case where a posting disappears or a board's identifiers
 shift. `merge_test.go` covers merging a board-vendor job into an existing aggregator job;
 see [Deduplication](/ingestion/deduplication-and-quality).

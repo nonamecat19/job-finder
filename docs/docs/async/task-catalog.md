@@ -17,7 +17,7 @@ description: Every task type — payload, queue, policy, producers, handler and 
 | `salary:infer` | `salary:infer` | `SalaryInferPayload` | `salary.Handler.ProcessTask` | `AI_TASK_TIMEOUT_SALARY` |
 | `ghost:score` | `ghost:score` | `GhostScorePayload` | `ghostjob` worker | `AI_TASK_TIMEOUT_GHOST` |
 
-Wiring is in `cmd/server/servers.go:88-95`.
+Wiring is in `cmd/server/servers.go:75-80`.
 
 ## Producer graph
 

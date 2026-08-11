@@ -118,8 +118,8 @@ never blocks the keyword diff.
 
 ## `sources`
 
-`SourcesPage.tsx`, `hooks.ts`, `HostRetrievalPanel.tsx`, `djinniSearchSummary.ts`, plus a
-`roster/` subdirectory.
+`SourcesPage.tsx` (which also exports `HostRetrievalPanel`), `hooks.ts`,
+`djinniSearchSummary.ts`, `SubscriptionRow.tsx`, plus a `roster/` subdirectory.
 
 | Concern | Endpoint |
 | --- | --- |

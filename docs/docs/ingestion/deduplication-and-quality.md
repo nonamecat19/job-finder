@@ -122,7 +122,7 @@ That keeps a background loop from re-scoring the whole corpus against a paid pro
 profile does not evidence — backed by `KeywordDiff`, `NormalizedTerm` and
 `SynonymOverride`. Rephrase suggestions go through `ProviderRephraseModel` behind a
 `CachedRephraser` with a TTL from `KEYWORD_REPHRASE_CACHE_TTL_SEC`
-(`compose_features.go`, `composeKeyword`).
+(`compose.go`, `composeKeyword`).
 
 ```mermaid
 flowchart LR
@@ -141,7 +141,7 @@ flowchart LR
 (`LEVELS_FYI_CSV`) and LLM inference, caching results in `SalaryCache` keyed by
 `(bucket, currency, source)` with a `sampleSize` counter. With the CSV unset the loader
 logs a warning and that source is simply absent
-(`compose_features.go`, `composeSalary`). `SALARY_FLOOR_USD` filters below a threshold; `0`
+(`compose.go`, `composeSalary`). `SALARY_FLOOR_USD` filters below a threshold; `0`
 disables it.
 
 ## Quality signals summary

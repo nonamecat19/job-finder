@@ -91,7 +91,7 @@ overrides:
 | `uuid` | `pgtype.UUID` (helpers in `internal/dbutil`) |
 
 `json.RawMessage` means the service decodes jsonb into a type it owns — see the STAR-story
-decoding in `cmd/server/compose_features.go` (`composeInterviewPrep`), which unmarshals
+decoding in `cmd/server/compose.go` (`composeInterviewPrep`), which unmarshals
 `row.Skills` and `row.Categories`.
 
 ## When SQL is not enough

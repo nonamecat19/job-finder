@@ -14,7 +14,7 @@ sweeper run as goroutines in a single binary.
 **Why.** This is a self-hosted single-user product. Splitting it into services would buy
 independent scaling nobody needs and cost an operator a deployment topology.
 
-**Where.** `apps/api/cmd/server/servers.go:113-137`:
+**Where.** `apps/api/cmd/server/servers.go:86-114`:
 
 ```go
 go func() { servers.HTTP.ListenAndServe() }()
@@ -99,7 +99,7 @@ downgrades the feature; it never takes down the request path.
 - `internal/llm/router.go:79-90` — a task set to Cerebras with no key configured silently
   resolves to Ollama. The HTTP layer surfaces `CredentialConfigured` so the operator can
   see *why*, but the task still runs.
-- `apps/api/cmd/server/compose_features.go` (`composeSalary`) — with `LEVELS_FYI_CSV`
+- `apps/api/cmd/server/compose.go` (`composeSalary`) — with `LEVELS_FYI_CSV`
   unset the loader logs `salary: LEVELS_FYI_CSV not set — levels.fyi source disabled` and
   the service continues with its remaining sources.
 - `internal/storage` — MinIO is optional; `MINIO_ENDPOINT` unset means local-disk
@@ -128,7 +128,8 @@ with a bad `CONFIG_ENCRYPTION_KEY` must fail loudly, not silently store plaintex
 behaviour — not by an arbitrary local quota, and escalation to heavier retrieval methods
 is a last resort.
 
-**Where.** `internal/retrieval/ladder.go:1-46` defines a three-rung ladder:
+**Where.** The job-scraper library's `retrieval/rung.go` defines a three-rung ladder,
+configured from this repo in `internal/retrieval/service_impl.go:16-24`:
 
 ```mermaid
 flowchart LR
@@ -141,8 +142,9 @@ flowchart LR
 
 Two details encode the principle:
 
-- `MaxRungForAccount(usesUserAccount bool)` caps a logged-in source at `direct`
-  (`ladder.go:43-48`) — never drive a challenge-solver through someone's own account.
+- A request carrying `UsesUserAccount` is never climbed: the engine records the block and
+  returns at the rung it is on (`retrieval/engine.go:135-141`) — never drive a
+  challenge-solver through someone's own account.
 - Migration `00029_drop_host_budget.sql` deleted the per-host daily budget; pacing is now
   crawl-delay aware (see [Rate limiting](/ingestion/rate-limiting)).
 

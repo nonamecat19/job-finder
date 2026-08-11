@@ -129,7 +129,7 @@ worse state than a run that finishes slowly.
 ## Detail-fetch delays
 
 Two sources have explicit per-detail sleeps on top of the transport pacing, wired in
-`composeEnrichment` (`cmd/server/compose_features.go`):
+`composeEnrichment` (`cmd/server/compose.go`):
 
 | Variable | Source | Purpose |
 | --- | --- | --- |
@@ -141,14 +141,16 @@ many sequential detail pages — benefits from an explicit, source-tuned gap.
 
 ## Separation from AI traffic
 
-`llm.tunedTransport` is deliberately distinct from `retrieval.DefaultTransport`
-(`internal/llm/factory.go:8-20`, citing FR-003): *"AI provider traffic must never pick up
-the scraper's request pacing."* Pacing a Cerebras call at 0.7 rps would be absurd; the LLM
-transport instead raises `MaxIdleConnsPerHost` so hosted concurrency does not force a
-fresh TLS handshake per request.
+LLM providers never touch `retrieval.DefaultTransport`, per FR-003: *"AI provider traffic
+must never pick up the scraper's request pacing."* Pacing a hosted chat call at 0.7 rps
+would be absurd. Each provider builds its own plain `http.Client` with nothing but a
+timeout — 300s for Ollama (`internal/platform/llm/infrastructure/ollama/ollama.go:63`), a
+safety-net timeout for the gateway
+(`internal/platform/llm/infrastructure/gateway/gateway.go:36`) — so it inherits Go's
+default transport, not the scraper's paced one.
 
 ## Testing
 
-`internal/ratelimit/transport_test.go` measures pacing against a `recordingRT` stub that
-stands in for the network, so the tests assert delay behaviour rather than round-trip
-latency.
+Pacing itself now lives in the job-scraper library (`retrieval/pacing.go`). On the app side
+`internal/retrieval/crawldelay_test.go` covers the `robots.txt` crawl-delay parsing that
+feeds it, table-driven against literal bodies rather than a live host.

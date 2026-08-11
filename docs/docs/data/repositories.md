@@ -108,7 +108,7 @@ generated type, keeping the dependency arrow pointing the right way.
 ## Test isolation
 
 `internal/dbtest` is compiled **only** under the `integration` build tag and never links
-into the production binary (`dbtest/lock.go:1-5`).
+into the production binary (`internal/dbtest/database.go:26`, `112-116`).
 
 Its central problem and solution: `go test ./...` runs packages in parallel, several
 integration suites `TRUNCATE` the same tables, and one suite's cleanup would wipe

@@ -49,24 +49,27 @@ flowchart LR
 ## Discovery
 
 ### `jobsources`
-Adapter contract, registry and ~20 provider adapters (`adapters/`), plus
-`roster/` for ATS board discovery. Port: `Repository` (`ports.go:8-18`). HTTP:
-`/sources`, `/roster`. Detail: [Job sources](/ingestion/job-sources).
-
-### `ingestion`
-Owns the scheduler (`scheduler.go`), the ingest task handler (`handler.go`), dedupe
-(`dedupe.go`), reconciliation (`reconcile.go`), and the saved-search
-(`searches.go`) and subscription (`subscription_runner.go`) runners. HTTP:
-`/searches`. Queue: `ingest`.
+Everything about reading a source. The adapter contract and the ~25 provider adapters now
+live in the job-scraper library (`ports/source.go`, `adapters/`); this package holds the
+source service (`application/service.go`), ingestion — scheduler
+(`interfaces/worker/scheduler.go`), ingest task handler (`interfaces/worker/handler.go`),
+dedupe and persistence (`application/ingest/`), and the saved-search, subscription and
+reconciliation runners (`application/search_service.go`) — plus `roster/` for ATS board
+discovery. Port: `Repository` (`domain/repository.go:9-16`). HTTP: `/sources`, `/searches`,
+`/roster`, `/hosts`. Queue: `ingest`. Detail: [Job sources](/ingestion/job-sources).
 
 ### `retrieval`
-The three-rung fetch ladder (`ladder.go`), browser identity (`identity.go`), per-host
-state with encrypted cookies (`state.go`), challenge handling (`challenge.go`), and a
-tuned transport (`transport.go`). HTTP: `/hosts/{host}/*`.
+The app-side configuration of the library's fetch engine: `NewService` assembles the
+three-rung ladder with the cooling-off and retest knobs (`service_impl.go:16-24`), per-host
+state with encrypted cookies (`state.go`), and the shared paced transport
+(`transport.go`). The rungs, browser identity and challenge handling themselves are the
+library's (`retrieval/rung*.go`, `identity.go`, `challenge.go`). HTTP: `/hosts/{host}/*`.
 
 ### `scraping`
-Headless-browser service constructed over `retrieval` (`scraping.New(retSvc)` in
-`cmd/server/platform.go:87`). Closed by `main.run` on shutdown.
+The app's `ports.Scraper`: an ordinary HTTP client plus a lazily launched headless browser
+(`scraping.New()` in `cmd/server/platform.go:88`). It lives here rather than in the library
+so one browser is shared between job sources and the company-intel and PDF paths. Closed by
+`main.run` on shutdown.
 
 ### `ratelimit`
 Crawl-delay-aware pacing. Per-host daily budgets were removed in migration
@@ -104,7 +107,7 @@ Two-phase scoring: pgvector recall, then LLM fit scoring; persists `MatchResult`
 ### `enrichment`
 Fetches full job detail after ingest, per-source delays (`DJINNI_DETAIL_DELAY_MS`,
 `WORKUA_DETAIL_DELAY_MS`). Constructed with ten source adapters plus the asynq client
-(`compose_features.go`). Queue: `enrich`.
+(`compose.go`). Queue: `enrich`.
 
 ### `generation`
 Tailored resume and cover-letter generation grounded in the profile
@@ -134,7 +137,7 @@ Kanban statuses, event history (`Application.events` jsonb), stats. HTTP:
 
 ### `coach`
 `coach.Service` + `AssessmentService`, built over the keyword rephrase model and profile
-entries (`compose_features.go`). HTTP: `POST /jobs/{id}/coach/assess`, cached read at
+entries (`compose.go`). HTTP: `POST /jobs/{id}/coach/assess`, cached read at
 `/jobs/{id}/coach/assessment`.
 
 ### `interviewprep`

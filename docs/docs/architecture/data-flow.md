@@ -68,7 +68,8 @@ sequenceDiagram
 :::note Embeddings stay on Ollama
 Chat tasks can be routed to Cerebras; embeddings cannot — neither remote provider exposes
 an embeddings API. `EMBED_URL` therefore always points at an Ollama instance
-(`internal/llm/factory.go:24-30`).
+(`internal/platform/llm/llm.go:97-103` — `EmbedURL` is only ever handed to the Ollama
+provider).
 :::
 
 The two-phase design — cheap vector recall, then expensive LLM scoring on the survivors —

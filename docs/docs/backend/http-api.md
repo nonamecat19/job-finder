@@ -10,7 +10,7 @@ description: Router construction, middleware, handler conventions, and the full 
 
 `httpapi.NewRouter(mounts ...func(chi.Router))` takes the mount functions as variadic
 arguments (`internal/httpapi/router.go:13`). Handlers are registered in
-`cmd/server/servers.go:66-73` — `router.go` itself is never edited to add an endpoint.
+`cmd/server/servers.go:55-67` — `router.go` itself is never edited to add an endpoint.
 
 ```mermaid
 flowchart TD

@@ -31,13 +31,15 @@ analysis is not.
 
 ## Phase 1 — embedding prefilter
 
-`runEmbeddingPrefilter` (`internal/matching/scoring.go:26-68`):
+The prefilter is inlined in `MatchJob`
+(`internal/matching/application/service.go:83-117`):
 
 ```go
 jobText := strutil.Truncate(fmt.Sprintf("%s at %s\n%s", job.Title, job.Company, job.Description), 8000)
-hash := contentHash(jobText)
-
-if job.EmbeddingHash != nil && *job.EmbeddingHash == hash && len(job.Embedding) > 0 {
+jobEmbedding, err := s.llmc.Embed(ctx, jobText)
+...
+similarity, err := s.profiles.Similarity(ctx, profileID, jobEmbedding)
+if similarity < s.threshold { /* save a similarity-only result and stop */ }
     jobEmbedding = job.Embedding          // unchanged content: reuse
 } else {
     jobEmbedding, err = s.llmc.Embed(ctx, jobText)
@@ -78,18 +80,20 @@ sequenceDiagram
     P-->>M: cosine similarity
 ```
 
-`hasEmbedding` prefers the `profile.SnapshotCache` over a query and **defaults to `true`**
-when neither source is readable — the comment gives the rule: *"a spurious refresh is
-worse than a skipped one"* (`scoring.go:75-92`).
+`profiles.HasEmbedding` is consulted before refreshing, and a refresh is attempted **only**
+when the answer is a confident "no": `if has, err := s.profiles.HasEmbedding(...); err == nil
+&& !has` (`service.go:96-98`). An error skips the refresh rather than forcing one — a
+spurious refresh is worse than a skipped one.
 
 :::note A similarity error is not a task failure
-`runEmbeddingPrefilter` returns `0, nil` when `Similarity` fails (`scoring.go:66-69`).
+`MatchJob` sets `similarity = 0` when `profiles.Similarity` fails (`service.go:105-107`).
 Matching proceeds with a zero similarity rather than aborting the task.
 :::
 
 ## Phase 2 — LLM fit analysis
 
-`runLLMAnalysis` (`scoring.go:110`) returns `score, matched, missing, summary, redFlags`.
+Phase 2 is the second half of `MatchJob` (`service.go:119-165`): it builds the prompt, calls
+`llm.CompleteStructured[domain.FitResult]`, and persists via `saveResult`.
 It runs through the `match` router, so the provider and model come from settings.
 
 The target type implements `Validator`:
@@ -121,7 +125,8 @@ func NewService(q Repository, profiles *profile.Service, snapshot *profile.Snaps
 ## Progress reporting
 
 `MatchJob` takes an `*activity.Recorder` and calls `rec.Step(ctx, "embedding", nil)` and
-`rec.Step(ctx, "prefilter (similarity)", nil)` as it goes (`scoring.go:30-32`, `61-63`).
+`rec.Step(ctx, "prefilter (similarity)", nil)` as it goes (`service.go:84-85`, `101-102`,
+`148-149`).
 Those strings are what the Status page shows as the current step.
 
 ## Persistence and the mapper
@@ -150,7 +155,7 @@ classDiagram
     Service --> mapper
 ```
 
-`jsonOrNull` (`mapper.go:11-16`) writes SQL `NULL` rather than `[]` for absent skill
+`jsonOrNull` (`service.go:215-221`) writes SQL `NULL` rather than `[]` for absent skill
 lists, so "not analysed" and "analysed, none found" stay distinguishable.
 
 `MatchResult` is `UNIQUE(jobId)` — one current score per job, replaced on re-match.

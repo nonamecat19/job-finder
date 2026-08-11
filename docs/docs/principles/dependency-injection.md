@@ -12,7 +12,7 @@ Every dependency is a constructor argument. There is no DI container, no `init()
 registry, and no package-level mutable singleton in the service packages.
 
 ```go
-// apps/api/cmd/server/compose_features.go
+// apps/api/cmd/server/compose.go — composeSalary
 salaryService := salary.NewService(p.DB.Queries, defaultRouter, levelsFyiLoader, "")
 ```
 
@@ -49,10 +49,12 @@ classDiagram
     FakeRepo ..|> Repository : satisfies in tests
 ```
 
-`internal/jobsources/ports.go` is the model: the interface names exactly the six queries
-the service uses, and `*sqlcgen.Queries` satisfies it without importing anything from
-`jobsources`. The same `ports.go` convention appears in `internal/ingestion`,
-`internal/matching` and elsewhere.
+`internal/jobsources/domain/repository.go:9-16` is the model: the interface names exactly
+the six queries the service uses, and `*sqlcgen.Queries` satisfies it without importing
+anything from `jobsources`. The same convention appears as `domain/port.go` or
+`domain/ports.go` in `internal/matching`, `internal/generation`, `internal/manualadd`,
+`internal/keyword` and elsewhere; older packages such as `internal/jobs` and
+`internal/enrichment` keep a flat `ports.go`.
 
 :::tip Interface size
 Ports list the methods the consumer calls — not the full repository surface. A port with
@@ -61,22 +63,21 @@ six methods is a six-method fake in tests, not a hundred-method one.
 
 ## Rule: all wiring lives in the composition root
 
-`apps/api/cmd/server/` is the only package that knows how the whole system fits together.
-It is split by concern rather than being one giant file:
+`apps/api/cmd/server/` is the only package that knows how the whole system fits together:
 
 | File | Responsibility |
 | --- | --- |
 | `main.go` | load config, migrate, build, run, shut down |
 | `platform.go` | process-wide infrastructure: DB, Redis, asynq, retrieval, MinIO probe, policies, sweeper |
-| `compose.go` | top-level `buildContexts`, assembling the `App` |
-| `compose_llm.go` | providers, snapshot holder, per-task routers |
-| `compose_sources.go` | job-source adapters and the registry |
-| `compose_features.go` | enrichment, salary, keyword, coach, interview prep |
-| `compose_intel.go` | company intel and related services |
-| `compose_tasks.go` | task handlers |
-| `compose_support.go` | supporting handlers |
-| `compose_types.go` | the `App` struct and handle types |
+| `compose.go` | the `App` struct, every per-concern `composeX` function, and `buildContexts` assembling them |
 | `servers.go` | HTTP server, six asynq workers, run/shutdown orchestration |
+
+Wiring is split by *function*, not by file: `compose.go` holds one `composeX` per concern —
+`composeLLM` (providers, snapshot holder, per-task routers), `composeJobSources` (adapters
+and the registry), `composeIngestion`, `composeMatching`, `composeGeneration`,
+`composeEnrichment`, `composeSalary`, `composeKeyword`, `composeCompanyIntel`,
+`composeInterviewPrep` and the rest, each returning a small handles struct that
+`buildContexts` (`compose.go:711`) folds into the `App` (`compose.go:92`).
 
 ```mermaid
 flowchart TD
@@ -88,10 +89,10 @@ flowchart TD
     PLAT --> POL["queue.PoliciesFromConfig"]
     PLAT --> SW["activity.NewSweeper"]
     PLAT --> CTXS["buildContexts(ctx, platform)"]
-    CTXS --> LLM["compose_llm: providers + routers"]
-    CTXS --> SRC["compose_sources: adapters"]
-    CTXS --> FEAT["compose_features: salary, keyword, coach, prep"]
-    CTXS --> TASKS["compose_tasks: handlers"]
+    CTXS --> LLM["composeLLM: providers + routers"]
+    CTXS --> SRC["composeJobSources: adapters"]
+    CTXS --> FEAT["composeSalary / composeKeyword / composeCoach / composeInterviewPrep"]
+    CTXS --> TASKS["composeIngestion / composeMatching / composeGeneration"]
     CTXS --> APP["App"]
     APP --> SRV["buildServers: router + 6 workers"]
 ```

@@ -79,7 +79,6 @@ flowchart TD
 | --- | --- |
 | `apps/api` | Go backend: HTTP API, asynq workers, ingestion scheduler, all domain logic |
 | `apps/dashboard` | React 19 + Vite 6 dashboard (TanStack Query, Tailwind 4, Radix, dnd-kit) |
-| `apps/jobspy-sidecar` | leftover directory — the JobSpy adapter and its Python sidecar were removed (commit `b433986`) |
 | `packages/shared` | Shared TypeScript types mirroring the Go DTOs |
 | `specs/NNN-*` | Per-feature specification, plan, tasks, checklists |
 | `.specify/` | Spec-driven-development tooling, templates, project constitution |

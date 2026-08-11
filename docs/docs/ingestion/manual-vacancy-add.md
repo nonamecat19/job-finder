@@ -61,8 +61,8 @@ that can take minutes; the vacancy is useful before it finishes.
 
 ## The `PostingReader` port
 
-A source supports manual add by implementing one optional interface in
-`jobsources/domain/adapter.go`:
+A source supports manual add by implementing one optional interface from the job-scraper
+library, `ports/source.go:76-89`:
 
 ```go
 type PostingReader interface {

@@ -4,7 +4,7 @@ Consolidates **014** browser-fidelity fetch ladder, **017** throttle-only rate c
 **025** batched atomic ingest persistence, and **043**'s relocation of the fetch stack into
 the scraper library.
 
-Implementation: **the fetch machinery is in the `github.com/nonamecat19/jobscraper`
+Implementation: **the fetch machinery is in the `github.com/nonamecat19/job-scraper`
 library** (`retrieval/`, `scraping/`) after 043 — see
 [`codebase-structure.md`](codebase-structure.md) § 5. What remains app-side:
 `apps/api/internal/retrieval/` (the `ports.StateStore` implementation and the engine wiring)
@@ -63,7 +63,7 @@ The three rungs, cheapest first, are `direct` → `browser` → `flaresolverr`.
 
 ### 2.1 `retrieval.Service` — the seam every adapter uses
 
-`jobscraper/retrieval` (was `apps/api/internal/retrieval` before 043). Adapters call this
+`job-scraper/retrieval` (was `apps/api/internal/retrieval` before 043). Adapters call this
 instead of `scraping.Scraper.FetchHTML` or `HTTPClient()` directly; that indirection *is*
 014-FR-020.
 
@@ -169,7 +169,7 @@ behaviour.
 
 ### 3.1 Rate resolution
 
-The paced transport lives in `jobscraper/retrieval/pacing.go` after 043 (vendored from the
+The paced transport lives in `job-scraper/retrieval/pacing.go` after 043 (vendored from the
 deleted `internal/ratelimit`, 043-FR-008). `Transport` resolves a host's pace through an
 injected seam:
 

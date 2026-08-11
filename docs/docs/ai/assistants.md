@@ -40,7 +40,7 @@ A design note worth copying (`apiservice.go:38-42`):
 type ProfileEntriesFunc func(ctx context.Context) ([]ProfileEntry, error)
 ```
 
-A function-typed dependency is the smallest possible port. `compose_features.go` supplies
+A function-typed dependency is the smallest possible port. `compose.go` supplies
 the closure that adapts `profile.Service` to it.
 
 ```mermaid
@@ -69,7 +69,7 @@ result for free.
 ## Interview prep
 
 `interviewprep.Service` combines profile STAR stories with company intel
-(`compose_features.go`, `composeInterviewPrep`). STAR stories come from `StarStory`
+(`compose.go`, `composeInterviewPrep`). STAR stories come from `StarStory`
 (`00022_star_story.sql`) with `skills` and `categories` as jsonb arrays, decoded at the
 composition boundary.
 

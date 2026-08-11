@@ -82,7 +82,7 @@ erDiagram
 | `Job.raw` | `jsonb NOT NULL`, the untouched provider payload |
 | `Job.embedding` | `vector(768)`, sized to `EMBED_DIMS` |
 | `Job.status` | defaults to `'found'` |
-| `JobSource.kind` | one of `api`, `scrape`, `sidecar` |
+| `JobSource.kind` | plain `text`, no CHECK; `api`, `scrape`, `sidecar` or `manual` in practice |
 | `SavedSearch.cron` | defaults to `'0 */6 * * *'` |
 | `Subscription.sourceKey` | FK to `JobSource.key`, cascade delete |
 

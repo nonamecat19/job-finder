@@ -125,10 +125,10 @@ classDiagram
 
 ## Runtime model
 
-The server process runs eight kinds of goroutine: the HTTP listener, six asynq servers,
-the ingestion scheduler and the activity sweeper (`cmd/server/servers.go:113-127`).
-Shutdown is ordered: workers first, then HTTP with a 10-second drain, then the deferred
-closes in `main.run` (`main.go:45-49`).
+The server process runs ten kinds of goroutine: the HTTP listener, six asynq servers,
+the ingestion scheduler, the activity sweeper and the DB saturation sampler
+(`cmd/server/servers.go:86-114`). Shutdown is ordered: workers first, then HTTP with a
+10-second drain, then the deferred closes in `main.run` (`main.go:42-45`).
 
 ## Where to start reading
 

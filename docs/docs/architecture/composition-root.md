@@ -35,7 +35,7 @@ sequenceDiagram
     M->>R: runServers(ctx, platform, servers, scheduler)
 ```
 
-`main.go:28-56` is short enough to read in full — that is the point. The complexity lives
+`main.go:21-54` is short enough to read in full — that is the point. The complexity lives
 in the composers, and each one has a single reason to change.
 
 ## What `buildPlatform` owns
@@ -68,7 +68,7 @@ Two details worth internalising (`cmd/server/platform.go`):
 
 ## What `buildContexts` owns
 
-`compose.go:14-89` runs the composers in dependency order and performs the two wires that
+`compose.go:711-806` runs the composers in dependency order and performs the two wires that
 cannot live inside any single composer.
 
 ```mermaid
@@ -94,9 +94,9 @@ flowchart TD
 The two cross-composer wires are called out in the function's doc comment:
 
 1. `jobsHandler` needs `jobs.Service` from **matching** and `generation.Service` from
-   **generation** (`compose.go:34`).
+   **generation** (`compose.go:754`).
 2. `ingestionH.Sources.Enrichment = enrichHandler` is a back-reference set after both
-   exist (`compose.go:37`).
+   exist (`compose.go:752`).
 
 Naming a cycle-breaking assignment explicitly beats hiding it behind lazy initialisation.
 
@@ -127,13 +127,14 @@ fixed at construction: there is no holder, no atomic swap and no runtime reconfi
 Routing state lives in `gateway/config.yaml` and environment variables. Because `Router`
 itself implements `Provider`, no service knows routing exists.
 
-The same routers are handed to the activity handler as `queue.ClassResolver`s
-(`compose.go:52-57`) so the queue view can report which provider class each queue will
-run on right now.
+The same routers are handed to the activity handler as `queue.ClassResolver`s —
+`queueClassResolvers` (`compose.go:694-709`) maps each policy's queue to the router that
+serves it — so the queue view can report which provider class each queue will run on right
+now.
 
 ## What `buildServers` owns
 
-`servers.go:65-108`: the chi router with 23 mounts, and the six workers. Each worker is
+`servers.go:54-84`: the chi router with 26 mounts, and the six workers. Each worker is
 built by `Platform.worker(...)` which composes admission gate → deadline middleware →
 handler:
 
@@ -144,14 +145,15 @@ flowchart LR
     DL --> HANDLER["service ProcessTask"]
 ```
 
-`policyFor(taskType)` panics for an unknown type (`servers.go:56-63`) — every wired worker
+`policyFor(taskType)` panics for an unknown type (`servers.go:45-52`) — every wired worker
 must have a validated policy. That is a startup invariant, not a runtime error path.
 
 ## Adding a feature to the graph
 
-1. Write the service with its own `ports.go`.
-2. Add a `composeX` function in the matching `compose_*.go` file.
-3. Add its handler to the `App` struct in `compose_types.go`.
+1. Write the service with its own `domain/port.go` declaring the queries it calls.
+2. Add a `composeX` function in `compose.go`.
+3. Add its handler to the `App` struct at the top of `compose.go`, and fold the handles in
+   from `buildContexts`.
 4. Add `app.X.Mount` to the `NewRouter(...)` call in `servers.go`.
 5. If it is async: add the task type, queue name, payload, and a `TaskPolicy` in
    `internal/queue`, then a `p.worker(...)` line.

@@ -5,7 +5,7 @@ Consolidates **002** Indeed, **003** RemoteOK, **004** Glassdoor, **005** JobLea
 **015**/**016** Djinni search modes, **022** Djinni scraping enhancement, and **043**'s move
 of every adapter into the scraper library.
 
-Implementation: **the adapters live in `github.com/nonamecat19/jobscraper`**
+Implementation: **the adapters live in `github.com/nonamecat19/job-scraper`**
 (`adapter/` for the framework, `adapters/` for the 25 site adapters) since 043 — see
 [`codebase-structure.md`](codebase-structure.md) § 5. `apps/api/internal/jobsources/` keeps
 the application services, the sqlcgen repositories, the roster, the HTTP handlers and the
@@ -68,7 +68,7 @@ Every per-source spec (002, 003, 004, 005, 010, 011, 012) shipped an identical a
 contract. Stated once, it binds every adapter:
 
 ```go
-// package ports — github.com/nonamecat19/jobscraper/ports
+// package ports — github.com/nonamecat19/job-scraper/ports
 type JobSource interface {
     Key() string
     Kind() model.SourceKind
@@ -207,10 +207,10 @@ therefore runnable; "Enrich" = wired into `enrichment.NewHandler` for detail fet
 > Verified against `apps/api/cmd/server/compose.go` at the time this doc was written.
 >
 > `indeed`, `remoteok`, `glassdoor`, `jobleads`, `wellfound` and `jobgether` are constructed
-> only inside `composeEnrichment` (compose.go:402-407) and are **absent from the
-> `adapter.NewRegistry(...)` call** in `composeJobSources` (compose.go:135-151). Since ingest
+> only inside `composeEnrichment` (compose.go:461-466) and are **absent from the
+> `adapter.NewRegistry(...)` call** in `composeJobSources` (compose.go:186-201). Since ingest
 > resolves its adapter through `registry.Get(payload.SourceKey)`
-> (`jobsources/interfaces/worker/handler.go:158`), a run for any of these keys fails with
+> (`jobsources/interfaces/worker/handler.go:159`), a run for any of these keys fails with
 > `AdapterNotRegisteredError`. They cannot be enabled, listed, health-checked, or run — which
 > contradicts **JS-01**, **JS-02**, **JS-05** and **JS-06** for each of them. Their detail-page
 > enrichment does work, for jobs that reached the DB some other way.
@@ -249,7 +249,7 @@ orchestration) stay app-side and call those methods on the same struct.
 
 The board-run machinery moved with the adapters and is now a Template Method: the roster
 walk, the per-employer outcome classification and the runaway-board cap live once in
-`jobscraper/adapters/atsboard`, and each vendor is an `atsboard.Fetcher` differing only in a
+`job-scraper/adapters/atsboard`, and each vendor is an `atsboard.Fetcher` differing only in a
 URL and a JSON shape. Each vendor package exposes `New(roster)` and `HealthChecker()`, so
 the app builds the checkers map itself and still passes it into
 `roster.NewService(q, checkers)` — the wiring shape 013 established did not change, only
@@ -401,10 +401,10 @@ manually from the audit list.
 >
 > 016-FR-006/007 required deleting the Djinni session-login path and its configuration.
 > The code still carries `DjinniSession` — now in the library
-> (`jobscraper/adapters/djinni_session.go`, constructed app-side in
+> (`job-scraper/session/session.go` plus `adapters/djinni/provider.go`, constructed app-side in
 > `cmd/server/platform.go`) — the `DJINNI_EMAIL` / `DJINNI_PASSWORD` config fields
-> (`config/config.go:83`, listed as secrets in `config/defaults.go:61`), the `sessionCookie`
-> config blob, and login-required errors in `jobscraper/adapters/djinni.go:59,63,72`. The § 2
+> (`config/config.go:51-52`, listed as secrets in `config/defaults.go:62`), the `sessionCookie`
+> config blob, and login-required errors in `job-scraper/adapters/djinni/djinni.go:59,72`. The § 2
 > register reflects the code, not the spec. **043 relocated this drift without resolving it**;
 > closing it is now a library change plus a config removal app-side.
 >

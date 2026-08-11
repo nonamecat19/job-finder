@@ -104,7 +104,7 @@ flowchart TD
 | DTO field | `make tygo-generate` + edit `index.ts` + rebuild shared |
 | New handler | mount it in `NewRouter(...)` in `cmd/server/servers.go`, not in `router.go` |
 | New task type | queue constants, payload, `TaskPolicy`, worker line, `queueForOp` entry |
-| New job source | adapter + fixtures + registry entry in `compose_sources.go` |
+| New job source | adapter + fixtures + registry entry in `compose.go` |
 
 Install the pinned generators once: `make sqlc-install`, `make tygo-install`.
 

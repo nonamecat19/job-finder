@@ -105,8 +105,10 @@ export const APPLICATION_STATUSES = [
   'found', 'shortlisted', 'docs_generated', 'applied',
   'interview', 'offer', 'rejected',
 ] as const;
-export const DOCUMENT_TYPES = ['resume', 'cover_letter'] as const;
-export const SOURCE_KINDS = ['api', 'scrape', 'sidecar'] as const;
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
+export type SourceKind = Gen.SourceKind;
+export type DocumentType = Gen.DocumentType;
 ```
 
 ```mermaid
@@ -123,8 +125,11 @@ stateDiagram-v2
     rejected --> [*]
 ```
 
-`SOURCE_KINDS` is the important one for [job sources](/ingestion/job-sources): a source is
-an `api` client, a `scrape` adapter, or delegated to the `sidecar`.
+`SourceKind` is the important one for [job sources](/ingestion/job-sources): a source is an
+`api` client, a `scrape` adapter, a `sidecar` delegation, or `manual` for hand-entered
+vacancies no adapter reads. Unlike the status vocabulary it is generated, not
+hand-maintained — tygo emits it from the job-scraper library's `model/job.go` into
+`generated-model.ts`.
 
 ## Optionality is a pointer
 

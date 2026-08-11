@@ -61,17 +61,25 @@ export const APPLICATION_STATUSES = [
 ] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
-export const DOCUMENT_TYPES = ['resume', 'cover_letter'] as const;
-export const SOURCE_KINDS = ['api', 'scrape', 'sidecar'] as const;
+export const ENTRY_TYPES = [
+  'education', 'experience', 'normal', 'publication',
+  'one_line', 'bullet', 'numbered', 'reversed_numbered', 'text',
+] as const;
+export type EntryType = (typeof ENTRY_TYPES)[number];
 ```
+
+Kinds needed only as a type, never iterated at runtime, are aliased straight off the
+generated module instead — `export type SourceKind = Gen.SourceKind;`,
+`export type DocumentType = Gen.DocumentType;`.
 
 The tracker iterates `APPLICATION_STATUSES` to render its columns *and* uses
 `ApplicationStatus` as a type. A generated interface cannot do both.
 
-:::warning `index.ts` does not re-export `generated.ts`
-`AGENTS.md` states the rule: Go DTO field names and JSON tags must match `index.ts`
-field-for-field, because `index.ts` is hand-maintained. **Update both when you add a DTO
-field.**
+:::warning `index.ts` re-exports and narrows — it never restates a shape
+`index.ts` does `import * as Gen from './generated'` and aliases each DTO off it, adding
+nullability narrowing where the Go pointer semantics need it. `AGENTS.md:104` states the
+rule: add the field to the Go DTO in `apps/api/internal/dto/`, run `make tygo-generate`,
+done. Hand-written types with no backend counterpart live in `consumer-only.ts`.
 :::
 
 ## Build

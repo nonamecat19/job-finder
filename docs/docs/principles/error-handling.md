@@ -130,7 +130,7 @@ sequenceDiagram
 return errors upward rather than logging them; the composition root and the HTTP edge
 decide what is worth an operator's attention. Optional-feature degradation logs at `warn`
 at the point of degradation — for example the levels.fyi loader in
-`cmd/server/compose_features.go`.
+`cmd/server/compose.go`.
 
 ## Anti-patterns this codebase avoids
 

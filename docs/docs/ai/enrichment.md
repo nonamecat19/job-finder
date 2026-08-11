@@ -23,11 +23,13 @@ flowchart TD
 ```
 
 `NeedsDetail` is an optional interface, not a flag, so adapters returning complete rows
-need no change (`jobsources/adapter.go:24-34`).
+need no change (`ports/source.go:44-46` in the job-scraper library).
 
 ## The handler
 
-`enrichment.NewHandler` takes the ten adapters that have detail pages, plus the asynq
+`enrichment.NewHandler` takes the nine adapters that have detail pages — djinni, dou,
+workua, indeed, remoteok, glassdoor, jobleads, wellfound, jobgether (`compose.go:460-467`)
+— plus the asynq
 client, a default delay and a per-source delay map
 (`internal/enrichment/handler.go:40`):
 
@@ -54,7 +56,7 @@ pacing, identity) live in `retrieval`; what remains genuinely differs per source
 ## Delays
 
 ```go
-// cmd/server/compose_features.go
+// cmd/server/compose.go
 enrichDelay := time.Duration(cfg.DjinniDetailDelayMs) * time.Millisecond
 enrichDelays := map[string]time.Duration{
     "workua": time.Duration(cfg.WorkUaDetailDelayMs) * time.Millisecond,

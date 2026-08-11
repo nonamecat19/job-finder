@@ -100,11 +100,12 @@ Job descriptions and your resume are personal data. Ollama runs on your machine 
 default; remote providers are opt-in per task and fall back to Ollama when unconfigured
 (`internal/llm/router.go:79-90`). Embeddings never leave Ollama at all.
 
-## The Python sidecar that no longer exists
+## The `sidecar` source kind
 
-`dto.SourceKind` still lists `sidecar` alongside `api` and `scrape`
-(`internal/dto/dto.go:8`), a remnant of a JobSpy-backed Python sidecar. The adapter and the
-sidecar were removed in commit `b433986`; `apps/jobspy-sidecar/` retains only a stale
-virtualenv and test directory, and no registered adapter uses the `sidecar` kind. Every
-source today is either a direct API client or a scrape adapter going through
-`internal/retrieval`.
+`dto.SourceKind` lists `sidecar` alongside `api`, `scrape` and `manual`
+(`internal/dto/scraper_aliases.go:21-28`, aliased from the job-scraper library). One
+registered adapter uses it: `jobspy`, which delegates to a JobSpy service reached over
+HTTP at `JOBSPY_URL` (`cmd/server/compose.go:194`). The Python sidecar that used to ship
+in this repo as `apps/jobspy-sidecar/` is gone (commit `b433986`) — the service is now
+deployed separately. Every other source is a direct API client or a scrape adapter going
+through `internal/retrieval`.
