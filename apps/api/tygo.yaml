@@ -1,7 +1,29 @@
 packages:
+  # The scraper library owns NormalizedJob/SearchQuery/JobSourceDto/SourceKind.
+  # tygo cannot follow the `dto` type aliases across the module boundary, so the
+  # library package is generated into its own file and re-exported from
+  # generated.ts (see frontmatter below). Consumers still import every type from
+  # @shared/generated exactly as before.
+  - path: "github.com/job-finder/jobscraper/model"
+    output_path: "../../packages/shared/src/generated-model.ts"
+    enum_style: union
+    type_mappings:
+      "time.Time": "string"
+
   - path: "github.com/job-finder/api/internal/dto"
     output_path: "../../packages/shared/src/generated.ts"
     # Emits Go string-const groups as TS literal unions instead of `type X = string`.
     enum_style: union
+    # The alias declarations re-export the library's types for Go call sites;
+    # their TypeScript comes from generated-model.ts instead.
+    exclude_files:
+      - "scraper_aliases.go"
+    frontmatter: |
+      export * from "./generated-model";
+      import { NormalizedJob, SearchQuery, JobSourceDto, SourceKind } from "./generated-model";
     type_mappings:
       "time.Time": "string"
+      "model.NormalizedJob": "NormalizedJob"
+      "model.SearchQuery": "SearchQuery"
+      "model.JobSourceDto": "JobSourceDto"
+      "model.SourceKind": "SourceKind"

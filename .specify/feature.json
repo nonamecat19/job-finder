@@ -1,1 +1,3 @@
-{"feature_directory":"specs/042-resume-generation-workspace"}
+{
+  "feature_directory": "specs/043-extract-job-scraper-lib"
+}

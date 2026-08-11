@@ -14,6 +14,7 @@ require (
 	github.com/hibiken/asynq v0.26.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/job-finder/jobscraper v0.0.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/minio/minio-go/v7 v7.2.1
 	github.com/pgvector/pgvector-go v0.4.1
@@ -25,6 +26,8 @@ require (
 	golang.org/x/time v0.15.0
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+replace github.com/job-finder/jobscraper => ../../../jobscraper
 
 require (
 	github.com/andybalholm/brotli v1.2.2 // indirect
