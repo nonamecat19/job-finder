@@ -17,7 +17,7 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/queue"
-	"github.com/job-finder/jobscraper/adapters"
+	"github.com/nonamecat19/jobscraper/adapters"
 )
 
 type Handler struct {

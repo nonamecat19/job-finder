@@ -9,7 +9,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	jsadapter "github.com/job-finder/jobscraper/adapter"
+	jsadapter "github.com/nonamecat19/jobscraper/adapter"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/apperr"

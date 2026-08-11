@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/job-finder/jobscraper/rosterport"
+	"github.com/nonamecat19/jobscraper/rosterport"
 
 	"github.com/job-finder/api/internal/dbtest"
 	"github.com/job-finder/api/internal/jobsources/roster"

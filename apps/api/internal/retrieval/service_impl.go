@@ -1,7 +1,7 @@
 package retrieval
 
 import (
-	jsretrieval "github.com/job-finder/jobscraper/retrieval"
+	jsretrieval "github.com/nonamecat19/jobscraper/retrieval"
 
 	"github.com/job-finder/api/internal/config"
 )

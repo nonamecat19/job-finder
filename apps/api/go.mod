@@ -12,9 +12,9 @@ require (
 	github.com/hibiken/asynq v0.26.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/job-finder/jobscraper v0.0.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/minio/minio-go/v7 v7.2.1
+	github.com/nonamecat19/jobscraper v0.1.0
 	github.com/pgvector/pgvector-go v0.4.1
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/redis/go-redis/v9 v9.22.0
@@ -23,8 +23,6 @@ require (
 	golang.org/x/sync v0.22.0
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/job-finder/jobscraper => ../../../jobscraper
 
 require (
 	github.com/andybalholm/brotli v1.2.2 // indirect

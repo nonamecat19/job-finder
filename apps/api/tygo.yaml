@@ -4,7 +4,7 @@ packages:
   # library package is generated into its own file and re-exported from
   # generated.ts (see frontmatter below). Consumers still import every type from
   # @shared/generated exactly as before.
-  - path: "github.com/job-finder/jobscraper/model"
+  - path: "github.com/nonamecat19/jobscraper/model"
     output_path: "../../packages/shared/src/generated-model.ts"
     enum_style: union
     type_mappings:

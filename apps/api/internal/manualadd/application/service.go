@@ -19,7 +19,7 @@ import (
 	"github.com/job-finder/api/internal/jobsources/application/ingest"
 	"github.com/job-finder/api/internal/manualadd/domain"
 	"github.com/job-finder/api/internal/queue"
-	jobsources "github.com/job-finder/jobscraper/adapter"
+	jobsources "github.com/nonamecat19/jobscraper/adapter"
 )
 
 // AddTimeout is the whole budget for one manual add: resolution, per-host

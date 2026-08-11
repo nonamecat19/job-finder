@@ -87,9 +87,9 @@ var forbiddenPrefixes = []string{
 	"github.com/job-finder/api/internal/applications",
 	"github.com/job-finder/api/internal/retrieval",
 	"github.com/job-finder/api/internal/jobsources",
-	"github.com/job-finder/jobscraper/retrieval",
-	"github.com/job-finder/jobscraper/adapters",
-	"github.com/job-finder/jobscraper/scraping",
+	"github.com/nonamecat19/jobscraper/retrieval",
+	"github.com/nonamecat19/jobscraper/adapters",
+	"github.com/nonamecat19/jobscraper/scraping",
 }
 
 func TestToolPackagesAreReadOnly(t *testing.T) {

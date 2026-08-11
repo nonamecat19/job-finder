@@ -8,8 +8,8 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	activityhttp "github.com/job-finder/api/internal/activity/interfaces/http"
-	jsadapter "github.com/job-finder/jobscraper/adapter"
-	jsretrieval "github.com/job-finder/jobscraper/retrieval"
+	jsadapter "github.com/nonamecat19/jobscraper/adapter"
+	jsretrieval "github.com/nonamecat19/jobscraper/retrieval"
 
 	"github.com/job-finder/api/internal/aifeature"
 	aifeaturehttp "github.com/job-finder/api/internal/aifeature/interfaces/http"
@@ -64,7 +64,7 @@ import (
 	subscriptionshttp "github.com/job-finder/api/internal/subscriptions/interfaces/http"
 	"github.com/job-finder/api/internal/summarymodel"
 	summarymodelhttp "github.com/job-finder/api/internal/summarymodel/interfaces/http"
-	"github.com/job-finder/jobscraper/adapters"
+	"github.com/nonamecat19/jobscraper/adapters"
 )
 
 type App struct {

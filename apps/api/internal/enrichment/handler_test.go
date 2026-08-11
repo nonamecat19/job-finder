@@ -13,8 +13,8 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/enrichment"
 	"github.com/job-finder/api/internal/queue"
-	"github.com/job-finder/jobscraper/adapters"
-	"github.com/job-finder/jobscraper/scraping"
+	"github.com/nonamecat19/jobscraper/adapters"
+	"github.com/nonamecat19/jobscraper/scraping"
 )
 
 type enrichFakeRepo struct {

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	js "github.com/job-finder/jobscraper/retrieval"
+	js "github.com/nonamecat19/jobscraper/retrieval"
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"

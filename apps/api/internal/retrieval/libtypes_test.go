@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	js "github.com/job-finder/jobscraper/retrieval"
+	js "github.com/nonamecat19/jobscraper/retrieval"
 )
 
 // The ladder, the outcome vocabulary and the fetch/status types moved into the

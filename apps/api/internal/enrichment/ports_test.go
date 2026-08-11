@@ -8,7 +8,7 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/enrichment"
-	"github.com/job-finder/jobscraper/adapters"
+	"github.com/nonamecat19/jobscraper/adapters"
 )
 
 var (

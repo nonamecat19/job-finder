@@ -13,7 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	jsretrieval "github.com/job-finder/jobscraper/retrieval"
+	jsretrieval "github.com/nonamecat19/jobscraper/retrieval"
 
 	"github.com/job-finder/api/internal/crypto"
 	"github.com/job-finder/api/internal/db/sqlcgen"

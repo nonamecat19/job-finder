@@ -9,13 +9,13 @@ import (
 	"os"
 	"strings"
 
-	jsadapter "github.com/job-finder/jobscraper/adapter"
+	jsadapter "github.com/nonamecat19/jobscraper/adapter"
 
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/seed"
-	"github.com/job-finder/jobscraper/adapters"
+	"github.com/nonamecat19/jobscraper/adapters"
 )
 
 func main() {

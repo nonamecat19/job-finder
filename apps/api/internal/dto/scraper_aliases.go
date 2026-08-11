@@ -9,7 +9,7 @@ package dto
 // four types is generated from the library package into generated-model.ts and
 // re-exported from generated.ts.
 
-import "github.com/job-finder/jobscraper/model"
+import "github.com/nonamecat19/jobscraper/model"
 
 type (
 	NormalizedJob = model.NormalizedJob

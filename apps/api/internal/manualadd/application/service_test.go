@@ -15,7 +15,7 @@ import (
 	"github.com/job-finder/api/internal/jobsources/application/ingest"
 	"github.com/job-finder/api/internal/manualadd/application"
 	"github.com/job-finder/api/internal/manualadd/domain"
-	jobsources "github.com/job-finder/jobscraper/adapter"
+	jobsources "github.com/nonamecat19/jobscraper/adapter"
 )
 
 const postingURL = "https://djinni.co/jobs/123456-senior-go-engineer/"

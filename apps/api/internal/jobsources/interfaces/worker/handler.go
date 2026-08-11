@@ -11,7 +11,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	jsadapter "github.com/job-finder/jobscraper/adapter"
+	jsadapter "github.com/nonamecat19/jobscraper/adapter"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"

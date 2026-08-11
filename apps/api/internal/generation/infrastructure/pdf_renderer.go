@@ -16,7 +16,7 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/platform/storage"
-	"github.com/job-finder/jobscraper/scraping"
+	"github.com/nonamecat19/jobscraper/scraping"
 )
 
 //go:embed templates/*.html

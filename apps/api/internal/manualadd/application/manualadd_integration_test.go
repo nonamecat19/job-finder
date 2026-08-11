@@ -17,7 +17,7 @@ import (
 	"github.com/job-finder/api/internal/manualadd/application"
 	"github.com/job-finder/api/internal/manualadd/domain"
 	"github.com/job-finder/api/internal/subscriptions"
-	jobsources "github.com/job-finder/jobscraper/adapter"
+	jobsources "github.com/nonamecat19/jobscraper/adapter"
 )
 
 func setupManualAdd(t *testing.T) (context.Context, *db.DB, func()) {

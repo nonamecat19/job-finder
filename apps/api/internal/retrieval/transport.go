@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/job-finder/jobscraper/httpjson"
-	jsretrieval "github.com/job-finder/jobscraper/retrieval"
+	"github.com/nonamecat19/jobscraper/httpjson"
+	jsretrieval "github.com/nonamecat19/jobscraper/retrieval"
 )
 
 // ConfigureDefaultTransport points the library's shared paced transport at the
