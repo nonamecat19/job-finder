@@ -1,10 +1,16 @@
 # Domain: Retrieval & Ingestion
 
 Consolidates **014** browser-fidelity fetch ladder, **017** throttle-only rate control,
-**025** batched atomic ingest persistence.
+**025** batched atomic ingest persistence, and **043**'s relocation of the fetch stack into
+the scraper library.
 
-Implementation: `apps/api/internal/platform/scraping/`, `internal/retrieval/`,
-`internal/ratelimit/`, `internal/jobsources/`. How it works:
+Implementation: **the fetch machinery is in the `github.com/nonamecat19/jobscraper`
+library** (`retrieval/`, `scraping/`) after 043 — see
+[`codebase-structure.md`](codebase-structure.md) § 5. What remains app-side:
+`apps/api/internal/retrieval/` (the `StateStorePort` implementation and the engine wiring)
+and `internal/jobsources/` (ingest persistence). `internal/ratelimit/` and
+`internal/platform/scraping/` no longer exist — both were vendored into the library. How it
+works:
 [`docs/ingestion/retrieval-and-fetching.md`](../../docs/docs/ingestion/retrieval-and-fetching.md),
 [`docs/ingestion/rate-limiting.md`](../../docs/docs/ingestion/rate-limiting.md).
 
@@ -57,8 +63,9 @@ The three rungs, cheapest first, are `direct` → `browser` → `flaresolverr`.
 
 ### 2.1 `retrieval.Service` — the seam every adapter uses
 
-`apps/api/internal/retrieval`. Adapters call this instead of `scraping.Service.FetchHTML` or
-`HTTPClient()` directly; that indirection *is* 014-FR-020.
+`jobscraper/retrieval` (was `apps/api/internal/retrieval` before 043). Adapters call this
+instead of `scraping.Scraper.FetchHTML` or `HTTPClient()` directly; that indirection *is*
+014-FR-020.
 
 ```go
 type Service interface {
@@ -100,6 +107,30 @@ Behaviour the tests pin, not just the types:
 **without resetting its expiry**, and returns the remaining duration so the caller can show
 the operator what risk they are taking.
 
+### 2.2 Host state crosses a port (043)
+
+The engine no longer reaches a database. It reads and writes host state — rung preference,
+crawl delay, consecutive blocks, cooling-off window, cookies — through
+`retrieval.StateStorePort`, a 9-method interface in library-owned types (043-FR-007). The
+app's `retrieval.StateStore` implements it against `sqlcgen`, and **the encryption stays on
+the app side of that line**: cookies cross the port as plaintext JSON and are encrypted with
+`internal/crypto` and `CONFIG_ENCRYPTION_KEY` before they reach Postgres (043-FR-012). The
+library never sees the key.
+
+Two behaviours the port's shape pins:
+
+- `Get` returning `(nil, nil)` for an unknown host is **legal** and means "no history" — the
+  engine starts at the cheapest rung. It is not an error case.
+- `*time.Time`, not `pgtype.Timestamptz`, carries every timestamp. A nil pointer is "never
+  happened"; the app does the `pgtype` translation in its own field-copy.
+
+Construction is `NewEngine(identity, store, EngineOpts{...})`. `EngineOpts` carries
+`BrowserEnabled`, `FlaresolverrURL`, `CheapRungRetestInterval`, `CoolingOffThreshold` and
+`CoolingOffBaseDuration` as **plain values** — the library reads no config file and no
+environment (043-FR-008). `apps/api/internal/retrieval.NewService` is the one place that maps
+`config.Config` onto those fields. A nil identity selects the library's default browser
+identity, so a consumer with no identity of its own still gets 014-FR-002 fidelity.
+
 ## 3. Pacing — throttle only (017, revising 014)
 
 **017 revoked 014-FR-030 in full.** 014 originally specified a configurable per-host *daily
@@ -138,7 +169,9 @@ behaviour.
 
 ### 3.1 Rate resolution
 
-`ratelimit.Transport` resolves a host's pace through an injected seam:
+The paced transport lives in `jobscraper/retrieval/pacing.go` after 043 (vendored from the
+deleted `internal/ratelimit`, 043-FR-008). `Transport` resolves a host's pace through an
+injected seam:
 
 ```
 RateResolver func(host string) (rps float64, source string, ok bool)
@@ -149,8 +182,9 @@ RateResolver func(host string) (rps float64, source string, ok bool)
 - Consulted at **limiter construction**, then cached for a short TTL. Pacing must never put a
   query in the hot path.
 - `ok == false` falls through to `DefaultRPS`.
-- **The `ratelimit` package must not import `retrieval`, `db`, or any Postgres type.** The
-  resolver is injected by the composition layer.
+- **The pacing code must not import `db` or any Postgres type.** Since 043 it reads host
+  state through `StateStorePort` like the rest of the engine, and the resolver is still
+  injected by the composition layer.
 
 Precedence:
 
@@ -161,6 +195,25 @@ Precedence:
 
 `crawl_delay_seconds == 0` means "we asked, the host advertised nothing" and falls to case 3.
 It must never resolve to an unbounded rate.
+
+> **Defect — the resolver is not wired in the running app.** `DefaultTransport` is
+> constructed as `NewTransport(nil)`, and its `RateResolver` is only set by
+> `ConfigureDefaultTransport`, which **nothing calls** outside tests
+> (`apps/api/internal/retrieval/transport.go` exposes it; no composer invokes it). So
+> precedence cases 1 and 2 never fire at runtime: every host is paced at `DefaultRPS`, an
+> advertised `crawl_delay_seconds` is stored but not honoured (**017-FR-009 is unmet in
+> practice**), and `HostStatus.Pacing.Source` always reports `default`. `RateFor` still reads
+> that same unconfigured transport (`retrieval/engine.go:280`), so § 3.2's status view is
+> consistent with the code and wrong about the world.
+>
+> **This predates 043.** The call existed in `platform.go` when 017 shipped (`4376e68`) and
+> was dropped by the composition-root extraction (`1e613fd`); the extraction only relocated
+> the already-unwired code. There is also no `HostRPSOverrides` key in `internal/config`, so
+> operator overrides have no input path either.
+>
+> Fixing it is one call in `composeRetrieval` after the state store exists —
+> `retrieval.ConfigureDefaultTransport(stateStore, nil)` — plus a config key if overrides are
+> wanted. Recorded here rather than fixed silently, per § "record, don't drop" practice.
 
 Jitter is ±25% and is **deliberately not exposed** anywhere. It is anti-fingerprinting
 machinery; surfacing a fluctuating number would undercut 017-FR-016's requirement that the

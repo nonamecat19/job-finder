@@ -2,9 +2,17 @@
 
 Consolidates **002** Indeed, **003** RemoteOK, **004** Glassdoor, **005** JobLeads,
 **010** Wellfound, **011** Himalayas, **012** Jobgether, **013** ATS boards,
-**015**/**016** Djinni search modes, **022** Djinni scraping enhancement.
+**015**/**016** Djinni search modes, **022** Djinni scraping enhancement, and **043**'s move
+of every adapter into the scraper library.
 
-Implementation: `apps/api/internal/jobsources/`. How it works: [`docs/ingestion/job-sources.md`](../../docs/docs/ingestion/job-sources.md).
+Implementation: **the adapters live in `github.com/nonamecat19/jobscraper`**
+(`adapter/` for the framework, `adapters/` for the 25 site adapters) since 043 — see
+[`codebase-structure.md`](codebase-structure.md) § 5. `apps/api/internal/jobsources/` keeps
+the application services, the sqlcgen repositories, the roster, the HTTP handlers and the
+worker/scheduler. How it works: [`docs/ingestion/job-sources.md`](../../docs/docs/ingestion/job-sources.md).
+
+**Every rule below binds regardless of which repository the code sits in.** A source's
+obligations did not change when the adapters moved; only their import path did.
 
 ---
 
@@ -46,8 +54,9 @@ Quality bars that applied per-source and now apply to all:
   pre-existing sources.
 
 **Adding a source is one adapter file + one registry entry.** No downstream change. Enforced
-by `domain.Adapter` in `apps/api/internal/jobsources/domain/adapter.go` and the variadic
-`domain.NewRegistry(...)` call in `apps/api/cmd/server/compose.go`.
+by `adapter.Adapter` in the library's `adapter/adapter.go` and the variadic
+`adapter.NewRegistry(...)` call in `apps/api/cmd/server/compose.go`. Since 043 the adapter
+file lands in the **library** and only the registry entry is an app-side edit.
 
 ### 1.1 The Go adapter surface
 
@@ -55,18 +64,55 @@ Every per-source spec (002, 003, 004, 005, 010, 011, 012) shipped an identical a
 contract. Stated once, it binds every adapter:
 
 ```go
+// package adapter — github.com/nonamecat19/jobscraper/adapter
 type Adapter interface {
     Key() string
-    Kind() dto.SourceKind
-    Search(ctx context.Context, query dto.SearchQuery, config map[string]any) ([]dto.NormalizedJob, error)
+    Kind() model.SourceKind
+    Search(ctx context.Context, query model.SearchQuery, config map[string]any) ([]model.NormalizedJob, error)
     HealthCheck(ctx context.Context, config map[string]any) (bool, error)
 }
 ```
 
+The optional interfaces an adapter may also satisfy, and the framework's helpers, come from
+the same package (043-FR-004):
+
+```go
+type DetailNeeder interface   { NeedsDetail() bool }
+type Credentialed interface   { UsesUserAccount() bool }
+type EmployerReporter interface { LastRunDetail() []EmployerRunOutcome }
+
+type PostingReader interface {
+    MatchesPostingURL(rawURL string) bool                                                   // no I/O, never panics
+    ReadPosting(ctx context.Context, rawURL string, config map[string]any) (model.NormalizedJob, error)
+}
+
+func NewRegistry(adapters ...Adapter) *Registry
+func AsPostingReader(a Adapter) (PostingReader, bool)
+func NeedsDetail(a Adapter) bool
+func IsCredentialed(a Adapter) bool
+
+type SourceNotFoundError struct{ Key string }
+type AdapterNotRegisteredError struct{ Key string }
+```
+
+Six rules bind a `PostingReader`, and they moved with the interface because the app's
+enrichment path depends on all six: `MatchesPostingURL` does no I/O and never panics on
+malformed input; it returns false for search URLs on its own host; `ReadPosting` returns
+partial results rather than erroring when the page loads but some fields are missing, and
+errors only when the page could not be read at all; it honours the context deadline and
+returns `context.DeadlineExceeded` wrapped no deeper than `errors.Is` can see; it sets
+`SourceKey` to its own `Key()` and resolves the URL to absolute canonical form; and it uses
+the same retrieval path as the adapter's other methods, so pacing and the ladder apply.
+
+**`dto.NormalizedJob` and friends still exist app-side as aliases** of the library's `model`
+types (`internal/dto/scraper_aliases.go`, 043-FR-003), so every app importer and the tygo
+chain to `packages/shared` read exactly as before — the JSON shapes the dashboard sees did
+not change (043-SC-005).
+
 | Member | Contract |
 |---|---|
 | `Key()` | The source key, constant, no receiver state. It is the value used in `SourceKey` on every job the adapter returns, in `/api/sources/{key}` paths, and in `Registry.Get`. |
-| `Kind()` | `dto.SourceKindAPI` for JSON feeds (`remoteok`, `himalayas`), `dto.SourceKindScrape` for HTML (`indeed`, `glassdoor`, `jobleads`, `jobgether`, `djinni`, `dou`, `workua`). |
+| `Kind()` | `model.SourceKindAPI` for JSON feeds (`remoteok`, `himalayas`), `model.SourceKindScrape` for HTML (`indeed`, `glassdoor`, `jobleads`, `jobgether`, `djinni`, `dou`, `workua`). |
 | `Search` — precondition | `query.SubscriptionURL != ""`. **Keyword search is out of scope for every scraped source.** An empty subscription URL returns `fmt.Errorf("<key> keyword search not implemented — use subscription URL instead")` — the same message shape across all of them. |
 | `Search` — success | `[]dto.NormalizedJob` with `SourceKey` set on every element. **An empty slice with a nil error is the valid "zero matching listings" result** and MUST stay distinguishable from a non-nil error ("could not be interpreted"). This is JS-11, mechanically. |
 | `Search` — partial failure | If pages 1..N succeed and page N+1 fails, return the N pages' jobs with a **nil** error. Never `nil, err` after partial progress unless page 1 itself failed. This is JS-08, mechanically. |
@@ -87,7 +133,7 @@ listing exist, and the difference is deliberate:
 In both dispositions the summary-level fields captured at ingestion are left untouched.
 
 **Wiring a source touches exactly these call sites**, none of which change signature:
-`domain.NewRegistry(...)` in `compose.go`; the enrich-eligibility `SourceKey` check in
+`adapter.NewRegistry(...)` in `compose.go`; the enrich-eligibility `SourceKey` check in
 `ingestion.Handler.persistIfNew`; the `switch job.SourceKey` in
 `enrichment.Handler.ProcessTask`; the `enrichment.NewHandler(...)` parameter list; the
 per-source arm of `subscriptions.Service.validateSubscriptionURL` (JS-15); and, only for
@@ -124,7 +170,7 @@ set is the contract:
 
 ## 2. Source register
 
-Keys are the `Adapter.Key()` values. "Ingest" = registered in `domain.NewRegistry` and
+Keys are the `Adapter.Key()` values. "Ingest" = registered in `adapter.NewRegistry` and
 therefore runnable; "Enrich" = wired into `enrichment.NewHandler` for detail fetch.
 
 | Key | Access | Credentials | Ingest | Enrich | Spec |
@@ -156,10 +202,10 @@ therefore runnable; "Enrich" = wired into `enrichment.NewHandler` for detail fet
 > Verified against `apps/api/cmd/server/compose.go` at the time this doc was written.
 >
 > `indeed`, `remoteok`, `glassdoor`, `jobleads`, `wellfound` and `jobgether` are constructed
-> only inside `composeEnrichment` (compose.go:362-367) and are **absent from the
-> `domain.NewRegistry(...)` call** in `composeJobSources` (compose.go:136-150). Since ingest
+> only inside `composeEnrichment` (compose.go:402-407) and are **absent from the
+> `adapter.NewRegistry(...)` call** in `composeJobSources` (compose.go:135-151). Since ingest
 > resolves its adapter through `registry.Get(payload.SourceKey)`
-> (`jobsources/interfaces/worker/handler.go:169`), a run for any of these keys fails with
+> (`jobsources/interfaces/worker/handler.go:158`), a run for any of these keys fails with
 > `AdapterNotRegisteredError`. They cannot be enabled, listed, health-checked, or run — which
 > contradicts **JS-01**, **JS-02**, **JS-05** and **JS-06** for each of them. Their detail-page
 > enrichment does work, for jobs that reached the DB some other way.
@@ -180,6 +226,32 @@ Five vendors — Greenhouse, Lever, Ashby, Workable, SmartRecruiters — read op
 straight from employer-hosted boards. They share one `roster.Service`
 (`internal/jobsources/roster/`), health-checked through the checkers map that
 `adapters.NewBoardAdapters()` returns.
+
+**Since 043 the board adapters live in the library and persist through a port** (043-FR-010).
+They moved **whole** — roster concerns included, no adapter was split — and every DB call
+they used to make now goes through `rosterport.RosterPort`, an 11-method interface in
+library-owned types. `roster.Service` implements it and owns the whole `pgtype` translation:
+board IDs cross the boundary as `string` UUIDs, timestamps as `*time.Time`. The library
+declares no `pgx`, `pgtype` or `sqlcgen` dependency (043-FR-002), so a consumer can run the
+board adapters against an in-memory roster and no database.
+
+The port deliberately includes the **candidate/discovery methods that no library adapter
+calls** (`ListBoardCandidates`, `GetBoardCandidate`, `GetBoardCandidateByID`,
+`InsertBoardCandidate`, `DecideBoardCandidate`, `ListApplyURLsForDiscovery`). That keeps
+`roster.Service` the single implementer instead of forcing a second struct for the app-only
+half of the surface. `roster/view.go` (dashboard DTOs) and `roster/candidates.go` (discovery
+orchestration) stay app-side and call those methods on the same struct.
+
+The board-run helpers moved with the adapters: `runBoardVendor`, `vendorHealthCheck`,
+`healthCheckEmployer`, `classifyOutcome` and `NewBoardAdapters` are library-internal to
+`jobscraper/adapters`. `NewBoardAdapters()` still returns the five adapters plus the
+`map[string]EmployerHealthChecker`, and the app still passes that map into
+`roster.NewService(q, checkers)` — the wiring shape 013 established did not change.
+
+A boundary this mechanical is where a silent translation bug lives, so it carries its own
+integration test app-side (`internal/jobsources/roster`, real database): the library's own
+board tests run against an in-memory fake and cannot catch a mistake in the UUID/timestamp
+conversion the app owns.
 
 **Roster**
 
@@ -321,11 +393,13 @@ manually from the audit list.
 > ### ⚠ Known drift — the 016 login teardown never happened
 >
 > 016-FR-006/007 required deleting the Djinni session-login path and its configuration.
-> The code still carries `DjinniSession`
-> (`jobsources/infrastructure/adapters/djinni_session.go`), the `DJINNI_EMAIL` /
-> `DJINNI_PASSWORD` config fields (`config/config.go:83`, listed as secrets in
-> `config/defaults.go:61`), the `sessionCookie` config blob, and login-required errors in
-> `adapters/djinni.go:71,84`. The § 2 register reflects the code, not the spec.
+> The code still carries `DjinniSession` — now in the library
+> (`jobscraper/adapters/djinni_session.go`, constructed app-side in
+> `cmd/server/platform.go`) — the `DJINNI_EMAIL` / `DJINNI_PASSWORD` config fields
+> (`config/config.go:83`, listed as secrets in `config/defaults.go:61`), the `sessionCookie`
+> config blob, and login-required errors in `jobscraper/adapters/djinni.go:59,63,72`. The § 2
+> register reflects the code, not the spec. **043 relocated this drift without resolving it**;
+> closing it is now a library change plus a config removal app-side.
 >
 > 016-SC-008 ("a maintainer search surfaces zero references to session login") is therefore
 > **not met.** Either finish the teardown or revoke 016-FR-006/007 explicitly. Do not

@@ -1,11 +1,11 @@
 # Domain: Codebase Structure
 
 Consolidates **027** HTTP handler decomposition, **024** agent-context and shared-type
-consolidation.
+consolidation, **043** the scraper-library extraction.
 
 Implementation: `apps/api/internal/*/interfaces/http/`, `apps/api/internal/httpapi/`,
 `apps/api/internal/httpx/`, `apps/api/.golangci.yml`, `apps/api/internal/arch_test.go`,
-`packages/shared/src/`. How it works:
+`packages/shared/src/`, `apps/api/go.mod`. How it works:
 [`docs/architecture/component-map.md`](../../docs/docs/architecture/component-map.md),
 [`docs/backend/http-api.md`](../../docs/docs/backend/http-api.md),
 [`docs/frontend/shared-types.md`](../../docs/docs/frontend/shared-types.md).
@@ -312,3 +312,94 @@ the same rules, because only one version of each rule exists to find.
   (`.specify/scripts/bash/`, `.specify/templates/`) after consolidation (024-FR-024).
 - 024-FR-025: a future speckit upgrade targets the single declared stack by default and must
   not reinstall the removed one. **Check this after any `specify` tooling upgrade.**
+
+## 5. The scraper library boundary (043)
+
+The scraping stack is **not in this repository**. The adapter framework, the 25 site
+adapters, the retrieval ladder and the scraping helpers live in
+`github.com/nonamecat19/jobscraper`, a separate Go module consumed by `apps/api` as an
+ordinary tagged dependency (`v0.1.0` at extraction). There is **no `replace` directive** in
+`apps/api/go.mod` — local-path wiring was a development convenience during the move and was
+dropped to publish.
+
+**The boundary rule, stated once**: the library scrapes; the app persists, schedules and
+serves. Everything the library needs from a database, a queue, a config file or an encryption
+key arrives through a port the app implements.
+
+| # | Rule |
+|---|---|
+| 043-FR-001 | The scraping capability (adapter framework + the site adapters) is consumable as a standalone Go module by any Go project, with no dependency on `apps/api`. |
+| 043-FR-002 | The library's `go.mod` declares **no** dependency on `pgx`, `asynq`, `viper`, `minio`, `pgvector`, `goose`, or any `github.com/job-finder/api/internal/*` path. Verifiable by reading the file (043-SC-002). |
+| 043-FR-003 | The job model types (`NormalizedJob`, `SearchQuery`, `SourceKind`, `JobSourceDto`) are owned by the library's `model` package; `apps/api/internal/dto` re-exports them as **type aliases** (`internal/dto/scraper_aliases.go`) so every app importer and the tygo generator are source-compatible. |
+| 043-FR-004 | The adapter framework (`Adapter`, `PostingReader`, `Credentialed`, `DetailNeeder`, `Registry`, adapter errors) references only library model types — never `dto`, never `sqlcgen`. |
+| 043-FR-005 | HTML helpers and the JSON HTTP client are library packages with no dependency on the retrieval package; the default HTTP client is **injectable** rather than hard-wired to a package-level transport. |
+| 043-FR-006 | The retrieval engine — ladder, challenge detection, page outcomes, browser identity, the three rungs, the `Service` interface — is library-owned. See [`retrieval-and-ingestion.md`](retrieval-and-ingestion.md) § 2.1. |
+| 043-FR-007 | The engine reads and writes host state through a **library-owned** `StateStorePort`, so a consumer can back it with an in-memory map and no DB. |
+| 043-FR-008 | The engine imports none of the app's `config`, `db`, `crypto` or `ratelimit`; per-host pacing is library-internal (`ratelimit` was vendored into `retrieval/pacing.go` and deleted from the app). |
+| 043-FR-009 | The `Scraper` port and its chromedp-backed implementation are library-owned (`scraping/`), with no project-internal imports. |
+| 043-FR-010 | The 6 board adapters moved **whole**, roster concerns included, and persist through a library-owned `RosterPort`. See [`job-sources.md`](job-sources.md) § 3. |
+| 043-FR-011 | The app retains the application services, the sqlcgen-typed repository interfaces, the `roster` package (now a port implementation), the HTTP interfaces, the worker handler and scheduler, and the retrieval state/wiring files. |
+| 043-FR-012 | Stored cookies are still encrypted app-side with `internal/crypto` and `CONFIG_ENCRYPTION_KEY`. **The library never sees the key**; cookie bytes cross the port as plaintext JSON. |
+| 043-FR-016 | The library's package graph allows importing the engine **without** transitively importing the adapters — a consumer who wants only the fetch ladder pays for nothing else (043-SC-006). |
+| 043-FR-017 | The library does not depend on `dto`; former `dto.NormalizedJob`/`dto.SearchQuery`/`dto.SourceKind` references point at `model`. |
+| 043-FR-018 | The `arch_test.go` exemption list may shrink when an exempted package leaves the tree. **No new exemption may be added to accommodate the library** — it lives outside `internal/`, so neither `depguard` nor the placement test needs to know about it. |
+| 043-FR-019 | The library vendors the ~30 lines of string helpers its adapters use (`strutil/`) rather than importing the app's `internal/strutil`, which stays in the app unchanged. |
+
+**Package graph.** The import direction is the whole contract; a cycle here would put site
+code on the engine's dependency path and break 043-FR-016.
+
+```
+model      ← everything (types only, stdlib)
+adapter    → model                                    (framework; stdlib only besides)
+htmlutil / httpjson / strutil / scraping              (helpers, no library-internal deps
+                                                       beyond stdlib + goquery/chromedp)
+retrieval  → (stdlib, bogdanfinn/*, chromedp, x/time) — NEVER adapter, NEVER adapters
+rosterport → (stdlib)                                  (port types only)
+adapters   → adapter, model, retrieval, rosterport, htmlutil, httpjson, strutil, scraping
+```
+
+`adapters` is the heavyweight package and the only one that knows about specific sites.
+`adapter` (singular, the framework) and `retrieval` (the engine) are each usable alone.
+
+**The two ports, and who implements them.** Both are declared by the library in library-owned
+types and satisfied by an existing app struct — no new adapter layer was introduced.
+
+| Port | Declared in | Implemented by | Carries |
+|---|---|---|---|
+| `retrieval.StateStorePort` (9 methods) | `retrieval/state_port.go` | `apps/api/internal/retrieval.StateStore` | Per-host rung preference, crawl delay, block/cooling-off timestamps, cookies. `HostState` is a plain struct — no `pgtype`, no `sqlcgen`. |
+| `rosterport.RosterPort` (11 methods) | `rosterport/roster_port.go` | `apps/api/internal/jobsources/roster.Service` | Employer boards and board candidates. IDs are `string` (UUID form) at the boundary; the app converts via `dbutil`. |
+
+Both implementations assert conformance at compile time (`var _ jsretrieval.StateStorePort =
+(*StateStore)(nil)`) — the port breaking is a build failure, not a runtime surprise.
+
+`RosterPort` includes the candidate/discovery methods even though **no library adapter calls
+them**. That is deliberate: it keeps `roster.Service` the single implementer instead of
+forcing a second struct for the app-only half of the surface. `roster/view.go` and
+`roster/candidates.go` stay app-side — they produce dashboard DTOs.
+
+**What the app kept, and why it is small.** After the move, `apps/api/internal/retrieval/`
+holds only the wiring: `state.go` (the port implementation, with the encryption), plus two
+thin files where a whole engine used to be —
+
+- `service_impl.go` — one `NewService` that maps `config.Config` onto `retrieval.EngineOpts`
+  and returns `jsretrieval.NewEngine(...)`. The ladder, rungs and cooling-off logic are gone
+  from the app entirely.
+- `transport.go` — `ConfigureDefaultTransport` (would point the library's paced transport at
+  the app's host state) and `UsePacedHTTPJSONClient`. The second exists **because** of
+  043-FR-005: `httpjson` may not depend on `retrieval` inside the library, so the app
+  re-attaches the paced transport to the default JSON client at startup (`compose.go:616`).
+  Deleting that call silently unpaces every JSON-source request — it is load-bearing, not
+  boilerplate. `ConfigureDefaultTransport` has **no caller**; see
+  [`retrieval-and-ingestion.md`](retrieval-and-ingestion.md) § 3.1 for what that costs.
+
+**Regression guardrails** (043-FR-013/014/015, 043-SC-003/004/005): every adapter unit test
+and the `live_smoke_test` moved with their code and passed **unmodified** — no fixture or
+assertion was adjusted to accommodate the move; `make test-lint` passes; and
+`packages/shared/src/generated.ts` is byte-identical before and after, because the moved
+types are re-exported as aliases rather than reshaped. The dashboard never learned that the
+scraping stack left the repo.
+
+**Working across the two repos.** A change to adapter or engine behaviour is now a library
+change, tagged and then bumped in `apps/api/go.mod` — not an edit under `apps/api/internal/`.
+The app-side files that may still change for a scraping reason are the two ports'
+implementations and the `compose.go`/`platform.go` wiring.
