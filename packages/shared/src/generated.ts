@@ -836,6 +836,12 @@ export interface Entry {
   url?: string;
   label?: string;
   details?: string;
+  /**
+   * SkillLevel is the density of a skill group's details list on generated
+   * resumes: "all", "medium" or "relevant". Only meaningful for entries in
+   * the skills section.
+   */
+  skillLevel?: string;
   bullet?: string;
   number?: string;
   reversedNumber?: string;

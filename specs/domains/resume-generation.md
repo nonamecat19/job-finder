@@ -135,6 +135,12 @@ the vacancy analysis:
 - groups keep the master's order unless `skillsMaxGroups` forces a choice, in which case they
   sort by how much of the vacancy they cover so the cap keeps the relevant ones,
 - pinned groups (`Spoken Languages`) are left exactly as authored,
+- a group's authored `skills_level` (`all` / `medium` / `relevant`) bounds how much of it a
+  tailored resume renders, applied **after** ordering: `medium` keeps the top half (ceil, so a
+  single-skill group never empties) and `relevant` keeps only entries the vacancy asks for —
+  a `relevant` group with nothing matching is dropped from the rendered document, while the
+  profile and workspace still hold it in full. The trim runs on master-fresh skills only; the
+  workspace export path never applies it (the selection is the shape, FR-018),
 - the same inputs always produce the same output.
 
 **Achievements are chosen by reference, not written.** `TailoredExperience.Highlights` and

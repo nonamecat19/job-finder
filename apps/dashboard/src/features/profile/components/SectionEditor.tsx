@@ -83,7 +83,7 @@ export function SectionEditor({ section, onChange }: SectionEditorProps) {
                   </div>
                   <div className="flex-1">
                     {FormComponent ? (
-                      <FormComponent entry={entry} onChange={(e) => updateEntry(i, e)} />
+                      <FormComponent entry={entry} sectionName={section.name} onChange={(e) => updateEntry(i, e)} />
                     ) : (
                       <UnrecognizedEntryFallbackForm entry={entry} onChange={(e) => updateEntry(i, e)} />
                     )}

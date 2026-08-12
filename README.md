@@ -150,6 +150,11 @@ conflict, the page target wins and the run records that it did.
 The defaults reproduce the pipeline's pre-settings behaviour exactly, so leaving this
 card alone changes nothing.
 
+**Per-group skill density** lives in the Profile, not here: each skill group can be set to
+show *All skills*, *Half — most relevant first*, or *Only the skills the job asks for* on a
+generated resume (default: all). The trim is applied to the tailored resume after relevance
+ranking; a group set to "only relevant" with nothing matching the job is left off that resume.
+
 ## Adding a job source
 
 One type implementing `ports.JobSource` (`ports/source.go` in the job-scraper library) in

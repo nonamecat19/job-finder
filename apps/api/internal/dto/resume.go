@@ -59,6 +59,11 @@ type Entry struct {
 	Label   *string `json:"label,omitempty"`
 	Details *string `json:"details,omitempty"`
 
+	// SkillLevel is the density of a skill group's details list on generated
+	// resumes: "all", "medium" or "relevant". Only meaningful for entries in
+	// the skills section.
+	SkillLevel *string `json:"skillLevel,omitempty"`
+
 	Bullet *string `json:"bullet,omitempty"`
 
 	Number *string `json:"number,omitempty"`

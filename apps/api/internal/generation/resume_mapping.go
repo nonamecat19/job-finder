@@ -70,7 +70,7 @@ func strSlice(m map[string]any, key string, consumed map[string]bool) []string {
 	return StringSliceField(m, key)
 }
 
-func mapEntry(entryType dto.EntryType, raw any) dto.Entry {
+func mapEntry(entryType dto.EntryType, sectionName string, raw any) dto.Entry {
 	if entryType == dto.EntryText {
 		if s, ok := raw.(string); ok {
 			return dto.Entry{Text: &s}
@@ -124,6 +124,9 @@ func mapEntry(entryType dto.EntryType, raw any) dto.Entry {
 	case dto.EntryOneLine:
 		e.Label = strPtr(m, "label", consumed)
 		e.Details = strPtr(m, "details", consumed)
+		if sectionName == "skills" {
+			e.SkillLevel = strPtr(m, "skills_level", consumed)
+		}
 	case dto.EntryBullet:
 		e.Bullet = strPtr(m, "bullet", consumed)
 	case dto.EntryNumbered:
@@ -187,7 +190,7 @@ func MasterToResume(master RendercvMaster) (dto.Resume, error) {
 			entryType := inferEntryType(rawEntries)
 			section := dto.Section{Name: key, EntryType: entryType}
 			for _, re := range rawEntries {
-				section.Entries = append(section.Entries, mapEntry(entryType, re))
+				section.Entries = append(section.Entries, mapEntry(entryType, key, re))
 			}
 			resume.Sections = append(resume.Sections, section)
 		}
@@ -226,7 +229,7 @@ func setSliceOrDelete(m map[string]any, key string, v []string) {
 	}
 }
 
-func entryToRaw(entryType dto.EntryType, e dto.Entry) any {
+func entryToRaw(entryType dto.EntryType, sectionName string, e dto.Entry) any {
 	if entryType == dto.EntryText {
 		if e.Text != nil {
 			return *e.Text
@@ -279,6 +282,9 @@ func entryToRaw(entryType dto.EntryType, e dto.Entry) any {
 	case dto.EntryOneLine:
 		setOrDelete(m, "label", e.Label)
 		setOrDelete(m, "details", e.Details)
+		if sectionName == "skills" {
+			setOrDelete(m, "skills_level", e.SkillLevel)
+		}
 	case dto.EntryBullet:
 		setOrDelete(m, "bullet", e.Bullet)
 	case dto.EntryNumbered:
@@ -342,7 +348,7 @@ func ResumeToMaster(resume dto.Resume, existing RendercvMaster) (RendercvMaster,
 	for _, sec := range resume.Sections {
 		entries := make([]any, 0, len(sec.Entries))
 		for _, e := range sec.Entries {
-			entries = append(entries, entryToRaw(sec.EntryType, e))
+			entries = append(entries, entryToRaw(sec.EntryType, sec.Name, e))
 		}
 		sections[sec.Name] = entries
 		order = append(order, sec.Name)

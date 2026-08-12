@@ -240,3 +240,43 @@ func TestLocalOnlyRunProducesAResume(t *testing.T) {
 		t.Errorf("local provider served %d calls, want at least one per stage", local.calls)
 	}
 }
+
+// The per-group skills_level trim is part of the tailoring pipeline: the
+// merged document that leaves tailorRendercvResume is already density-capped,
+// so the render loop and the page-fit passes never see the full groups again.
+func TestSkillDensityTrimmedInTailoring(t *testing.T) {
+	master := domain.RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"summary": []any{"A summary."},
+		"skills": []any{
+			map[string]any{"label": "Backend", "details": "Go, Postgres, Redis", "skills_level": "relevant"},
+			map[string]any{"label": "Mobile", "details": "React Native, Swift", "skills_level": "medium"},
+			map[string]any{"label": "Spoken Languages", "details": "English, Ukrainian", "skills_level": "relevant"},
+		},
+		"experience": []any{map[string]any{
+			"company":    "Acme",
+			"highlights": []any{"Did a thing"},
+			"start_date": "2018-01",
+			"end_date":   "present",
+		}},
+	}}}
+	svc, _, _, _, _ := stagedService(t)
+
+	merged, _, err := svc.tailorRendercvResume(context.Background(), master, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
+	if err != nil {
+		t.Fatalf("tailorRendercvResume: %v", err)
+	}
+
+	details := map[string]string{}
+	for _, g := range domain.AsSliceOfMaps(domain.CvSections(merged)["skills"]) {
+		details[domain.StringField(g, "label")] = domain.StringField(g, "details")
+	}
+	if got := details["Backend"]; got != "Go" {
+		t.Errorf("Backend details = %q, want %q (relevant: only the vacancy's Go)", got, "Go")
+	}
+	if got := details["Mobile"]; got != "React Native" {
+		t.Errorf("Mobile details = %q, want %q (medium: top half in ranked order)", got, "React Native")
+	}
+	if got := details["Spoken Languages"]; got != "English, Ukrainian" {
+		t.Errorf("pinned group trimmed to %q, want untouched", got)
+	}
+}

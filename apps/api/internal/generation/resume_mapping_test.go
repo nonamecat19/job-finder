@@ -175,6 +175,80 @@ cv:
 	}
 }
 
+func TestResumeSkillLevelRoundTrip(t *testing.T) {
+	yamlText := `
+cv:
+  name: Test User
+  sections:
+    skills:
+      - label: Backend
+        details: Go, Node.js
+        skills_level: medium
+      - label: Spoken Languages
+        details: English, Ukrainian
+        skills_level: relevant
+`
+	master, err := ParseRendercv(yamlText)
+	if err != nil {
+		t.Fatalf("ParseRendercv: %v", err)
+	}
+	resume, err := MasterToResume(master)
+	if err != nil {
+		t.Fatalf("MasterToResume: %v", err)
+	}
+	var skills dto.Section
+	for _, s := range resume.Sections {
+		if s.Name == "skills" {
+			skills = s
+		}
+	}
+	if len(skills.Entries) != 2 {
+		t.Fatalf("skills entries = %d, want 2", len(skills.Entries))
+	}
+	if got := skills.Entries[0].SkillLevel; got == nil || *got != "medium" {
+		t.Errorf("Backend skillLevel = %v, want medium", got)
+	}
+
+	rebuilt, err := ResumeToMaster(resume, master)
+	if err != nil {
+		t.Fatalf("ResumeToMaster: %v", err)
+	}
+	groups := domain.AsSliceOfMaps(domain.CvSections(rebuilt)["skills"])
+	if got := domain.StringField(groups[0], "skills_level"); got != "medium" {
+		t.Errorf("skills_level after write-back = %q, want medium", got)
+	}
+	if domain.StringField(groups[1], "skills_level") != "relevant" {
+		t.Errorf("pinned group skills_level after write-back = %q, want relevant", domain.StringField(groups[1], "skills_level"))
+	}
+}
+
+func TestResumeSkillLevel_OnlyMappedForSkillsSection(t *testing.T) {
+	yamlText := `
+cv:
+  name: Test User
+  sections:
+    certifications:
+      - label: AWS
+        details: 'Amazon Web Services, 2024'
+        skills_level: medium
+`
+	master, err := ParseRendercv(yamlText)
+	if err != nil {
+		t.Fatalf("ParseRendercv: %v", err)
+	}
+	resume, err := MasterToResume(master)
+	if err != nil {
+		t.Fatalf("MasterToResume: %v", err)
+	}
+	entry := resume.Sections[0].Entries[0]
+	if entry.SkillLevel != nil {
+		t.Errorf("certifications entry exposed skillLevel = %v, want nil", *entry.SkillLevel)
+	}
+	if entry.Unrecognized["skills_level"] != "medium" {
+		t.Errorf("skills_level should stay unrecognized outside the skills section, got %+v", entry.Unrecognized)
+	}
+}
+
 func TestValidateResume(t *testing.T) {
 	badEndDate := dto.Resume{
 		Name: "Jane",
