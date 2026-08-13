@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:5762e9f734eef16e7f9bd56b4f0efd4beaa7ad46319005381a682607f287cb2c",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write a professional summary about the candidate.  CANDIDATE SKILL AREAS: Infrastructure, Languages, Practices  Write 1-2 sentences that: - Open with \"9+ years ",
+    "prompt_len": 771,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"9+ years of experience in software engineering, with strong expertise across infrastructure, programming languages, and development practices. Skilled at building and maintaining robust systems while applying sound engineering practices to deliver reliable, scalable solutions.\"}",
+  "recorded_at": "2026-08-12",
+  "recorded_from": "generation-summary"
+}

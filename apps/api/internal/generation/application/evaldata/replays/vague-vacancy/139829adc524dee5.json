@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:139829adc524dee5879a64f0832ac9adfe95d5fb8b6695393c133ec0cbf775c2",
+  "request_summary": {
+    "model_key": "generation-select",
+    "prompt_prefix": "The resume below is too short (only 1 page). Expand it to fill TWO pages with more detail.  RULES: - Leave the summary alone. It is written by a separate step a",
+    "prompt_len": 4448,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "16384",
+    "response_mode": 1,
+    "schema_len": 2966,
+    "json_output": true
+  },
+  "response": "{\n  \"experience\": [\n    {\n      \"company\": \"Small Studio\",\n      \"highlights\": [\n        {\n          \"rephrased\": \"Owned and maintained the REST API for a scheduling product, demonstrating end-to-end ownership and building impactful features that enhanced user experience.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Successfully migrated the service's underlying database from SQLite to Postgres with zero downtime, ensuring uninterrupted product continuity and significantly improving data management capabilities.\",\n          \"sourceIndex\": 1\n        },\n        {\n          \"rephrased\": \"Developed and implemented new features for the scheduling product's API, directly contributing to product growth and user satisfaction.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Proactively identified and resolved performance bottlenecks within the API, leading to a more responsive and reliable user experience.\",\n          \"sourceIndex\": 0\n        },\n        {\n          \"rephrased\": \"Authored comprehensive API documentation, facilitating smoother integration for external partners and internal teams.\",\n          \"sourceIndex\": 0\n        }\n      ]\n    }\n  ],\n  \"projects\": [],\n  \"skillChanges\": [],\n  \"skillGroupsToAdd\": [],\n  \"skillGroupsToRemove\": []\n}",
+  "recorded_at": "2026-08-12",
+  "recorded_from": "generation-select"
+}

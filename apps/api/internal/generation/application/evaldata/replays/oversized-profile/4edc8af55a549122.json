@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:4edc8af55a54912223a1d49b07cee3d58f2cc3973a906cb8d1eec2adaa4819d8",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write a professional summary about the candidate.  CANDIDATE SKILL AREAS: Languages, ML Frameworks, Infrastructure, Research Areas  Write 1-2 sentences that: - ",
+    "prompt_len": 791,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"2+ years of experience in software development and machine learning research, with a strong foundation across multiple programming languages, ML frameworks, and infrastructure tools. Skilled in applying research-driven approaches to build and support scalable technical solutions.\"}",
+  "recorded_at": "2026-08-12",
+  "recorded_from": "generation-summary"
+}

@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:71d3c549fb3fb5efa12153222c8d29768c30062c6ab4db20fd825434ecf85875",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write a professional summary about the candidate.  CANDIDATE SKILL AREAS: Backend, Tools  CANDIDATE ACHIEVEMENTS (the only achievements you may reference):   - ",
+    "prompt_len": 1078,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"2+ years of experience in backend development and tooling, with a strong focus on API ownership and reliable data infrastructure. Owned and maintained the REST API for a scheduling product, and successfully migrated its underlying database from SQLite to Postgres with zero downtime, ensuring continuity and improved data management.\"}",
+  "recorded_at": "2026-08-12",
+  "recorded_from": "generation-summary"
+}

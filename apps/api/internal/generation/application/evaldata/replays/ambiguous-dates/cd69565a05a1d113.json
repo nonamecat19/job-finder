@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:cd69565a05a1d113dac0fcff4ddc5b2429a95e1ff9165d6cc633c20009dc43e8",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write a professional summary about the candidate.  CANDIDATE SKILL AREAS: Backend, Platform  CANDIDATE ACHIEVEMENTS (the only achievements you may reference):  ",
+    "prompt_len": 1702,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"4+ years of experience in Backend and Platform engineering, with a track record of scaling systems and driving architectural improvements. Rebuilt an ingestion pipeline to handle ten times the daily volume, led the migration of a billing service off a shared database, and cut p95 checkout latency from 900ms to 210ms. Delivered end-to-end platform services including a customer portal, a client reporting service, automated reconciliation jobs, schema versioning across six downstream consumers, and a deployment pipeline that remained in use for three years.\"}",
+  "recorded_at": "2026-08-12",
+  "recorded_from": "generation-summary"
+}

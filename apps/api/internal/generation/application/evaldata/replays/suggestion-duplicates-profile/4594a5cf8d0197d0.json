@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:4594a5cf8d0197d011e95dc25f276d81e245aebd039fa01f215862db8059ffec",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write a professional summary about the candidate.  CANDIDATE SKILL AREAS: Kubernetes and Terraform, Observability, Incident Response, Languages  CANDIDATE ACHIE",
+    "prompt_len": 1566,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"9+ years of experience in Kubernetes and Terraform, observability, and incident response, owning the Kubernetes platform powering all payment services and authoring the Terraform modules used company-wide. Reduced mean time to recovery from 45 to 11 minutes on a payments system, cut alert noise by 70 percent through rewritten Prometheus alerting, and led incident response efforts—including establishing the on-call rotation, automating certificate rotation, and writing the runbooks still used by the support team.\"}",
+  "recorded_at": "2026-08-12",
+  "recorded_from": "generation-summary"
+}

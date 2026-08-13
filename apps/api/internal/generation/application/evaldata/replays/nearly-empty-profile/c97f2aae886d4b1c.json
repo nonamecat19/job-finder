@@ -1,0 +1,18 @@
+{
+  "request_hash": "sha256:c97f2aae886d4b1c455d9d3c97233aa8e815f8d012ce01c8359d66f062ce8fc0",
+  "request_summary": {
+    "model_key": "generation-summary",
+    "prompt_prefix": "Write a professional summary about the candidate.  CANDIDATE SKILL AREAS: Backend, Tools  Write 1-2 sentences that: - Open with \"2+ years of experience\" (derive",
+    "prompt_len": 749,
+    "system_len": 0,
+    "messages": 2,
+    "temperature": "0.1",
+    "max_tokens": "2048",
+    "response_mode": 1,
+    "schema_len": 184,
+    "json_output": true
+  },
+  "response": "{\"summary\":\"2+ years of experience in backend development, with a strong command of essential tools that support efficient and reliable software delivery. Skilled at building robust backend solutions while leveraging the right tools to streamline development workflows.\"}",
+  "recorded_at": "2026-08-12",
+  "recorded_from": "generation-summary"
+}
