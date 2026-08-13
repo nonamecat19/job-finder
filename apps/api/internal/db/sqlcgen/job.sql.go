@@ -173,6 +173,15 @@ func (q *Queries) ClearJobDetailScrapedAt(ctx context.Context, id pgtype.UUID) e
 	return err
 }
 
+const clearStaleJobEmbeddings = `-- name: ClearStaleJobEmbeddings :exec
+UPDATE "Job" SET "embedding" = NULL, "embeddingHash" = NULL WHERE "embedModel" IS DISTINCT FROM $1
+`
+
+func (q *Queries) ClearStaleJobEmbeddings(ctx context.Context, embedmodel *string) error {
+	_, err := q.db.Exec(ctx, clearStaleJobEmbeddings, embedmodel)
+	return err
+}
+
 const deleteAllJobs = `-- name: DeleteAllJobs :execrows
 DELETE FROM "Job"
 `
@@ -276,7 +285,7 @@ func (q *Queries) GetJobByDedupeKey(ctx context.Context, dedupekey string) (pgty
 }
 
 const getJobByID = `-- name: GetJobByID :one
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId" FROM "Job" WHERE "id" = $1
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId", "embedModel" FROM "Job" WHERE "id" = $1
 `
 
 func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
@@ -317,6 +326,7 @@ func (q *Queries) GetJobByID(ctx context.Context, id pgtype.UUID) (Job, error) {
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
 		&i.LastSeenRunId,
+		&i.EmbedModel,
 	)
 	return i, err
 }
@@ -362,7 +372,7 @@ INSERT INTO "Job" (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
   ARRAY[$2]
 )
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId", "embedModel"
 `
 
 type InsertJobParams struct {
@@ -433,6 +443,7 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, erro
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
 		&i.LastSeenRunId,
+		&i.EmbedModel,
 	)
 	return i, err
 }
@@ -492,7 +503,7 @@ func (q *Queries) ListJobsMissingMatch(ctx context.Context, arg ListJobsMissingM
 }
 
 const listJobsNeedingDetail = `-- name: ListJobsNeedingDetail :many
-SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId" FROM "Job"
+SELECT id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId", "embedModel" FROM "Job"
 WHERE "sourceKey" = $1 AND "detailScrapedAt" IS NULL
 ORDER BY "ingestedAt" ASC
 LIMIT $2
@@ -547,6 +558,7 @@ func (q *Queries) ListJobsNeedingDetail(ctx context.Context, arg ListJobsNeeding
 			&i.SalaryEstimateMax,
 			&i.SalaryEstimateCurrency,
 			&i.LastSeenRunId,
+			&i.EmbedModel,
 		); err != nil {
 			return nil, err
 		}
@@ -564,7 +576,7 @@ UPDATE "Job" SET
   "sourceKey" = $3,
   "seenOnSources" = array_append("seenOnSources", $4)
 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId", "embedModel"
 `
 
 type MergeJobBoardParams struct {
@@ -617,6 +629,7 @@ func (q *Queries) MergeJobBoard(ctx context.Context, arg MergeJobBoardParams) (J
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
 		&i.LastSeenRunId,
+		&i.EmbedModel,
 	)
 	return i, err
 }
@@ -625,7 +638,7 @@ const recordJobRepost = `-- name: RecordJobRepost :one
 UPDATE "Job" SET "seenCount" = "seenCount" + 1, "ingestedAt" = now(),
   "subscriptionId" = COALESCE("subscriptionId", $2)
 WHERE "dedupeKey" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId", "embedModel"
 `
 
 type RecordJobRepostParams struct {
@@ -677,6 +690,7 @@ func (q *Queries) RecordJobRepost(ctx context.Context, arg RecordJobRepostParams
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
 		&i.LastSeenRunId,
+		&i.EmbedModel,
 	)
 	return i, err
 }
@@ -699,7 +713,7 @@ UPDATE "Job" SET
   "salary_estimate_max" = COALESCE($13, "salary_estimate_max"),
   "salary_estimate_currency" = COALESCE($14, "salary_estimate_currency")
 WHERE "id" = $15
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId", "embedModel"
 `
 
 type UpdateJobDetailParams struct {
@@ -774,44 +788,52 @@ func (q *Queries) UpdateJobDetail(ctx context.Context, arg UpdateJobDetailParams
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
 		&i.LastSeenRunId,
+		&i.EmbedModel,
 	)
 	return i, err
 }
 
 const updateJobEmbedding = `-- name: UpdateJobEmbedding :exec
-UPDATE "Job" SET "embedding" = $2 WHERE "id" = $1
+UPDATE "Job" SET "embedding" = $2, "embedModel" = $3 WHERE "id" = $1
 `
 
 type UpdateJobEmbeddingParams struct {
-	ID        pgtype.UUID      `json:"id"`
-	Embedding *pgvector.Vector `json:"embedding"`
+	ID         pgtype.UUID      `json:"id"`
+	Embedding  *pgvector.Vector `json:"embedding"`
+	EmbedModel *string          `json:"embedModel"`
 }
 
 func (q *Queries) UpdateJobEmbedding(ctx context.Context, arg UpdateJobEmbeddingParams) error {
-	_, err := q.db.Exec(ctx, updateJobEmbedding, arg.ID, arg.Embedding)
+	_, err := q.db.Exec(ctx, updateJobEmbedding, arg.ID, arg.Embedding, arg.EmbedModel)
 	return err
 }
 
 const updateJobEmbeddingWithHash = `-- name: UpdateJobEmbeddingWithHash :exec
-UPDATE "Job" SET "embedding" = $2, "embeddingHash" = $3 WHERE "id" = $1
+UPDATE "Job" SET "embedding" = $2, "embeddingHash" = $3, "embedModel" = $4 WHERE "id" = $1
 `
 
 type UpdateJobEmbeddingWithHashParams struct {
 	ID            pgtype.UUID      `json:"id"`
 	Embedding     *pgvector.Vector `json:"embedding"`
 	EmbeddingHash *string          `json:"embeddingHash"`
+	EmbedModel    *string          `json:"embedModel"`
 }
 
 // Stores the hash of the exact text embedded, so a later match on unchanged
 // content can skip re-embedding (019-ai-job-throughput, research.md R5).
 func (q *Queries) UpdateJobEmbeddingWithHash(ctx context.Context, arg UpdateJobEmbeddingWithHashParams) error {
-	_, err := q.db.Exec(ctx, updateJobEmbeddingWithHash, arg.ID, arg.Embedding, arg.EmbeddingHash)
+	_, err := q.db.Exec(ctx, updateJobEmbeddingWithHash,
+		arg.ID,
+		arg.Embedding,
+		arg.EmbeddingHash,
+		arg.EmbedModel,
+	)
 	return err
 }
 
 const updateJobStatus = `-- name: UpdateJobStatus :one
 UPDATE "Job" SET "status" = $2 WHERE "id" = $1
-RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId"
+RETURNING id, "dedupeKey", "sourceKey", "externalId", title, company, location, remote, "salaryRaw", url, description, raw, "postedAt", "ingestedAt", embedding, status, "detailScrapedAt", "salaryMin", "salaryMax", "salaryCurrency", "salaryConfidence", "salarySource", "seenCount", "subscriptionId", "seenOnSources", "embeddingHash", experience_level, experience_min_years, english_level, salary_estimate_raw, salary_estimate_min, salary_estimate_max, salary_estimate_currency, "lastSeenRunId", "embedModel"
 `
 
 type UpdateJobStatusParams struct {
@@ -857,6 +879,7 @@ func (q *Queries) UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams
 		&i.SalaryEstimateMax,
 		&i.SalaryEstimateCurrency,
 		&i.LastSeenRunId,
+		&i.EmbedModel,
 	)
 	return i, err
 }

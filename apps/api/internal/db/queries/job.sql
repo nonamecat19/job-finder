@@ -16,12 +16,15 @@ INSERT INTO "Job" (
 RETURNING *;
 
 -- name: UpdateJobEmbedding :exec
-UPDATE "Job" SET "embedding" = $2 WHERE "id" = $1;
+UPDATE "Job" SET "embedding" = $2, "embedModel" = $3 WHERE "id" = $1;
 
 -- name: UpdateJobEmbeddingWithHash :exec
 -- Stores the hash of the exact text embedded, so a later match on unchanged
 -- content can skip re-embedding (019-ai-job-throughput, research.md R5).
-UPDATE "Job" SET "embedding" = $2, "embeddingHash" = $3 WHERE "id" = $1;
+UPDATE "Job" SET "embedding" = $2, "embeddingHash" = $3, "embedModel" = $4 WHERE "id" = $1;
+
+-- name: ClearStaleJobEmbeddings :exec
+UPDATE "Job" SET "embedding" = NULL, "embeddingHash" = NULL WHERE "embedModel" IS DISTINCT FROM $1;
 
 -- name: UpdateJobStatus :one
 UPDATE "Job" SET "status" = $2 WHERE "id" = $1
