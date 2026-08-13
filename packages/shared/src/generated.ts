@@ -838,8 +838,9 @@ export interface Entry {
   details?: string;
   /**
    * SkillLevel is the density of a skill group's details list on generated
-   * resumes: "all", "medium" or "relevant". Only meaningful for entries in
-   * the skills section.
+   * resumes: "relevant" (only what the vacancy asks for, the default),
+   * "top10" (~10), "top15" (~15), "top20" (~20) or "all" (everything). Only
+   * meaningful for entries in the skills section.
    */
   skillLevel?: string;
   bullet?: string;

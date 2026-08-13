@@ -34,11 +34,13 @@ Two decisions are deliberately kept away from the model rather than checked afte
 - **Skill order.** The selection payload has no skills field. Groups carry over from the
   master untouched and `domain.RankSkills` orders them from the vacancy analysis — a
   permutation, so nothing can be dropped, reworded or invented on the way. A group's
-  authored `skills_level` (`all` / `medium` / `relevant`) then bounds what a tailored
-  resume renders: `domain.TrimSkillGroups` keeps the top half of a `medium` group (in that
-  ranked order) or only the vacancy-matched entries of a `relevant` group, dropping a
-  `relevant` group that matches nothing. The workspace export path never trims — the
-  selection is the shape (FR-018).
+  authored `skills_level` (`relevant` / `top10` / `top15` / `top20` / `all`) then bounds
+  what a tailored resume renders: `domain.TrimSkillGroups` keeps the first N entries of a
+  count-based group in that ranked order (`top10` → 10, `top15` → 15, `top20` → 20), keeps
+  everything for `all`, or keeps only the vacancy-matched entries of a `relevant` group —
+  `relevant` is also the default for a group with no level — dropping a `relevant` group
+  that matches nothing. The workspace export path never trims — the selection is the shape
+  (FR-018).
 - **Numbers.** Every metric a highlight asserts must appear in the master bullets it draws
   from, checked at every grounding level. Word-overlap alone cannot see this: it discards
   short tokens, so `40%` was invisible to it.

@@ -4,28 +4,34 @@ import "strings"
 
 // Skill density levels, stored per skill group in the profile as
 // "skills_level". They bound how much of a group's details list a generated
-// resume renders; a group without a level keeps everything, which is also
-// what "all" means. An unknown level is treated as "all" — a lenient default
-// rather than a rejected profile.
+// resume renders. The count-based levels keep the group's most vacancy-
+// relevant skills up to a cap: "top5" (5), "top10" (~10), "top15" (~15) and
+// "top20" (~20). "all" keeps everything, and "relevant" keeps only the
+// entries the vacancy asks for — it is also the default for a group with no
+// level or an unrecognised one.
 const (
+	SkillLevelTop5     = "top5"
+	SkillLevelTop10    = "top10"
+	SkillLevelTop15    = "top15"
+	SkillLevelTop20    = "top20"
 	SkillLevelAll      = "all"
-	SkillLevelMedium   = "medium"
 	SkillLevelRelevant = "relevant"
 )
 
-// SkillLevels the rendered document's skills down to each group's authored
-// density level, and returns whether it changed anything.
+// TrimSkillGroups bounds the rendered document's skills down to each group's
+// authored density level, and returns whether it changed anything.
 //
 // It must run after RankSkills: the ordering that function produces is the
-// relevance order the trim relies on. "medium" keeps the top half of each
-// group (ceil, so a single-skill group never empties), "relevant" keeps only
-// the entries the vacancy asks for, and "all" (the default for an unset or
-// unknown level) keeps everything.
+// relevance order the trim relies on. The count-based levels keep that order's
+// first N entries (fewer if the group is smaller): "top10" keeps ten, "top15"
+// fifteen and "top20" twenty. "all" keeps everything, and "relevant" keeps
+// only the entries the vacancy asks for. An unset or unknown level behaves as
+// "relevant" — the default.
 //
 // Callers feed it master-fresh skills: every tailoring retry re-merges from
 // the master before re-ranking, so the trim runs once per group. Trimming an
-// already-trimmed group would halve it again — the proportional cut is
-// deliberately not idempotent, and no pipeline path depends on it being so.
+// already-trimmed group would trim it again — the fixed cap is deliberately
+// not idempotent, and no pipeline path depends on it being so.
 //
 // Pinned groups are facts about the candidate, not tailoring targets, and are
 // never trimmed — the same exemption skill_ranking.go and ApplyHardLimits
@@ -50,21 +56,20 @@ func TrimSkillGroups(doc RendercvMaster, analysis VacancyAnalysis) bool {
 			continue
 		}
 		level := StringField(g, "skills_level")
-		if level == "" || level == SkillLevelAll {
-			kept = append(kept, g)
-			continue
-		}
 		entries := splitSkillEntries(StringField(g, "details"))
 		switch level {
-		case SkillLevelMedium:
-			half := (len(entries) + 1) / 2
-			if half >= len(entries) {
-				kept = append(kept, g)
-				continue
+		case SkillLevelAll:
+			kept = append(kept, g)
+			continue
+		case SkillLevelTop5, SkillLevelTop10, SkillLevelTop15, SkillLevelTop20:
+			cap := topCapFor(level)
+			if len(entries) > cap {
+				g["details"] = strings.Join(entries[:cap], ", ")
+				changed = true
 			}
-			g["details"] = strings.Join(entries[:half], ", ")
-			changed = true
-		case SkillLevelRelevant:
+		default:
+			// "relevant", unset, or an unknown level: keep only the entries
+			// the vacancy asks for.
 			matched := make([]string, 0, len(entries))
 			for _, e := range entries {
 				if skillEntryScore(e, analysis) > 0 {
@@ -79,9 +84,6 @@ func TrimSkillGroups(doc RendercvMaster, analysis VacancyAnalysis) bool {
 				g["details"] = strings.Join(matched, ", ")
 				changed = true
 			}
-		default:
-			kept = append(kept, g)
-			continue
 		}
 		kept = append(kept, g)
 	}
@@ -91,4 +93,20 @@ func TrimSkillGroups(doc RendercvMaster, analysis VacancyAnalysis) bool {
 	}
 	sections["skills"] = kept
 	return changed
+}
+
+// topCapFor returns the cap a count-based density level applies.
+func topCapFor(level string) int {
+	switch level {
+	case SkillLevelTop5:
+		return 5
+	case SkillLevelTop10:
+		return 10
+	case SkillLevelTop15:
+		return 15
+	case SkillLevelTop20:
+		return 20
+	default:
+		return 0
+	}
 }

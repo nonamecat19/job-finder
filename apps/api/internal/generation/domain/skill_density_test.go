@@ -1,14 +1,15 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
 
 // TrimSkillGroups is the render-time enforcement of each skill group's
-// authored density level. These tests pin the three levels against the
-// relevance order RankSkills produces, the pinned-group exemption and the
-// empty-"relevant"-group drop.
+// authored density level. These tests pin the levels against the relevance
+// order RankSkills produces, the "relevant" default for an unset or unknown
+// level, the pinned-group exemption and the empty-"relevant"-group drop.
 
 func skillsDoc(groups ...[3]string) RendercvMaster {
 	raw := make([]any, 0, len(groups))
@@ -31,54 +32,73 @@ func groupDetails(t *testing.T, doc RendercvMaster) map[string]string {
 	return out
 }
 
-func TestTrimSkillGroups_NoLevelKeepsEverything(t *testing.T) {
+func TestTrimSkillGroups_NoLevelDefaultsToRelevant(t *testing.T) {
 	doc := skillsDoc([3]string{"Backend", "Go, Node.js, Kafka", ""})
 	analysis := VacancyAnalysis{RequiredSkills: []string{"Go"}}
 
-	if changed := TrimSkillGroups(doc, analysis); changed {
-		t.Error("changed = true, want false (no level configured)")
+	RankSkills(doc, analysis, ShapeConfig{SkillsEnabled: true})
+	if !TrimSkillGroups(doc, analysis) {
+		t.Error("changed = false, want true (unset level defaults to relevant-only)")
 	}
-	if got := groupDetails(t, doc)["Backend"]; got != "Go, Node.js, Kafka" {
-		t.Errorf("details = %q, want untouched", got)
+	if got := groupDetails(t, doc)["Backend"]; got != "Go" {
+		t.Errorf("details = %q, want %q", got, "Go")
+	}
+}
+
+func TestTrimSkillGroups_UnknownLevelDefaultsToRelevant(t *testing.T) {
+	doc := skillsDoc([3]string{"Backend", "Go, Node.js, Kafka", "medium"})
+	analysis := VacancyAnalysis{RequiredSkills: []string{"Go"}}
+
+	RankSkills(doc, analysis, ShapeConfig{SkillsEnabled: true})
+	if !TrimSkillGroups(doc, analysis) {
+		t.Error("changed = false, want true (legacy 'medium' behaves as relevant-only)")
+	}
+	if got := groupDetails(t, doc)["Backend"]; got != "Go" {
+		t.Errorf("details = %q, want %q", got, "Go")
+	}
+}
+
+func TestTrimSkillGroups_CountCaps(t *testing.T) {
+	skills := make([]string, 25)
+	for i := range skills {
+		skills[i] = fmt.Sprintf("s%02d", i)
+	}
+	cases := []struct {
+		level string
+		cap   int
+	}{
+		{SkillLevelTop5, 5},
+		{SkillLevelTop10, 10},
+		{SkillLevelTop15, 15},
+		{SkillLevelTop20, 20},
+	}
+	for _, c := range cases {
+		t.Run(c.level, func(t *testing.T) {
+			doc := skillsDoc([3]string{"Backend", strings.Join(skills, ", "), c.level})
+			// No vacancy skills match, so the ranked order is the authored order.
+			RankSkills(doc, VacancyAnalysis{}, ShapeConfig{SkillsEnabled: true})
+			TrimSkillGroups(doc, VacancyAnalysis{})
+
+			got := splitSkillEntries(groupDetails(t, doc)["Backend"])
+			if len(got) != c.cap {
+				t.Errorf("kept %d skills, want %d (%q)", len(got), c.cap, strings.Join(got, ", "))
+			}
+		})
 	}
 }
 
 func TestTrimSkillGroups_AllKeepsEverything(t *testing.T) {
-	doc := skillsDoc([3]string{"Backend", "Go, Node.js, Kafka", SkillLevelAll})
+	doc := skillsDoc([3]string{"Backend", "Go, Node.js, Kafka, Redis, Fiber, NATS", SkillLevelAll})
 	analysis := VacancyAnalysis{RequiredSkills: []string{"Go"}}
 
-	if changed := TrimSkillGroups(doc, analysis); changed {
-		t.Error("changed = true, want false")
-	}
-	if got := groupDetails(t, doc)["Backend"]; got != "Go, Node.js, Kafka" {
-		t.Errorf("details = %q, want untouched", got)
-	}
-}
-
-func TestTrimSkillGroups_MediumKeepsTopHalfOfRankedOrder(t *testing.T) {
-	doc := skillsDoc([3]string{"Backend", "Go, Node.js, Redis, Kafka, Fiber", SkillLevelMedium})
-	analysis := VacancyAnalysis{RequiredSkills: []string{"Go", "Redis"}}
-
 	RankSkills(doc, analysis, ShapeConfig{SkillsEnabled: true})
-	if !TrimSkillGroups(doc, analysis) {
-		t.Error("changed = false, want true")
+	if changed := TrimSkillGroups(doc, analysis); changed {
+		t.Error("changed = true, want false (all keeps everything)")
 	}
-	// 5 entries -> ceil(5/2) = 3, the three most relevant after RankSkills.
-	want := "Go, Redis, Node.js"
+	// RankSkills still orders by relevance; "all" just skips the cap.
+	want := "Go, Node.js, Kafka, Redis, Fiber, NATS"
 	if got := groupDetails(t, doc)["Backend"]; got != want {
 		t.Errorf("details = %q, want %q", got, want)
-	}
-}
-
-func TestTrimSkillGroups_MediumRoundsUpSoSingleGroupNeverEmpties(t *testing.T) {
-	doc := skillsDoc([3]string{"Backend", "Go", SkillLevelMedium})
-	analysis := VacancyAnalysis{}
-
-	if changed := TrimSkillGroups(doc, analysis); changed {
-		t.Error("changed = true, want false (1 entry already below the half floor)")
-	}
-	if got := groupDetails(t, doc)["Backend"]; got != "Go" {
-		t.Errorf("details = %q, want untouched", got)
 	}
 }
 
@@ -152,7 +172,7 @@ func TestTrimSkillGroups_PinnedGroupNeverTrimmed(t *testing.T) {
 
 func TestTrimSkillGroups_ExpandPathPreservesTrimmedDetails(t *testing.T) {
 	doc := skillsDoc(
-		[3]string{"Backend", "Go, Redis, Node.js, Kafka", SkillLevelMedium},
+		[3]string{"Backend", "Go, Redis, Node.js, Kafka", SkillLevelTop20},
 		[3]string{"Frontend", "React, Vue, Next.js", SkillLevelRelevant},
 	)
 	analysis := VacancyAnalysis{RequiredSkills: []string{"Go", "Next.js"}, NiceToHaveSkills: []string{"Redis"}}
