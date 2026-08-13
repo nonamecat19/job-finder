@@ -1,9 +1,11 @@
 # job-finder
 
 Self-hosted, modular AI job-search platform. Discovers jobs across multiple sources, scores
-them against your master profile with Ollama (local or Ollama Cloud), generates grounded tailored
-resumes + cover letters as PDFs, and tracks applications on a kanban. You apply manually —
-no auto-apply, ever.
+them against your master profile via a self-hosted LiteLLM gateway to hosted LLM providers,
+generates grounded tailored resumes + cover letters as PDFs, and tracks applications on a kanban.
+You apply manually — no auto-apply, ever. Every AI request leaves the deployment: prompt content
+(profile data, resume content, posting text) is sent to a third-party provider on every request,
+with no configuration under which it is not — see `.env.example`'s LLM block.
 
 Requirement records live in [`specs/`](specs/README.md) (start at
 [`specs/domains/`](specs/domains/)); the implementation guide is the Docusaurus site
@@ -13,7 +15,7 @@ under [`docs/`](docs/); agent workflow rules are in [`AGENTS.md`](AGENTS.md).
 
 ```
 apps/api              Go backend (chi HTTP API, sqlc + goose on Postgres/pgvector,
-                      asynq workers on Redis, Ollama, scraping/retrieval ladder)
+                      asynq workers on Redis, LiteLLM gateway, scraping/retrieval ladder)
 apps/dashboard        React dashboard (Vite, Tailwind, TanStack Query, dnd-kit)
 packages/shared       Shared TS types (NormalizedJob, DTOs, JSON Resume subset)
 ```
@@ -22,8 +24,8 @@ packages/shared       Shared TS types (NormalizedJob, DTOs, JSON Resume subset)
 
 ```bash
 cp .env.example .env       # set DB_PASSWORD, CONFIG_ENCRYPTION_KEY (openssl rand -hex 32),
-                           # ADZUNA_APP_ID/KEY if you have them
-docker compose up --build  # first run pulls Ollama models (~10 GB for qwen2.5:14b)
+                           # LITELLM_MASTER_KEY, provider API keys, ADZUNA_APP_ID/KEY if you have them
+docker compose up --build
 ```
 
 Dashboard: http://localhost:8080 · API: http://localhost:3000/api/health
@@ -33,35 +35,29 @@ http://localhost:8090 — live view of the six asynq queues (ingest, match, gene
 enrich, salary, ghost), task inspection, retry/delete/archive actions, and per-queue
 history.
 
-GPU strongly recommended for local Ollama (uncomment the `deploy` block in docker-compose.yml).
-To use **Ollama Cloud** instead, set `OLLAMA_URL=https://ollama.com` + `OLLAMA_KEY=<key>` and
-`-cloud` model tags. Cloud has no embedding models, so point `EMBED_URL` at a local Ollama.
-Chat models on the direct-Ollama path are per-task: `LLM_MODEL_MATCH` (fit scoring),
-`LLM_MODEL_GENERATION` (resume/cover), `LLM_MODEL` as fallback; embeddings use
-`EMBED_MODEL`. With `GATEWAY_URL` set, the gateway chooses the model instead — see below.
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 
-Ollama is the default, local-first provider and always terminates every routing chain. Optionally,
-set `GATEWAY_URL=http://litellm:4000` and `LITELLM_MASTER_KEY` to route chat tasks (matching,
-generation, rephrase, ghost-job, salary/recruiter/outreach) through the bundled LiteLLM proxy
-instead: each task key resolves to an ordered free-tier-first failover chain (Cerebras → Groq →
-Cohere → OpenRouter → Ollama) declared in `gateway/config.yaml`. Provider keys
-(`CEREBRAS_API_KEY`, `GROQ_API_KEY`, `COHERE_API_KEY`, `OPENROUTER_API_KEY`) live in the `litellm`
-compose service's environment only — the Go backend never reads them and never learns which
-upstream served a request beyond a `served_model` log line. **Changing which model serves a task
-is a `gateway/config.yaml` edit followed by `docker compose restart litellm` — no dashboard, no
-rebuild.** With `GATEWAY_URL` unset, every task talks to Ollama directly. Embeddings always stay on
-Ollama regardless of gateway configuration (no remote provider offers an embeddings API).
+There is one inference path: every AI request goes through the self-hosted LiteLLM proxy
+(`gateway/config.yaml`) to a hosted provider. `GATEWAY_URL` and `LITELLM_MASTER_KEY` are required —
+the application refuses to boot without them, naming the missing key. Each scenario (match,
+generation, rephrase, ghost-job, salary, outreach, recruiter, every generation sub-stage, and
+embeddings) resolves to its own ordered failover chain of at least two tiers across at least two
+distinct providers (Cerebras, OpenRouter, OpenAI). Provider keys
+(`CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`) live
+in the `litellm` compose service's environment only — the Go backend never reads them and never
+learns which upstream served a request beyond a `served_model` log line. **Changing which model
+serves a scenario is a `gateway/config.yaml` edit followed by `docker compose restart litellm` — no
+dashboard, no rebuild.**
 
 Rate limits and provider errors are classified rather than blindly retried. Terminal problems
 (rejected key, out of credits, unknown model) fail the task immediately with the reason on its
-activity record instead of retrying forever; transient 5xx/network failures stay retryable. When
-the gateway chain is exhausted the failure surfaces the same way a direct-Ollama failure would.
+activity record instead of retrying forever; transient 5xx/network failures stay retryable. When a
+scenario's whole chain is exhausted, the task fails with that reason recorded.
 
 ## Dev workflow (api/dashboard on host)
 
 ```bash
-make up                    # postgres, redis, ollama, minio
+make up                    # postgres, redis, litellm, minio
 pnpm install
 pnpm --filter @job-finder/shared build
 make run-backend           # api :3000 — runs embedded goose migrations on startup
@@ -78,7 +74,7 @@ was withdrawn and why.
 Useful:
 
 ```bash
-pnpm --filter @job-finder/api llm:smoke     # test complete/structured/embed against Ollama
+pnpm --filter @job-finder/api llm:smoke     # test complete/structured/embed against the gateway
 pnpm -r typecheck
 pnpm build
 ```

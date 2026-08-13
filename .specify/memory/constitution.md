@@ -93,6 +93,62 @@ Templates requiring updates:
   - .claude/skills/speckit-*/SKILL.md ✅ re-checked, no specs/archive
     reference found, no change needed
 Follow-up TODOs: none
+
+--------------------------------------------------------------------------
+
+Version change: 1.0.3 → 2.0.0 (MAJOR — a principle is redefined, not
+  clarified)
+Modified principles:
+  - **Principle V, "Local-First, Self-Hosted by Default" → "Self-Hosted
+    Control Plane, Single Inference Path".** The local-first inference
+    guarantee is removed. Before this amendment the principle required core
+    scoring and generation to remain fully operational against a local
+    Ollama instance with no calls to third-party AI APIs, and required the
+    system to serve AI tasks locally when the gateway was unconfigured or
+    unreachable. Both requirements are void.
+
+    Why. The guarantee was costing more than it bought. Honouring it meant
+    two inference paths in the application — a gateway path and a direct
+    local path — with different failover, different cost accounting and,
+    for the local path, no observability at all. The second path was the
+    default in the shipped example environment, so the system most operators
+    actually ran was the one nothing could see into. Embeddings never used
+    the gateway on either path, which made "every AI call is recorded"
+    untrue in a way that read as true.
+
+    A second, quieter reason: the local tier had already stopped being
+    local. `OLLAMA_URL` defaulted to `https://ollama.com` with an
+    `OLLAMA_KEY`, so the terminal tier of every failover chain was a
+    third-party API wearing the word "local". The principle was protecting
+    a property the configuration had not had for some time.
+
+    What replaces it. Provider credentials, routing policy and the proxy
+    itself stay self-hosted and in-repository; the application holds no
+    provider credential and reaches no provider directly. Availability is
+    protected by requiring every task's chain to span at least two distinct
+    providers, rather than by a local terminal tier.
+
+    What is knowingly given up, stated so no future reader has to infer it:
+    the platform can no longer score or generate anything without reaching a
+    third-party provider, and prompt content — profile data, resume content,
+    posting text — leaves the deployment on every AI request, with no
+    configuration under which it does not. That is a real loss of the
+    original product promise and it was accepted deliberately, not
+    discovered. See specs/044-litellm-only-routing/spec.md and its
+    Clarifications section for the decision record.
+Added sections: none
+Removed sections: none
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ re-checked, no provider or
+    local-first reference, no change needed
+  - .specify/templates/spec-template.md ✅ re-checked, no change needed
+  - .specify/templates/tasks-template.md ✅ re-checked, no change needed
+  - .specify/templates/checklist-template.md ✅ re-checked, no change needed
+  - .claude/skills/speckit-*/SKILL.md ✅ re-checked, no provider or
+    local-first reference found, no change needed
+Follow-up TODOs: the documents that describe the old guarantee are updated
+  in the same feature, not here — specs/domains/llm-routing.md,
+  docs/docs/ai/*, .env.example, docker-compose.prod.yml, README.md.
 -->
 
 # job-finder Constitution
@@ -136,18 +192,28 @@ Rationale: matches the existing Makefile-enforced workflow; per-language suites 
 feedback fast, while Docker-backed integration tests catch the cross-service bugs unit
 tests can't.
 
-### V. Local-First, Self-Hosted by Default
-Core scoring and generation MUST remain fully operational against the local Ollama
-instance and self-hosted Postgres/Redis, with no calls to third-party AI APIs. Hosted
-inference reached through the LiteLLM gateway is permitted as an optimisation, but every
-task's routing chain MUST terminate at the local model, and the system MUST serve AI tasks
-locally when the gateway is unconfigured or unreachable. Provider credentials MUST stay in
-the gateway container's environment and MUST NOT be readable through the application.
-External job sources (Adzuna, Jooble, Indeed, Glassdoor, ...) are for job discovery only,
-never core inference.
-Rationale: stated project goal is a self-hosted platform the user fully controls; a
-hidden dependency on an external LLM API would silently break that guarantee and add
-cost/privacy exposure users didn't opt into.
+### V. Self-Hosted Control Plane, Single Inference Path
+Data and control stay self-hosted: Postgres, Redis, document storage and the LiteLLM
+routing service all run inside the deployment, and routing policy lives in-repository as
+reviewed configuration. Inference does not. The application MUST reach AI providers
+through the self-hosted gateway and MUST NOT call any provider directly — one path, so
+that every AI request is recorded, costed and attributed without exception. Provider
+credentials MUST stay in the gateway container's environment and MUST NOT be readable
+through the application. Availability MUST be protected by chain diversity: every task's
+routing chain MUST span at least two distinct providers. External job sources (Adzuna,
+Jooble, Indeed, Glassdoor, ...) are for job discovery only, never core inference.
+
+This principle no longer promises offline operation. Core scoring and generation depend on
+at least one third-party provider being reachable, and prompt content — including profile
+data and generated application materials — leaves the deployment on every AI request, with
+no configuration under which it does not. Documentation presented to operators MUST state
+that plainly rather than implying otherwise.
+
+Rationale: the previous local-first guarantee required a second inference path inside the
+application, which carried its own failover, its own cost accounting and no observability —
+and it was the path the default configuration actually used. One audited path is worth more
+than a fallback nobody could see into. What users control is what this project can
+genuinely keep controlling: their data, their routing policy, their credentials.
 
 ## Technology & Architecture Constraints
 
@@ -198,4 +264,4 @@ should be checked against the five Core Principles above before being marked rea
 review; deviations must be justified in the plan's Complexity Tracking section (or PR
 description) rather than silently introduced.
 
-**Version**: 1.0.3 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-04
+**Version**: 2.0.0 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-12

@@ -1,13 +1,37 @@
 # Domain: LLM Routing & AI Throughput
 
 Consolidates **029** LiteLLM proxy gateway, **030** gateway-owned model routing,
-**019** AI throughput & stuck-run recovery. **001-cerebras-model-toggle is fully
-superseded** — see § 5.
+**019** AI throughput & stuck-run recovery, **044** LiteLLM-only inference.
+**001-cerebras-model-toggle is fully superseded** — see § 5.
 
 Implementation: `apps/api/internal/platform/llm/`, `gateway/config.yaml`,
 `internal/queue/policy.go`. How it works:
 [`docs/ai/llm-abstraction.md`](../../docs/docs/ai/llm-abstraction.md),
 [`docs/ai/overview.md`](../../docs/docs/ai/overview.md).
+
+**Amended by 044 (2026-08-12): there is one inference path.** The application's second,
+direct-to-Ollama path is deleted — `infrastructure/ollama` is gone, `GATEWAY_URL` and
+`LITELLM_MASTER_KEY` are required configuration, and **every** AI request, embeddings included,
+goes through the self-hosted LiteLLM gateway to hosted providers. `default` and `local` no longer
+exist as names. Rules 044 voids are marked **superseded by 044** where they are stated, never
+deleted — a revoked rule with a pointer is worth more than a missing one.
+
+**Constitution 2.0.0.** Principle V was renamed *"Local-First, Self-Hosted by Default"* →
+**"Self-Hosted Control Plane, Single Inference Path"**, and redefined rather than clarified —
+hence MAJOR. The control plane stays self-hosted (Postgres, Redis, document storage, the routing
+service, routing policy as reviewed in-repository configuration); **inference does not**. It no
+longer promises operation with no third-party AI call, and no longer requires the system to serve
+AI tasks locally when the gateway is unreachable. It requires exactly one path — through the
+gateway, so every request is recorded, costed and attributed — and protects availability with
+**chain diversity** (every chain spans ≥2 distinct providers) instead of a local terminal tier.
+Every "Constitution V made mechanical" claim below was written against the 1.x wording and must be
+read against 2.0.0.
+
+**Terminology: four names, one concept.** **Task key** — the code's name (`taskKey`,
+`NewRouter(taskKey, …)`) and this document's — is **canonical**. *Scenario* is 044's spec name for
+the same thing, *model group* is what `gateway/config.yaml` calls it, and *public group* is
+LiteLLM's own documentation's name. They are interchangeable; nothing was renamed in code. Stated
+once here rather than at each occurrence.
 
 ---
 
@@ -16,8 +40,13 @@ Implementation: `apps/api/internal/platform/llm/`, `gateway/config.yaml`,
 **The application asks for a task. The gateway decides the model.** That is the whole
 design, and 030 exists to make it the *only* design.
 
-- 030-FR-004: the application requests AI work by task name only — `match`, `generation`,
-  `rephrase`, `ghost`, `default` — carrying no provider or model identity.
+- 030-FR-004: the application requests AI work by task name only, carrying no provider or model
+  identity. **The example set `match`, `generation`, `rephrase`, `ghost`, `default` is superseded
+  by 044** — the declared set is now `match`, `ghost`, `rephrase`, `recruiter`, `salary`,
+  `outreach`, `generation`, `generation-analyze`, `generation-select`,
+  `generation-select-premium`, `generation-summary`, `generation-summary-premium`,
+  `generation-summary-fast`, `embed` (044-C1-2). The rule itself — name only, no provider, no
+  model — is unchanged and now covers embeddings too.
 - 030-FR-005: provider and model selection lives entirely in `gateway/config.yaml`. Changing
   which model serves a task is a YAML edit plus `docker compose restart litellm`. No
   dashboard, no rebuild, no application restart (030-SC-003: under 5 minutes, one file, one
@@ -29,36 +58,69 @@ design, and 030 exists to make it the *only* design.
 
 ## 2. Failover chains
 
-- 029-FR-004/005 + 030-FR-006: each task key resolves to an **ordered** chain. Free-tier
-  hosted providers (Cerebras → Groq → Cohere) are attempted before the OpenRouter
-  aggregator. Exception: the `generation` chain puts OpenRouter first — resume tailoring
-  is quality-critical, so it pays for the aggregator up front and keeps the free tiers as
-  its fallbacks.
+- 029-FR-004/005 + 030-FR-006: each task key resolves to an **ordered** chain. **The blanket
+  order rule is superseded by 044.** It read: "free-tier hosted providers (Cerebras → Groq →
+  Cohere) are attempted before the OpenRouter aggregator, except `generation`, which puts
+  OpenRouter first." Ordering now follows the **class of the task** (044-C2-3), because the
+  `generation` exception was never an exception — it was the quality-writing class, stated once:
+
+  | Class | Order rule |
+  |---|---|
+  | quality-writing | the quality model **leads**; cheaper tiers follow as fallbacks |
+  | economy-structured | a free tier leads; paid aggregator tiers follow |
+  | tool-capable | free tier leads, and **every** tier must be tool-capable |
+  | embedding | the primary provider leads; every tier at the declared width |
+
+  Quality-writing chains are *expected* to lead with OpenRouter. That is the rule, not a
+  deviation from it.
 - 030-FR-008: the **final** entry of every chain is the locally hosted Ollama model. Ollama
-  always terminates the chain — this is Constitution V made mechanical.
+  always terminates the chain — this is Constitution V made mechanical. **Superseded by 044,
+  and void:** there is no local tier to terminate at. The replacement invariant (044-C2-1) is
+  that **every chain has at least two tiers drawn from at least two distinct providers**.
+  Availability now comes from provider diversity rather than from a locally hosted last resort,
+  which is Constitution 2.0.0 made mechanical in the same place the old rule was.
 - 030-FR-007: the chain advances automatically on a missing credential, an authentication
   failure, or an unavailable entry.
 - 030-FR-011: absent optional provider credentials never prevent startup and never cause a
   request-time error; those entries are skipped.
 - 030-FR-009: when the gateway is unconfigured or unreachable, the application serves AI
   tasks with the local model rather than failing them (030-SC-005: with no external provider
-  reachable at all, matching and generation still complete).
+  reachable at all, matching and generation still complete). **Superseded by 044, and void** —
+  along with 030-SC-005. `GATEWAY_URL` and `LITELLM_MASTER_KEY` are **required**: empty or unset
+  is a startup error naming the key (044-K1). Startup validates that the gateway is *configured*,
+  never that it is *reachable* — an unreachable gateway fails tasks, not boots (044-K1-2), and no
+  AI request is ever issued as a health probe (044-K1-3). There is no degraded local mode to fall
+  into, and no substituted result: a task that cannot reach the gateway fails and retries under
+  the existing worker policy.
 - 029-SC-006: the gateway adds no more than 200 ms median latency over calling the provider
   directly.
 
-**Current chains** — `gateway/config.yaml`, one `<task>` / `<task>-groq` / `<task>-cohere` /
-`<task>-openrouter` quartet per task key, each falling through to Ollama.
+**Current chains** — `gateway/config.yaml`, one ordered chain per task key. **Superseded by
+044:** the old shape was a `<task>` / `<task>-groq` / `<task>-cohere` / `<task>-openrouter`
+quartet per key, each falling through to a shared Ollama tier. Chains are now per-task and of
+differing length — at most 4 tiers where they were 5 — with no shared terminal tier. The
+authoritative list is 044-C2-4 in `gateway/config.yaml`.
 
 ### 2.1 `gateway/config.yaml` — the routing contract
 
 Mounted read-only into the `litellm` service. For **every** task key there must be a public
-group named exactly the task key whose deployment is a free-tier provider, plus an ordered
-fallback list declared under `litellm_settings.fallbacks`. Three order constraints must hold
-for every task:
+group named exactly the task key, plus an ordered fallback list declared under
+`litellm_settings.fallbacks`. The order constraints:
 
-- All free tiers (Cerebras, Groq, Cohere) precede any OpenRouter tier (030-FR-006).
-- The final tier is the Ollama deployment (030-FR-008).
-- **No chain is empty and no chain terminates on a hosted provider.**
+- "All free tiers (Cerebras, Groq, Cohere) precede any OpenRouter tier (030-FR-006)" —
+  **superseded by 044-C2-3**, the per-class ordering table in §2 above.
+- "The final tier is the Ollama deployment (030-FR-008)" — **superseded by 044-C2-1**: at least
+  two tiers drawn from at least two distinct providers.
+- "No chain is empty and no chain terminates on a hosted provider" — **superseded by 044**: no
+  chain is empty and no chain names an undeclared tier (044-C2-2), but **every** chain now
+  terminates on a hosted provider, because every tier is one.
+- **New in 044**: no tier may be named `local` and no group may be named `default`. A request
+  naming either MUST fail 4xx. Every declared group is requested by exactly one router in
+  `cmd/server/compose.go` (or is `embed`, requested by `Router.Embed`); a declared-but-unrequested
+  group is a defect, not spare capacity (044-C1-4).
+
+The example below is **pre-044** and retained to show what the shape used to be — the `local`
+deployment and the `default` key in it no longer exist:
 
 ```yaml
 general_settings:
@@ -93,7 +155,15 @@ litellm_settings:
 
 The task keys and what they serve: `match` (job scoring), `generation` (cover letter — resume
 generation split into the stage keys of §2.2), `rephrase` (keyword suggestions), `ghost`
-(ghost-job detection), `default` (salary, outreach, recruiter extraction).
+(ghost-job detection), and — until 044 — `default` (salary, outreach, recruiter extraction).
+
+**The `default` key is superseded by 044 and removed.** It served three unrelated kinds of work
+through one chain, so none of them could be tuned without moving the other two. It is replaced by
+**`salary`**, **`outreach`** and **`recruiter`** as independently-routed task keys, each with its
+own chain and its own class under 044-C2-3 (`salary` is tool-capable, `outreach` is
+quality-writing, `recruiter` is economy-structured). A request naming `default` fails 4xx; there
+is no default group left to absorb an unknown name, which makes 030's fail-loudly rule below
+load-bearing rather than merely correct.
 
 **Request contract.** `POST {GATEWAY_URL}/chat/completions` with
 `Authorization: Bearer {LITELLM_MASTER_KEY}`. `model` is always one of the task keys (§2.2 adds
@@ -117,10 +187,12 @@ maps onto the sentinel taxonomy:
 
 **Credential handling (030-C4).** Every `api_key` is an `os.environ/…` reference; **no
 literal key may appear in the file.** The `litellm` compose service passes
-`CEREBRAS_API_KEY`, `GROQ_API_KEY`, `COHERE_API_KEY`, `OPENROUTER_API_KEY`, `OLLAMA_URL`,
-`OLLAMA_KEY` and `LITELLM_MASTER_KEY`, each with an **empty default (`${VAR:-}`)**, so a
-missing variable never aborts config load (030-FR-011). An empty key produces an auth failure
-at request time, which advances the chain (030-FR-007).
+`CEREBRAS_API_KEY`, `GROQ_API_KEY`, `COHERE_API_KEY`, `OPENROUTER_API_KEY` and
+`LITELLM_MASTER_KEY`, each with an **empty default (`${VAR:-}`)**, so a missing variable never
+aborts config load (030-FR-011). An empty key produces an auth failure at request time, which
+advances the chain (030-FR-007). **Amended by 044:** `OLLAMA_URL` and `OLLAMA_KEY` are removed
+from that list, and `OPENAI_API_KEY` is added — optional, the `embed` chain's fallback tier
+(044-K4). `LITELLM_MASTER_KEY` remains the one secret the *application* container is permitted.
 
 > **The capability trap (030-C5).** Every model in a chain for a JSON-consuming task must
 > support `response_format: {"type":"json_object"}`. Because `drop_params: true` silently
@@ -142,10 +214,23 @@ at request time, which advances the chain (030-FR-007).
 > and every chain terminates at it (030-FR-008), so declaring it tool-capable for one chain
 > declares it tool-capable for every task in the system. Repointing `OLLAMA_URL` or changing
 > the local model for one task's benefit silently changes that claim for all of them.
+>
+> **Superseded by 044 — the coupling is gone with the shared tier.** No deployment is shared
+> between chains any more, so a tool-capability claim is scoped to the one chain that declares
+> it. The requirement narrows accordingly: **every tier of `salary` declares
+> `model_info.supports_function_calling: true`, and no other task key is required to**
+> (044-C3-2, narrowed from "every tier of `default`"). `salary` is the only tool-using consumer
+> (§2.5). The trap itself is unchanged — the declaration is still documentation a test reads,
+> not a control the proxy enforces.
 
 **Change contract (030-C6).** Changing which model serves a task requires exactly: edit this
 file → `docker compose restart litellm`. No application rebuild, no migration, no dashboard
 action.
+
+> **The one exception, added by 044-C5-1: the embedding width.** Changing `output_dimension` on
+> the `embed` chain is **not** a config-only change — it requires a migration and re-embedding.
+> The guardrail asserting `output_dimension == EMBED_DIMS` is what turns that from a silent
+> corruption of a shared vector column into a failed build.
 
 **These guardrails run in CI, and only because the path filter says so (037-FR-030).** The
 `go` filter in `.github/workflows/api-ci.yml` includes `gateway/**`. Until 037 it matched only
@@ -182,6 +267,18 @@ than a group the application requests, and it is requested directly (`compose.go
 so an escalation fired during an Anthropic outage would fail the run instead of falling through to
 Ollama. That is 030-FR-008 and Constitution V, and it is not weakened by the split (035-FR-011).
 
+> **Superseded by 044** on the terminal tier only. 035-FR-011's actual point survives and is what
+> matters: **every requested key, escalation keys included, must have its own declared chain.**
+> The invariant that chain now has to satisfy is ≥2 tiers over ≥2 distinct providers (044-C2-1)
+> rather than "ends at `local`". The failure mode is unchanged in shape — an escalation fired
+> during a provider outage with no chain behind it fails the run — only the thing that catches it
+> is now a second *provider* rather than a local model.
+
+**Two further summary keys exist beyond the four above** — `generation-summary-premium` and
+`generation-summary-fast`, the 034 summary options, requested through
+`compose.go summaryOptionRouters` from the option catalogue rather than a list. They are declared,
+chained and bound by every rule in this section like the rest.
+
 **The reasoning switch (035-FR-014).** Every stage deployment must declare how that model's
 deliberation is bounded. Reasoning tokens count against `max_completion_tokens`, so a thinking
 model left to deliberate freely spends its entire output budget reasoning and returns **empty
@@ -200,20 +297,42 @@ Adding a stage candidate therefore includes declaring its switch. A deployment w
 configuration error, not a default.
 
 **Guardrail.** `internal/platform/llm/gateway_config_test.go` parses `gateway/config.yaml` and
-fails the build when a requested `generation-*` group has no chain, a chain does not end at
-`local`, a chain names an undeclared tier, an `openrouter/*` stage deployment omits its reasoning
-switch, or an `api_key` is a literal. The file is not compiled into the binary, so this test is
-the only thing that makes a forgotten chain fail loudly rather than silently at request time.
+fails the build when a requested group has no chain, a chain names an undeclared tier, a tier
+omits its reasoning switch, or an `api_key` is a literal. The file is not compiled into the
+binary, so this test is the only thing that makes a forgotten chain fail loudly rather than
+silently at request time.
+
+**Amended by 044-C6**, since the guardrail is the mechanism the superseded rules were enforced by:
+
+| Assertion | Change |
+|---|---|
+| chain terminates at `local` | **deleted** |
+| chain has ≥2 tiers over ≥2 distinct providers | **new** |
+| no tier named `local`, no group named `default` | **new** |
+| the requested-group list | extended from `generation-*` to the full key set of 044-C1-2 |
+| tool-capability declared on the `default` chain | narrowed to `salary` |
+| `embed` chain width and `input_type` | **new** |
+| `EMBED_DIMS` mirrors the declared `output_dimension` | **new** — read from `internal/config/defaults.go` |
+| `EMBED_MODEL_ID` mirrors the `embed` deployment's model string | **new** — a drifted mirror mislabels the provenance of every stored vector while looking correct |
+| reasoning-switch check | **widened** from `generation-*` stage deployments to **every** `openrouter/*` tier. 044 adds OpenRouter tiers to `outreach`, `salary` and `recruiter`, which the narrow check would not have seen — and an unbounded thinking model returns a 200 with empty content that no fallback rescues |
+| literal-credential check | unchanged |
+
+The inline-fixture tests that assert the invariants *reject* a broken config are extended with
+each new invariant: a guardrail that can only ever pass guards nothing.
 
 **Retune procedure (035-FR-016).** Unchanged from 030-C6 and it must stay that way: edit
 `gateway/config.yaml` → `docker compose restart litellm`. Repointing a stage at a different model,
 or adding a candidate to a chain, is a configuration edit and a restart of the routing service —
 no application rebuild, no migration, no code change, no dashboard action.
 
-**Local pinning.** When `GATEWAY_URL` is empty the gateway is bypassed and each stage uses its
-`LLM_MODEL_GENERATION_*` value: `LLM_MODEL_GENERATION_ANALYZE`, `_SELECT`, `_PREMIUM`, `_SUMMARY`.
-Each resolves through `Config.GenerationModelOr` — empty falls back to `LLM_MODEL_GENERATION`, then
-to `LLM_MODEL` — so an operator who pins nothing per stage keeps today's behaviour.
+**Local pinning. Superseded by 044 and removed entirely.** It read: "when `GATEWAY_URL` is empty
+the gateway is bypassed and each stage uses its `LLM_MODEL_GENERATION_*` value, resolved through
+`Config.GenerationModelOr`." `GATEWAY_URL` can no longer be empty (044-K1), so there is no bypass
+to pin a model for. Every `LLM_MODEL*` key is deleted from configuration, from
+`internal/config/defaults.go`, from both compose files and from `.env.example`, and
+`Config.ModelOr` / `Config.GenerationModelOr` are deleted with them (044-K3). Pinning a stage at a
+model is now what it always should have been: an edit to that stage's chain in
+`gateway/config.yaml`.
 
 ### 2.3 No LLM framework — the port is kept (2026-08-07 decision)
 

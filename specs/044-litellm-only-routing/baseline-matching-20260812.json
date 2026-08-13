@@ -1,0 +1,507 @@
+{
+  "_header": {
+    "purpose": "T002 SC-007 pre-migration matching baseline for 044-litellm-only-routing",
+    "captured_at": "2026-08-12",
+    "source": "Live MatchResult rows from the running dev Postgres (postgresql://jobfinder@localhost:5483/jobfinder), produced by the actual running 'go run ./cmd/server' process (PID 1474542) matching the single seeded default Profile against its currently-ingested Job backlog under the CURRENT (unmodified) code. No dedicated '50-job benchmark' script, Go test, or documented make target exists anywhere in the repo (grepped for '50-job'/'benchmark' across apps/, specs/, docs/, AGENTS.md) -- the closest thing is this live matching data, which is the actual before-side artifact SC-007 needs: same profile, same embedding model, same job set the after-side must be compared against.",
+    "note_49_not_50": "49 jobs have a MatchResult row, not 50 -- the Job table has 140 rows total but MatchResult has a UNIQUE constraint on jobId and only 49 have been matched (visible from MatchResult_jobId_unique). This is the full set of jobs matched so far under the current code, used as the fixed sample rather than trimming/padding to an exact 50.",
+    "embedding_model": "nomic-embed-text (Ollama, EMBED_MODEL in .env / internal/config/defaults.go)",
+    "embedding_dimension": 768,
+    "embedding_dimension_source": "EMBED_DIMS=768 in .env; Job.embedding column is vector(768) in the DB schema",
+    "match_task_key": "match (all 49 rows have model='match' -- the LiteLLM model_name/group the gateway/config.yaml 'match' chain resolved to; served_model resolution captured separately in baseline-routing-20260812.md)",
+    "match_threshold": "MATCH_SIMILARITY_THRESHOLD=0.35 (.env) -- similarity is a cosine-style pgvector distance-derived score from profile embedding vs job embedding; score is the LLM fit-analysis 0-100 rating, only computed when similarity >= threshold",
+    "ordering": "rows sorted by similarity descending (rank 1 = highest similarity); after-side comparison should recompute the same ordering under the migrated embedding pipeline and diff both similarity values and rank order",
+    "profile_count_in_db": 1
+  },
+  "jobs": [
+    {
+      "job_id": "9b814200-8754-40d9-9861-db5c1c996a95",
+      "title": "Middle Backend (TypeScript+Golang) Engineer",
+      "company": "Sombra",
+      "similarity": 0.7580861087598911,
+      "score": 93,
+      "model": "match",
+      "createdAt": "2026-08-12T17:42:05.205",
+      "rank": 1
+    },
+    {
+      "job_id": "06ad7e7d-39dd-41e4-b487-d38a9fcb5914",
+      "title": "Senior Node.js / NestJS Engineer - AI Operations Platform",
+      "company": "New Wave Devs",
+      "similarity": 0.7451573639766489,
+      "score": 92,
+      "model": "match",
+      "createdAt": "2026-08-12T17:46:05.661",
+      "rank": 2
+    },
+    {
+      "job_id": "8d9b90b5-02a9-492a-9755-cab9f9e4ba38",
+      "title": "Golang Engineer (Junior++ / Middle)",
+      "company": "Phoenixgame",
+      "similarity": 0.7407128619216113,
+      "score": 84,
+      "model": "match",
+      "createdAt": "2026-08-12T17:37:05.225",
+      "rank": 3
+    },
+    {
+      "job_id": "0313adf9-c30d-488f-8ceb-26871e641174",
+      "title": "Middle Golang Engineer",
+      "company": "Phoenixgame",
+      "similarity": 0.7305813674804461,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:48:05.434",
+      "rank": 4
+    },
+    {
+      "job_id": "9f0bbf87-cfc6-49e1-be25-2a92386cf926",
+      "title": "Software Engineer (Golang)",
+      "company": "SKELAR",
+      "similarity": 0.7273435558797776,
+      "score": 92,
+      "model": "match",
+      "createdAt": "2026-08-12T17:35:06.338",
+      "rank": 5
+    },
+    {
+      "job_id": "af971aea-08cc-47ae-a7b0-c69cad06a17d",
+      "title": "Senior Go Engineer",
+      "company": "RedCore",
+      "similarity": 0.7270266670875335,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:42:06.557",
+      "rank": 6
+    },
+    {
+      "job_id": "268dd816-78a1-40f0-86b0-c9954b91d918",
+      "title": "Go Backend Engineer",
+      "company": "Shore Scale",
+      "similarity": 0.7257645782520434,
+      "score": 82,
+      "model": "match",
+      "createdAt": "2026-08-12T17:58:08.49",
+      "rank": 7
+    },
+    {
+      "job_id": "7942ef06-da68-4db2-93c3-761604775677",
+      "title": "Backend Engineer (Golang)",
+      "company": "SKELAR",
+      "similarity": 0.7167964807628249,
+      "score": 94,
+      "model": "match",
+      "createdAt": "2026-08-12T17:46:06.38",
+      "rank": 8
+    },
+    {
+      "job_id": "84d69c69-fd2c-481a-bcaa-dd2dbe31deee",
+      "title": "Senior Frontend Engineer (React / TypeScript)",
+      "company": "ZentixSoft",
+      "similarity": 0.7057933721288269,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:49:08.333",
+      "rank": 9
+    },
+    {
+      "job_id": "2827d34f-8d4d-4228-b034-4251436ba5fb",
+      "title": "Senior Backend Engineer \u2013 NestJS",
+      "company": "Mobilunity",
+      "similarity": 0.7038845004744139,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:36:05.296",
+      "rank": 10
+    },
+    {
+      "job_id": "1a513939-49d2-4044-a002-d9d0274e57d6",
+      "title": "Senior React Developer (Legacy Modernisation)",
+      "company": "SiloDev",
+      "similarity": 0.6983514731170029,
+      "score": 82,
+      "model": "match",
+      "createdAt": "2026-08-12T17:51:08.476",
+      "rank": 11
+    },
+    {
+      "job_id": "de01d17f-bd38-4169-99e9-9428bad78a1e",
+      "title": "Node.js Backend Developer",
+      "company": "United Tech",
+      "similarity": 0.6940872429451697,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:48:06.631",
+      "rank": 12
+    },
+    {
+      "job_id": "07dc180e-0f11-45d5-9d86-61d33e53e250",
+      "title": "AI Backend Developer (NestJS + MongoDB + TypeScript) \u041e\u043f\u0446\u0456\u043e\u043d",
+      "company": "Tumli",
+      "similarity": 0.693677419211198,
+      "score": 95,
+      "model": "match",
+      "createdAt": "2026-08-12T17:37:04.622",
+      "rank": 13
+    },
+    {
+      "job_id": "8c06f71a-1bd4-4345-8550-e70278324e64",
+      "title": "Front-End Engineer (React, TypeScript)",
+      "company": "Stafnear",
+      "similarity": 0.6933247135715777,
+      "score": 82,
+      "model": "match",
+      "createdAt": "2026-08-12T17:52:05.771",
+      "rank": 14
+    },
+    {
+      "job_id": "37aea069-9a2e-4f55-a2a1-e5970900bcab",
+      "title": "Senior BackEnd Engineer - NestJs",
+      "company": "Selfinspection",
+      "similarity": 0.6928284670439997,
+      "score": 95,
+      "model": "match",
+      "createdAt": "2026-08-12T17:45:06.409",
+      "rank": 15
+    },
+    {
+      "job_id": "00eac1b7-e27d-4654-9446-2429d9f201c1",
+      "title": "Senior Full-Stack Engineer (Growing AI Startup)",
+      "company": "Universium",
+      "similarity": 0.6901676535519344,
+      "score": 82,
+      "model": "match",
+      "createdAt": "2026-08-12T17:36:05.472",
+      "rank": 16
+    },
+    {
+      "job_id": "4e74632c-bd40-47ea-873d-46db6da4c4c6",
+      "title": "Senior Front-end Engineer",
+      "company": "Flamingo",
+      "similarity": 0.6893401058133145,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:50:08.34",
+      "rank": 17
+    },
+    {
+      "job_id": "91f07017-8396-438f-a925-92530412d9d7",
+      "title": "Middle/Senior Golang Developer",
+      "company": "GameInspire",
+      "similarity": 0.6890106901303933,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:51:05.57",
+      "rank": 18
+    },
+    {
+      "job_id": "84983093-d72a-457e-a62b-b5356306b0a1",
+      "title": "Senior Full-Stack Engineer (Vue+Node.JS)",
+      "company": "N-iX",
+      "similarity": 0.686600763553274,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:49:06.575",
+      "rank": 19
+    },
+    {
+      "job_id": "184f273f-7927-41ac-b9e1-fa351e5ee849",
+      "title": "Backend Engineer Core Team (GoLang + PHP)",
+      "company": "BetterMe",
+      "similarity": 0.6865762435609873,
+      "score": 82,
+      "model": "match",
+      "createdAt": "2026-08-12T17:40:04.798",
+      "rank": 20
+    },
+    {
+      "job_id": "f162513c-dd3e-4698-922b-84538e92f940",
+      "title": "Golang Engineer \u2013 Payment Gateway",
+      "company": "VetPromo",
+      "similarity": 0.6857826103888444,
+      "score": 82,
+      "model": "match",
+      "createdAt": "2026-08-12T17:45:07.117",
+      "rank": 21
+    },
+    {
+      "job_id": "0cc2029a-75f6-4869-88b4-70328e4da33d",
+      "title": "Senior Backend Engineer \u2014 Automation",
+      "company": "OnlyMonster",
+      "similarity": 0.6855947515637422,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:45:05.703",
+      "rank": 22
+    },
+    {
+      "job_id": "f38d6679-1355-4329-bb88-7ad31598263a",
+      "title": "Senior Platform Engineer (Go, Kubernetes, IAM)",
+      "company": "Sigma Software",
+      "similarity": 0.6811145035665563,
+      "score": 78,
+      "model": "match",
+      "createdAt": "2026-08-12T17:35:05.457",
+      "rank": 23
+    },
+    {
+      "job_id": "d93bf7d3-14fb-41a6-9158-708a937662f8",
+      "title": "Senior+ / Lead NodeJS Developer (igaming)",
+      "company": "NewGMedia",
+      "similarity": 0.6787010560572686,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:46:05.509",
+      "rank": 24
+    },
+    {
+      "job_id": "f83bef17-8c01-4083-b65e-423b680dc65b",
+      "title": "Middle/Strong Middle Front-end Developer (Vue.js)",
+      "company": "Maestro Ticket System (Kontramarka \u0423\u043a\u0440\u0430\u0457\u043d\u0430)",
+      "similarity": 0.6772800969349334,
+      "score": 82,
+      "model": "match",
+      "createdAt": "2026-08-12T17:49:07.527",
+      "rank": 25
+    },
+    {
+      "job_id": "cf9c5d3e-7fd0-4933-b19f-b76762e80020",
+      "title": "Senior Frontend Engineer. WebGPU, 3D Visualization",
+      "company": "Zibra AI",
+      "similarity": 0.6721028587190727,
+      "score": 58,
+      "model": "match",
+      "createdAt": "2026-08-12T17:53:05.857",
+      "rank": 26
+    },
+    {
+      "job_id": "31f5fe6b-f684-4aa6-8080-668ad343ec10",
+      "title": "Senior Frontend Developer / Pixi.js",
+      "company": "OptiPlay",
+      "similarity": 0.665069629685521,
+      "score": 68,
+      "model": "match",
+      "createdAt": "2026-08-12T17:51:09.416",
+      "rank": 27
+    },
+    {
+      "job_id": "e9a5d942-a674-45d8-b919-43a3fc7a9955",
+      "title": "Back-end Developer (Node.js)",
+      "company": "ElevateOS",
+      "similarity": 0.6632346903826924,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:43:10.011",
+      "rank": 28
+    },
+    {
+      "job_id": "b4630971-b280-4476-893d-d1e2aa243d85",
+      "title": "Senior Software Engineer Technical Animator (TypeScript, PixiJS, WebGL)",
+      "company": "PrivatBank",
+      "similarity": 0.6456753282642786,
+      "score": 40,
+      "model": "match",
+      "createdAt": "2026-08-12T17:53:06.78",
+      "rank": 29
+    },
+    {
+      "job_id": "5ccb19a2-8b77-4306-b841-5cba980555a2",
+      "title": "Senior Software Engineer (Game Engine)",
+      "company": "RecruitGarden",
+      "similarity": 0.6399226190185214,
+      "score": 45,
+      "model": "match",
+      "createdAt": "2026-08-12T17:48:04.838",
+      "rank": 30
+    },
+    {
+      "job_id": "1b62e6cc-bf6f-4cc1-959f-c422f86a3e42",
+      "title": "Backend Developer",
+      "company": "AIstats",
+      "similarity": 0.6261360346896344,
+      "score": 88,
+      "model": "match",
+      "createdAt": "2026-08-12T17:47:08.024",
+      "rank": 31
+    },
+    {
+      "job_id": "073c1b1e-c55d-4076-b931-6991e8edbf40",
+      "title": "AI Sourcing Automation Specialist",
+      "company": "Futurra Group",
+      "similarity": 0.6236756501098345,
+      "score": 78,
+      "model": "match",
+      "createdAt": "2026-08-12T17:49:05.879",
+      "rank": 32
+    },
+    {
+      "job_id": "f7e6c41a-50e0-4c4f-a421-155a34565cfd",
+      "title": "AI Talent Sourcer",
+      "company": "Futurra Group",
+      "similarity": 0.6142591827977009,
+      "score": 48,
+      "model": "match",
+      "createdAt": "2026-08-12T17:45:07.957",
+      "rank": 33
+    },
+    {
+      "job_id": "f97f23da-7da8-46bc-932f-05706a4d2b87",
+      "title": "Purchasing Manager",
+      "company": "WallPanels",
+      "similarity": 0.6141945694435634,
+      "score": 22,
+      "model": "match",
+      "createdAt": "2026-08-12T17:49:04.847",
+      "rank": 34
+    },
+    {
+      "job_id": "98ed46c8-27d6-4097-82db-b3873846476a",
+      "title": "Angular Developer",
+      "company": "Phoenixgame",
+      "similarity": 0.6127947187982165,
+      "score": 78,
+      "model": "match",
+      "createdAt": "2026-08-12T17:51:07.582",
+      "rank": 35
+    },
+    {
+      "job_id": "9539d25c-73f8-4ae7-886e-49ab1b094eaa",
+      "title": "Senior UI\\UX Designer",
+      "company": "Ascendix Technologies",
+      "similarity": 0.6081335225224674,
+      "score": 35,
+      "model": "match",
+      "createdAt": "2026-08-12T17:42:05.876",
+      "rank": 36
+    },
+    {
+      "job_id": "87826358-39db-4a33-82b5-e29836ff0755",
+      "title": "Shopify Technical Specialist",
+      "company": "Celtara",
+      "similarity": 0.6068138575588519,
+      "score": 58,
+      "model": "match",
+      "createdAt": "2026-08-12T17:51:06.604",
+      "rank": 37
+    },
+    {
+      "job_id": "f87a5145-1ed8-41bb-8878-d24c9b1f1561",
+      "title": "Middle+ Back-End Developer (Slots) - iGaming/Casino",
+      "company": "Devix",
+      "similarity": 0.6062599012276778,
+      "score": 75,
+      "model": "match",
+      "createdAt": "2026-08-12T17:46:08.081",
+      "rank": 38
+    },
+    {
+      "job_id": "bdd490d0-f22b-4373-b7a7-d669df62ad49",
+      "title": "CRM / Retention Manager (Mexico/Smartico)",
+      "company": "LegendBro.top",
+      "similarity": 0.6032207289981439,
+      "score": 58,
+      "model": "match",
+      "createdAt": "2026-08-12T17:48:09.317",
+      "rank": 39
+    },
+    {
+      "job_id": "5d487670-2dd9-4b89-aed8-dae899f10f5c",
+      "title": "Middle+ Back-End Developer - iGaming/Betting",
+      "company": "Devix",
+      "similarity": 0.6031368054423459,
+      "score": 82,
+      "model": "match",
+      "createdAt": "2026-08-12T17:42:07.955",
+      "rank": 40
+    },
+    {
+      "job_id": "c310fee6-054f-432d-9de2-667825e95adc",
+      "title": "Account Manager (select form)",
+      "company": "FRACTAL",
+      "similarity": 0.5982124057256971,
+      "score": 22,
+      "model": "match",
+      "createdAt": "2026-08-12T17:46:07.23",
+      "rank": 41
+    },
+    {
+      "job_id": "4b50b351-fb5e-4ae0-b332-c745c1392547",
+      "title": "SAP FI/CO Consultant",
+      "company": "SBCG",
+      "similarity": 0.5937991322260471,
+      "score": 22,
+      "model": "match",
+      "createdAt": "2026-08-12T17:45:04.945",
+      "rank": 42
+    },
+    {
+      "job_id": "de09ce38-dda0-4732-8c30-ab0082252037",
+      "title": "Service manager",
+      "company": "AP Education Center",
+      "similarity": 0.5911168568684572,
+      "score": 35,
+      "model": "match",
+      "createdAt": "2026-08-12T17:46:05.008",
+      "rank": 43
+    },
+    {
+      "job_id": "91042767-9ea6-48b3-8a0f-2ed0bc546274",
+      "title": "Senior Game Designer",
+      "company": "TopDevs",
+      "similarity": 0.5811436411783506,
+      "score": 25,
+      "model": "match",
+      "createdAt": "2026-08-12T17:48:09.986",
+      "rank": 44
+    },
+    {
+      "job_id": "b1b75243-8aac-43d4-a7c7-abb65eea7256",
+      "title": "Middle QA Engineer (FinTech / Crypto)",
+      "company": "Devix",
+      "similarity": 0.5778894738058475,
+      "score": 20,
+      "model": "match",
+      "createdAt": "2026-08-12T17:39:07.547",
+      "rank": 45
+    },
+    {
+      "job_id": "78b9eb2f-f9b5-4c64-a70d-8299b0f1b438",
+      "title": "AI Content Researcher",
+      "company": "Yanarchy",
+      "similarity": 0.5701807409536838,
+      "score": 78,
+      "model": "match",
+      "createdAt": "2026-08-12T17:38:05.002",
+      "rank": 46
+    },
+    {
+      "job_id": "2731b3af-127d-46e0-8139-973ef6a81889",
+      "title": "Senior Media Buyer FB",
+      "company": "Rockit Media",
+      "similarity": 0.5503303406945211,
+      "score": 15,
+      "model": "match",
+      "createdAt": "2026-08-12T17:38:04.685",
+      "rank": 47
+    },
+    {
+      "job_id": "c118ede1-f385-4187-9127-811a76a2da7e",
+      "title": "Senior Media Buyer (FB Gambling)",
+      "company": "Rockit Media",
+      "similarity": 0.5430790878701751,
+      "score": 22,
+      "model": "match",
+      "createdAt": "2026-08-12T17:57:11.54",
+      "rank": 48
+    },
+    {
+      "job_id": "436b00f1-631a-4021-b6c7-22330831e1d0",
+      "title": "Team Lead Media Buyer FB (Gambling)",
+      "company": "Rockit Media",
+      "similarity": 0.5417874378506701,
+      "score": 25,
+      "model": "match",
+      "createdAt": "2026-08-12T17:39:04.967",
+      "rank": 49
+    }
+  ]
+}
