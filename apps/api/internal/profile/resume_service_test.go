@@ -52,7 +52,7 @@ func TestGetResume_SocialNetworksSurfaced(t *testing.T) {
 	repo := &resumeFakeRepo{row: sqlcgen.Profile{
 		ID: uid, Name: "Test User", RendercvConfig: configJSON,
 	}}
-	svc := profile.NewService(repo, nil, "", "")
+	svc := profile.NewService(repo, nil, "")
 
 	resume, err := svc.GetResume(context.Background(), "00000000-0000-0000-0000-000000000001")
 	if err != nil {
@@ -97,7 +97,7 @@ func (stubEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
 func TestCreate_WithoutYamlSeedsMinimalConfig(t *testing.T) {
 	uid, _ := dbutil.ParseUUID("00000000-0000-0000-0000-000000000002")
 	repo := &createFakeRepo{row: sqlcgen.Profile{ID: uid}}
-	svc := profile.NewService(repo, stubEmbedder{}, "", "")
+	svc := profile.NewService(repo, stubEmbedder{}, "")
 
 	out, err := svc.Create(context.Background(), "My Profile", "", nil)
 	if err != nil {

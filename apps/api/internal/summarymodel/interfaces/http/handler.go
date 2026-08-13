@@ -45,7 +45,6 @@ func settingToDto(options []domain.SummaryOption, current domain.SummaryOption) 
 			Label:       o.Label,
 			Description: o.Description,
 			Cost:        o.Cost,
-			SelfHosted:  o.SelfHosted(),
 			Current:     o.ID == current.ID,
 		})
 	}

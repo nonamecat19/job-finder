@@ -14,18 +14,25 @@ import (
 
 	"github.com/job-finder/api/internal/platform/llm/domain"
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/shared"
+	"github.com/job-finder/api/internal/strutil"
 )
 
 const safetyNetTimeout = 15 * time.Minute
 
+// embedMaxChars is the E1-3 backstop truncation. The caller (matching's
+// service.go) already truncates before calling Embed; this is a second,
+// unconditional guard so the adapter itself never sends more than the
+// contract allows regardless of what the caller does.
+const embedMaxChars = 8000
+
 type Provider struct {
-	http    *http.Client
-	baseURL string
-	apiKey  string
-	ollama  domain.Provider
+	http      *http.Client
+	baseURL   string
+	apiKey    string
+	embedDims int
 }
 
-func New(baseURL, apiKey string, ollama domain.Provider) (*Provider, error) {
+func New(baseURL, apiKey string, embedDims int) (*Provider, error) {
 	if baseURL == "" {
 		return nil, errors.New("gateway: baseURL is required")
 	}
@@ -33,10 +40,10 @@ func New(baseURL, apiKey string, ollama domain.Provider) (*Provider, error) {
 		return nil, errors.New("gateway: apiKey is required")
 	}
 	return &Provider{
-		http:    &http.Client{Timeout: safetyNetTimeout},
-		baseURL: baseURL,
-		apiKey:  apiKey,
-		ollama:  ollama,
+		http:      &http.Client{Timeout: safetyNetTimeout},
+		baseURL:   baseURL,
+		apiKey:    apiKey,
+		embedDims: embedDims,
 	}, nil
 }
 
@@ -126,6 +133,26 @@ func observabilityMetadata(ctx context.Context, opts *domain.CompleteOptions) ma
 		md["tags"] = []string{task}
 	}
 	return md
+}
+
+// embedObservabilityMetadata builds the proxy metadata object for one embed
+// call (E1-4): existing_trace_id from context, generation_name "embed", tags
+// ["embed"]. Unlike observabilityMetadata, the task key is not read from
+// caller-supplied CompleteOptions — Embed takes no opts — it is the fixed
+// scenario name "embed" (E1-1). Metadata is omitted entirely, not just its
+// trace field, when there is no trace on the context: a call with nothing to
+// correlate sends nothing extra, keeping the wire body exactly {model, input}
+// for an untraced call (as the golden test's bare context.Background() is).
+func embedObservabilityMetadata(ctx context.Context) map[string]any {
+	trace := domain.TraceIDFrom(ctx)
+	if trace == "" {
+		return nil
+	}
+	return map[string]any{
+		"existing_trace_id": trace,
+		"generation_name":   "embed",
+		"tags":              []string{"embed"},
+	}
 }
 
 // responseFormat expresses the OpenAI response_format parameter in both its
@@ -463,8 +490,134 @@ func isResponseFormatRejection(err error) bool {
 	return errors.Is(err, shared.ErrModelUnavailable) || errors.Is(err, shared.ErrInvalidResponse)
 }
 
+// embedRequest is the wire body for POST /embeddings (contracts/embeddings.md
+// E1). The key set is deliberately exactly {model, input} — no dimensions, no
+// input_type, no encoding_format (E1-2). Those are properties of the
+// deployment declared in gateway/config.yaml, never a per-call parameter.
+type embedRequest struct {
+	Model string   `json:"model"`
+	Input []string `json:"input"`
+}
+
+type embedData struct {
+	Index     int       `json:"index"`
+	Embedding []float32 `json:"embedding"`
+}
+
+type embedResponse struct {
+	Model string      `json:"model"`
+	Data  []embedData `json:"data"`
+	Usage struct {
+		Cost         float64 `json:"cost"`
+		PromptTokens int     `json:"prompt_tokens"`
+		TotalTokens  int     `json:"total_tokens"`
+	} `json:"usage"`
+}
+
+// Embed implements the embedding half of the single inference path
+// (contracts/embeddings.md E1-E4). It is a real POST {base}/embeddings call,
+// not a delegation (E5-1): error classification, served-model logging and
+// usage capture all follow the same rules as the chat path's send().
 func (g *Provider) Embed(ctx context.Context, text string) ([]float32, error) {
-	return g.ollama.Embed(ctx, text)
+	const scenario = "embed"
+	start := time.Now()
+	text = strutil.Truncate(text, embedMaxChars)
+
+	req := embedRequest{Model: scenario, Input: []string{text}}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.baseURL+"/embeddings", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+g.apiKey)
+	if md := embedObservabilityMetadata(ctx); md != nil {
+		// Embeddings have no metadata field on the wire request today's
+		// chatRequest carries — the proxy still reads metadata from a
+		// top-level "metadata" key on any request, so it is added directly
+		// to the marshalled body via a second pass rather than growing
+		// embedRequest with an omitempty field that would show up in the
+		// golden test's key-set assertion (E1-2 forbids a stray key). When
+		// there is no trace on the context — e.g. the golden test's bare
+		// context.Background() — no metadata key is added at all, keeping
+		// the body exactly {model, input}.
+		var raw map[string]any
+		if err := json.Unmarshal(body, &raw); err == nil {
+			raw["metadata"] = md
+			if withMD, err := json.Marshal(raw); err == nil {
+				httpReq.Body = io.NopCloser(bytes.NewReader(withMD))
+				httpReq.ContentLength = int64(len(withMD))
+			}
+		}
+	}
+
+	res, err := g.http.Do(httpReq)
+	if err != nil {
+		g.logServed(scenario, "unknown", time.Since(start), "error", "")
+		return nil, fmt.Errorf("%w: gateway: embed request failed: %s", shared.ErrProviderUnavailable, err)
+	}
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		g.logServed(scenario, "unknown", time.Since(start), "error", "")
+		return nil, fmt.Errorf("%w: gateway: read embed response: %s", shared.ErrProviderUnavailable, err)
+	}
+	modelID := res.Header.Get("x-litellm-model-id")
+	if res.StatusCode >= 400 {
+		g.logServed(scenario, "unknown", time.Since(start), "error", modelID)
+		return nil, shared.ClassifyProviderError("gateway", res.StatusCode, data)
+	}
+	var parsed embedResponse
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		g.logServed(scenario, "unknown", time.Since(start), "error", modelID)
+		return nil, fmt.Errorf("%w: gateway: invalid embed response: %s", shared.ErrInvalidResponse, err)
+	}
+	if len(parsed.Data) == 0 {
+		g.logServed(scenario, embedServedModel(res.Header, parsed), time.Since(start), "error", modelID)
+		return nil, fmt.Errorf("%w: gateway: no embedding data returned", shared.ErrInvalidResponse)
+	}
+	vec := parsed.Data[0].Embedding
+	served := embedServedModel(res.Header, parsed)
+	if g.embedDims > 0 && len(vec) != g.embedDims {
+		g.logServed(scenario, served, time.Since(start), "error", modelID)
+		return nil, fmt.Errorf("%w: gateway: embedding length %d does not match configured EMBED_DIMS %d",
+			shared.ErrInvalidResponse, len(vec), g.embedDims)
+	}
+	g.logServed(scenario, served, time.Since(start), "ok", modelID)
+	domain.ReportServedModel(ctx, served)
+	domain.ReportUsage(ctx, embedUsageFrom(res.Header, parsed))
+	return vec, nil
+}
+
+func embedServedModel(headers http.Header, body embedResponse) string {
+	if v := headers.Get("x-litellm-model-name"); v != "" {
+		return v
+	}
+	if body.Model != "" {
+		return body.Model
+	}
+	return "unknown"
+}
+
+func embedUsageFrom(headers http.Header, body embedResponse) domain.Usage {
+	u := domain.Usage{
+		CostUSD:      body.Usage.Cost,
+		PromptTokens: body.Usage.PromptTokens,
+		ServedGroup:  headers.Get("x-litellm-model-group"),
+	}
+	if u.CostUSD == 0 {
+		if c, err := strconv.ParseFloat(headers.Get("x-litellm-response-cost"), 64); err == nil {
+			u.CostUSD = c
+		}
+	}
+	if n, err := strconv.Atoi(headers.Get("x-litellm-attempted-fallbacks")); err == nil && n > 0 {
+		u.AttemptedFallbacks = n
+		u.Substituted = true
+	}
+	return u
 }
 
 var _ domain.Provider = (*Provider)(nil)

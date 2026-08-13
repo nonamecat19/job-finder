@@ -37,12 +37,12 @@ func (f fakeResolver) ProviderClass() llm.ProviderClass { return f.class }
 
 func testPolicies() []queue.TaskPolicy {
 	return []queue.TaskPolicy{
-		{TaskType: queue.TypeIngest, Queue: queue.QueueIngest, LocalConcurrency: 2, HostedConcurrency: 2},
-		{TaskType: queue.TypeMatch, Queue: queue.QueueMatch, LocalConcurrency: 1, HostedConcurrency: 3},
-		{TaskType: queue.TypeGenerate, Queue: queue.QueueGenerate, LocalConcurrency: 1, HostedConcurrency: 3},
-		{TaskType: queue.TypeEnrich, Queue: queue.QueueEnrich, LocalConcurrency: 1, HostedConcurrency: 1},
-		{TaskType: queue.TypeSalaryInfer, Queue: queue.QueueSalaryInfer, LocalConcurrency: 1, HostedConcurrency: 3},
-		{TaskType: queue.TypeGhostScore, Queue: queue.QueueGhostScore, LocalConcurrency: 1, HostedConcurrency: 3},
+		{TaskType: queue.TypeIngest, Queue: queue.QueueIngest, Concurrency: 2},
+		{TaskType: queue.TypeMatch, Queue: queue.QueueMatch, Concurrency: 3},
+		{TaskType: queue.TypeGenerate, Queue: queue.QueueGenerate, Concurrency: 3},
+		{TaskType: queue.TypeEnrich, Queue: queue.QueueEnrich, Concurrency: 1},
+		{TaskType: queue.TypeSalaryInfer, Queue: queue.QueueSalaryInfer, Concurrency: 3},
+		{TaskType: queue.TypeGhostScore, Queue: queue.QueueGhostScore, Concurrency: 3},
 	}
 }
 
@@ -89,10 +89,10 @@ func TestActivityQueues_FixedOrderingAndProviderClass(t *testing.T) {
 		t.Errorf("expected match providerClass hosted, got %v", got)
 	}
 	if got := byName["match"].Concurrency; got != 3 {
-		t.Errorf("expected match concurrency 3 (hosted), got %d", got)
+		t.Errorf("expected match concurrency 3, got %d", got)
 	}
-	if got := byName["generate"].Concurrency; got != 1 {
-		t.Errorf("expected generate concurrency 1 (local), got %d", got)
+	if got := byName["generate"].Concurrency; got != 3 {
+		t.Errorf("expected generate concurrency 3, got %d", got)
 	}
 }
 

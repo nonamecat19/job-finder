@@ -3,8 +3,9 @@ package domain
 import "testing"
 
 // The catalogue is a menu a user reads, so its invariants are about the menu
-// being usable, not about Go compiling. Spec AC1 asks for 3-5 options plus the
-// always-available self-hosted one, with exactly one preselected.
+// being usable, not about Go compiling. Spec AC1 asks for 3-5 options with
+// exactly one preselected. 044 dropped the self-hosted entry that used to sit
+// alongside them: there is no local runtime left for it to run on.
 func TestSummaryCatalogueIsAUsableMenu(t *testing.T) {
 	opts := SummaryOptions()
 
@@ -14,7 +15,7 @@ func TestSummaryCatalogueIsAUsableMenu(t *testing.T) {
 	}
 
 	seen := map[string]bool{}
-	defaults, selfHosted := 0, 0
+	defaults := 0
 	for _, o := range opts {
 		if seen[o.ID] {
 			t.Errorf("duplicate option id %q; ids are persisted, so a collision silently reroutes a user", o.ID)
@@ -27,17 +28,10 @@ func TestSummaryCatalogueIsAUsableMenu(t *testing.T) {
 		if o.Default {
 			defaults++
 		}
-		if o.SelfHosted() {
-			selfHosted++
-		}
 	}
 
 	if defaults != 1 {
 		t.Errorf("catalogue has %d defaults, want exactly 1 (spec AC1)", defaults)
-	}
-	if selfHosted != 1 {
-		t.Errorf("catalogue offers %d self-hosted options, want exactly 1; it must always be "+
-			"available (Constitution V)", selfHosted)
 	}
 }
 
@@ -73,10 +67,14 @@ func TestLookupSummaryOptionFallsBackToTheDefault(t *testing.T) {
 	}
 }
 
-func TestSelfHostedOptionIsTheOneWithNoTaskKey(t *testing.T) {
+// 044 deleted the self-hosted option, and with it the only reason an option
+// could carry an empty task key. summaryOptionRouters now builds a router for
+// every entry unconditionally, so an option without a key would produce one
+// that sends an empty model name to the gateway.
+func TestEverySummaryOptionHasATaskKey(t *testing.T) {
 	for _, o := range SummaryOptions() {
-		if o.SelfHosted() != (o.TaskKey == "") {
-			t.Errorf("option %q disagrees with itself about being self-hosted", o.ID)
+		if o.TaskKey == "" {
+			t.Errorf("option %q has no task key; there is no local tier left for it to mean", o.ID)
 		}
 	}
 }

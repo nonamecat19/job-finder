@@ -3,11 +3,13 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
 	"gopkg.in/yaml.v3"
 
@@ -22,15 +24,11 @@ import (
 type Service struct {
 	q           domain.Repository
 	llmc        llm.Provider
-	embedModel  string
 	rendercvBin string
 }
 
-func NewService(q domain.Repository, llmc llm.Provider, embedModel string, rendercvBin string) *Service {
-	if embedModel == "" {
-		embedModel = "nomic-embed-text"
-	}
-	return &Service{q: q, llmc: llmc, embedModel: embedModel, rendercvBin: rendercvBin}
+func NewService(q domain.Repository, llmc llm.Provider, rendercvBin string) *Service {
+	return &Service{q: q, llmc: llmc, rendercvBin: rendercvBin}
 }
 
 func (s *Service) List(ctx context.Context) ([]dto.ProfileDto, error) {
@@ -52,7 +50,10 @@ func (s *Service) Get(ctx context.Context, id string) (sqlcgen.Profile, error) {
 	}
 	row, err := s.q.GetProfile(ctx, uid)
 	if err != nil {
-		return sqlcgen.Profile{}, fmt.Errorf("profile %s not found", id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return sqlcgen.Profile{}, fmt.Errorf("profile %s not found: %w", id, pgx.ErrNoRows)
+		}
+		return sqlcgen.Profile{}, fmt.Errorf("get profile %s: %w", id, err)
 	}
 	return row, nil
 }
@@ -353,14 +354,17 @@ func (s *Service) RefreshEmbedding(ctx context.Context, id string) error {
 		return err
 	}
 	text := generation.RendercvToText(master)
-	embedding, err := s.llmc.Embed(ctx, text)
+	// The served model is captured from the gateway's response (not from a
+	// Go-side config mirror), so provenance stays correct while the model
+	// choice lives only in gateway/config.yaml.
+	embedCtx, servedModel := llm.WithServedModelCapture(ctx)
+	embedding, err := s.llmc.Embed(embedCtx, text)
 	if err != nil {
 		return err
 	}
 	vec := pgvector.NewVector(embedding)
-	model := s.embedModel
 	uid, _ := dbutil.ParseUUID(id)
-	return s.q.UpdateProfileEmbedding(ctx, sqlcgen.UpdateProfileEmbeddingParams{ID: uid, Embedding: &vec, EmbedModel: &model})
+	return s.q.UpdateProfileEmbedding(ctx, sqlcgen.UpdateProfileEmbeddingParams{ID: uid, Embedding: &vec, EmbedModel: servedModel})
 }
 
 func (s *Service) toDto(p sqlcgen.Profile) dto.ProfileDto {

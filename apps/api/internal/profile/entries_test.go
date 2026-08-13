@@ -36,7 +36,7 @@ func rendercvConfigWithExperience(exp []map[string]any) []byte {
 }
 
 func TestProfileEntries_NoProfile(t *testing.T) {
-	svc := profile.NewService(&entriesFakeRepo{getErr: context.DeadlineExceeded}, nil, "", "")
+	svc := profile.NewService(&entriesFakeRepo{getErr: context.DeadlineExceeded}, nil, "")
 	out, err := svc.ProfileEntries(context.Background())
 	if err != nil {
 		t.Fatalf("ProfileEntries: %v", err)
@@ -63,7 +63,7 @@ func TestProfileEntries_BuildsSourceLabel(t *testing.T) {
 		},
 	})
 
-	svc := profile.NewService(&entriesFakeRepo{row: sqlcgen.Profile{RendercvConfig: config}}, nil, "", "")
+	svc := profile.NewService(&entriesFakeRepo{row: sqlcgen.Profile{RendercvConfig: config}}, nil, "")
 	out, err := svc.ProfileEntries(context.Background())
 	if err != nil {
 		t.Fatalf("ProfileEntries: %v", err)
@@ -88,7 +88,7 @@ func TestProfileEntries_BuildsSourceLabel(t *testing.T) {
 }
 
 func TestProfileEntries_MissingConfig(t *testing.T) {
-	svc := profile.NewService(&entriesFakeRepo{row: sqlcgen.Profile{}}, nil, "", "")
+	svc := profile.NewService(&entriesFakeRepo{row: sqlcgen.Profile{}}, nil, "")
 	out, err := svc.ProfileEntries(context.Background())
 	if err != nil {
 		t.Fatalf("ProfileEntries: %v", err)

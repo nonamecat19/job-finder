@@ -18,6 +18,7 @@ type Repository interface {
 
 	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
 	UpdateJobEmbedding(ctx context.Context, arg sqlcgen.UpdateJobEmbeddingParams) error
+	UpdateJobEmbeddingWithHash(ctx context.Context, arg sqlcgen.UpdateJobEmbeddingWithHashParams) error
 	UpsertMatchResult(ctx context.Context, arg sqlcgen.UpsertMatchResultParams) (sqlcgen.MatchResult, error)
 }
 

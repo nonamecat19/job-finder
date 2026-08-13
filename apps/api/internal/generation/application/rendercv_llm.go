@@ -331,30 +331,19 @@ func selectContent(ctx context.Context, lc llm.Provider, model string, master do
 // at premium rates small (035 FR-004).
 func buildSummaryPrompt(brief domain.SummaryBrief) string {
 	var b strings.Builder
-	b.WriteString("Write the professional summary for a tailored resume.\n\n")
-	b.WriteString("VACANCY REQUIRED SKILLS: " + strings.Join(brief.Analysis.RequiredSkills, ", ") + "\n")
-	if len(brief.Analysis.NiceToHaveSkills) > 0 {
-		b.WriteString("VACANCY NICE-TO-HAVE: " + strings.Join(brief.Analysis.NiceToHaveSkills, ", ") + "\n")
-	}
-	if brief.Analysis.ExperienceLevel != "" {
-		b.WriteString("VACANCY SENIORITY: " + brief.Analysis.ExperienceLevel + "\n")
-	}
-	if len(brief.Analysis.IndustryKeywords) > 0 {
-		b.WriteString("INDUSTRY: " + strings.Join(brief.Analysis.IndustryKeywords, ", ") + "\n")
-	}
+	b.WriteString("Write a professional summary about the candidate.\n\n")
 	if len(brief.SkillGroupLabels) > 0 {
-		b.WriteString("\nCANDIDATE SKILL AREAS: " + strings.Join(brief.SkillGroupLabels, ", ") + "\n")
+		b.WriteString("CANDIDATE SKILL AREAS: " + strings.Join(brief.SkillGroupLabels, ", ") + "\n")
 	}
 	if len(brief.Highlights) > 0 {
-		b.WriteString("\nACHIEVEMENTS SELECTED FOR THIS RESUME (the only achievements you may reference):\n")
+		b.WriteString("\nCANDIDATE ACHIEVEMENTS (the only achievements you may reference):\n")
 		for _, h := range brief.Highlights {
 			b.WriteString("  - " + h + "\n")
 		}
 	}
 	fmt.Fprintf(&b, "\nWrite %d-%d sentences that:\n", brief.SentenceMin, brief.SentenceMax)
 	fmt.Fprintf(&b, "- Open with \"%d+ years of experience\" (derived from the candidate's dates; use it verbatim) and domain expertise\n", brief.TotalYears)
-	b.WriteString("- Reference 2-3 skills the vacancy requires, drawn only from the candidate's skill areas above\n")
-	b.WriteString("- Mention one achievement from the list above, without inventing or altering its numbers\n")
+	b.WriteString("- Summarize the candidate's background and strengths, drawing from the skill areas and achievements above\n")
 	b.WriteString("- Never use a seniority label (e.g. 'mid-level', 'senior') in place of the years figure\n")
 	b.WriteString("- Introduce no skill, employer, credential or metric that does not appear above\n")
 	if len(brief.PreviousViolations) > 0 {

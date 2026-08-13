@@ -13,27 +13,10 @@ type Config struct {
 	DatabaseURL string `mapstructure:"DATABASE_URL"`
 	RedisURL    string `mapstructure:"REDIS_URL"`
 
-	OllamaURL  string `mapstructure:"OLLAMA_URL"`
-	OllamaKey  string `mapstructure:"OLLAMA_KEY"`
-	LLMModel   string `mapstructure:"LLM_MODEL"`
-	EmbedModel string `mapstructure:"EMBED_MODEL"`
-
-	LLMModelMatch      string `mapstructure:"LLM_MODEL_MATCH"`
-	LLMModelGeneration string `mapstructure:"LLM_MODEL_GENERATION"`
-	LLMModelRephrase   string `mapstructure:"LLM_MODEL_REPHRASE"`
-	LLMModelGhost      string `mapstructure:"LLM_MODEL_GHOST"`
-
-	LLMModelGenerationAnalyze string `mapstructure:"LLM_MODEL_GENERATION_ANALYZE"`
-	LLMModelGenerationSelect  string `mapstructure:"LLM_MODEL_GENERATION_SELECT"`
-	LLMModelGenerationPremium string `mapstructure:"LLM_MODEL_GENERATION_PREMIUM"`
-	LLMModelGenerationSummary string `mapstructure:"LLM_MODEL_GENERATION_SUMMARY"`
-
 	GatewayURL       string `mapstructure:"GATEWAY_URL"`
 	LiteLLMMasterKey string `mapstructure:"LITELLM_MASTER_KEY"`
 
 	KeywordRephraseCacheTTLSec int `mapstructure:"KEYWORD_REPHRASE_CACHE_TTL_SEC"`
-
-	EmbedURL string `mapstructure:"EMBED_URL"`
 
 	EmbedDims                int     `mapstructure:"EMBED_DIMS"`
 	MatchSimilarityThreshold float64 `mapstructure:"MATCH_SIMILARITY_THRESHOLD"`
@@ -84,7 +67,6 @@ type Config struct {
 	LinkedInScrapeEnabled bool `mapstructure:"LINKEDIN_SCRAPE_ENABLED"`
 
 	AIConcurrencyCloud int `mapstructure:"AI_CONCURRENCY_CLOUD"`
-	AIConcurrencyLocal int `mapstructure:"AI_CONCURRENCY_LOCAL"`
 	IngestConcurrency  int `mapstructure:"INGEST_CONCURRENCY"`
 	EnrichConcurrency  int `mapstructure:"ENRICH_CONCURRENCY"`
 
@@ -102,8 +84,7 @@ type Config struct {
 	ActivitySweepInterval     time.Duration `mapstructure:"ACTIVITY_SWEEP_INTERVAL"`
 	ActivityQueuedGrace       time.Duration `mapstructure:"ACTIVITY_QUEUED_GRACE"`
 
-	OllamaKeepAlive        string `mapstructure:"OLLAMA_KEEP_ALIVE"`
-	LLMMaxIdleConnsPerHost int    `mapstructure:"LLM_MAX_IDLE_CONNS_PER_HOST"`
+	LLMMaxIdleConnsPerHost int `mapstructure:"LLM_MAX_IDLE_CONNS_PER_HOST"`
 
 	// LLM observability retention (036 FR-008, contracts C7-1). The platform
 	// prunes the collector itself because automated retention is not an OSS
@@ -128,25 +109,28 @@ type Config struct {
 	DBInteractiveReserve int           `mapstructure:"DB_INTERACTIVE_RESERVE"`
 }
 
-func (c *Config) ModelOr(m string) string {
-	if m == "" {
-		return c.LLMModel
-	}
-	return m
-}
-
-// GenerationModelOr resolves a per-stage local model, falling back to the
-// generation-wide model and then to LLM_MODEL. It exists so pinning a stage is
-// optional: an operator who sets only LLM_MODEL_GENERATION still gets that
-// model for every stage.
-func (c *Config) GenerationModelOr(m string) string {
-	if m == "" {
-		m = c.LLMModelGeneration
-	}
-	return c.ModelOr(m)
-}
-
+// Load reads configuration for binaries that do AI/inference work. It applies
+// every validation LoadNonAI does, plus the AI surface requirement (K1):
+// GATEWAY_URL and LITELLM_MASTER_KEY must be configured. It never checks that
+// the gateway is reachable — only that it is configured (K1-2, K1-3).
 func Load() (*Config, error) {
+	cfg, err := load()
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAISurface(cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// LoadNonAI reads configuration for binaries and tests that do no inference
+// work, so must not be required to configure a gateway (K1-4).
+func LoadNonAI() (*Config, error) {
+	return load()
+}
+
+func load() (*Config, error) {
 	v := viper.New()
 	v.AutomaticEnv()
 
@@ -167,4 +151,17 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// validateAISurface enforces K1: the gateway must be configured before any
+// AI-doing binary boots. This checks presence only, never reachability — an
+// unreachable gateway fails tasks, not boots (K1-2, K1-3).
+func validateAISurface(cfg *Config) error {
+	if cfg.GatewayURL == "" {
+		return fmt.Errorf("config: GATEWAY_URL is required")
+	}
+	if cfg.LiteLLMMasterKey == "" {
+		return fmt.Errorf("config: LITELLM_MASTER_KEY is required")
+	}
+	return nil
 }

@@ -1,62 +1,186 @@
-# LiteLLM proxy configuration (030-litellm-model-routing).
-# Contract: specs/domains/llm-routing.md § 2.1
+# LiteLLM proxy configuration (044-litellm-only-routing).
+# Contract: specs/044-litellm-only-routing/contracts/gateway-config.md
 #
-# The Go backend sends the task key as the `model` field and never learns
-# which upstream served the request beyond what apps/api logs from
-# x-litellm-model-name (FR-012/FR-013). This file is the single place to
-# change which model serves a task (FR-005/SC-003): edit the model id below,
-# then `docker compose restart litellm` — no application rebuild needed.
+# The Go backend sends the scenario name as the `model` field and never
+# learns which upstream served the request beyond what apps/api logs from
+# x-litellm-model-name (FR-012/FR-013, 030). This file is the single place to
+# change which model serves a scenario (FR-005/SC-003): edit the model id
+# below, then `docker compose restart litellm` — no application rebuild, no
+# migration, no dashboard action (C5), except for the `embed` chain's width
+# (C5-1: changing `output_dimension` there needs a migration and re-embed).
 #
-# Naming convention: <task>-<tier> for every non-primary tier; the primary
-# group is bare <task> so app requests (model=<task>) always hit tier 1
-# directly. Chain order for every task (data-model.md §2, FR-006/FR-008):
-#   <task> (free: Cerebras) → <task>-groq (free) → <task>-cohere (free)
-#   → <task>-openrouter (aggregator, may be paid) → local (terminal, shared)
-# `generation` is the deliberate exception: OpenRouter is its tier 1 and
-# Cerebras drops to <task>-cerebras behind it. See the generation block.
-# Every model below is response_format:json_object-capable (contract C5) so
-# the chain never silently degrades a structured-output task into prose.
+# There is no local/self-hosted terminal tier and no `default` catch-all
+# group any more (044 removes both — the free-tier-first-then-Ollama rule
+# this header used to describe is gone with them). Every scenario instead
+# resolves to a chain of at least two tiers drawn from at least two distinct
+# hosted providers (C2-1); an unknown scenario name fails loudly (4xx)
+# instead of falling through to a default.
+#
+# TEMPORARY (2026-08-13): Groq and Cohere are removed from every chain.
+# Their fallback tiers below are gone, and `embed` — whose primary was Cohere
+# with OpenAI as its only fallback — is now a single OpenAI tier with no
+# fallback. That is an explicit, temporary exception to C2-1 for `embed`
+# only (contracts/gateway-config.md C2-5); the two chat chains that lost
+# their whole fallback list (recruiter, generation-summary-fast) gained an
+# openrouter tier instead so C2-1 still holds for them.
+#
+# Naming convention: <scenario>-<tier> for every non-primary tier; the
+# primary group is bare <scenario> so app requests (model=<scenario>) hit
+# tier 1 directly. Ordering follows the scenario's class (C2-3):
+#   - economy-structured: a free tier leads, paid aggregator tiers follow
+#     (match, ghost, rephrase, recruiter, generation-summary-fast)
+#   - quality-writing: the quality model leads, cheaper tiers are fallbacks
+#     (generation, outreach, generation-select-premium, generation-summary,
+#     generation-summary-premium) — FR-011 requires `generation` and
+#     `outreach` specifically to lead with openrouter/anthropic/claude-sonnet-5
+#   - tool-capable: free tier leads, but EVERY tier is tool-capable (salary
+#     is the only scenario this applies to — C3-2)
+#   - embedding: the primary provider leads, every tier at the declared
+#     width (embed)
+#   generation-analyze and generation-select are economy-structured but are
+#   the deliberate exception to "free tier leads": see their block below.
+#
+# Every model below is response_format:json_object-capable (C3-5) so the
+# chain never silently degrades a structured-output scenario into prose.
+# Every tier whose family deliberates (OpenAI/Anthropic/Google via
+# openrouter/*, plus the deepseek tiers below) declares its reasoning bound
+# — reasoning_effort: low, or reasoning: {enabled: false} — because an
+# unbounded thinking model spends its whole output budget reasoning and
+# returns empty content that no fallback rescues (FR-014, research.md R2).
+# This is checked for EVERY openrouter/* tier in the file, not only the
+# generation-* ones (C6).
 #
 # Model IDs verified live against each provider's catalog 2026-07-31
-# (research.md R8): Cerebras gpt-oss-120b, Groq llama-3.3-70b-versatile,
-# Cohere command-r-08-2024, OpenRouter deepseek/deepseek-v4-pro /
-# qwen/qwen3.7-max / openai/gpt-4o-mini (unchanged from the prior config and
-# reconfirmed present). The `litellm_settings.fallbacks` shape below (a list
-# of single-key dicts under litellm_settings, not litellm_params) was
-# confirmed against the pinned `ghcr.io/berriai/litellm:main-stable` image by
-# running it locally with `--detailed_debug` (research.md R1).
+# (research.md R8): Cerebras gpt-oss-120b, OpenRouter
+# deepseek/deepseek-v4-pro / anthropic/claude-* / openai/gpt-4o-mini,
+# OpenAI text-embedding-3-small (research.md R4). The
+# `litellm_settings.fallbacks` shape below (a list of single-key dicts under
+# litellm_settings, not litellm_params) was confirmed against the pinned
+# `ghcr.io/berriai/litellm:main-stable` image by running it locally with
+# `--detailed_debug` (research.md R1).
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
 
 model_list:
-  # --- match ---
+  # --- match (economy-structured) ---
   - model_name: match
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: match-groq
-    litellm_params:
-      model: groq/llama-3.3-70b-versatile
-      api_key: os.environ/GROQ_API_KEY
-  - model_name: match-cohere
-    litellm_params:
-      model: cohere_chat/command-r-08-2024
-      api_key: os.environ/COHERE_API_KEY
   - model_name: match-openrouter
     litellm_params:
       model: openrouter/deepseek/deepseek-v4-pro
+      reasoning: { enabled: false }
       api_key: os.environ/OPENROUTER_API_KEY
 
-  # --- generation (cover letters) ---
-  # Since 035 this key serves the cover letter only; the resume is produced by
-  # the staged keys below. Tier 1 is OpenRouter because the letter is prose the
-  # user sends to an employer, so output quality decides whether it is usable.
+  # --- ghost (economy-structured) ---
+  - model_name: ghost
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: ghost-openrouter
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-pro
+      reasoning: { enabled: false }
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # --- rephrase (economy-structured) ---
+  - model_name: rephrase
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: rephrase-openrouter
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # --- recruiter (economy-structured, new in 044) ---
+  # Recruiter-message extraction is a structured-output task in the same
+  # class as match/ghost/rephrase, so it is modelled on their shape: free
+  # tier leads, an openrouter tier follows. Two tiers is the whole chain
+  # (2026-08-13: groq and cohere were removed; the openrouter tier that the
+  # other economy-structured scenarios carried is what fills the gap).
+  - model_name: recruiter
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+  - model_name: recruiter-openrouter
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-pro
+      reasoning: { enabled: false }
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # --- salary (tool-capable, new in 044) ---
   #
-  # It was deepseek-v4-pro until 2026-08-07. That model honours neither
-  # reasoning_effort nor reasoning.enabled, so its deliberation cannot be
-  # bounded, and an unbounded thinking model spends the whole output budget
-  # reasoning and returns empty content (research.md R2).
+  # 037/044: every tier of this chain carries a model_info.supports_function_calling
+  # declaration, because `salary` is the key the salary tool loop runs on
+  # (C3-2). This scenario is the direct successor of the removed `default`
+  # group: same provider shape, same tiers, renamed.
+  #
+  # READ THIS BEFORE TRUSTING THE ANNOTATION. It is DOCUMENTATION THAT A TEST
+  # READS, NOT A CONTROL THE PROXY ENFORCES. LiteLLM uses model_info for its
+  # model-info endpoint and cost bookkeeping; it does not refuse a request,
+  # skip a tier, or stop `drop_params: true` (below) from silently dropping a
+  # `tools` array an upstream will not accept. The request then succeeds
+  # without tools — the identical capability trap this file already
+  # documents for response_format, where "the fallback chain will not rescue
+  # that, because the request succeeded".
+  #
+  # The line exists so gateway_config_test.go can assert that somebody
+  # considered tool capability when adding a tier. The only mechanism that
+  # catches a dropped tools array at runtime is the loop's required first
+  # round, which returns not_tool_capable rather than an answer.
+  #
+  # Values below reflect each provider's published tool-calling support as of
+  # 2026-08-07. They are a documented claim, not a live probe: if a tier
+  # starts answering the salary loop's first round with prose, this is the
+  # first line to re-verify.
+  - model_name: salary
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+    model_info:
+      supports_function_calling: true
+  - model_name: salary-openrouter
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      supports_function_calling: true
+
+  # --- outreach (quality-writing, new in 044) ---
+  # Outreach messages are prose sent to another person, so — like
+  # `generation` below — output quality decides whether it is usable
+  # (FR-011): the quality model leads and cheaper tiers are the fallback,
+  # not the other way around.
+  - model_name: outreach
+    litellm_params:
+      model: openrouter/anthropic/claude-sonnet-5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: outreach-haiku
+    litellm_params:
+      model: openrouter/anthropic/claude-haiku-4.5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: outreach-cerebras
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+
+  # --- generation (cover letters, quality-writing) ---
+  # Since 035 this key serves the cover letter only; the resume is produced
+  # by the staged keys below. Tier 1 is OpenRouter because the letter is
+  # prose the user sends to an employer, so output quality decides whether it
+  # is usable (FR-011).
   - model_name: generation
+    litellm_params:
+      model: openrouter/anthropic/claude-sonnet-5
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-haiku
     litellm_params:
       model: openrouter/anthropic/claude-haiku-4.5
       reasoning_effort: low
@@ -65,43 +189,41 @@ model_list:
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: generation-groq
-    litellm_params:
-      model: groq/llama-3.3-70b-versatile
-      api_key: os.environ/GROQ_API_KEY
-  - model_name: generation-cohere
-    litellm_params:
-      model: cohere_chat/command-r-08-2024
-      api_key: os.environ/COHERE_API_KEY
 
   # --- generation stages (035-split-model-generation) ---
-  # The generation task is split into stages so each is served by the cheapest
-  # model that does its job. The economy model does the mechanical work (ranking
-  # skills, picking highlights) as well as the premium one at a fraction of the
-  # price, and fails only at writing the summary.
+  # The generation task is split into stages so each is served by the
+  # cheapest model that does its job. The economy model does the mechanical
+  # work (ranking skills, picking highlights) as well as the premium one at
+  # a fraction of the price, and fails only at writing the summary.
   #
-  # WHERE THE EVIDENCE LIVES (038). Do not record measurements in this comment.
-  # The evaluation harness produces a durable comparison artifact — per model,
-  # per case, per stage, with cost, latency, served model and the request
-  # parameters it ran under — and that artifact is the record a model swap is
-  # decided on:
+  # generation-analyze and generation-select are economy-structured, but are
+  # the deliberate exception to "free tier leads" (FR-011's second clause):
+  # they lead with a paid OpenRouter tier because the mechanical stages
+  # measured better there. WHERE THE EVIDENCE LIVES (038). Do not record
+  # measurements in this comment. The evaluation harness produces a durable
+  # comparison artifact — per model, per case, per stage, with cost, latency,
+  # served model and the request parameters it ran under — and that artifact
+  # is the record a model swap is decided on:
   #
   #   go test -tags eval_live ./internal/generation/application/ \
   #     -run TestLiveComparison -eval.models generation-select,generation-summary
   #
-  # A figure typed into a YAML comment drifts from the moment it is written and
-  # cannot be reproduced by the next reader. The original 2026-08-07 measurement
-  # (one vacancy, identical prompt and strict schema) is recorded in
-  # specs/035-split-model-generation/research.md R1; everything after it belongs
-  # in an artifact.
+  # A figure typed into a YAML comment drifts from the moment it is written
+  # and cannot be reproduced by the next reader. The original 2026-08-07
+  # measurement (one vacancy, identical prompt and strict schema) that first
+  # justified leading these two stages with a paid tier is recorded in
+  # specs/035-split-model-generation/research.md R1; everything after it
+  # belongs in an artifact.
   #
-  # Every deployment declares how its model's deliberation is bounded. Without
-  # it a thinking model spends its whole output budget reasoning and returns
-  # empty content — reasoning tokens count against max_completion_tokens. That
-  # is not a tuning detail: it is what made every resume run fail before
-  # 2026-08-07. The switch differs by provider family (research.md R2):
-  # reasoning_effort for OpenAI/Anthropic/Google, reasoning.enabled for z-ai
-  # and deepseek-flash. deepseek-v4-pro honours neither and is not eligible.
+  # Every deployment declares how its model's deliberation is bounded.
+  # Without it a thinking model spends its whole output budget reasoning and
+  # returns empty content — reasoning tokens count against
+  # max_completion_tokens. That is not a tuning detail: it is what made every
+  # resume run fail before 2026-08-07. The switch differs by provider family
+  # (research.md R2): reasoning_effort for OpenAI/Anthropic/Google,
+  # reasoning.enabled for z-ai and deepseek-flash. deepseek-v4-pro honours
+  # neither natively, so its tiers above declare reasoning.enabled: false as
+  # the closest available bound rather than leave the field absent.
 
   - model_name: generation-analyze
     litellm_params:
@@ -112,10 +234,6 @@ model_list:
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: generation-analyze-cohere
-    litellm_params:
-      model: cohere_chat/command-r-08-2024
-      api_key: os.environ/COHERE_API_KEY
 
   - model_name: generation-select
     litellm_params:
@@ -126,15 +244,9 @@ model_list:
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: generation-select-cohere
-    litellm_params:
-      model: cohere_chat/command-r-08-2024
-      api_key: os.environ/COHERE_API_KEY
 
-  # Escalation target: reached only when the economy model returns incomplete
-  # selection output twice (FR-007). It needs its own chain for the same reason
-  # every other key does — an escalation during an Anthropic outage must still
-  # land on the local model.
+  # Escalation target (quality-writing): reached only when the economy model
+  # returns incomplete selection output twice (FR-007).
   - model_name: generation-select-premium
     litellm_params:
       model: openrouter/anthropic/claude-sonnet-5
@@ -145,6 +257,10 @@ model_list:
       model: openrouter/anthropic/claude-haiku-4.5
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-select-premium-cerebras
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
 
   - model_name: generation-summary
     litellm_params:
@@ -162,11 +278,12 @@ model_list:
       api_key: os.environ/CEREBRAS_API_KEY
 
   # --- user-selectable summary options (034) ---
-  # The summary stage is the only stage the user gets to choose, because it is
-  # the only one where the choice buys anything: 035 measured the economy model
-  # doing analyze and select as well as the premium one, and failing at the
-  # summary. The catalogue lives in internal/generation/domain/summary_option.go
-  # and a test asserts every option's key is declared and chained here.
+  # The summary stage is the only stage the user gets to choose, because it
+  # is the only one where the choice buys anything: 035 measured the economy
+  # model doing analyze and select as well as the premium one, and failing
+  # at the summary. The catalogue lives in
+  # internal/generation/domain/summary_option.go and a test asserts every
+  # option's key is declared and chained here.
   #
   # `standard` is deliberately absent from this block: it routes to the
   # `generation-summary` key above, unchanged, so a user who never opens the
@@ -185,119 +302,35 @@ model_list:
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: generation-summary-fast-groq
-    litellm_params:
-      model: groq/llama-3.3-70b-versatile
-      api_key: os.environ/GROQ_API_KEY
-
-  # --- rephrase ---
-  - model_name: rephrase
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: rephrase-groq
-    litellm_params:
-      model: groq/llama-3.3-70b-versatile
-      api_key: os.environ/GROQ_API_KEY
-  - model_name: rephrase-cohere
-    litellm_params:
-      model: cohere_chat/command-r-08-2024
-      api_key: os.environ/COHERE_API_KEY
-  - model_name: rephrase-openrouter
+  - model_name: generation-summary-fast-openrouter
     litellm_params:
       model: openrouter/openai/gpt-4o-mini
+      reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
 
-  # --- ghost ---
-  - model_name: ghost
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: ghost-groq
-    litellm_params:
-      model: groq/llama-3.3-70b-versatile
-      api_key: os.environ/GROQ_API_KEY
-  - model_name: ghost-cohere
-    litellm_params:
-      model: cohere_chat/command-r-08-2024
-      api_key: os.environ/COHERE_API_KEY
-  - model_name: ghost-openrouter
-    litellm_params:
-      model: openrouter/deepseek/deepseek-v4-pro
-      api_key: os.environ/OPENROUTER_API_KEY
-
-  # --- default ---
-  # --- default (salary, outreach, recruiter extraction) ---
+  # --- embed (embedding, new in 044) ---
+  # TEMPORARY (2026-08-13): Cohere was the embed primary and OpenAI its only
+  # fallback; with Cohere and Groq removed, this chain is a single OpenAI
+  # tier with no fallback — an explicit, temporary exception to C2-1's
+  # >=2-provider rule until a second embedding provider is added back
+  # (contracts/gateway-config.md C2-5).
   #
-  # 037: every tier of this chain carries a model_info.supports_function_calling
-  # declaration, because `default` is the key the salary tool loop runs on.
-  #
-  # READ THIS BEFORE TRUSTING THE ANNOTATION. It is DOCUMENTATION THAT A TEST
-  # READS, NOT A CONTROL THE PROXY ENFORCES. LiteLLM uses model_info for its
-  # model-info endpoint and cost bookkeeping; it does not refuse a request, skip
-  # a tier, or stop `drop_params: true` (below) from silently dropping a `tools`
-  # array an upstream will not accept. The request then succeeds without tools —
-  # the identical capability trap this file already documents for
-  # response_format, where "the fallback chain will not rescue that, because the
-  # request succeeded".
-  #
-  # The line exists so gateway_config_test.go can assert that somebody
-  # considered tool capability when adding a tier. The only mechanism that
-  # catches a dropped tools array at runtime is the loop's required first round,
-  # which returns not_tool_capable rather than an answer.
-  #
-  # Values below reflect each provider's published tool-calling support as of
-  # 2026-08-07. They are a documented claim, not a live probe: if a tier starts
-  # answering the salary loop's first round with prose, this is the first line
-  # to re-verify.
-  - model_name: default
+  # 1024-wide, matching the application's EMBED_DIMS default (C5-1) —
+  # changing the width here is NOT a config-only change, it requires a
+  # migration and re-embedding every stored vector. `input_type:
+  # search_document` and `output_dimension` are still declared (C3-4) even
+  # though OpenAI's embeddings API uses neither: `drop_params: true` makes
+  # that silent rather than an error. `dimensions` is the field LiteLLM
+  # actually forwards to OpenAI, while `output_dimension` is the width
+  # declaration the guardrail reads — both are set to keep the API call and
+  # the config-level width declaration in agreement.
+  - model_name: embed
     litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
-    model_info:
-      supports_function_calling: true
-  - model_name: default-groq
-    litellm_params:
-      model: groq/llama-3.3-70b-versatile
-      api_key: os.environ/GROQ_API_KEY
-    model_info:
-      supports_function_calling: true
-  - model_name: default-cohere
-    litellm_params:
-      model: cohere_chat/command-r-08-2024
-      api_key: os.environ/COHERE_API_KEY
-    model_info:
-      supports_function_calling: true
-  - model_name: default-openrouter
-    litellm_params:
-      model: openrouter/openai/gpt-4o-mini
-      api_key: os.environ/OPENROUTER_API_KEY
-    model_info:
-      supports_function_calling: true
-
-  # --- local (terminal tier, shared by every task, FR-008) ---
-  # model_info declares this deployment as free (036 FR-014). Without an
-  # explicit zero the proxy emits *no* cost for a model absent from its cost
-  # map, which makes a genuinely free call and an unpriced one indistinguishable
-  # in the observability record — so "local calls are recorded at cost 0" could
-  # not be asserted. Declaring it makes the claim true rather than hopeful.
-  - model_name: local
-    litellm_params:
-      model: ollama_chat/gpt-oss:120b-cloud
-      api_base: os.environ/OLLAMA_URL
-      api_key: os.environ/OLLAMA_KEY
-    model_info:
-      input_cost_per_token: 0
-      output_cost_per_token: 0
-      # 037 FR-018a: there is exactly ONE local deployment and every task chain
-      # ends at it. Declaring it tool-capable here declares it tool-capable FOR
-      # EVERY TASK IN THE SYSTEM, not just for the one chain that needed the
-      # claim. That is a statement about the model this deployment currently
-      # points at (gpt-oss:120b-cloud, which supports tool calling), and it has
-      # to be re-checked whenever OLLAMA_URL is repointed or the model changes —
-      # a swap made for one task's benefit silently changes this claim for all
-      # of them.
-      supports_function_calling: true
+      model: openai/text-embedding-3-small
+      dimensions: 1024
+      output_dimension: 1024
+      input_type: search_document
+      api_key: os.environ/OPENAI_API_KEY
 
 litellm_settings:
   # --- observability (036-langfuse-llm-observability) ---
@@ -305,28 +338,30 @@ litellm_settings:
   # the call worth having a record of: a failure that produces no record is
   # indistinguishable from a call that never happened (FR-002).
   #
-  # Global, never per-deployment: a callback attached to individual deployments
-  # would produce coverage that silently depends on which tier answered.
+  # Global, never per-deployment: a callback attached to individual
+  # deployments would produce coverage that silently depends on which tier
+  # answered.
   #
   # Delivery is best-effort and dispatched off the request path, so an
   # unreachable collector cannot delay or fail inference (FR-004). That is
-  # verified with a stopped AND a paused collector, not assumed — this file's
-  # own history is why (see the request_timeout note below).
+  # verified with a stopped AND a paused collector, not assumed — this
+  # file's own history is why (see the request_timeout note below).
   #
-  # Credentials arrive as environment variables on the litellm container only;
-  # the application container is never granted them (FR-007).
+  # Credentials arrive as environment variables on the litellm container
+  # only; the application container is never granted them (FR-007).
   success_callback: ["langfuse"]
   failure_callback: ["langfuse"]
 
   drop_params: true
   num_retries: 1
-  # request_timeout is PER ATTEMPT, not per chain. The worst case is
-  # tiers x (1 + num_retries) x request_timeout = 5 x 2 x 60 = 600s, which is
-  # the number that must stay under the Go adapter's safetyNetTimeout
-  # (15m, infrastructure/gateway/gateway.go) so the proxy is always what
-  # times out first and the app receives a real upstream error rather than a
-  # local deadline. Raising request_timeout, num_retries or the tier count
-  # without redoing that arithmetic is what reintroduces the silent hang.
+  # request_timeout is PER ATTEMPT, not per chain. Chains are now at most 4
+  # tiers where they were 5 (C4-1), so the worst case is
+  # tiers x (1 + num_retries) x request_timeout = 4 x 2 x 60 = 480s, which
+  # must stay under the Go adapter's safetyNetTimeout (15m,
+  # infrastructure/gateway/gateway.go) so the proxy is always what times out
+  # first and the app receives a real upstream error rather than a local
+  # deadline. Raising request_timeout, num_retries or the tier count without
+  # redoing that arithmetic is what reintroduces the silent hang.
   #
   # This was previously 110 under the comment "below the Go adapter's 120s
   # timeout so a chain exhausting every tier still returns" — false, since a
@@ -335,26 +370,28 @@ litellm_settings:
   allowed_fails: 3
   cooldown_time: 60
   # Keyed on the PRIMARY group only, deliberately. LiteLLM walks this list in
-  # order for the whole request, so tiers 3-5 are reached even though only
+  # order for the whole request, so later tiers are reached even though only
   # tier 1 is keyed — verified 2026-08-04 by running this image with
-  # generation and generation-groq pointed at a dead endpoint: the call was
-  # served by generation-cohere in 5.3s.
+  # generation and generation-haiku pointed at a dead endpoint: the call was
+  # served by generation-cerebras in 5.3s.
   #
-  # The "No fallback model group found for original model_group=<task>-groq"
+  # The "No fallback model group found for original model_group=<scenario>-<tier>"
   # line this produces is a nested-lookup diagnostic, not a chain stop; the
   # outer walk continues past it. Do NOT "fix" it by giving each tier its own
   # fallback list: that makes a failed tier traverse its own successors AND
-  # then get retried by the outer walk, roughly doubling the attempt count and
-  # breaking the worst-case arithmetic above.
+  # then get retried by the outer walk, roughly doubling the attempt count
+  # and breaking the worst-case arithmetic above.
   fallbacks:
-    - match: [match-groq, match-cohere, match-openrouter, local]
-    - generation: [generation-cerebras, generation-groq, generation-cohere, local]
-    - generation-analyze: [generation-analyze-cerebras, generation-analyze-cohere, local]
-    - generation-select: [generation-select-cerebras, generation-select-cohere, local]
-    - generation-select-premium: [generation-select-premium-haiku, local]
-    - generation-summary: [generation-summary-haiku, generation-summary-cerebras, local]
-    - generation-summary-premium: [generation-summary-premium-sonnet, generation-summary-cerebras, local]
-    - generation-summary-fast: [generation-summary-fast-groq, generation-summary-cerebras, local]
-    - rephrase: [rephrase-groq, rephrase-cohere, rephrase-openrouter, local]
-    - ghost: [ghost-groq, ghost-cohere, ghost-openrouter, local]
-    - default: [default-groq, default-cohere, default-openrouter, local]
+    - match: [match-openrouter]
+    - ghost: [ghost-openrouter]
+    - rephrase: [rephrase-openrouter]
+    - recruiter: [recruiter-openrouter]
+    - salary: [salary-openrouter]
+    - outreach: [outreach-haiku, outreach-cerebras]
+    - generation: [generation-haiku, generation-cerebras]
+    - generation-analyze: [generation-analyze-cerebras]
+    - generation-select: [generation-select-cerebras]
+    - generation-select-premium: [generation-select-premium-haiku, generation-select-premium-cerebras]
+    - generation-summary: [generation-summary-haiku, generation-summary-cerebras]
+    - generation-summary-premium: [generation-summary-premium-sonnet, generation-summary-cerebras]
+    - generation-summary-fast: [generation-summary-fast-openrouter]

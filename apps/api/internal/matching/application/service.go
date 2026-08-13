@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +24,35 @@ import (
 )
 
 var ErrNoProfileConfig = errors.New("no profile config")
+
+// contentHash identifies the exact text an embedding was produced from, so a
+// later match on unchanged content can skip the call (019 R5, E4-3).
+func contentHash(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
+}
+
+// reusableJobEmbedding returns the stored vector only when the row was embedded
+// by embedModel over text with this hash. Anything else — different model,
+// absent provenance, changed content, missing vector — is treated as
+// unembedded and re-embedded rather than compared across vector spaces
+// (FR-020, contracts/embeddings.md E4-2).
+func reusableJobEmbedding(job sqlcgen.Job, hash, embedModel string) ([]float32, bool) {
+	if embedModel == "" || job.EmbedModel == nil || *job.EmbedModel != embedModel {
+		return nil, false
+	}
+	if job.EmbeddingHash == nil || *job.EmbeddingHash != hash {
+		return nil, false
+	}
+	if job.Embedding == nil {
+		return nil, false
+	}
+	stored := job.Embedding.Slice()
+	if len(stored) == 0 {
+		return nil, false
+	}
+	return stored, true
+}
 
 type Service struct {
 	q          domain.Repository
@@ -86,13 +117,33 @@ func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Reco
 	}
 
 	jobText := strutil.Truncate(fmt.Sprintf("%s at %s\n%s", job.Title, job.Company, job.Description), 8000)
-	jobEmbedding, err := s.llmc.Embed(ctx, jobText)
-	if err != nil {
-		return dto.MatchResultDto{}, err
+	hash := contentHash(jobText)
+	// The profile's own provenance is the current served value this job has to
+	// match: a similarity is only meaningful when both sides came out of the
+	// same model (contracts/embeddings.md E4-2, FR-020).
+	var embedModel string
+	if prof.EmbedModel != nil {
+		embedModel = *prof.EmbedModel
 	}
-	jobVec := pgvector.NewVector(jobEmbedding)
-	if err := s.q.UpdateJobEmbedding(ctx, sqlcgen.UpdateJobEmbeddingParams{ID: uid, Embedding: &jobVec}); err != nil {
-		return dto.MatchResultDto{}, err
+	jobEmbedding, reused := reusableJobEmbedding(job, hash, embedModel)
+	if !reused {
+		// The served model is read off the gateway's response rather than a
+		// Go-side config mirror, so a model swap in gateway/config.yaml stays a
+		// config-only change (E4-1).
+		embedCtx, servedModel := llm.WithServedModelCapture(ctx)
+		jobEmbedding, err = s.llmc.Embed(embedCtx, jobText)
+		if err != nil {
+			return dto.MatchResultDto{}, err
+		}
+		jobVec := pgvector.NewVector(jobEmbedding)
+		if err := s.q.UpdateJobEmbeddingWithHash(ctx, sqlcgen.UpdateJobEmbeddingWithHashParams{
+			ID:            uid,
+			Embedding:     &jobVec,
+			EmbeddingHash: &hash,
+			EmbedModel:    servedModel,
+		}); err != nil {
+			return dto.MatchResultDto{}, err
+		}
 	}
 
 	if has, err := s.profiles.HasEmbedding(ctx, profileID); err == nil && !has {

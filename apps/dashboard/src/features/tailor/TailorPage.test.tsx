@@ -32,10 +32,9 @@ const mockedUseSummaryModel = vi.mocked(useSummaryModel);
 const summaryMenu = {
   optionId: 'standard',
   options: [
-    { id: 'standard', label: 'Standard', description: 'The balanced default.', cost: 'moderate', selfHosted: false, current: true },
-    { id: 'premium', label: 'Premium', description: 'The strongest writer available.', cost: 'highest', selfHosted: false, current: false },
-    { id: 'fast', label: 'Fast', description: 'Cheapest and quickest.', cost: 'lowest', selfHosted: false, current: false },
-    { id: 'local', label: 'Self-hosted', description: 'Runs on your own machine.', cost: 'free', selfHosted: true, current: false },
+    { id: 'standard', label: 'Standard', description: 'The balanced default.', cost: 'moderate', current: true },
+    { id: 'premium', label: 'Premium', description: 'The strongest writer available.', cost: 'highest', current: false },
+    { id: 'fast', label: 'Fast', description: 'Cheapest and quickest.', cost: 'lowest', current: false },
   ],
 };
 

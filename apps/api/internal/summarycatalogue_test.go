@@ -27,7 +27,7 @@ import (
 // The parse below is deliberately minimal: only the two things this test
 // asserts about. The full config contract is checked by
 // internal/platform/llm/gateway_config_test.go, which is also where each of
-// these keys is asserted to have a chain terminating at `local`.
+// these keys is asserted to have a fallback chain across real providers.
 
 type catalogueGatewayConfig struct {
 	ModelList []struct {
@@ -63,26 +63,25 @@ func TestEverySummaryOptionRoutesSomewhereReal(t *testing.T) {
 
 	checked := 0
 	for _, o := range domain.SummaryOptions() {
-		if o.SelfHosted() {
-			// The self-hosted option is reached by giving the router no gateway
-			// at all, so it has nothing to declare here. That it is always
-			// offered is asserted in the domain package.
+		checked++
+		if o.TaskKey == "" {
+			t.Errorf("summary option %q has no task key. Since 044 there is no local tier to fall "+
+				"back to, so an option without a key routes nowhere", o.ID)
 			continue
 		}
-		checked++
 		if !declared[o.TaskKey] {
 			t.Errorf("summary option %q routes to task key %q, which gateway/config.yaml does not declare. "+
 				"The option would appear on the menu and quietly route nowhere", o.ID, o.TaskKey)
 		}
 		if !chained[o.TaskKey] {
 			t.Errorf("summary option %q routes to task key %q, which has no litellm_settings.fallbacks chain. "+
-				"Without one it terminates on its own hosted provider instead of the local model (Constitution V)",
+				"Without one a single provider outage takes the option down with it",
 				o.ID, o.TaskKey)
 		}
 	}
 
 	if checked == 0 {
-		t.Fatal("no hosted summary options checked; either the catalogue lost every hosted option " +
-			"or this test stopped finding them")
+		t.Fatal("no summary options checked; either the catalogue is empty or this test stopped " +
+			"finding its options")
 	}
 }

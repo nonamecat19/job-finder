@@ -18,7 +18,7 @@ func TestLive_CompanyPage(t *testing.T) {
 		t.Fatalf("load config: %v", err)
 	}
 
-	llmProvider, err := llm.New(cfg)
+	gw, err := llm.NewProviders(cfg)
 	if err != nil {
 		t.Fatalf("llm new: %v", err)
 	}
@@ -40,7 +40,8 @@ func TestLive_CompanyPage(t *testing.T) {
 		t.Fatal("expected non-empty flattened page text")
 	}
 
-	contacts, err := ExtractCompanyPageContacts(ctx, llmProvider, cfg.ModelOr(""), text)
+	router := llm.NewRouter("recruiter", gw)
+	contacts, err := ExtractCompanyPageContacts(ctx, router, "", text)
 	if err != nil {
 		t.Fatalf("ExtractCompanyPageContacts: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestLive_LinkedIn(t *testing.T) {
 		t.Skip("LINKEDIN_SCRAPE_ENABLED is not set to true — LinkedIn is opt-in (FR-004)")
 	}
 
-	llmProvider, err := llm.New(cfg)
+	gw, err := llm.NewProviders(cfg)
 	if err != nil {
 		t.Fatalf("llm new: %v", err)
 	}
@@ -81,7 +82,8 @@ func TestLive_LinkedIn(t *testing.T) {
 		t.Skip("empty page text — likely an auth wall or markup change")
 	}
 
-	contacts, err := ExtractLinkedInContacts(ctx, llmProvider, cfg.ModelOr(""), text)
+	router := llm.NewRouter("recruiter", gw)
+	contacts, err := ExtractLinkedInContacts(ctx, router, "", text)
 	if err != nil {
 		t.Fatalf("ExtractLinkedInContacts: %v", err)
 	}

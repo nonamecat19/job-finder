@@ -570,9 +570,10 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		// order is decided here, from the analysis, before the group cap in
 		// ApplyHardLimits picks which ones make the page.
 		domain.RankSkills(merged, analysis, cfg)
-		// Each group's authored density level ("all"/"medium"/"relevant")
-		// trims the details RankSkills just ordered, before the group cap in
-		// ApplyHardLimits picks which groups make the page.
+		// Each group's authored density level ("relevant"/"top5"/"top10"/
+		// "top15"/"top20"/"all", defaulting to "relevant") trims the details
+		// RankSkills just ordered, before the group cap in ApplyHardLimits
+		// picks which groups make the page.
 		domain.TrimSkillGroups(merged, analysis)
 		report := domain.ApplyHardLimits(master, merged, cfg)
 		recordShortfalls(ctx, rec, report)

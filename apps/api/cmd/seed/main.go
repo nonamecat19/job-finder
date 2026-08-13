@@ -39,7 +39,9 @@ func run() error {
 	tables := flag.String("tables", "", "comma-separated list of tables to seed (empty = all)")
 	flag.Parse()
 
-	cfg, err := config.Load()
+	// LoadNonAI: seeding does no inference work, so it must not be required
+	// to configure a gateway (contracts/configuration.md K1-4).
+	cfg, err := config.LoadNonAI()
 	if err != nil {
 		return err
 	}

@@ -13,9 +13,9 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := Load()
+	cfg, err := LoadNonAI()
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadNonAI: %v", err)
 	}
 	if cfg.Port != 3000 {
 		t.Errorf("Port default = %d, want 3000", cfg.Port)
@@ -23,14 +23,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.RedisURL != "redis://localhost:6379" {
 		t.Errorf("RedisURL default = %q", cfg.RedisURL)
 	}
-	if cfg.EmbedDims != 768 {
-		t.Errorf("EmbedDims default = %d, want 768", cfg.EmbedDims)
+	if cfg.EmbedDims != 1024 {
+		t.Errorf("EmbedDims default = %d, want 1024", cfg.EmbedDims)
 	}
 	if cfg.MatchSimilarityThreshold != 0.35 {
 		t.Errorf("MatchSimilarityThreshold default = %v, want 0.35", cfg.MatchSimilarityThreshold)
-	}
-	if cfg.OllamaKey != "" {
-		t.Errorf("OllamaKey should default empty, got %q", cfg.OllamaKey)
 	}
 	if cfg.LinkedInScrapeEnabled {
 		t.Error("LinkedInScrapeEnabled should default false")
@@ -62,15 +59,72 @@ func TestLoadGatewayOverride(t *testing.T) {
 	}
 }
 
+// TestConfigRequiresGateway guards K1: Load() (used by binaries that do
+// inference work) must fail closed when the gateway is not configured, and
+// the error must name the specific missing key — the same shape
+// queue.validateLiveness uses. It must never attempt to reach the network:
+// every case here runs with no server listening anywhere, and if Load()
+// tried an HTTP call the missing-key or bad-URL cases would hang or error on
+// the network rather than failing fast with a config error.
+func TestConfigRequiresGateway(t *testing.T) {
+	cases := []struct {
+		name       string
+		gatewayURL string
+		masterKey  string
+		wantKey    string
+	}{
+		{name: "both unset", gatewayURL: "", masterKey: "", wantKey: "GATEWAY_URL"},
+		{name: "master key unset", gatewayURL: "http://litellm:4000", masterKey: "", wantKey: "LITELLM_MASTER_KEY"},
+		{name: "gateway url unset", gatewayURL: "", masterKey: "sk-test", wantKey: "GATEWAY_URL"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := unsetForTest(t); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("GATEWAY_URL", tc.gatewayURL)
+			t.Setenv("LITELLM_MASTER_KEY", tc.masterKey)
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load: want error naming %s, got nil", tc.wantKey)
+			}
+			if !strings.Contains(err.Error(), tc.wantKey) {
+				t.Errorf("Load error = %q, want it to name %s", err.Error(), tc.wantKey)
+			}
+		})
+	}
+}
+
+// TestLoadNonAIIgnoresGateway guards K1-4: the sibling loader for binaries and
+// tests that do no inference must succeed with no gateway configured at all.
+func TestLoadNonAIIgnoresGateway(t *testing.T) {
+	if err := unsetForTest(t); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadNonAI()
+	if err != nil {
+		t.Fatalf("LoadNonAI: %v", err)
+	}
+	if cfg.GatewayURL != "" {
+		t.Errorf("GatewayURL = %q, want empty", cfg.GatewayURL)
+	}
+	if cfg.LiteLLMMasterKey != "" {
+		t.Errorf("LiteLLMMasterKey = %q, want empty", cfg.LiteLLMMasterKey)
+	}
+}
+
 func TestLoadLinkedInScrapeEnabledOverride(t *testing.T) {
 	if err := unsetForTest(t); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("LINKEDIN_SCRAPE_ENABLED", "true")
 
-	cfg, err := Load()
+	cfg, err := LoadNonAI()
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadNonAI: %v", err)
 	}
 	if !cfg.LinkedInScrapeEnabled {
 		t.Error("LinkedInScrapeEnabled = false, want true after env override")
@@ -86,9 +140,9 @@ func TestLoadEnvOverride(t *testing.T) {
 	t.Setenv("EMBED_DIMS", "1024")
 	t.Setenv("MATCH_SIMILARITY_THRESHOLD", "0.5")
 
-	cfg, err := Load()
+	cfg, err := LoadNonAI()
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadNonAI: %v", err)
 	}
 	if cfg.Port != 8080 {
 		t.Errorf("Port = %d, want 8080", cfg.Port)
@@ -104,20 +158,10 @@ func TestLoadEnvOverride(t *testing.T) {
 	}
 }
 
-func TestModelOr(t *testing.T) {
-	c := &Config{LLMModel: "base"}
-	if got := c.ModelOr(""); got != "base" {
-		t.Errorf("ModelOr(\"\") = %q, want base", got)
-	}
-	if got := c.ModelOr("special"); got != "special" {
-		t.Errorf("ModelOr(special) = %q, want special", got)
-	}
-}
-
 func unsetForTest(t *testing.T) error {
 	t.Helper()
 	all := append([]string{
-		"PORT", "REDIS_URL", "OLLAMA_URL", "LLM_MODEL", "EMBED_MODEL", "EMBED_DIMS",
+		"PORT", "REDIS_URL", "EMBED_DIMS",
 		"MATCH_SIMILARITY_THRESHOLD", "ADZUNA_COUNTRY", "DJINNI_DETAIL_DELAY_MS",
 		"WORKUA_DETAIL_DELAY_MS", "DOCUMENTS_DIR",
 		"RESUME_GROUNDING_LEVEL", "RENDERCV_BIN", "LINKEDIN_SCRAPE_ENABLED",

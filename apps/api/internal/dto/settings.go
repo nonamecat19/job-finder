@@ -32,7 +32,6 @@ type SummaryModelOptionDto struct {
 	Label       string `json:"label"`
 	Description string `json:"description"`
 	Cost        string `json:"cost"`
-	SelfHosted  bool   `json:"selfHosted"`
 	Current     bool   `json:"current"`
 }
 

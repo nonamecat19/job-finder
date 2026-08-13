@@ -249,7 +249,7 @@ func TestSkillDensityTrimmedInTailoring(t *testing.T) {
 		"summary": []any{"A summary."},
 		"skills": []any{
 			map[string]any{"label": "Backend", "details": "Go, Postgres, Redis", "skills_level": "relevant"},
-			map[string]any{"label": "Mobile", "details": "React Native, Swift", "skills_level": "medium"},
+			map[string]any{"label": "Mobile", "details": "React Native, Swift, Flutter, Kotlin, Dart, Xamarin, Ionic, Cordova, NativeScript, Expo, Capacitor, PWA", "skills_level": "top10"},
 			map[string]any{"label": "Spoken Languages", "details": "English, Ukrainian", "skills_level": "relevant"},
 		},
 		"experience": []any{map[string]any{
@@ -273,8 +273,8 @@ func TestSkillDensityTrimmedInTailoring(t *testing.T) {
 	if got := details["Backend"]; got != "Go" {
 		t.Errorf("Backend details = %q, want %q (relevant: only the vacancy's Go)", got, "Go")
 	}
-	if got := details["Mobile"]; got != "React Native" {
-		t.Errorf("Mobile details = %q, want %q (medium: top half in ranked order)", got, "React Native")
+	if got := details["Mobile"]; got != "React Native, Swift, Flutter, Kotlin, Dart, Xamarin, Ionic, Cordova, NativeScript, Expo" {
+		t.Errorf("Mobile details = %q, want first ten of the ranked order (top10)", got)
 	}
 	if got := details["Spoken Languages"]; got != "English, Ukrainian" {
 		t.Errorf("pinned group trimmed to %q, want untouched", got)

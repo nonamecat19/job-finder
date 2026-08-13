@@ -12,9 +12,12 @@ import (
 
 func defaultConfig(t *testing.T) *config.Config {
 	t.Helper()
-	cfg, err := config.Load()
+	// LoadNonAI, not Load: this package computes DB connection budgets and
+	// does no inference, so it must not be required to configure a gateway
+	// (contracts/configuration.md K1-4).
+	cfg, err := config.LoadNonAI()
 	if err != nil {
-		t.Fatalf("config.Load: %v", err)
+		t.Fatalf("config.LoadNonAI: %v", err)
 	}
 	return cfg
 }
@@ -61,13 +64,13 @@ func TestRequiredRisesWithCloudConcurrency(t *testing.T) {
 
 func TestBudgetUsesPoolSizeCeiling(t *testing.T) {
 	policies := []queue.TaskPolicy{
-		{TaskType: "a", LocalConcurrency: 9, HostedConcurrency: 2},
-		{TaskType: "b", LocalConcurrency: 1, HostedConcurrency: 4},
+		{TaskType: "a", Concurrency: 9},
+		{TaskType: "b", Concurrency: 4},
 	}
 	budget := BudgetFromPolicies(policies, 8, 100)
 
 	if budget.WorkerSlots != 13 {
-		t.Errorf("WorkerSlots = %d, want 13 (max(9,2) + max(1,4))", budget.WorkerSlots)
+		t.Errorf("WorkerSlots = %d, want 13 (9 + 4)", budget.WorkerSlots)
 	}
 	if got := budget.Required(); got != 13+backgroundConnectionSlots+8 {
 		t.Errorf("Required() = %d, want %d", got, 13+backgroundConnectionSlots+8)

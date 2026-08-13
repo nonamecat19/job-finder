@@ -13,38 +13,22 @@ const (
 	ProviderClassHosted ProviderClass = "hosted"
 )
 
-type hostedChecker interface {
-	IsHosted() bool
-}
-
 type Router struct {
-	taskKey    string
-	gateway    domain.Provider
-	local      domain.Provider
-	localModel string
+	taskKey string
+	gateway domain.Provider
 }
 
-func NewRouter(taskKey string, gateway, local domain.Provider, localModel string) *Router {
-	return &Router{taskKey: taskKey, gateway: gateway, local: local, localModel: localModel}
+func NewRouter(taskKey string, gateway domain.Provider) *Router {
+	return &Router{taskKey: taskKey, gateway: gateway}
 }
 
 func (r *Router) resolve() (domain.Provider, string) {
-	if r.gateway != nil {
-		return r.gateway, r.taskKey
-	}
-	return r.local, r.localModel
+	return r.gateway, r.taskKey
 }
 
+// ProviderClass is unconditionally hosted (044): the gateway is the only
+// inference path left, and there is no local tier to classify against.
 func (r *Router) ProviderClass() ProviderClass {
-	if r.gateway != nil {
-		return ProviderClassHosted
-	}
-	if hc, ok := r.local.(hostedChecker); ok {
-		if hc.IsHosted() {
-			return ProviderClassHosted
-		}
-		return ProviderClassLocal
-	}
 	return ProviderClassHosted
 }
 
@@ -83,8 +67,10 @@ func (r *Router) CompleteChat(ctx context.Context, msgs []domain.Message, opts *
 	return p.CompleteChat(ctx, msgs, opts)
 }
 
+// Embed always routes to the gateway (044, E5): there is no local provider
+// left to fall back to, and no fallback vector is ever substituted (E3-1).
 func (r *Router) Embed(ctx context.Context, text string) ([]float32, error) {
-	return r.local.Embed(ctx, text)
+	return r.gateway.Embed(ctx, text)
 }
 
 // withRouting stamps the resolved model and the router's task key onto a copy

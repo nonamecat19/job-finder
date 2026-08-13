@@ -139,7 +139,7 @@ func TestEvalRecord(t *testing.T) {
 		t.Skip("GATEWAY_URL and LITELLM_MASTER_KEY must be set to record")
 	}
 
-	gw, err := llm.NewGateway(gatewayURL, masterKey, nil)
+	gw, err := llm.NewGateway(gatewayURL, masterKey, 1024)
 	if err != nil {
 		t.Fatalf("gateway: %v", err)
 	}
@@ -170,7 +170,7 @@ func recordCase(t *testing.T, gw llm.Provider, c EvalCase) {
 	for key := range stages {
 		p := newReplayProvider(t, key, c.Name)
 		p.record = true
-		p.live = llm.NewRouter(key, gw, nil, "")
+		p.live = llm.NewRouter(key, gw)
 		providers[key] = p
 	}
 
@@ -250,7 +250,7 @@ func TestLiveComparison(t *testing.T) {
 		t.Skip("pass -eval.models with comma-separated task keys")
 	}
 
-	gw, err := llm.NewGateway(gatewayURL, masterKey, nil)
+	gw, err := llm.NewGateway(gatewayURL, masterKey, 1024)
 	if err != nil {
 		t.Fatalf("gateway: %v", err)
 	}
@@ -319,7 +319,7 @@ func runCaseLive(t *testing.T, gw llm.Provider, model string, c EvalCase) CaseRe
 	t.Helper()
 	cr := CaseResult{Case: c.Name, Scores: map[string]float64{}}
 
-	router := llm.NewRouter(model, gw, nil, "")
+	router := llm.NewRouter(model, gw)
 	svc := NewService(nil, nil, nil, nil, GenerationRouters{
 		Analyze: router, Select: router, Premium: router, Summary: router, Cover: router,
 	}, "", "", c.Spec.GroundingLevel, nil)
@@ -570,16 +570,16 @@ func TestBenchmarkSplitPipelineTargets(t *testing.T) {
 	// exactly as cmd/server wires them, so the benchmark measures the shipped
 	// routing rather than a benchmark-only path. The ollama leg is nil: the
 	// point of this measurement is the hosted chain.
-	gw, err := llm.NewGateway(gatewayURL, masterKey, nil)
+	gw, err := llm.NewGateway(gatewayURL, masterKey, 1024)
 	if err != nil {
 		t.Fatalf("gateway: %v", err)
 	}
 	svc := &Service{llm: GenerationRouters{
-		Analyze: llm.NewRouter("generation-analyze", gw, nil, ""),
-		Select:  llm.NewRouter("generation-select", gw, nil, ""),
-		Premium: llm.NewRouter("generation-select-premium", gw, nil, ""),
-		Summary: llm.NewRouter("generation-summary", gw, nil, ""),
-		Cover:   llm.NewRouter("generation", gw, nil, ""),
+		Analyze: llm.NewRouter("generation-analyze", gw),
+		Select:  llm.NewRouter("generation-select", gw),
+		Premium: llm.NewRouter("generation-select-premium", gw),
+		Summary: llm.NewRouter("generation-summary", gw),
+		Cover:   llm.NewRouter("generation", gw),
 	}}
 
 	master := loadBenchmarkMaster(t)

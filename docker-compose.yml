@@ -36,29 +36,17 @@ services:
     ports:
       - "8090:8090"
 
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollamadata:/root/.ollama
-    ports:
-      - "11434:11434"
-    healthcheck:
-      # ollama's image ships no curl/wget; the `ollama` CLI itself talks to
-      # the local API server, so a successful `ollama list` proves the
-      # server is reachable.
-      test: ["CMD", "ollama", "list"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  # LiteLLM proxy gateway (030-litellm-model-routing). The Go backend sends
-  # OpenAI-compatible requests with the task key as `model`; the proxy resolves
-  # it to an ordered free-tier-first failover chain in gateway/config.yaml
-  # (mounted read-only), terminating on the shared Ollama deployment. No
-  # depends_on: the proxy is independent of postgres/redis. Every provider key
-  # gets an empty default so a missing credential never aborts config load
-  # (FR-011) — it just fails that tier's auth at request time and the chain
-  # advances. Config contract: specs/domains/llm-routing.md § 2.1.
+  # LiteLLM proxy gateway — the application's only inference path
+  # (044-litellm-only-routing, Constitution Principle V 2.0.0). The Go backend
+  # sends OpenAI-compatible requests with the scenario name as `model`; the
+  # proxy resolves it to an ordered failover chain in gateway/config.yaml
+  # (mounted read-only), per-class as contracts/gateway-config.md C2-3
+  # describes. Every chain terminates on hosted providers only — there is no
+  # local/self-hosted tier left to fall back to. No depends_on: the proxy is
+  # independent of postgres/redis. Every provider key gets an empty default so
+  # a missing credential never aborts config load (030-FR-011) — it just fails
+  # that tier's auth at request time and the chain advances. Config contract:
+  # specs/044-litellm-only-routing/contracts/gateway-config.md.
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     container_name: litellm
@@ -68,11 +56,8 @@ services:
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      COHERE_API_KEY: ${COHERE_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OLLAMA_URL: ${OLLAMA_URL:-}
-      OLLAMA_KEY: ${OLLAMA_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # Observability collector (036 FR-001, contracts C2-6). These live here
       # and nowhere else: the application container must never receive a
       # LANGFUSE_* variable (FR-007), and the callbacks declared in
@@ -288,7 +273,6 @@ volumes:
   pgdata: {}
   documents: {}
   miniodata: {}
-  ollamadata: {}
   # Collector storage, deliberately separate from every platform volume
   # (036 contracts C3-6).
   clickhousedata: {}

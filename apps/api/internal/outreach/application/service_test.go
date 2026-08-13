@@ -104,6 +104,61 @@ func TestGenerateDraft_AddressesRealContact(t *testing.T) {
 	}
 }
 
+// 044 T042: outreach asks the gateway for the `outreach` task key.
+//
+// Salary, outreach and recruiter all used to share the `default` group, so a
+// change made for one of them silently moved the other two and reporting could
+// not tell their spend apart. compose.go now hands each its own router; this
+// asserts the key survives the trip through the service to the gateway, and is
+// paired with the same assertion in internal/salary/application and
+// internal/recruiter/application — the three keys together are what "distinct"
+// means, and each package can only speak for its own.
+func TestOutreachRequestsItsOwnTaskKey(t *testing.T) {
+	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
+	gw := &taskKeyRecorder{fakeLLM: fakeLLM{responses: []string{
+		`{"text":"Hi Jane, saw you're using Go, React, Postgres.","specificClaims":["Go, React, Postgres"]}`,
+	}}}
+	svc := NewService(contacts, &fakeIntel{intel: sampleIntel()}, llm.NewRouter("outreach", gw), "")
+
+	if _, err := svc.GenerateDraft(context.Background(), "job-1", "c1", "warm"); err != nil {
+		t.Fatalf("GenerateDraft: %v", err)
+	}
+
+	if len(gw.keys) == 0 {
+		t.Fatal("the gateway was never called, so no task key was requested")
+	}
+	for _, got := range gw.keys {
+		if got != "outreach" {
+			t.Errorf("gateway asked for task key %q, want %q", got, "outreach")
+		}
+	}
+}
+
+// taskKeyRecorder is the fake gateway a Router talks to, so a test can see the
+// task key the router stamped rather than the one it was handed.
+type taskKeyRecorder struct {
+	fakeLLM
+	keys []string
+}
+
+func (r *taskKeyRecorder) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
+	key := ""
+	if opts != nil {
+		key = opts.TaskKey
+	}
+	r.keys = append(r.keys, key)
+	return r.fakeLLM.CompleteJSON(ctx, prompt, opts)
+}
+
+func (r *taskKeyRecorder) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
+	prompt := ""
+	if len(msgs) > 0 {
+		prompt = msgs[len(msgs)-1].Content
+	}
+	text, err := r.CompleteJSON(ctx, prompt, opts)
+	return llm.ChatResult{Content: text}, err
+}
+
 func TestGenerateDraft_ClaimsTraceToSignals(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}

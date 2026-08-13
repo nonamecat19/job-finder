@@ -8,68 +8,61 @@ import (
 )
 
 type TaskPolicy struct {
-	TaskType          string
-	Queue             string
-	LocalConcurrency  int
-	HostedConcurrency int
-	MaxDuration       time.Duration
-	LLMTaskKey        string
+	TaskType    string
+	Queue       string
+	Concurrency int
+	MaxDuration time.Duration
+	LLMTaskKey  string
 }
 
+// PoolSize returns the worker concurrency for this policy. Since 044 there is
+// only one concurrency setting — the hosted/local split is gone along with
+// Ollama.
 func (p TaskPolicy) PoolSize() int {
-	if p.HostedConcurrency > p.LocalConcurrency {
-		return p.HostedConcurrency
-	}
-	return p.LocalConcurrency
+	return p.Concurrency
 }
 
 func PoliciesFromConfig(cfg *config.Config) ([]TaskPolicy, error) {
 	policies := []TaskPolicy{
 		{
-			TaskType:          TypeIngest,
-			Queue:             QueueIngest,
-			LocalConcurrency:  cfg.IngestConcurrency,
-			HostedConcurrency: cfg.IngestConcurrency,
-			MaxDuration:       cfg.AITaskTimeoutIngest,
+			TaskType:    TypeIngest,
+			Queue:       QueueIngest,
+			Concurrency: cfg.IngestConcurrency,
+			MaxDuration: cfg.AITaskTimeoutIngest,
 		},
 		{
-			TaskType:          TypeMatch,
-			Queue:             QueueMatch,
-			LocalConcurrency:  cfg.AIConcurrencyLocal,
-			HostedConcurrency: cfg.AIConcurrencyCloud,
-			MaxDuration:       cfg.AITaskTimeoutMatch,
-			LLMTaskKey:        "match",
+			TaskType:    TypeMatch,
+			Queue:       QueueMatch,
+			Concurrency: cfg.AIConcurrencyCloud,
+			MaxDuration: cfg.AITaskTimeoutMatch,
+			LLMTaskKey:  "match",
 		},
 		{
-			TaskType:          TypeGenerate,
-			Queue:             QueueGenerate,
-			LocalConcurrency:  cfg.AIConcurrencyLocal,
-			HostedConcurrency: cfg.AIConcurrencyCloud,
-			MaxDuration:       cfg.AITaskTimeoutGenerate,
-			LLMTaskKey:        "generation",
+			TaskType:    TypeGenerate,
+			Queue:       QueueGenerate,
+			Concurrency: cfg.AIConcurrencyCloud,
+			MaxDuration: cfg.AITaskTimeoutGenerate,
+			LLMTaskKey:  "generation",
 		},
 		{
-			TaskType:          TypeEnrich,
-			Queue:             QueueEnrich,
-			LocalConcurrency:  cfg.EnrichConcurrency,
-			HostedConcurrency: cfg.EnrichConcurrency,
-			MaxDuration:       cfg.AITaskTimeoutEnrich,
+			TaskType:    TypeEnrich,
+			Queue:       QueueEnrich,
+			Concurrency: cfg.EnrichConcurrency,
+			MaxDuration: cfg.AITaskTimeoutEnrich,
 		},
 		{
-			TaskType:          TypeSalaryInfer,
-			Queue:             QueueSalaryInfer,
-			LocalConcurrency:  cfg.AIConcurrencyLocal,
-			HostedConcurrency: cfg.AIConcurrencyCloud,
-			MaxDuration:       cfg.AITaskTimeoutSalary,
-			LLMTaskKey:        "default",
+			TaskType:    TypeSalaryInfer,
+			Queue:       QueueSalaryInfer,
+			Concurrency: cfg.AIConcurrencyCloud,
+			MaxDuration: cfg.AITaskTimeoutSalary,
+			LLMTaskKey:  "salary",
 		},
 		{
-			TaskType:          TypeGhostScore,
-			Queue:             QueueGhostScore,
-			LocalConcurrency:  cfg.AIConcurrencyLocal,
-			HostedConcurrency: cfg.AIConcurrencyCloud,
-			MaxDuration:       cfg.AITaskTimeoutGhost,
-			LLMTaskKey:        "ghost",
+			TaskType:    TypeGhostScore,
+			Queue:       QueueGhostScore,
+			Concurrency: cfg.AIConcurrencyCloud,
+			MaxDuration: cfg.AITaskTimeoutGhost,
+			LLMTaskKey:  "ghost",
 		},
 	}
 
@@ -85,11 +78,8 @@ func PoliciesFromConfig(cfg *config.Config) ([]TaskPolicy, error) {
 }
 
 func validatePolicy(p TaskPolicy) error {
-	if p.LocalConcurrency < 1 {
-		return fmt.Errorf("queue: %s: local concurrency must be >= 1, got %d", p.TaskType, p.LocalConcurrency)
-	}
-	if p.HostedConcurrency < 1 {
-		return fmt.Errorf("queue: %s: hosted concurrency must be >= 1, got %d", p.TaskType, p.HostedConcurrency)
+	if p.Concurrency < 1 {
+		return fmt.Errorf("queue: %s: concurrency must be >= 1, got %d", p.TaskType, p.Concurrency)
 	}
 	if p.MaxDuration <= 0 {
 		return fmt.Errorf("queue: %s: max duration must be > 0, got %s", p.TaskType, p.MaxDuration)

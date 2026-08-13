@@ -39,6 +39,60 @@ func (f *fakeLLM) CompleteChat(ctx context.Context, msgs []llm.Message, opts *ll
 }
 func (f *fakeLLM) Embed(ctx context.Context, text string) ([]float32, error) { return nil, nil }
 
+// 044 T042: recruiter asks the gateway for the `recruiter` task key.
+//
+// Salary, outreach and recruiter all used to share the `default` group, so a
+// change made for one of them silently moved the other two and reporting could
+// not tell their spend apart. compose.go now hands each its own router; this
+// asserts the key survives the trip through the extractor to the gateway, and
+// is paired with the same assertion in internal/salary/application and
+// internal/outreach/application — the three keys together are what "distinct"
+// means, and each package can only speak for its own.
+func TestRecruiterRequestsItsOwnTaskKey(t *testing.T) {
+	gw := &taskKeyRecorder{fakeLLM: fakeLLM{
+		json: `{"name":"Jane Doe","title":"Recruiter","email":"jane@acme.com","phone":"","linkedInUrl":""}`,
+	}}
+	body := "We are hiring a backend engineer.\n\nContact: Jane Doe, Recruiter <jane@acme.com>"
+
+	if _, err := ExtractPostingContact(context.Background(), llm.NewRouter("recruiter", gw), "", body); err != nil {
+		t.Fatalf("ExtractPostingContact: %v", err)
+	}
+
+	if len(gw.keys) == 0 {
+		t.Fatal("the gateway was never called, so no task key was requested")
+	}
+	for _, got := range gw.keys {
+		if got != "recruiter" {
+			t.Errorf("gateway asked for task key %q, want %q", got, "recruiter")
+		}
+	}
+}
+
+// taskKeyRecorder is the fake gateway a Router talks to, so a test can see the
+// task key the router stamped rather than the one it was handed.
+type taskKeyRecorder struct {
+	fakeLLM
+	keys []string
+}
+
+func (r *taskKeyRecorder) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
+	key := ""
+	if opts != nil {
+		key = opts.TaskKey
+	}
+	r.keys = append(r.keys, key)
+	return r.fakeLLM.CompleteJSON(ctx, prompt, opts)
+}
+
+func (r *taskKeyRecorder) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
+	prompt := ""
+	if len(msgs) > 0 {
+		prompt = msgs[len(msgs)-1].Content
+	}
+	text, err := r.CompleteJSON(ctx, prompt, opts)
+	return llm.ChatResult{Content: text}, err
+}
+
 func TestPostingParseNamedContact(t *testing.T) {
 	body := "We are hiring a backend engineer.\n\nContact: Jane Doe, Recruiter <jane@acme.com>"
 	llmc := &fakeLLM{json: `{"name":"Jane Doe","title":"Recruiter","email":"jane@acme.com","phone":"","linkedInUrl":""}`}

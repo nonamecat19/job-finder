@@ -114,6 +114,37 @@ func TestAnUnwiredOptionFallsBackRatherThanFailing(t *testing.T) {
 	}
 }
 
+// 044 deleted the `local` self-hosted option, but the id outlives the release:
+// it sits in Document and GenerationRun rows and in the summary-model setting
+// of every install that ever picked it (data-model.md §5). Those rows are read
+// back on a rerun, so the id has to degrade to the default rather than fail a
+// run. The miss path already does this; this pins it, because the next person
+// to read LookupSummaryOption's second return value could reasonably decide a
+// miss deserves an error.
+func TestAPersistedLocalOptionIDResolvesToTheDefault(t *testing.T) {
+	opt, ok := domain.LookupSummaryOption("local")
+	if ok {
+		t.Fatal(`the catalogue still offers "local"; 044 removed the self-hosted option`)
+	}
+	if opt.ID != domain.SummaryOptionStandard {
+		t.Fatalf(`stored "local" resolved to %q, want the default %q`, opt.ID, domain.SummaryOptionStandard)
+	}
+
+	f := summaryOptionFixture(t)
+	prov := &runProvenance{}
+	if _, _, err := f.svc.tailorRendercvResume(WithSummaryOption(context.Background(), opt),
+		stageMaster(), "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, prov); err != nil {
+		t.Fatalf(`a run carrying the retired "local" option failed: %v`, err)
+	}
+	if f.standard.calls != 1 {
+		t.Errorf("standard provider called %d times, want 1", f.standard.calls)
+	}
+	if prov.summaryOption != domain.SummaryOptionStandard {
+		t.Errorf("run recorded summary option %q, want %q — the retired id must not be written back",
+			prov.summaryOption, domain.SummaryOptionStandard)
+	}
+}
+
 type stubSummaryModelProvider struct{ opt domain.SummaryOption }
 
 func (s stubSummaryModelProvider) SummaryOption(context.Context) domain.SummaryOption { return s.opt }

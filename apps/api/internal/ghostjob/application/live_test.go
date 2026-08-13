@@ -34,12 +34,13 @@ func TestLive_GhostScore(t *testing.T) {
 		t.Fatalf("load config: %v", err)
 	}
 
-	llmProvider, err := llm.New(cfg)
+	gw, err := llm.NewProviders(cfg)
 	if err != nil {
 		t.Fatalf("llm new: %v", err)
 	}
+	router := llm.NewRouter("ghost", gw)
 
-	svc := ghostjob.NewService(database.Queries, llmProvider, cfg.ModelOr(cfg.LLMModelGhost))
+	svc := ghostjob.NewService(database.Queries, router, "")
 
 	jobs, err := database.Queries.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{Limit: 1})
 	if err != nil || len(jobs) == 0 {

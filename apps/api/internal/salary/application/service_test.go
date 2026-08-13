@@ -300,6 +300,64 @@ func TestInfer_LLMPathPerformsBothLookupsAndProducesAValidBand(t *testing.T) {
 	}
 }
 
+// 044 T042: salary asks the gateway for the `salary` task key.
+//
+// Salary, outreach and recruiter all used to share the `default` group, so a
+// change made for one of them silently moved the other two and reporting could
+// not tell their spend apart. compose.go now hands each its own router; this
+// asserts the key survives the trip through the service to the gateway, and is
+// paired with the same assertion in internal/outreach/application and
+// internal/recruiter/application — the three keys together are what "distinct"
+// means, and each package can only speak for its own.
+func TestSalaryRequestsItsOwnTaskKey(t *testing.T) {
+	repo := &fakeRepo{job: makeJob("Backend Engineer", "Acme", "US", "")}
+	gw := &taskKeyRecorder{}
+	svc := salary.NewService(repo, llm.NewRouter("salary", gw), nil, "")
+
+	if err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001"); err != nil {
+		t.Fatalf("Infer: %v", err)
+	}
+
+	gw.assertOnly(t, "salary")
+}
+
+// taskKeyRecorder is the fake gateway a Router talks to, so a test can see the
+// task key the router stamped rather than the one it was handed.
+type taskKeyRecorder struct {
+	fakeLLM
+	keys []string
+}
+
+func (r *taskKeyRecorder) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
+	r.record(opts)
+	return r.fakeLLM.CompleteChat(ctx, msgs, opts)
+}
+
+func (r *taskKeyRecorder) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
+	r.record(opts)
+	return r.fakeLLM.CompleteJSON(ctx, prompt, opts)
+}
+
+func (r *taskKeyRecorder) record(opts *llm.CompleteOptions) {
+	if opts == nil {
+		r.keys = append(r.keys, "")
+		return
+	}
+	r.keys = append(r.keys, opts.TaskKey)
+}
+
+func (r *taskKeyRecorder) assertOnly(t *testing.T, want string) {
+	t.Helper()
+	if len(r.keys) == 0 {
+		t.Fatal("the gateway was never called, so no task key was requested")
+	}
+	for _, got := range r.keys {
+		if got != want {
+			t.Errorf("gateway asked for task key %q, want %q", got, want)
+		}
+	}
+}
+
 // FR-022 / C7-3: when the exchange stops for any reason other than answered,
 // Infer returns an error and persists **nothing**. A fallback to a
 // low-confidence band here would write a fabrication to the database and label

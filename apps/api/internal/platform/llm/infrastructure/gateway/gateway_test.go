@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/job-finder/api/internal/platform/llm/domain"
-	"github.com/job-finder/api/internal/platform/llm/infrastructure/ollama"
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/shared"
 )
 
@@ -19,7 +18,7 @@ func newTestGateway(t *testing.T, handler http.HandlerFunc) *Provider {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	p, err := New(srv.URL, "sk-test-master", nil)
+	p, err := New(srv.URL, "sk-test-master", wantEmbedDims)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -27,16 +26,16 @@ func newTestGateway(t *testing.T, handler http.HandlerFunc) *Provider {
 }
 
 func TestNewGatewayRequiresBaseURLAndKey(t *testing.T) {
-	if _, err := New("", "key", nil); err == nil {
+	if _, err := New("", "key", wantEmbedDims); err == nil {
 		t.Error("expected error when baseURL is empty")
 	}
-	if _, err := New("http://litellm:4000", "", nil); err == nil {
+	if _, err := New("http://litellm:4000", "", wantEmbedDims); err == nil {
 		t.Error("expected error when apiKey is empty")
 	}
 }
 
 func TestGatewayModelName(t *testing.T) {
-	p, err := New("http://litellm:4000", "key", nil)
+	p, err := New("http://litellm:4000", "key", wantEmbedDims)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -325,7 +324,7 @@ func TestGatewayConnectionRefused(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	url := srv.URL
 	srv.Close()
-	p, err := New(url, "key", nil)
+	p, err := New(url, "key", wantEmbedDims)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -388,35 +387,14 @@ func TestGatewayErrorClassificationUnaffectedByServedModelLogging(t *testing.T) 
 	}
 }
 
-func TestGatewayEmbedDelegatesToOllama(t *testing.T) {
-	var embedHit bool
-	ollamaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		embedHit = true
-		_ = json.NewEncoder(w).Encode(map[string]any{"embedding": []float32{0.1, 0.2}})
-	}))
-	t.Cleanup(ollamaSrv.Close)
-	ollamaProvider := ollama.New(ollamaSrv.URL, "", "", "", "")
-
-	p, err := New("https://unused.example", "key", ollamaProvider)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	vec, err := p.Embed(context.Background(), "text")
-	if err != nil {
-		t.Fatalf("Embed: %v", err)
-	}
-	if !embedHit {
-		t.Error("Embed did not reach the Ollama provider")
-	}
-	if len(vec) != 2 {
-		t.Errorf("Embed() len = %d, want 2", len(vec))
-	}
-}
+// Embed's own coverage lives in embed_test.go and embed_golden_test.go (044
+// T014/T015): the real POST /embeddings implementation replaces the
+// delegation this test used to pin.
 
 func TestClientTimeoutExceedsProxyWorstCaseChain(t *testing.T) {
 	const proxyWorstCase = 600 * time.Second
 
-	g, err := New("http://gateway.invalid", "key", nil)
+	g, err := New("http://gateway.invalid", "key", wantEmbedDims)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

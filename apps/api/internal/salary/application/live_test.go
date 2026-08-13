@@ -33,10 +33,11 @@ func TestLive_InferOneJob(t *testing.T) {
 		t.Fatalf("load config: %v", err)
 	}
 
-	llmProvider, err := llm.New(cfg)
+	gw, err := llm.NewProviders(cfg)
 	if err != nil {
 		t.Fatalf("llm new: %v", err)
 	}
+	router := llm.NewRouter("salary", gw)
 
 	levelsFyi := salary.NewLevelsFyiLoader(database.Queries)
 	if cfg.LevelsFyiCSV != "" {
@@ -45,7 +46,7 @@ func TestLive_InferOneJob(t *testing.T) {
 		}
 	}
 
-	svc := salary.NewService(database.Queries, llmProvider, levelsFyi, cfg.ModelOr(""))
+	svc := salary.NewService(database.Queries, router, levelsFyi, "")
 
 	jobs, err := database.Queries.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{Limit: 1})
 	if err != nil || len(jobs) == 0 {

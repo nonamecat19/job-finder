@@ -17,9 +17,9 @@ package domain
 // gateway task key plus prose, and the task key must exist in
 // gateway/config.yaml — a deployment artifact reviewed in code. A row in a
 // table could name a key the gateway has never heard of, and the mismatch would
-// surface only as a silent fallback to the local model. Only the user's
-// *choice* is persisted; the menu is code, and a test asserts every key here is
-// a declared, chained model group.
+// surface only as a call that quietly routes nowhere. Only the user's *choice*
+// is persisted; the menu is code, and a test asserts every key here is a
+// declared, chained model group.
 
 // SummaryOption is one entry on the menu the user picks from.
 type SummaryOption struct {
@@ -34,16 +34,14 @@ type SummaryOption struct {
 	// wrong within a month and cannot be reproduced; 038's comparison artifact
 	// is where real per-run cost lives.
 	Cost string
-	// TaskKey is the gateway model group this option routes to. Empty means the
-	// self-hosted model, reached by giving the router no gateway at all.
+	// TaskKey is the gateway model group this option routes to. Always set:
+	// since 044 every option is a gateway task key, and an option without one
+	// would have nowhere to go.
 	TaskKey string
 	// Default marks the option a user who never opens the selector gets.
 	// Exactly one option has it.
 	Default bool
 }
-
-// SelfHosted reports whether this option runs on the local model.
-func (o SummaryOption) SelfHosted() bool { return o.TaskKey == "" }
 
 // SummaryOptionStandard is the default, and its task key is the one the
 // pipeline already used before this feature existed. That is what makes "a user
@@ -83,13 +81,6 @@ var summaryOptions = []SummaryOption{
 		Cost:        "lowest",
 		TaskKey:     "generation-summary-fast",
 	},
-	{
-		ID:          "local",
-		Label:       "Self-hosted",
-		Description: "Runs entirely on your own machine. No provider sees your profile, and it costs nothing to run.",
-		Cost:        "free",
-		TaskKey:     "",
-	},
 }
 
 // SummaryOptions returns the catalogue in menu order.
@@ -113,9 +104,10 @@ func DefaultSummaryOption() SummaryOption {
 }
 
 // LookupSummaryOption resolves an id to its option. An unknown id — a stale
-// dashboard, a hand-edited setting, an option removed between releases —
-// returns the default and false, so a caller can choose between reporting the
-// mismatch and quietly carrying on. A resume run should carry on: an option is
+// dashboard, a hand-edited setting, an option removed between releases such as
+// the `"local"` self-hosted one 044 deleted — returns the default and false, so
+// a caller can choose between reporting the mismatch and quietly carrying on. A
+// resume run should carry on: an option is
 // a routing preference, and a preference that can fail a run is a liability.
 func LookupSummaryOption(id string) (SummaryOption, bool) {
 	for _, o := range summaryOptions {

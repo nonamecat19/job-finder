@@ -17,7 +17,6 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/httpx"
-	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/queue"
 )
 
@@ -226,16 +225,13 @@ func (h *ActivityHandler) policyFor(qname string) (queue.TaskPolicy, bool) {
 }
 
 func (h *ActivityHandler) effectiveConcurrency(qname string, policy queue.TaskPolicy) int {
-	resolver := h.resolvers[qname]
-	if resolver == nil {
-		return policy.LocalConcurrency
-	}
-	if resolver.ProviderClass() == llm.ProviderClassHosted {
-		return policy.HostedConcurrency
-	}
-	return policy.LocalConcurrency
+	return policy.Concurrency
 }
 
+// providerClass reports the backlog's providerClass field. Since 044 there is
+// only one inference path, so this is always "hosted" for any queue with an
+// LLM task key — it is kept for the DTO's shape rather than its variability
+// (contracts/configuration.md, Complexity Tracking).
 func (h *ActivityHandler) providerClass(qname string) *string {
 	resolver := h.resolvers[qname]
 	if resolver == nil {

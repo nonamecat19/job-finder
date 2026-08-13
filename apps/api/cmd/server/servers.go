@@ -26,8 +26,8 @@ type namedWorker struct {
 	mux  *asynq.ServeMux
 }
 
-func (p *Platform) worker(name string, policy queue.TaskPolicy, resolver queue.ClassResolver, handler func(context.Context, *asynq.Task) error) namedWorker {
-	gate := queue.NewGate(policy, resolver)
+func (p *Platform) worker(name string, policy queue.TaskPolicy, handler func(context.Context, *asynq.Task) error) namedWorker {
+	gate := queue.NewGate(policy)
 	deadline := queue.NewDeadlineMiddleware(policy, p.DB.Queries, p.Config.ActivityHeartbeatInterval)
 	wrapped := gate.Middleware(deadline.Middleware(handler))
 	mux := asynq.NewServeMux()
@@ -72,12 +72,12 @@ func buildServers(p *Platform, app *App) *Servers {
 	}
 
 	workers := []namedWorker{
-		p.worker("ingest", p.policyFor(queue.TypeIngest), nil, app.Ingestion.ProcessTask),
-		p.worker("match", p.policyFor(queue.TypeMatch), app.MatchRouter, app.Matching.ProcessTask),
-		p.worker("generate", p.policyFor(queue.TypeGenerate), app.GenerationRouter, app.Generation.ProcessTask),
-		p.worker("enrich", p.policyFor(queue.TypeEnrich), nil, app.Enrichment.ProcessTask),
-		p.worker("salary", p.policyFor(queue.TypeSalaryInfer), app.DefaultRouter, app.Salary.ProcessTask),
-		p.worker("ghost", p.policyFor(queue.TypeGhostScore), app.GhostRouter, app.Ghost.ProcessTask),
+		p.worker("ingest", p.policyFor(queue.TypeIngest), app.Ingestion.ProcessTask),
+		p.worker("match", p.policyFor(queue.TypeMatch), app.Matching.ProcessTask),
+		p.worker("generate", p.policyFor(queue.TypeGenerate), app.Generation.ProcessTask),
+		p.worker("enrich", p.policyFor(queue.TypeEnrich), app.Enrichment.ProcessTask),
+		p.worker("salary", p.policyFor(queue.TypeSalaryInfer), app.Salary.ProcessTask),
+		p.worker("ghost", p.policyFor(queue.TypeGhostScore), app.Ghost.ProcessTask),
 	}
 
 	return &Servers{HTTP: srv, Workers: workers}

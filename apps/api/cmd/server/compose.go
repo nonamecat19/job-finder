@@ -126,7 +126,7 @@ type App struct {
 
 	MatchRouter      *llm.Router
 	GenerationRouter *llm.Router
-	DefaultRouter    *llm.Router
+	SalaryRouter     *llm.Router
 	GhostRouter      *llm.Router
 
 	Scheduler *worker.Scheduler
@@ -255,7 +255,6 @@ func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
 }
 
 type llmHandles struct {
-	Ollama      *llm.OllamaProvider
 	MatchRouter *llm.Router
 	// GenerationRouter serves the cover letter, which is still a single call
 	// against the `generation` task key. Resume generation itself is split
@@ -271,31 +270,41 @@ type llmHandles struct {
 	SummaryOptionRouters map[string]llm.Provider
 	RephraseRouter       *llm.Router
 	GhostRouter          *llm.Router
-	DefaultRouter        *llm.Router
+	// SalaryRouter, OutreachRouter and RecruiterRouter replace the former
+	// single DefaultRouter (044 data-model.md §4). Each resolves through its
+	// own scenario key; the "default" catch-all is gone from the gateway, so
+	// an unknown key fails loudly rather than falling through.
+	SalaryRouter    *llm.Router
+	OutreachRouter  *llm.Router
+	RecruiterRouter *llm.Router
+	// EmbedRouter is handed to any consumer whose only use of a Router is
+	// Embed (contracts/embeddings.md E5: Router.Embed always routes to the
+	// gateway under the "embed" key regardless of the router it is called
+	// through, but naming this one "embed" keeps the observability metadata
+	// honest for callers that use only this router).
+	EmbedRouter *llm.Router
 }
 
 func composeLLM(p *Platform) (*llmHandles, error) {
-	ollamaProvider, gatewayProvider, err := llm.NewProviders(p.Config)
+	gatewayProvider, err := llm.NewProviders(p.Config)
 	if err != nil {
 		return nil, err
 	}
-	var gatewayIface llm.Provider
-	if gatewayProvider != nil {
-		gatewayIface = gatewayProvider
-	}
-	cfg := p.Config
+	var gatewayIface llm.Provider = gatewayProvider
 	return &llmHandles{
-		Ollama:                  ollamaProvider,
-		MatchRouter:             llm.NewRouter("match", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelMatch)),
-		GenerationRouter:        llm.NewRouter("generation", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
-		GenerationAnalyzeRouter: llm.NewRouter("generation-analyze", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
-		GenerationSelectRouter:  llm.NewRouter("generation-select", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
-		GenerationPremiumRouter: llm.NewRouter("generation-select-premium", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
-		GenerationSummaryRouter: llm.NewRouter("generation-summary", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
-		SummaryOptionRouters:    summaryOptionRouters(gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGeneration)),
-		RephraseRouter:          llm.NewRouter("rephrase", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelRephrase)),
-		GhostRouter:             llm.NewRouter("ghost", gatewayIface, ollamaProvider, cfg.ModelOr(cfg.LLMModelGhost)),
-		DefaultRouter:           llm.NewRouter("default", gatewayIface, ollamaProvider, cfg.LLMModel),
+		MatchRouter:             llm.NewRouter("match", gatewayIface),
+		GenerationRouter:        llm.NewRouter("generation", gatewayIface),
+		GenerationAnalyzeRouter: llm.NewRouter("generation-analyze", gatewayIface),
+		GenerationSelectRouter:  llm.NewRouter("generation-select", gatewayIface),
+		GenerationPremiumRouter: llm.NewRouter("generation-select-premium", gatewayIface),
+		GenerationSummaryRouter: llm.NewRouter("generation-summary", gatewayIface),
+		SummaryOptionRouters:    summaryOptionRouters(gatewayIface),
+		RephraseRouter:          llm.NewRouter("rephrase", gatewayIface),
+		GhostRouter:             llm.NewRouter("ghost", gatewayIface),
+		SalaryRouter:            llm.NewRouter("salary", gatewayIface),
+		OutreachRouter:          llm.NewRouter("outreach", gatewayIface),
+		RecruiterRouter:         llm.NewRouter("recruiter", gatewayIface),
+		EmbedRouter:             llm.NewRouter("embed", gatewayIface),
 	}, nil
 }
 
@@ -304,8 +313,8 @@ type profileHandles struct {
 	Handler *profilehttp.ProfilesHandler
 }
 
-func composeProfile(p *Platform, ollama *llm.OllamaProvider) *profileHandles {
-	profileSvc := profile.NewService(p.DB.Queries, ollama, p.Config.EmbedModel, p.Config.RendercvBin)
+func composeProfile(p *Platform, router *llm.Router) *profileHandles {
+	profileSvc := profile.NewService(p.DB.Queries, router, p.Config.RendercvBin)
 	return &profileHandles{
 		Profile: profileSvc,
 		Handler: &profilehttp.ProfilesHandler{Profiles: profileSvc},
@@ -699,8 +708,8 @@ func queueClassResolvers(policies []queue.TaskPolicy, llmH *llmHandles) map[stri
 			resolvers[p.Queue] = llmH.MatchRouter
 		case "generation":
 			resolvers[p.Queue] = llmH.GenerationRouter
-		case "default":
-			resolvers[p.Queue] = llmH.DefaultRouter
+		case "salary":
+			resolvers[p.Queue] = llmH.SalaryRouter
 		case "ghost":
 			resolvers[p.Queue] = llmH.GhostRouter
 		}
@@ -719,7 +728,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	profileH := composeProfile(p, llmH.Ollama)
+	profileH := composeProfile(p, llmH.EmbedRouter)
 
 	matchingH, err := composeMatching(ctx, p, profileH.Profile, llmH.MatchRouter)
 	if err != nil {
@@ -753,11 +762,11 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 
 	jobsHandler := &jobshttp.JobsHandler{Jobs: matchingH.Jobs, Generation: generationH.Generation, Enrichment: enrichHandler}
 
-	salaryH := composeSalary(ctx, p, llmH.DefaultRouter)
+	salaryH := composeSalary(ctx, p, llmH.SalaryRouter)
 
 	keywordH := composeKeyword(p, llmH.RephraseRouter, profileH.Profile)
 	companyIntelH := composeCompanyIntel(p)
-	recruiterH := composeRecruiter(p, llmH.DefaultRouter)
+	recruiterH := composeRecruiter(p, llmH.RecruiterRouter)
 	interviewPrepH := composeInterviewPrep(p, profileH.Profile, companyIntelH.Service)
 	hostsH := composeHosts(retrievalSvc)
 
@@ -781,7 +790,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Coach:         composeCoach(p, keywordH.RephraseModel, profileH.Profile),
 		Contacts:      recruiterH.Handler,
 		Referral:      composeReferral(p),
-		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.DefaultRouter),
+		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.OutreachRouter),
 		AiFeatures:    matchingH.AiFeatureHandler,
 		ResumeShape:   generationH.ResumeShape,
 		SummaryModel:  generationH.SummaryModel,
@@ -798,7 +807,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 
 		MatchRouter:      llmH.MatchRouter,
 		GenerationRouter: llmH.GenerationRouter,
-		DefaultRouter:    llmH.DefaultRouter,
+		SalaryRouter:     llmH.SalaryRouter,
 		GhostRouter:      llmH.GhostRouter,
 
 		Scheduler: ingestionH.Scheduler,
@@ -809,17 +818,19 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 // catalogue rather than from a list repeated here — an option added in
 // internal/generation/domain wires itself.
 //
-// The self-hosted option deliberately gets a router with **no gateway**: that
-// is what "runs entirely on your own machine" means, and it is the same shape
-// the whole application takes when no gateway is configured at all.
-func summaryOptionRouters(gateway, local llm.Provider, localModel string) map[string]llm.Provider {
+// 044 removes Ollama entirely, so the self-hosted option's TaskKey=="" can no
+// longer construct a working provider — there is no local tier left to route
+// to. Rather than build a Router that would send an empty model name to the
+// gateway, the option is simply skipped: a lookup for "local" then falls
+// through LookupSummaryOption's existing miss path to the default, which is
+// exactly the degrade-correctly behaviour tasks.md's Phase C section
+// describes and T040 (US2) pins with a test. Deleting the "local" catalogue
+// entry and its SelfHosted() method outright is T037/T038 (US2), out of this
+// wave's scope.
+func summaryOptionRouters(gateway llm.Provider) map[string]llm.Provider {
 	out := map[string]llm.Provider{}
 	for _, o := range generation.SummaryOptions() {
-		if o.SelfHosted() {
-			out[o.ID] = llm.NewRouter("", nil, local, localModel)
-			continue
-		}
-		out[o.ID] = llm.NewRouter(o.TaskKey, gateway, local, localModel)
+		out[o.ID] = llm.NewRouter(o.TaskKey, gateway)
 	}
 	return out
 }

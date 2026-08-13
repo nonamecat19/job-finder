@@ -13,33 +13,33 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
+// ClassResolver is kept for the backlog DTO (internal/dto/queue_backlog.go),
+// even though Gate no longer consults it for admission decisions (044 T027):
+// with Ollama gone there is only one concurrency pool, so there is nothing
+// left to route between.
 type ClassResolver interface {
 	ProviderClass() llm.ProviderClass
 }
 
 type Gate struct {
-	hosted   *semaphore.Weighted
-	local    *semaphore.Weighted
-	resolver ClassResolver
+	sem *semaphore.Weighted
 }
 
-func NewGate(policy TaskPolicy, resolver ClassResolver) *Gate {
+// NewGate no longer takes a ClassResolver: admission is a single pool sized
+// by TaskPolicy.Concurrency (044). The resolver argument is kept out of this
+// constructor deliberately rather than accepted-and-ignored, so a caller
+// cannot believe it still has an effect here.
+func NewGate(policy TaskPolicy) *Gate {
 	return &Gate{
-		hosted:   semaphore.NewWeighted(int64(policy.HostedConcurrency)),
-		local:    semaphore.NewWeighted(int64(policy.LocalConcurrency)),
-		resolver: resolver,
+		sem: semaphore.NewWeighted(int64(policy.Concurrency)),
 	}
 }
 
 func (g *Gate) Acquire(ctx context.Context) (release func(), err error) {
-	sem := g.local
-	if g.resolver != nil && g.resolver.ProviderClass() == llm.ProviderClassHosted {
-		sem = g.hosted
-	}
-	if err := sem.Acquire(ctx, 1); err != nil {
+	if err := g.sem.Acquire(ctx, 1); err != nil {
 		return nil, err
 	}
-	return func() { sem.Release(1) }, nil
+	return func() { g.sem.Release(1) }, nil
 }
 
 func (g *Gate) Middleware(handler func(context.Context, *asynq.Task) error) func(context.Context, *asynq.Task) error {

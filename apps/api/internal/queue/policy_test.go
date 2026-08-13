@@ -11,7 +11,6 @@ import (
 func validConfig() *config.Config {
 	return &config.Config{
 		AIConcurrencyCloud:        3,
-		AIConcurrencyLocal:        1,
 		IngestConcurrency:         2,
 		EnrichConcurrency:         1,
 		AITaskTimeoutMatch:        5 * time.Minute,
@@ -40,7 +39,7 @@ func TestPoliciesFromConfig_AllSixTaskTypes(t *testing.T) {
 		TypeMatch:       "match",
 		TypeGenerate:    "generation",
 		TypeEnrich:      "",
-		TypeSalaryInfer: "default",
+		TypeSalaryInfer: "salary",
 		TypeGhostScore:  "ghost",
 	}
 	for _, p := range policies {
@@ -73,21 +72,12 @@ func TestPoliciesFromConfig_PoolSize(t *testing.T) {
 	}
 }
 
-func TestPoliciesFromConfig_RejectsLowConcurrency(t *testing.T) {
-	cfg := validConfig()
-	cfg.AIConcurrencyLocal = 0
-	_, err := PoliciesFromConfig(cfg)
-	if err == nil || !strings.Contains(err.Error(), "local concurrency") {
-		t.Fatalf("expected local concurrency error, got %v", err)
-	}
-}
-
-func TestPoliciesFromConfig_RejectsZeroHostedConcurrency(t *testing.T) {
+func TestPoliciesFromConfig_RejectsZeroConcurrency(t *testing.T) {
 	cfg := validConfig()
 	cfg.AIConcurrencyCloud = 0
 	_, err := PoliciesFromConfig(cfg)
-	if err == nil || !strings.Contains(err.Error(), "hosted concurrency") {
-		t.Fatalf("expected hosted concurrency error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "concurrency") {
+		t.Fatalf("expected concurrency error, got %v", err)
 	}
 }
 

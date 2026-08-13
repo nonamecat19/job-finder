@@ -174,6 +174,11 @@ export type PostAgeResponseDto = Nullable<Omit<Gen.PostAgeResponseDto, 'buckets'
 
 export type ProfileDto = Nullable<Gen.ProfileDto, 'extraNotes'>;
 
+// providerClass is permanently 'hosted' for any LLM-backed queue since
+// 044-litellm-only-routing removed the second (local/Ollama) inference path.
+// The field is kept and its shape unchanged rather than removed — dropping it
+// would be a breaking change to a shared type for a value that is now
+// constant.
 export type QueueBacklogDto = Nullable<Gen.QueueBacklogDto, 'etaSeconds' | 'providerClass'> & {
     providerClass: 'local' | 'hosted' | null;
   };

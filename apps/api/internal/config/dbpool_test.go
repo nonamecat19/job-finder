@@ -11,7 +11,7 @@ func TestLoadDBPoolDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := Load()
+	cfg, err := LoadNonAI()
 	if err != nil {
 		t.Fatalf("shipped defaults must validate cleanly, got: %v", err)
 	}

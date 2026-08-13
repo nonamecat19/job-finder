@@ -3,10 +3,7 @@ package config
 var defaults = map[string]any{
 	"PORT":                           3000,
 	"REDIS_URL":                      "redis://localhost:6379",
-	"OLLAMA_URL":                     "http://localhost:11434",
-	"LLM_MODEL":                      "qwen2.5:14b",
-	"EMBED_MODEL":                    "nomic-embed-text",
-	"EMBED_DIMS":                     768,
+	"EMBED_DIMS":                     1024,
 	"MATCH_SIMILARITY_THRESHOLD":     0.35,
 	"KEYWORD_REPHRASE_CACHE_TTL_SEC": 900,
 	"ADZUNA_COUNTRY":                 "gb",
@@ -25,7 +22,6 @@ var defaults = map[string]any{
 	"EVAL_PRUNE_RETENTION_DAYS":      30,
 
 	"AI_CONCURRENCY_CLOUD":        3,
-	"AI_CONCURRENCY_LOCAL":        1,
 	"INGEST_CONCURRENCY":          2,
 	"INGEST_PERSIST_CHUNK_SIZE":   500,
 	"ENRICH_CONCURRENCY":          1,
@@ -39,7 +35,6 @@ var defaults = map[string]any{
 	"ACTIVITY_STALE_AFTER":        "2m",
 	"ACTIVITY_SWEEP_INTERVAL":     "1m",
 	"ACTIVITY_QUEUED_GRACE":       "30m",
-	"OLLAMA_KEEP_ALIVE":           "30m",
 	"LLM_MAX_IDLE_CONNS_PER_HOST": 4,
 
 	"DB_MAX_CONNS":           0,
@@ -52,11 +47,7 @@ var defaults = map[string]any{
 }
 
 var optionalKeys = []string{
-	"DATABASE_URL", "OLLAMA_KEY", "LLM_MODEL_MATCH", "LLM_MODEL_GENERATION",
-	"LLM_MODEL_REPHRASE", "LLM_MODEL_GHOST",
-	"LLM_MODEL_GENERATION_ANALYZE", "LLM_MODEL_GENERATION_SELECT",
-	"LLM_MODEL_GENERATION_PREMIUM", "LLM_MODEL_GENERATION_SUMMARY",
-	"EMBED_URL", "CONFIG_ENCRYPTION_KEY",
+	"DATABASE_URL", "CONFIG_ENCRYPTION_KEY",
 	"ADZUNA_APP_ID", "ADZUNA_APP_KEY",
 	"JOBLEADS_EMAIL", "JOBLEADS_PASSWORD",
 	"DJINNI_EMAIL", "DJINNI_PASSWORD", "RESUME_MASTER_PATH",

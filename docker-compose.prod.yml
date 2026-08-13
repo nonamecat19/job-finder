@@ -1,23 +1,44 @@
 # Production compose.
 #
-# --- No gateway here, and therefore no LLM observability (036, contracts C3-5).
+# --- The gateway is required here now (044-litellm-only-routing, Constitution
+# Principle V 2.0.0). There is no local-first path left: every AI request,
+# prod included, goes through the self-hosted `litellm` proxy to a hosted
+# provider. Prod and dev route through the same artifact — same image, same
+# read-only gateway/config.yaml mount, same healthcheck, no depends_on
+# (contracts/configuration.md K5-1).
 #
-# This file has no `litellm` service and never has. The production deployment
-# talks to Ollama directly, which is the local-first path Constitution
-# Principle V describes: no provider credential, no third-party hop, no proxy.
-#
-# Feature 036 collects LLM observability through the *gateway's* success and
-# failure callbacks. With no gateway in the path there is nothing to attach a
-# callback to, so observability is deliberately a development-time capability
-# here — the collector service group exists in docker-compose.yml only.
-#
-# This is a recorded decision, not an oversight. Adding the collector to
-# production means first adding the gateway to production, which means putting
-# provider credentials on the production host — a Principle V trade to make
-# explicitly, on its own, not as a side effect of wanting dashboards. If that
-# trade is ever made, the collector's UI port must be bound to loopback here
-# too (contracts C3-4): it holds the user's full profile in plain text.
+# LLM observability (036) still has no collector here: `litellm`'s success/
+# failure callbacks would have somewhere to attach now that the gateway
+# exists in prod, but wiring the Langfuse service group here is a separate,
+# explicit trade (real credentials, another stateful service) that this
+# feature does not make. The collector service group stays dev-only in
+# docker-compose.yml.
 services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: litellm
+    command: ["--port", "4000", "--config", "/app/config.yaml"]
+    volumes:
+      - ./gateway/config.yaml:/app/config.yaml:ro
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    healthcheck:
+      # litellm main-stable image has no curl/wget; Python is the only HTTP
+      # client available.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -46,11 +67,10 @@ services:
     # NO `env_file: .env` (036 FR-007 / Constitution Principle V).
     #
     # This service used to ingest the whole .env, which handed the application
-    # container every provider credential — CEREBRAS_API_KEY, GROQ_API_KEY,
-    # COHERE_API_KEY, OPENROUTER_API_KEY. The constitution requires those to
-    # stay in the gateway container and be unreadable through the application,
-    # so the wholesale import was a standing violation independent of any
-    # feature.
+    # container every provider credential — CEREBRAS_API_KEY,
+    # OPENROUTER_API_KEY. The constitution requires those to stay in the
+    # gateway container and be unreadable through the application, so the
+    # wholesale import was a standing violation independent of any feature.
     #
     # The list below is explicit and enumerates exactly what internal/config
     # reads. It is verbose on purpose: an allowlist that must be edited to add
@@ -70,29 +90,17 @@ services:
       CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:-}
 
       # --- LLM access ---
+      # GATEWAY_URL and LITELLM_MASTER_KEY are required (contracts/
+      # configuration.md K1) — this is the application's only inference path.
       # LITELLM_MASTER_KEY authenticates the app TO the gateway; it is not a
-      # provider credential. OLLAMA_KEY is the local-first path (Principle V),
-      # which the app must be able to reach with no gateway at all.
+      # provider credential and is the one secret the application container
+      # is permitted. No provider API key (CEREBRAS/OPENROUTER/OPENAI) is
+      # ever granted here — those live only in the litellm service's
+      # environment above.
       GATEWAY_URL: ${GATEWAY_URL:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
-      OLLAMA_URL: ${OLLAMA_URL:-}
-      OLLAMA_KEY: ${OLLAMA_KEY:-}
-      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-}
-      EMBED_URL: ${EMBED_URL:-}
-      EMBED_MODEL: ${EMBED_MODEL:-}
       EMBED_DIMS: ${EMBED_DIMS:-}
       LLM_MAX_IDLE_CONNS_PER_HOST: ${LLM_MAX_IDLE_CONNS_PER_HOST:-}
-
-      # --- local model pinning (used only when GATEWAY_URL is empty) ---
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_MODEL_MATCH: ${LLM_MODEL_MATCH:-}
-      LLM_MODEL_GENERATION: ${LLM_MODEL_GENERATION:-}
-      LLM_MODEL_GENERATION_ANALYZE: ${LLM_MODEL_GENERATION_ANALYZE:-}
-      LLM_MODEL_GENERATION_SELECT: ${LLM_MODEL_GENERATION_SELECT:-}
-      LLM_MODEL_GENERATION_PREMIUM: ${LLM_MODEL_GENERATION_PREMIUM:-}
-      LLM_MODEL_GENERATION_SUMMARY: ${LLM_MODEL_GENERATION_SUMMARY:-}
-      LLM_MODEL_REPHRASE: ${LLM_MODEL_REPHRASE:-}
-      LLM_MODEL_GHOST: ${LLM_MODEL_GHOST:-}
 
       # --- job sources (their own credentials, not inference credentials) ---
       ADZUNA_APP_ID: ${ADZUNA_APP_ID:-}
@@ -124,7 +132,6 @@ services:
 
       # --- concurrency, timeouts, pool ---
       AI_CONCURRENCY_CLOUD: ${AI_CONCURRENCY_CLOUD:-}
-      AI_CONCURRENCY_LOCAL: ${AI_CONCURRENCY_LOCAL:-}
       AI_TASK_TIMEOUT_MATCH: ${AI_TASK_TIMEOUT_MATCH:-}
       AI_TASK_TIMEOUT_GENERATE: ${AI_TASK_TIMEOUT_GENERATE:-}
       AI_TASK_TIMEOUT_SALARY: ${AI_TASK_TIMEOUT_SALARY:-}

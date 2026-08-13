@@ -44,7 +44,7 @@ func TestSnapshotCache_HitReturnsIdenticalText(t *testing.T) {
 	repo := &countingRepo{
 		row: fakeProfile("Ada", time.Unix(1000, 0)),
 	}
-	svc := profile.NewService(repo, nil, "", "")
+	svc := profile.NewService(repo, nil, "")
 	cache := profile.NewSnapshotCache(svc)
 
 	snap1, err := cache.Get(context.Background())
@@ -67,7 +67,7 @@ func TestSnapshotCache_NewerUpdatedAtInvalidates(t *testing.T) {
 	repo := &countingRepo{
 		row: fakeProfile("Ada", time.Unix(1000, 0)),
 	}
-	svc := profile.NewService(repo, nil, "", "")
+	svc := profile.NewService(repo, nil, "")
 	cache := profile.NewSnapshotCache(svc)
 
 	if _, err := cache.Get(context.Background()); err != nil {
@@ -90,7 +90,7 @@ func TestSnapshotCache_ExplicitInvalidateForcesRebuild(t *testing.T) {
 	repo := &countingRepo{
 		row: fakeProfile("Ada", time.Unix(1000, 0)),
 	}
-	svc := profile.NewService(repo, nil, "", "")
+	svc := profile.NewService(repo, nil, "")
 	cache := profile.NewSnapshotCache(svc)
 
 	if _, err := cache.Get(context.Background()); err != nil {

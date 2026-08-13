@@ -7,7 +7,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/application"
 	"github.com/job-finder/api/internal/platform/llm/domain"
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/gateway"
-	"github.com/job-finder/api/internal/platform/llm/infrastructure/ollama"
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/shared"
 )
 
@@ -28,7 +27,6 @@ type (
 	Router        = application.Router
 	ProviderClass = application.ProviderClass
 
-	OllamaProvider  = ollama.Provider
 	GatewayProvider = gateway.Provider
 )
 
@@ -50,7 +48,6 @@ const (
 var (
 	NewRouter = application.NewRouter
 
-	NewOllama  = ollama.New
 	NewGateway = gateway.New
 
 	ErrRateLimited         = shared.ErrRateLimited
@@ -94,21 +91,9 @@ func CompleteStructuredChat[T any](ctx context.Context, p Provider, msgs []Messa
 	return domain.CompleteStructuredChat[T](ctx, p, msgs, opts)
 }
 
-func New(cfg *config.Config) (Provider, error) {
-	return ollama.New(cfg.OllamaURL, cfg.OllamaKey, cfg.LLMModel, cfg.EmbedModel, cfg.EmbedURL), nil
-}
-
-func NewProviders(cfg *config.Config) (*OllamaProvider, *GatewayProvider, error) {
-	o := ollama.New(cfg.OllamaURL, cfg.OllamaKey, cfg.LLMModel, cfg.EmbedModel, cfg.EmbedURL)
-
-	var gw *GatewayProvider
-	if cfg.GatewayURL != "" {
-		gwp, err := gateway.New(cfg.GatewayURL, cfg.LiteLLMMasterKey, o)
-		if err != nil {
-			return nil, nil, err
-		}
-		gw = gwp
-	}
-
-	return o, gw, nil
+// NewProviders builds the single inference path (044). GATEWAY_URL and
+// LITELLM_MASTER_KEY are required application configuration (K1) — config.Load
+// already refuses to boot without them — so this always constructs a gateway.
+func NewProviders(cfg *config.Config) (*GatewayProvider, error) {
+	return gateway.New(cfg.GatewayURL, cfg.LiteLLMMasterKey, cfg.EmbedDims)
 }

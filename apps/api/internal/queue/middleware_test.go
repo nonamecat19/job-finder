@@ -14,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/platform/llm"
 )
 
 type fakeActivityStore struct {
@@ -66,13 +65,13 @@ func taskWithActivityID(id string) *asynq.Task {
 	return asynq.NewTask("match", payload)
 }
 
-type fixedClass struct{ class llm.ProviderClass }
+// Gate has a single concurrency pool since 044 (T027): ClassResolver is no
+// longer consulted for admission, so these tests exercise TaskPolicy.Concurrency
+// directly rather than a hosted/local split that no longer exists.
 
-func (f fixedClass) ProviderClass() llm.ProviderClass { return f.class }
-
-func TestGate_HostedAdmitsConcurrentlyAndBlocksNext(t *testing.T) {
-	policy := TaskPolicy{HostedConcurrency: 2, LocalConcurrency: 1}
-	g := NewGate(policy, fixedClass{llm.ProviderClassHosted})
+func TestGate_AdmitsConcurrentlyAndBlocksNext(t *testing.T) {
+	policy := TaskPolicy{Concurrency: 2}
+	g := NewGate(policy)
 
 	release1, err := g.Acquire(context.Background())
 	if err != nil {
@@ -86,16 +85,16 @@ func TestGate_HostedAdmitsConcurrentlyAndBlocksNext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	if _, err := g.Acquire(ctx); err == nil {
-		t.Error("expected third acquire to block/fail while two hosted slots are held")
+		t.Error("expected third acquire to block/fail while two slots are held")
 	}
 
 	release1()
 	release2()
 }
 
-func TestGate_LocalAdmitsOnlyConfiguredCount(t *testing.T) {
-	policy := TaskPolicy{HostedConcurrency: 3, LocalConcurrency: 1}
-	g := NewGate(policy, fixedClass{llm.ProviderClassLocal})
+func TestGate_AdmitsOnlyConfiguredCount(t *testing.T) {
+	policy := TaskPolicy{Concurrency: 1}
+	g := NewGate(policy)
 
 	release, err := g.Acquire(context.Background())
 	if err != nil {
@@ -105,14 +104,14 @@ func TestGate_LocalAdmitsOnlyConfiguredCount(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	if _, err := g.Acquire(ctx); err == nil {
-		t.Error("expected second local acquire to block while local concurrency is 1")
+		t.Error("expected second acquire to block while concurrency is 1")
 	}
 	release()
 }
 
 func TestGate_WaitingAcquireHonoursCtxCancellation(t *testing.T) {
-	policy := TaskPolicy{HostedConcurrency: 1, LocalConcurrency: 1}
-	g := NewGate(policy, fixedClass{llm.ProviderClassLocal})
+	policy := TaskPolicy{Concurrency: 1}
+	g := NewGate(policy)
 
 	release, err := g.Acquire(context.Background())
 	if err != nil {
@@ -125,64 +124,6 @@ func TestGate_WaitingAcquireHonoursCtxCancellation(t *testing.T) {
 	if _, err := g.Acquire(ctx); err == nil {
 		t.Error("expected Acquire to return an error for an already-cancelled ctx")
 	}
-}
-
-func TestGate_NonLLMTaskBypassesClassResolution(t *testing.T) {
-	policy := TaskPolicy{HostedConcurrency: 5, LocalConcurrency: 2}
-	g := NewGate(policy, nil)
-
-	release1, err := g.Acquire(context.Background())
-	if err != nil {
-		t.Fatalf("acquire 1: %v", err)
-	}
-	release2, err := g.Acquire(context.Background())
-	if err != nil {
-		t.Fatalf("acquire 2: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	if _, err := g.Acquire(ctx); err == nil {
-		t.Error("expected third acquire to block: non-LLM tasks use the local (=configured) concurrency, not the 5-wide hosted one")
-	}
-	release1()
-	release2()
-}
-
-func TestGate_ClassResolvedOnceDoesNotChangeMidFlight(t *testing.T) {
-	policy := TaskPolicy{HostedConcurrency: 1, LocalConcurrency: 1}
-	resolver := &mutableClass{class: llm.ProviderClassHosted}
-	g := NewGate(policy, resolver)
-
-	release, err := g.Acquire(context.Background())
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	resolver.set(llm.ProviderClassLocal)
-
-	localRelease, err := g.Acquire(context.Background())
-	if err != nil {
-		t.Fatalf("expected local slot still free: %v", err)
-	}
-	localRelease()
-	release()
-}
-
-type mutableClass struct {
-	mu    sync.Mutex
-	class llm.ProviderClass
-}
-
-func (m *mutableClass) ProviderClass() llm.ProviderClass {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.class
-}
-
-func (m *mutableClass) set(c llm.ProviderClass) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.class = c
 }
 
 const testActivityID = "11111111-1111-1111-1111-111111111111"
@@ -265,8 +206,8 @@ func TestDeadlineMiddleware_HeartbeatTicksWhileRunning(t *testing.T) {
 }
 
 func TestGate_Middleware_AcquiresAndReleases(t *testing.T) {
-	policy := TaskPolicy{HostedConcurrency: 1, LocalConcurrency: 1}
-	g := NewGate(policy, fixedClass{llm.ProviderClassLocal})
+	policy := TaskPolicy{Concurrency: 1}
+	g := NewGate(policy)
 
 	var running int32
 	var maxRunning int32

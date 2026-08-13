@@ -183,7 +183,7 @@ cv:
     skills:
       - label: Backend
         details: Go, Node.js
-        skills_level: medium
+        skills_level: top10
       - label: Spoken Languages
         details: English, Ukrainian
         skills_level: relevant
@@ -205,8 +205,8 @@ cv:
 	if len(skills.Entries) != 2 {
 		t.Fatalf("skills entries = %d, want 2", len(skills.Entries))
 	}
-	if got := skills.Entries[0].SkillLevel; got == nil || *got != "medium" {
-		t.Errorf("Backend skillLevel = %v, want medium", got)
+	if got := skills.Entries[0].SkillLevel; got == nil || *got != "top10" {
+		t.Errorf("Backend skillLevel = %v, want top10", got)
 	}
 
 	rebuilt, err := ResumeToMaster(resume, master)
@@ -214,8 +214,8 @@ cv:
 		t.Fatalf("ResumeToMaster: %v", err)
 	}
 	groups := domain.AsSliceOfMaps(domain.CvSections(rebuilt)["skills"])
-	if got := domain.StringField(groups[0], "skills_level"); got != "medium" {
-		t.Errorf("skills_level after write-back = %q, want medium", got)
+	if got := domain.StringField(groups[0], "skills_level"); got != "top10" {
+		t.Errorf("skills_level after write-back = %q, want top10", got)
 	}
 	if domain.StringField(groups[1], "skills_level") != "relevant" {
 		t.Errorf("pinned group skills_level after write-back = %q, want relevant", domain.StringField(groups[1], "skills_level"))
@@ -230,7 +230,7 @@ cv:
     certifications:
       - label: AWS
         details: 'Amazon Web Services, 2024'
-        skills_level: medium
+        skills_level: top10
 `
 	master, err := ParseRendercv(yamlText)
 	if err != nil {
@@ -244,7 +244,7 @@ cv:
 	if entry.SkillLevel != nil {
 		t.Errorf("certifications entry exposed skillLevel = %v, want nil", *entry.SkillLevel)
 	}
-	if entry.Unrecognized["skills_level"] != "medium" {
+	if entry.Unrecognized["skills_level"] != "top10" {
 		t.Errorf("skills_level should stay unrecognized outside the skills section, got %+v", entry.Unrecognized)
 	}
 }

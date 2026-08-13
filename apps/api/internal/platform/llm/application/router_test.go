@@ -5,13 +5,17 @@ import (
 	"testing"
 
 	"github.com/job-finder/api/internal/platform/llm/domain"
-	ollamaprovider "github.com/job-finder/api/internal/platform/llm/infrastructure/ollama"
 )
 
 type stubProvider struct {
 	name     string
 	gotModel string
 	lastOpts *domain.CompleteOptions
+
+	embedHit  bool
+	embedText string
+	embedVec  []float32
+	embedErr  error
 }
 
 func (s *stubProvider) ModelName() string { return s.name }
@@ -39,30 +43,22 @@ func (s *stubProvider) CompleteChat(ctx context.Context, msgs []domain.Message, 
 	text, err := s.CompleteJSON(ctx, prompt, opts)
 	return domain.ChatResult{Content: text}, err
 }
+
 func (s *stubProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+	s.embedHit = true
+	s.embedText = text
+	if s.embedErr != nil {
+		return nil, s.embedErr
+	}
+	if s.embedVec != nil {
+		return s.embedVec, nil
+	}
 	return []float32{1}, nil
 }
 
-func TestRouterNilGatewayRoutesToLocalWithLocalModel(t *testing.T) {
-	local := &stubProvider{name: "ollama"}
-	r := NewRouter("match", nil, local, "gpt-oss:20b-cloud")
-
-	out, err := r.Complete(context.Background(), "hi", nil)
-	if err != nil {
-		t.Fatalf("Complete: %v", err)
-	}
-	if out != "ollama" {
-		t.Errorf("Complete() = %q, want ollama", out)
-	}
-	if local.gotModel != "gpt-oss:20b-cloud" {
-		t.Errorf("model passed to local = %q, want gpt-oss:20b-cloud", local.gotModel)
-	}
-}
-
-func TestRouterNonNilGatewayRoutesWithTaskKeyAsModel(t *testing.T) {
-	local := &stubProvider{name: "ollama"}
+func TestRouterRoutesToGatewayWithTaskKeyAsModel(t *testing.T) {
 	gateway := &stubProvider{name: "gateway"}
-	r := NewRouter("generation", gateway, local, "gpt-oss:120b-cloud")
+	r := NewRouter("generation", gateway)
 
 	out, err := r.Complete(context.Background(), "hi", nil)
 	if err != nil {
@@ -76,37 +72,52 @@ func TestRouterNonNilGatewayRoutesWithTaskKeyAsModel(t *testing.T) {
 	}
 }
 
-func TestRouterEmbedAlwaysUsesLocal(t *testing.T) {
-	local := &stubProvider{name: "ollama"}
-	gateway := &stubProvider{name: "gateway"}
-	r := NewRouter("ghost", gateway, local, "")
+// TestRouterEmbedRoutesToGateway — E5: there is no local provider to route to
+// in the target design. Every Embed call goes to the configured gateway.
+func TestRouterEmbedRoutesToGateway(t *testing.T) {
+	gateway := &stubProvider{name: "gateway", embedVec: []float32{0.1, 0.2, 0.3}}
+	r := NewRouter("embed", gateway)
 
-	vec, err := r.Embed(context.Background(), "text")
+	vec, err := r.Embed(context.Background(), "senior go engineer")
 	if err != nil {
 		t.Fatalf("Embed: %v", err)
 	}
-	if len(vec) != 1 {
-		t.Errorf("Embed should delegate to local stub, got %v", vec)
+	if !gateway.embedHit {
+		t.Fatal("Embed did not reach the configured gateway")
+	}
+	if gateway.embedText != "senior go engineer" {
+		t.Errorf("embed text = %q, want %q", gateway.embedText, "senior go engineer")
+	}
+	if len(vec) != 3 {
+		t.Errorf("Embed() = %v, want the gateway's 3-element vector", vec)
 	}
 }
 
-func TestRouterEmbedAlwaysUsesLocalWithNilGateway(t *testing.T) {
-	local := &stubProvider{name: "ollama"}
-	r := NewRouter("default", nil, local, "")
+// TestRouterEmbedPropagatesGatewayError — a failed embed call fails outright;
+// E3-1 states there is no fallback to a locally computed vector.
+func TestRouterEmbedPropagatesGatewayError(t *testing.T) {
+	wantErr := context.DeadlineExceeded
+	gateway := &stubProvider{name: "gateway", embedErr: wantErr}
+	r := NewRouter("embed", gateway)
 
-	vec, err := r.Embed(context.Background(), "text")
-	if err != nil {
-		t.Fatalf("Embed: %v", err)
+	if _, err := r.Embed(context.Background(), "text"); err != wantErr {
+		t.Errorf("Embed() error = %v, want %v (no fallback vector, E3-1)", err, wantErr)
 	}
-	if len(vec) != 1 {
-		t.Errorf("Embed should delegate to local stub, got %v", vec)
+}
+
+// TestProviderClassIsAlwaysHosted — E5/T016: there is no local/nil-gateway
+// branch left; ProviderClass is unconditionally "hosted".
+func TestProviderClassIsAlwaysHosted(t *testing.T) {
+	gateway := &stubProvider{name: "gateway"}
+	r := NewRouter("match", gateway)
+	if got := r.ProviderClass(); got != ProviderClassHosted {
+		t.Errorf("ProviderClass() = %v, want %v", got, ProviderClassHosted)
 	}
 }
 
 func TestRouterExplicitCallerModelIsNotOverwritten(t *testing.T) {
-	local := &stubProvider{name: "ollama"}
 	gateway := &stubProvider{name: "gateway"}
-	r := NewRouter("match", gateway, local, "")
+	r := NewRouter("match", gateway)
 
 	if _, err := r.Complete(context.Background(), "hi", &domain.CompleteOptions{Model: "caller-override"}); err != nil {
 		t.Fatalf("Complete: %v", err)
@@ -116,65 +127,11 @@ func TestRouterExplicitCallerModelIsNotOverwritten(t *testing.T) {
 	}
 }
 
-func TestRouterEmptyLocalModelUsesProviderDefault(t *testing.T) {
-	local := &stubProvider{name: "ollama"}
-	r := NewRouter("rephrase", nil, local, "")
-
-	if _, err := r.Complete(context.Background(), "hi", nil); err != nil {
-		t.Fatalf("Complete: %v", err)
-	}
-	if local.gotModel != "" {
-		t.Errorf("gotModel = %q, want empty (provider default)", local.gotModel)
-	}
-}
-
-func TestProviderClass_NilGatewayLoopbackIsLocal(t *testing.T) {
-	local := ollamaprovider.New("http://localhost:11434", "", "", "", "")
-	r := NewRouter("match", nil, local, "")
-	if got := r.ProviderClass(); got != ProviderClassLocal {
-		t.Errorf("expected local, got %v", got)
-	}
-}
-
-func TestProviderClass_NilGatewayLoopbackWithKeySetIsHosted(t *testing.T) {
-	local := ollamaprovider.New("http://127.0.0.1:11434", "some-key", "", "", "")
-	r := NewRouter("match", nil, local, "")
-	if got := r.ProviderClass(); got != ProviderClassHosted {
-		t.Errorf("expected hosted (key set on loopback), got %v", got)
-	}
-}
-
-func TestProviderClass_NilGatewayCloudURLIsHosted(t *testing.T) {
-	local := ollamaprovider.New("https://ollama.com", "cloud-key", "", "", "")
-	r := NewRouter("match", nil, local, "")
-	if got := r.ProviderClass(); got != ProviderClassHosted {
-		t.Errorf("expected hosted, got %v", got)
-	}
-}
-
-func TestProviderClass_ConfiguredGatewayIsAlwaysHosted(t *testing.T) {
-	local := ollamaprovider.New("http://localhost:11434", "", "", "", "")
+func TestRouterModelNameIsTaskKey(t *testing.T) {
 	gateway := &stubProvider{name: "gateway"}
-	r := NewRouter("default", gateway, local, "")
-	if got := r.ProviderClass(); got != ProviderClassHosted {
-		t.Errorf("expected hosted, got %v", got)
-	}
-}
-
-func TestRouterModelNameGatewayIsTaskKey(t *testing.T) {
-	local := ollamaprovider.New("http://localhost:11434", "", "", "", "")
-	gateway := &stubProvider{name: "gateway"}
-	r := NewRouter("ghost", gateway, local, "")
+	r := NewRouter("ghost", gateway)
 	if got := r.ModelName(); got != "ghost" {
 		t.Errorf("ModelName() = %q, want ghost (task key)", got)
-	}
-}
-
-func TestRouterModelNameLocalFallsBackToProviderDefault(t *testing.T) {
-	local := &stubProvider{name: "ollama-default-model"}
-	r := NewRouter("match", nil, local, "")
-	if got := r.ModelName(); got != "ollama-default-model" {
-		t.Errorf("ModelName() = %q, want ollama-default-model", got)
 	}
 }
 
@@ -184,7 +141,7 @@ func TestRouterModelNameLocalFallsBackToProviderDefault(t *testing.T) {
 // every task routed through a Router gets it, including ones added later.
 func TestRouterStampsTaskKey(t *testing.T) {
 	stub := &stubProvider{}
-	r := NewRouter("generation-summary", stub, nil, "")
+	r := NewRouter("generation-summary", stub)
 
 	if _, err := r.CompleteJSON(context.Background(), "p", nil); err != nil {
 		t.Fatalf("CompleteJSON: %v", err)
@@ -204,7 +161,7 @@ func TestRouterStampsTaskKey(t *testing.T) {
 // An explicit TaskKey from the caller wins, matching how Model already behaves.
 func TestRouterDoesNotOverrideExplicitTaskKey(t *testing.T) {
 	stub := &stubProvider{}
-	r := NewRouter("generation-summary", stub, nil, "")
+	r := NewRouter("generation-summary", stub)
 
 	opts := &domain.CompleteOptions{TaskKey: "caller-supplied"}
 	if _, err := r.CompleteJSON(context.Background(), "p", opts); err != nil {
@@ -218,7 +175,7 @@ func TestRouterDoesNotOverrideExplicitTaskKey(t *testing.T) {
 // The caller's options must not be mutated — the router copies.
 func TestRouterDoesNotMutateCallerOptions(t *testing.T) {
 	stub := &stubProvider{}
-	r := NewRouter("match", stub, nil, "")
+	r := NewRouter("match", stub)
 
 	opts := &domain.CompleteOptions{}
 	if _, err := r.CompleteJSON(context.Background(), "p", opts); err != nil {

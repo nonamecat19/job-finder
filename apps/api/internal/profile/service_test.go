@@ -20,7 +20,7 @@ func (f *fakeRepo) ListProfiles(ctx context.Context) ([]sqlcgen.Profile, error) 
 }
 
 func TestListEmpty(t *testing.T) {
-	svc := profile.NewService(&fakeRepo{}, nil, "", "")
+	svc := profile.NewService(&fakeRepo{}, nil, "")
 	out, err := svc.List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -31,7 +31,7 @@ func TestListEmpty(t *testing.T) {
 }
 
 func TestListError(t *testing.T) {
-	svc := profile.NewService(&fakeRepo{listErr: errors.New("db down")}, nil, "", "")
+	svc := profile.NewService(&fakeRepo{listErr: errors.New("db down")}, nil, "")
 	if _, err := svc.List(context.Background()); err == nil {
 		t.Fatal("expected error, got nil")
 	}

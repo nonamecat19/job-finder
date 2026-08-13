@@ -2,11 +2,13 @@ package http
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/generation"
@@ -55,7 +57,7 @@ func (h *ProfilesHandler) get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	out, err := h.Profiles.GetDto(r.Context(), id)
 	if err != nil {
-		httpx.WriteError(w, http.StatusNotFound, "profile not found: "+id)
+		writeProfileError(w, id, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
@@ -110,7 +112,7 @@ func (h *ProfilesHandler) update(w http.ResponseWriter, r *http.Request) {
 
 	out, err := h.Profiles.Update(r.Context(), id, in)
 	if err != nil {
-		httpx.WriteError(w, http.StatusNotFound, "profile not found: "+id)
+		writeProfileError(w, id, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
@@ -191,7 +193,7 @@ func (h *ProfilesHandler) getResume(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	resume, err := h.Profiles.GetResume(r.Context(), id)
 	if err != nil {
-		httpx.WriteError(w, http.StatusNotFound, "resume not found: "+id)
+		writeProfileError(w, id, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, dto.ResumeDto{Resume: resume})
@@ -210,8 +212,19 @@ func (h *ProfilesHandler) updateResume(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"path": verr.Path, "message": verr.Message})
 			return
 		}
-		httpx.WriteError(w, http.StatusNotFound, "profile not found: "+id)
+		writeProfileError(w, id, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, dto.ResumeDto{Resume: resume})
+}
+
+// writeProfileError reports a genuine "not found" as 404 and everything else
+// as a 500 with the real error — so a validation, YAML or database failure is
+// never presented to the caller as a missing profile.
+func writeProfileError(w http.ResponseWriter, id string, err error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		httpx.WriteError(w, http.StatusNotFound, "profile not found: "+id)
+		return
+	}
+	httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 }
