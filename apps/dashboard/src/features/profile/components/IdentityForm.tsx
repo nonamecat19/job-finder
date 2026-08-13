@@ -1,6 +1,5 @@
 import type { CustomConnection, Resume, SocialNetwork } from '@job-finder/shared';
-import { SectionTitle } from '../../../components/layout/PageHeader';
-import { Field, Input, Button, Surface } from '../../../components/ui';
+import { Field, Input, Button } from '../../../components/ui';
 
 interface IdentityFormProps {
   resume: Resume;
@@ -38,9 +37,8 @@ export function IdentityForm({ resume, onChange }: IdentityFormProps) {
     set('customConnections', [...(resume.customConnections ?? []), { placeholder: '', url: '' }]);
 
   return (
-    <Surface>
-      <SectionTitle>Identity</SectionTitle>
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Name">
           <Input value={resume.name} onChange={(e) => set('name', e.target.value)} placeholder="Jane Doe" />
         </Field>
@@ -120,6 +118,6 @@ export function IdentityForm({ resume, onChange }: IdentityFormProps) {
           ))}
         </div>
       </div>
-    </Surface>
+    </div>
   );
 }

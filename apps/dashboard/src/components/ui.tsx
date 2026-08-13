@@ -1,4 +1,5 @@
-import { ReactNode, type ComponentPropsWithoutRef, type ElementType } from 'react';
+import { ReactNode, useState, type ComponentPropsWithoutRef, type ElementType, type KeyboardEvent } from 'react';
+import { X } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export { ScoreBadge, GhostBadge, HealthDot } from './badges';
@@ -295,6 +296,142 @@ export function ErrorState({ error }: { error: unknown }) {
   return (
     <div className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
       {error instanceof Error ? error.message : String(error)}
+    </div>
+  );
+}
+
+export function TagInput({
+  values,
+  onChange,
+  placeholder,
+  className,
+  'aria-label': ariaLabel,
+}: {
+  values: string[];
+  onChange: (values: string[]) => void;
+  placeholder?: string;
+  className?: string;
+  'aria-label'?: string;
+}) {
+  const [draft, setDraft] = useState('');
+
+  const commit = () => {
+    const parts = draft
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length > 0) onChange([...values, ...parts]);
+    setDraft('');
+  };
+
+  const removeAt = (i: number) => onChange(values.filter((_, idx) => idx !== i));
+
+  return (
+    <div
+      className={cn(
+        'flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-lg border border-border bg-surface-secondary px-2 py-1.5 shadow-sm transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft',
+        className,
+      )}
+    >
+      {values.map((v, i) => (
+        <button
+          key={`${v}-${i}`}
+          type="button"
+          onClick={() => removeAt(i)}
+          onMouseDown={(e) => e.preventDefault()}
+          aria-label={`remove ${v}`}
+          className="group inline-flex items-center gap-1 rounded-md bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent ring-1 ring-inset ring-accent/25 transition hover:ring-accent/60"
+        >
+          {v}
+          <X className="h-3 w-3 text-accent/60 transition group-hover:text-accent" />
+        </button>
+      ))}
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Backspace' && draft === '' && values.length > 0) {
+            removeAt(values.length - 1);
+          }
+        }}
+        onBlur={commit}
+        placeholder={values.length === 0 ? placeholder : undefined}
+        aria-label={ariaLabel}
+        className="min-w-[8rem] flex-1 border-none bg-transparent px-1 py-0.5 text-sm text-foreground outline-none placeholder:text-faint"
+      />
+    </div>
+  );
+}
+
+export type TabItem = { id: string; label: string; icon?: ReactNode };
+
+export function Tabs({
+  tabs,
+  active,
+  onChange,
+  className,
+  'aria-label': ariaLabel,
+}: {
+  tabs: TabItem[];
+  active: string;
+  onChange: (id: string) => void;
+  className?: string;
+  'aria-label'?: string;
+}) {
+  const index = Math.max(0, tabs.findIndex((t) => t.id === active));
+  const activate = (i: number) => {
+    const target = tabs[Math.min(Math.max(i, 0), tabs.length - 1)];
+    if (target) onChange(target.id);
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      activate(index + 1);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      activate(index - 1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      activate(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      activate(tabs.length - 1);
+    }
+  };
+
+  return (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      onKeyDown={onKeyDown}
+      className={cn('flex flex-wrap gap-1 border-b border-border', className)}
+    >
+      {tabs.map((t, i) => {
+        const selected = i === index;
+        return (
+          <button
+            key={t.id}
+            role="tab"
+            id={`tab-${t.id}`}
+            aria-selected={selected}
+            aria-controls={`panel-${t.id}`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(t.id)}
+            className={cn(
+              'inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              '-mb-px',
+              selected ? 'border-accent text-foreground' : 'border-transparent text-muted hover:text-foreground',
+            )}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

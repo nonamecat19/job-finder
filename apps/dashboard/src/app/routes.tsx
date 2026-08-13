@@ -45,7 +45,7 @@ export function AppRoutes() {
           </RequireProfileConfig>
         }
       />
-      <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/profile/:tab?" element={<ProfilePage />} />
       <Route path="/contacts" element={<ContactsPage />} />
       <Route path="/tailor" element={<TailorPage />} />
       <Route

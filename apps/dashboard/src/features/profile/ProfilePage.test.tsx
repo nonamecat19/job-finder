@@ -1,6 +1,7 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders } from '../../test/test-utils'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import ProfilePage from './ProfilePage'
 
@@ -21,6 +22,21 @@ vi.mock('../../lib/api', () => ({
 
 const emptyResume = { resume: { name: 'Jane Doe', sections: [] } }
 
+function renderProfile(initialPath = '/profile') {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <Routes>
+          <Route path="/profile/:tab?" element={<ProfilePage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
 beforeEach(() => {
   vi.mocked(api.profiles.configStatus).mockResolvedValue({ hasConfig: false, hasExistingContent: false })
 })
@@ -32,13 +48,13 @@ describe('ProfilePage', () => {
     ])
     vi.mocked(api.profiles.getResume).mockResolvedValue(emptyResume)
 
-    renderWithProviders(<ProfilePage />)
+    renderProfile()
 
-    await waitFor(() => {
-      expect(screen.getByText(/no sections yet/i)).toBeInTheDocument()
-    })
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Jane Doe'))
     expect(document.querySelector('.bg-danger-soft')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Name')).toHaveValue('Jane Doe')
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Add section' }))
+    expect(screen.getByText(/no sections yet/i)).toBeInTheDocument()
   })
 
   it('auto-creates a blank profile and lands directly on the editable form when none exists', async () => {
@@ -54,13 +70,32 @@ describe('ProfilePage', () => {
     })
     vi.mocked(api.profiles.getResume).mockResolvedValue({ resume: { name: '', sections: [] } })
 
-    renderWithProviders(<ProfilePage />)
+    renderProfile()
 
     await waitFor(() => expect(api.profiles.create).toHaveBeenCalledWith({ name: 'My Profile' }))
     expect(screen.queryByPlaceholderText('e.g. Jane Doe')).not.toBeInTheDocument()
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /import config/i })).toBeInTheDocument())
-    expect(screen.getByLabelText('Name')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Config' }))
+    expect(screen.getByRole('button', { name: /import config/i })).toBeInTheDocument()
+  })
+
+  it('adds a section via the Add section tab and opens it', async () => {
+    vi.mocked(api.profiles.list).mockResolvedValue([
+      { id: 'p1', name: 'Jane Doe', hasConfig: false, extraNotes: null, updatedAt: new Date().toISOString() },
+    ])
+    vi.mocked(api.profiles.getResume).mockResolvedValue(emptyResume)
+
+    renderProfile()
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Jane Doe'))
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Add section' }))
+    await userEvent.type(screen.getByPlaceholderText(/New section name/i), 'Volunteering')
+    await userEvent.click(screen.getByRole('button', { name: /add section/i }))
+
+    expect(await screen.findByRole('tab', { name: 'Volunteering' })).toBeInTheDocument()
+    expect(screen.getByLabelText('section name')).toHaveValue('Volunteering')
   })
 
   it('requires confirmation before a config upload overwrites existing content', async () => {
@@ -72,8 +107,8 @@ describe('ProfilePage', () => {
       resume: { name: 'Jane Doe', sections: [{ name: 'experience', entryType: 'experience', entries: [{ company: 'Acme' }] }] },
     })
 
-    renderWithProviders(<ProfilePage />)
-    await waitFor(() => expect(screen.getByText(/Profile: Jane Doe/)).toBeInTheDocument())
+    renderProfile()
+    await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument())
 
     const file = new File(['cv:\n  name: Jane'], 'config.yaml', { type: 'application/yaml' })
     const input = document.querySelector('input[type="file"]') as HTMLInputElement

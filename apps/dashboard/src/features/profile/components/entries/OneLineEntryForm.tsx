@@ -1,6 +1,6 @@
 import type { Entry } from '@job-finder/shared';
-import { Field, Input, Select } from '../../../../components/ui';
-import { makeEntrySetter } from './entryFormUtils';
+import { Field, Input, Select, TagInput } from '../../../../components/ui';
+import { listToText, makeEntrySetter, textToList } from './entryFormUtils';
 
 interface EntryFormProps {
   entry: Entry;
@@ -16,23 +16,37 @@ export function OneLineEntryForm({ entry, onChange, sectionName }: EntryFormProp
       <Field label="Label">
         <Input value={entry.label ?? ''} onChange={(e) => set('label', e.target.value || undefined)} placeholder="Languages" />
       </Field>
-      <Field label="Details">
-        <Input
-          value={entry.details ?? ''}
-          onChange={(e) => set('details', e.target.value || undefined)}
-          placeholder="Python, Go, Rust"
-        />
-      </Field>
+      {isSkills ? (
+        <Field label="Details">
+          <TagInput
+            values={textToList(entry.details ?? '') ?? []}
+            onChange={(values) => set('details', values.length > 0 ? listToText(values) : undefined)}
+            placeholder="Python, Go, Rust"
+            aria-label="Skill details"
+          />
+        </Field>
+      ) : (
+        <Field label="Details">
+          <Input
+            value={entry.details ?? ''}
+            onChange={(e) => set('details', e.target.value || undefined)}
+            placeholder="Python, Go, Rust"
+          />
+        </Field>
+      )}
       {isSkills ? (
         <Field label="How many to show on a generated resume">
           <Select
-            value={entry.skillLevel ?? 'all'}
-            onChange={(e) => set('skillLevel', e.target.value === 'all' ? undefined : e.target.value)}
+            value={entry.skillLevel ?? 'relevant'}
+            onChange={(e) => set('skillLevel', e.target.value === 'relevant' ? undefined : e.target.value)}
             aria-label="Skill density"
           >
-            <option value="all">All skills</option>
-            <option value="medium">Half — most relevant first</option>
             <option value="relevant">Only the skills the job asks for</option>
+            <option value="top5">5 by relevance</option>
+            <option value="top10">~10 by relevance</option>
+            <option value="top15">~15 by relevance</option>
+            <option value="top20">~20 by relevance</option>
+            <option value="all">All skills</option>
           </Select>
         </Field>
       ) : null}
