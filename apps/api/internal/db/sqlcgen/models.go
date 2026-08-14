@@ -158,18 +158,19 @@ type GeneratedDocument struct {
 }
 
 type GenerationItem struct {
-	ID          pgtype.UUID        `json:"id"`
-	SectionID   pgtype.UUID        `json:"section_id"`
-	Origin      string             `json:"origin"`
-	SourceIndex *int32             `json:"source_index"`
-	SourceText  string             `json:"source_text"`
-	EditedText  *string            `json:"edited_text"`
-	Rank        int32              `json:"rank"`
-	Position    int32              `json:"position"`
-	Selected    bool               `json:"selected"`
-	Unavailable bool               `json:"unavailable"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID             pgtype.UUID        `json:"id"`
+	SectionID      pgtype.UUID        `json:"section_id"`
+	Origin         string             `json:"origin"`
+	SourceIndex    *int32             `json:"source_index"`
+	SourceText     string             `json:"source_text"`
+	EditedText     *string            `json:"edited_text"`
+	Rank           int32              `json:"rank"`
+	Position       int32              `json:"position"`
+	Selected       bool               `json:"selected"`
+	Unavailable    bool               `json:"unavailable"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DroppedEntries []string           `json:"dropped_entries"`
 }
 
 type GenerationRun struct {

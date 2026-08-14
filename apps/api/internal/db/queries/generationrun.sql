@@ -133,6 +133,16 @@ WHERE id = $1;
 -- handler before calling it (403 for a profile-origin item).
 UPDATE generation_items SET edited_text = $2, updated_at = now() WHERE id = $1;
 
+-- name: UpdateItemDroppedEntries :exec
+-- The per-skill half of PATCH .../items/{itemId}: the entries of a skill
+-- group's `details` the user switched off, replaced wholesale so the write is
+-- idempotent and order-free. Only ever called for a profile-origin item in a
+-- skills section, checked by the handler.
+UPDATE generation_items SET
+    dropped_entries = sqlc.arg('dropped_entries')::text[],
+    updated_at = now()
+WHERE id = $1;
+
 -- name: ReorderSectionItems :exec
 -- Whole-section reorder in one call (PATCH .../sections/{sectionId}/order).
 -- item_ids and positions are position-aligned arrays.

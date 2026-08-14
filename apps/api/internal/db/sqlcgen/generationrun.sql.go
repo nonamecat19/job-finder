@@ -24,7 +24,7 @@ FROM (
         unnest($7::int[]) AS p,
         unnest($8::bool[]) AS sel
 ) AS x
-RETURNING id, section_id, origin, source_index, source_text, edited_text, rank, position, selected, unavailable, created_at, updated_at
+RETURNING id, section_id, origin, source_index, source_text, edited_text, rank, position, selected, unavailable, created_at, updated_at, dropped_entries
 `
 
 type CreateItemsParams struct {
@@ -73,6 +73,7 @@ func (q *Queries) CreateItems(ctx context.Context, arg CreateItemsParams) ([]Gen
 			&i.Unavailable,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DroppedEntries,
 		); err != nil {
 			return nil, err
 		}
@@ -237,7 +238,7 @@ func (q *Queries) DeleteSectionItems(ctx context.Context, sectionID pgtype.UUID)
 }
 
 const getItemForUpdate = `-- name: GetItemForUpdate :one
-SELECT id, section_id, origin, source_index, source_text, edited_text, rank, position, selected, unavailable, created_at, updated_at FROM generation_items WHERE id = $1 FOR UPDATE
+SELECT id, section_id, origin, source_index, source_text, edited_text, rank, position, selected, unavailable, created_at, updated_at, dropped_entries FROM generation_items WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetItemForUpdate(ctx context.Context, id pgtype.UUID) (GenerationItem, error) {
@@ -256,6 +257,7 @@ func (q *Queries) GetItemForUpdate(ctx context.Context, id pgtype.UUID) (Generat
 		&i.Unavailable,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DroppedEntries,
 	)
 	return i, err
 }
@@ -327,7 +329,7 @@ func (q *Queries) GetRunForUpdate(ctx context.Context, id pgtype.UUID) (Generati
 }
 
 const listItemsByRun = `-- name: ListItemsByRun :many
-SELECT gi.id, gi.section_id, gi.origin, gi.source_index, gi.source_text, gi.edited_text, gi.rank, gi.position, gi.selected, gi.unavailable, gi.created_at, gi.updated_at FROM generation_items gi
+SELECT gi.id, gi.section_id, gi.origin, gi.source_index, gi.source_text, gi.edited_text, gi.rank, gi.position, gi.selected, gi.unavailable, gi.created_at, gi.updated_at, gi.dropped_entries FROM generation_items gi
 JOIN generation_sections gs ON gs.id = gi.section_id
 WHERE gs.run_id = $1
 ORDER BY gs.position, gi.position
@@ -359,6 +361,7 @@ func (q *Queries) ListItemsByRun(ctx context.Context, runID pgtype.UUID) ([]Gene
 			&i.Unavailable,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DroppedEntries,
 		); err != nil {
 			return nil, err
 		}
@@ -579,6 +582,27 @@ func (q *Queries) SetSectionState(ctx context.Context, arg SetSectionStateParams
 		arg.FallbackUsed,
 		arg.Error,
 	)
+	return err
+}
+
+const updateItemDroppedEntries = `-- name: UpdateItemDroppedEntries :exec
+UPDATE generation_items SET
+    dropped_entries = $2::text[],
+    updated_at = now()
+WHERE id = $1
+`
+
+type UpdateItemDroppedEntriesParams struct {
+	ID             pgtype.UUID `json:"id"`
+	DroppedEntries []string    `json:"dropped_entries"`
+}
+
+// The per-skill half of PATCH .../items/{itemId}: the entries of a skill
+// group's `details` the user switched off, replaced wholesale so the write is
+// idempotent and order-free. Only ever called for a profile-origin item in a
+// skills section, checked by the handler.
+func (q *Queries) UpdateItemDroppedEntries(ctx context.Context, arg UpdateItemDroppedEntriesParams) error {
+	_, err := q.db.Exec(ctx, updateItemDroppedEntries, arg.ID, arg.DroppedEntries)
 	return err
 }
 
