@@ -66,6 +66,7 @@ export default function GenerateWorkspacePage() {
             onToggle={(itemId, selected) => toggleItem.mutate({ itemId, selected })}
             onEditText={(itemId, text) => toggleItem.mutate({ itemId, text })}
             onReorder={(sectionId, itemIds) => reorderSection.mutate({ sectionId, itemIds })}
+            onDropEntries={(itemId, droppedEntries) => toggleItem.mutate({ itemId, droppedEntries })}
             onRerun={() => rerunRun.mutate(undefined)}
           />
         </Surface>
@@ -161,6 +162,7 @@ function WorkspaceLeftPane({
   onToggle,
   onEditText,
   onReorder,
+  onDropEntries,
   onRerun,
 }: {
   runId: string | undefined;
@@ -170,6 +172,7 @@ function WorkspaceLeftPane({
   onToggle: (itemId: string, selected: boolean) => void;
   onEditText: (itemId: string, text: string) => void;
   onReorder: (sectionId: string, itemIds: string[]) => void;
+  onDropEntries: (itemId: string, droppedEntries: string[]) => void;
   onRerun: () => void;
 }) {
   if (!runId) {
@@ -249,7 +252,13 @@ function WorkspaceLeftPane({
       ))}
 
       {skillsSection ? (
-        <SkillsBlock section={skillsSection} onToggle={onToggle} onReorder={onReorder} onEditText={onEditText} />
+        <SkillsBlock
+          section={skillsSection}
+          onToggle={onToggle}
+          onReorder={onReorder}
+          onEditText={onEditText}
+          onDropEntries={onDropEntries}
+        />
       ) : null}
 
       {projectsSection ? (

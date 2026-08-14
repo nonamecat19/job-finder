@@ -9,6 +9,8 @@ export interface SkillsBlockProps {
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
   /** Present so an included (selected) origin="ai" skill can be edited in place (T056, FR-015). */
   onEditText?: (itemId: string, text: string) => void;
+  /** Per-skill inclusion inside a profile skill group: the whole drop set. */
+  onDropEntries?: (itemId: string, droppedEntries: string[]) => void;
 }
 
 // T031/T063: skill-group items with the same toggle affordance as
@@ -17,7 +19,7 @@ export interface SkillsBlockProps {
 // then the ones skillsMaxGroups left out, which are shown unselected rather
 // than removed, FR-011), then the AI-suggested skills in their own visually
 // distinct group, off by default (FR-013).
-export default function SkillsBlock({ section, onToggle, onReorder, onEditText }: SkillsBlockProps) {
+export default function SkillsBlock({ section, onToggle, onReorder, onEditText, onDropEntries }: SkillsBlockProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const profileItems = section.items.filter((it) => it.origin === 'profile');
@@ -53,7 +55,12 @@ export default function SkillsBlock({ section, onToggle, onReorder, onEditText }
           <SortableContext items={orderedItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
             <ul className="space-y-1.5">
               {selectedItems.map((item) => (
-                <ItemRow key={item.id} item={item} onToggle={(selected) => onToggle(item.id, selected)} />
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  onToggle={(selected) => onToggle(item.id, selected)}
+                  onDropEntries={onDropEntries ? (dropped) => onDropEntries(item.id, dropped) : undefined}
+                />
               ))}
               {selectedItems.length > 0 && unselectedItems.length > 0 ? (
                 <li
@@ -64,7 +71,12 @@ export default function SkillsBlock({ section, onToggle, onReorder, onEditText }
                 </li>
               ) : null}
               {unselectedItems.map((item) => (
-                <ItemRow key={item.id} item={item} onToggle={(selected) => onToggle(item.id, selected)} />
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  onToggle={(selected) => onToggle(item.id, selected)}
+                  onDropEntries={onDropEntries ? (dropped) => onDropEntries(item.id, dropped) : undefined}
+                />
               ))}
             </ul>
           </SortableContext>

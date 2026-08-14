@@ -10,6 +10,7 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 
 	"context"
+	"strings"
 )
 
 // SetTxRunner installs the transactional port PatchGenerationItem and
@@ -74,6 +75,21 @@ func (s *Service) PatchGenerationItem(ctx context.Context, runID, itemID string,
 			return apperr.Conflict("item is unavailable")
 		}
 
+		if req.DroppedEntries != nil {
+			if !hasSkillEntries(kind, item.Origin) {
+				return apperr.New(apperr.KindForbidden, "droppedEntries can only be set on a profile-origin skills item")
+			}
+			normalized, vErr := normalizeDroppedEntries(item, *req.DroppedEntries)
+			if vErr != nil {
+				return vErr
+			}
+			if uErr := q.UpdateItemDroppedEntries(ctx, sqlcgen.UpdateItemDroppedEntriesParams{
+				ID: iid, DroppedEntries: normalized,
+			}); uErr != nil {
+				return uErr
+			}
+		}
+
 		if req.Text != nil {
 			if uErr := q.UpdateItemText(ctx, sqlcgen.UpdateItemTextParams{ID: iid, EditedText: req.Text}); uErr != nil {
 				return uErr
@@ -103,6 +119,39 @@ func (s *Service) PatchGenerationItem(ctx context.Context, runID, itemID string,
 		return dto.GenerationItemDto{}, err
 	}
 	return itemToDto(sectionKind, updated), nil
+}
+
+// normalizeDroppedEntries validates a per-skill drop set against the group it
+// belongs to and returns it in the group's own entry order, deduped. Storing
+// it canonically is what makes the write idempotent: the same request twice,
+// or the same skills named in another order, lands the same row.
+//
+// An entry the group does not contain is a 400 rather than a silent no-op —
+// it means the client is working from a stale copy of the group, and dropping
+// the wrong skill from a resume is not a mistake worth swallowing.
+func normalizeDroppedEntries(item sqlcgen.GenerationItem, requested []string) ([]string, error) {
+	want := make(map[string]bool, len(requested))
+	for _, r := range requested {
+		if t := strings.TrimSpace(r); t != "" {
+			want[t] = true
+		}
+	}
+
+	entries := sqlcItemToDomain(item).SkillEntries()
+	known := make(map[string]bool, len(entries))
+	out := make([]string, 0, len(want))
+	for _, e := range entries {
+		known[e.Text] = true
+		if want[e.Text] {
+			out = append(out, e.Text)
+		}
+	}
+	for name := range want {
+		if !known[name] {
+			return nil, apperr.Validation("not a skill in this group: " + name)
+		}
+	}
+	return out, nil
 }
 
 // ReorderSection is

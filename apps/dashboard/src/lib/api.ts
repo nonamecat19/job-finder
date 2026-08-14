@@ -340,7 +340,11 @@ export const api = {
       const qs = q.toString();
       return request<GenerationRunDto[]>(`/v1/generations${qs ? `?${qs}` : ''}`);
     },
-    patchItem: (runId: string, itemId: string, body: { selected?: boolean; position?: number; text?: string }) =>
+    patchItem: (
+      runId: string,
+      itemId: string,
+      body: { selected?: boolean; position?: number; text?: string; droppedEntries?: string[] },
+    ) =>
       request(`/v1/generations/${runId}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(body) }),
     reorder: (runId: string, sectionId: string, itemIds: string[]) =>
       request(`/v1/generations/${runId}/sections/${sectionId}/order`, {

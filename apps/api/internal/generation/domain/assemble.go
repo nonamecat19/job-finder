@@ -117,6 +117,40 @@ func assembleProjects(masterProjects []map[string]any, selected []Item) []any {
 	return out
 }
 
+// applyDroppedEntries removes the individual skills the user switched off
+// inside a group, and reports whether the group still says anything.
+//
+// An item with nothing dropped returns the master's own map untouched — the
+// common case must stay byte-identical, fields and all. Otherwise the group is
+// shallow-copied before `details` is rewritten, so the run's master snapshot
+// (which every other export path reads) is never mutated. Emptying a group
+// entirely drops it from the document rather than rendering a bare label, the
+// same call TrimSkillGroups makes for a "relevant" group with no match.
+func applyDroppedEntries(group map[string]any, it Item) (map[string]any, bool) {
+	if len(it.DroppedEntries) == 0 {
+		return group, true
+	}
+	dropped := make(map[string]bool, len(it.DroppedEntries))
+	for _, d := range it.DroppedEntries {
+		dropped[strings.TrimSpace(d)] = true
+	}
+	kept := make([]string, 0, len(it.DroppedEntries))
+	for _, e := range splitSkillEntries(StringField(group, "details")) {
+		if !dropped[e] {
+			kept = append(kept, e)
+		}
+	}
+	if len(kept) == 0 {
+		return nil, false
+	}
+	out := make(map[string]any, len(group))
+	for k, v := range group {
+		out[k] = v
+	}
+	out["details"] = strings.Join(kept, ", ")
+	return out, true
+}
+
 // assembleSkillGroups rebuilds the skills section from the selected items.
 // A profile-origin item resolves through its SourceIndex back to the master's
 // own group map, so every field on that group (and not just label/details)
@@ -127,7 +161,10 @@ func assembleSkillGroups(masterGroups []map[string]any, selected []Item) []any {
 	for _, it := range selected {
 		if it.Origin == OriginProfile {
 			if it.SourceIndex != nil && *it.SourceIndex >= 0 && *it.SourceIndex < len(masterGroups) {
-				out = append(out, masterGroups[*it.SourceIndex])
+				group, keep := applyDroppedEntries(masterGroups[*it.SourceIndex], it)
+				if keep {
+					out = append(out, group)
+				}
 			}
 			continue
 		}

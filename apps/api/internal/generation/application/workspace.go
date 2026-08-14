@@ -284,11 +284,48 @@ func (s *Service) persistWorkspaceItems(ctx context.Context, sectionID pgtype.UU
 		positions[i] = int32(it.Position)
 		selected[i] = it.Selected
 	}
-	_, err := s.q.CreateItems(ctx, sqlcgen.CreateItemsParams{
+	created, err := s.q.CreateItems(ctx, sqlcgen.CreateItemsParams{
 		SectionID: sectionID, Origins: origins, SourceIndexes: sourceIndexes, SourceTexts: sourceTexts,
 		EditedTexts: editedTexts, Ranks: ranks, Positions: positions, SelectedFlags: selected,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return s.persistDroppedEntries(ctx, created, items)
+}
+
+// persistDroppedEntries writes back the per-skill drop sets a rerun carried
+// forward. Kept out of CreateItems' zipped-array insert because the column is
+// an array per row, which that unnest pattern cannot express; a rerun touches
+// one section and only its skill groups can carry drops, so this is a handful
+// of updates at most, and none at all for the overwhelmingly common case of a
+// section with nothing dropped.
+func (s *Service) persistDroppedEntries(ctx context.Context, created []sqlcgen.GenerationItem, items []domain.Item) error {
+	bySource := make(map[int][]string)
+	for _, it := range items {
+		if len(it.DroppedEntries) == 0 || it.Origin != domain.OriginProfile || it.SourceIndex == nil {
+			continue
+		}
+		bySource[*it.SourceIndex] = it.DroppedEntries
+	}
+	if len(bySource) == 0 {
+		return nil
+	}
+	for _, row := range created {
+		if row.Origin != string(domain.OriginProfile) || row.SourceIndex == nil {
+			continue
+		}
+		dropped, ok := bySource[int(*row.SourceIndex)]
+		if !ok {
+			continue
+		}
+		if err := s.q.UpdateItemDroppedEntries(ctx, sqlcgen.UpdateItemDroppedEntriesParams{
+			ID: row.ID, DroppedEntries: dropped,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // rankedSectionResult is one experience section's outcome from the ranking
@@ -539,6 +576,12 @@ func preserveMatchedSelections(oldItems, newItems []domain.Item) []domain.Item {
 			it.Position = match.Position
 			if it.Origin == domain.OriginAI {
 				it.EditedText = match.EditedText
+			} else {
+				// A per-skill drop set is part of the same selection the
+				// Selected flag carries, so it survives a rerun the same way.
+				// Entries the master no longer has simply stop matching
+				// anything when the group is next assembled.
+				it.DroppedEntries = match.DroppedEntries
 			}
 		}
 		out[i] = it
@@ -557,16 +600,17 @@ func sqlcItemToDomain(it sqlcgen.GenerationItem) domain.Item {
 		sourceIndex = &v
 	}
 	return domain.Item{
-		ID:          dbutil.UUIDString(it.ID),
-		SectionID:   dbutil.UUIDString(it.SectionID),
-		Origin:      domain.ItemOrigin(it.Origin),
-		SourceIndex: sourceIndex,
-		SourceText:  it.SourceText,
-		EditedText:  it.EditedText,
-		Rank:        int(it.Rank),
-		Position:    int(it.Position),
-		Selected:    it.Selected,
-		Unavailable: it.Unavailable,
+		ID:             dbutil.UUIDString(it.ID),
+		SectionID:      dbutil.UUIDString(it.SectionID),
+		Origin:         domain.ItemOrigin(it.Origin),
+		SourceIndex:    sourceIndex,
+		SourceText:     it.SourceText,
+		EditedText:     it.EditedText,
+		Rank:           int(it.Rank),
+		Position:       int(it.Position),
+		Selected:       it.Selected,
+		Unavailable:    it.Unavailable,
+		DroppedEntries: it.DroppedEntries,
 	}
 }
 
@@ -1136,7 +1180,30 @@ func itemToDto(sectionKind string, it sqlcgen.GenerationItem) dto.GenerationItem
 		ID: dbutil.UUIDString(it.ID), Origin: it.Origin, Kind: itemKindFor(sectionKind),
 		Text: text, SourceIndex: sourceIndex, Rank: int(it.Rank), Position: int(it.Position),
 		Selected: it.Selected, Edited: edited, Unavailable: it.Unavailable,
+		SkillEntries: skillEntriesToDto(sectionKind, it),
 	}
+}
+
+// skillEntriesToDto exposes a skill group's individual entries and their
+// inclusion state, and nothing at all for any other item — the per-skill
+// toggle exists only where a group's `details` is a comma-separated list the
+// master itself authored.
+func skillEntriesToDto(sectionKind string, it sqlcgen.GenerationItem) []dto.GenerationSkillEntryDto {
+	if !hasSkillEntries(sectionKind, it.Origin) {
+		return nil
+	}
+	entries := sqlcItemToDomain(it).SkillEntries()
+	out := make([]dto.GenerationSkillEntryDto, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, dto.GenerationSkillEntryDto{Text: e.Text, Selected: e.Selected})
+	}
+	return out
+}
+
+// hasSkillEntries is the one predicate the read and write paths share: only a
+// profile-origin item in a skills section has per-skill entries.
+func hasSkillEntries(sectionKind, origin string) bool {
+	return domain.SectionKind(sectionKind) == domain.SectionKindSkills && domain.ItemOrigin(origin) == domain.OriginProfile
 }
 
 func itemKindFor(sectionKind string) string {

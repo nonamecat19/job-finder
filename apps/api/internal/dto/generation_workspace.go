@@ -70,6 +70,19 @@ type GenerationItemDto struct {
 	Selected    bool   `json:"selected"`
 	Edited      bool   `json:"edited"`
 	Unavailable bool   `json:"unavailable"`
+	// SkillEntries is present only for a profile-origin item in a skills
+	// section: the group's individual skills, each with its own inclusion
+	// state, so the client can switch one skill off without dropping the
+	// whole group. Absent everywhere else — an AI-suggested skill is a single
+	// entry whose text may itself contain commas.
+	SkillEntries []GenerationSkillEntryDto `json:"skillEntries,omitempty"`
+}
+
+// GenerationSkillEntryDto is one skill inside a group, and whether it is
+// included in the exported resume.
+type GenerationSkillEntryDto struct {
+	Text     string `json:"text"`
+	Selected bool   `json:"selected"`
 }
 
 // GenerationExportDto is the run's export status, embedded in the run
@@ -120,6 +133,12 @@ type PatchGenerationItemRequestDto struct {
 	Selected *bool   `json:"selected,omitempty"`
 	Position *int    `json:"position,omitempty"`
 	Text     *string `json:"text,omitempty"`
+	// DroppedEntries replaces the set of individual skills switched off
+	// inside a skill group — the whole set every time, so the write is
+	// idempotent and order-free. An empty (non-nil) array restores the whole
+	// group. Rejected with 403 for anything but a profile-origin item in a
+	// skills section, and with 400 for an entry that group does not contain.
+	DroppedEntries *[]string `json:"droppedEntries,omitempty"`
 }
 
 // RerunGenerationRequestDto is the body of

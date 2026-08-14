@@ -43,6 +43,7 @@ type Repository interface {
 	GetItemForUpdate(ctx context.Context, id pgtype.UUID) (sqlcgen.GenerationItem, error)
 	UpdateItemSelection(ctx context.Context, arg sqlcgen.UpdateItemSelectionParams) error
 	UpdateItemText(ctx context.Context, arg sqlcgen.UpdateItemTextParams) error
+	UpdateItemDroppedEntries(ctx context.Context, arg sqlcgen.UpdateItemDroppedEntriesParams) error
 	ReorderSectionItems(ctx context.Context, arg sqlcgen.ReorderSectionItemsParams) error
 	MarkItemsUnavailable(ctx context.Context, itemIds []pgtype.UUID) error
 }

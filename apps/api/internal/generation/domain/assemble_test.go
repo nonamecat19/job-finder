@@ -235,3 +235,78 @@ func TestOverflowCandidatesAreWorstRankedSelectedItemsFirst(t *testing.T) {
 		t.Error("a document that fits reported drop candidates")
 	}
 }
+
+// assembledSkillDetails returns the assembled details string for one group label, or
+// "" when the group is not in the document at all.
+func assembledSkillDetails(doc RendercvMaster, label string) string {
+	for _, g := range AsSliceOfMaps(CvSections(doc)["skills"]) {
+		if StringField(g, "label") == label {
+			return StringField(g, "details")
+		}
+	}
+	return ""
+}
+
+// Per-skill drops: a group stays in the resume, minus the individual skills
+// the user switched off. Everything left is still the master's own text.
+func TestAssembleDropsIndividualSkillEntries(t *testing.T) {
+	sections := assembleSections()
+	sections[3].Items[0].DroppedEntries = []string{"TypeScript"}
+
+	doc, err := Assemble(assembleMaster(), sections)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	if got := assembledSkillDetails(doc, "Languages"); got != "Go" {
+		t.Errorf("Languages details = %q, want only the kept entry %q", got, "Go")
+	}
+}
+
+// Dropping every entry of a group leaves nothing to say, so the group goes
+// with them rather than rendering a bare label.
+func TestAssembleDropsAnEmptiedSkillGroupEntirely(t *testing.T) {
+	sections := assembleSections()
+	sections[3].Items[0].DroppedEntries = []string{"Go", "TypeScript"}
+
+	doc, err := Assemble(assembleMaster(), sections)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	if groups := AsSliceOfMaps(CvSections(doc)["skills"]); len(groups) != 0 {
+		t.Errorf("skills = %v, want the emptied group gone", groups)
+	}
+}
+
+// The drop is applied to a copy: the master snapshot every other export path
+// reads must come back out of Assemble untouched.
+func TestAssembleDoesNotMutateTheMasterSkillGroup(t *testing.T) {
+	master := assembleMaster()
+	sections := assembleSections()
+	sections[3].Items[0].DroppedEntries = []string{"TypeScript"}
+
+	if _, err := Assemble(master, sections); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	if got := assembledSkillDetails(master, "Languages"); got != "Go, TypeScript" {
+		t.Errorf("master Languages details = %q, want it unchanged", got)
+	}
+}
+
+// SkillEntries is what the client renders a per-skill toggle from: every
+// entry of the group, each carrying its own inclusion state.
+func TestSkillEntriesReportsPerEntrySelection(t *testing.T) {
+	it := Item{
+		Origin: OriginProfile, Kind: ItemKindSkillGroup,
+		SourceText:     "Languages: Go, TypeScript, SQL",
+		DroppedEntries: []string{"TypeScript"},
+	}
+
+	got := it.SkillEntries()
+	want := []SkillEntry{{Text: "Go", Selected: true}, {Text: "TypeScript", Selected: false}, {Text: "SQL", Selected: true}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("SkillEntries() = %+v, want %+v", got, want)
+	}
+}

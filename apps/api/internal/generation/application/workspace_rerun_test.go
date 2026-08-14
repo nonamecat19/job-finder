@@ -1,6 +1,7 @@
 package application
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/job-finder/api/internal/generation/domain"
@@ -81,7 +82,7 @@ func TestPreserveMatchedSelectionsIsIdentityWithNoOldItems(t *testing.T) {
 
 	out := preserveMatchedSelections(nil, fresh)
 
-	if len(out) != 1 || out[0] != fresh[0] {
+	if len(out) != 1 || !reflect.DeepEqual(out[0], fresh[0]) {
 		t.Errorf("out = %+v, want fresh unchanged", out)
 	}
 }

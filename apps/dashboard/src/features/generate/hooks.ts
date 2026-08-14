@@ -78,6 +78,25 @@ function applyItemPatch(
   };
 }
 
+// applyDroppedEntries re-derives one skill group's per-entry state from the
+// drop set the PATCH is carrying, so a switched-off skill greys out on the
+// click rather than on the response. Kept separate from applyItemPatch because
+// the new value depends on the item it lands on, not just the request.
+function applyDroppedEntries(run: GenerationRunDto, itemId: string, droppedEntries: string[]): GenerationRunDto {
+  const dropped = new Set(droppedEntries);
+  return {
+    ...run,
+    sections: run.sections.map((section) => ({
+      ...section,
+      items: section.items.map((item) =>
+        item.id === itemId && item.skillEntries
+          ? { ...item, skillEntries: item.skillEntries.map((e) => ({ ...e, selected: !dropped.has(e.text) })) }
+          : item,
+      ),
+    })),
+  };
+}
+
 // applyReorder returns a new run with one section's items given fresh
 // `position` values from `orderedItemIds`, re-sorted to match — the client
 // never waits on the network to show the new order (SC-006).
@@ -103,24 +122,26 @@ export function useToggleGenerationItem(runId: string | undefined) {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (p: { itemId: string; selected?: boolean; position?: number; text?: string }) =>
+    mutationFn: (p: { itemId: string; selected?: boolean; position?: number; text?: string; droppedEntries?: string[] }) =>
       api.generations.patchItem(runId!, p.itemId, {
         selected: p.selected,
         position: p.position,
         text: p.text,
+        droppedEntries: p.droppedEntries,
       }),
     onMutate: async (p) => {
       if (!runId) return undefined;
       await qc.cancelQueries({ queryKey: generations.get(runId) });
       const previous = qc.getQueryData<GenerationRunDto>(generations.get(runId));
       if (previous) {
+        const patched = applyItemPatch(previous, p.itemId, {
+          ...(p.selected !== undefined ? { selected: p.selected } : {}),
+          ...(p.position !== undefined ? { position: p.position } : {}),
+          ...(p.text !== undefined ? { text: p.text, edited: true } : {}),
+        });
         qc.setQueryData<GenerationRunDto>(
           generations.get(runId),
-          applyItemPatch(previous, p.itemId, {
-            ...(p.selected !== undefined ? { selected: p.selected } : {}),
-            ...(p.position !== undefined ? { position: p.position } : {}),
-            ...(p.text !== undefined ? { text: p.text, edited: true } : {}),
-          }),
+          p.droppedEntries ? applyDroppedEntries(patched, p.itemId, p.droppedEntries) : patched,
         );
       }
       return { previous };

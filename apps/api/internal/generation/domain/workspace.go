@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 )
 
 // ItemOrigin distinguishes a profile-sourced candidate (text byte-identical
@@ -71,6 +72,44 @@ type Item struct {
 	Position    int
 	Selected    bool
 	Unavailable bool
+	// DroppedEntries names the individual entries of a skill group's details
+	// the user switched off (empty for every other kind of item). It is a
+	// selection inside the item, the same way Selected is a selection inside
+	// the section: nothing is reworded, only left out, so FR-009's
+	// byte-identical rule still holds for what remains.
+	DroppedEntries []string
+}
+
+// SkillEntries splits a skill-group item's display text into its individual
+// entries and reports which of them are still included — the per-skill
+// counterpart to Selected, and the one place the drop rule is applied.
+//
+// Only meaningful for a profile-origin item in a skills section: an AI
+// suggestion is a single skill whose own text may contain commas
+// ("Nest.js fundamentals (modules, guards, pipes)"), and splitting it would
+// invent entries the model never wrote.
+func (i Item) SkillEntries() []SkillEntry {
+	_, details, found := strings.Cut(i.SourceText, ":")
+	if !found {
+		details = i.SourceText
+	}
+	entries := splitSkillEntries(details)
+	dropped := make(map[string]bool, len(i.DroppedEntries))
+	for _, d := range i.DroppedEntries {
+		dropped[strings.TrimSpace(d)] = true
+	}
+	out := make([]SkillEntry, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, SkillEntry{Text: e, Selected: !dropped[e]})
+	}
+	return out
+}
+
+// SkillEntry is one entry of a skill group's details plus whether the user
+// kept it.
+type SkillEntry struct {
+	Text     string
+	Selected bool
 }
 
 // EffectiveText is `edited_text ?? source_text` — computed here, never

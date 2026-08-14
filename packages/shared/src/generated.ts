@@ -324,6 +324,22 @@ export interface GenerationItemDto {
   selected: boolean;
   edited: boolean;
   unavailable: boolean;
+  /**
+   * SkillEntries is present only for a profile-origin item in a skills
+   * section: the group's individual skills, each with its own inclusion
+   * state, so the client can switch one skill off without dropping the
+   * whole group. Absent everywhere else — an AI-suggested skill is a single
+   * entry whose text may itself contain commas.
+   */
+  skillEntries?: GenerationSkillEntryDto[];
+}
+/**
+ * GenerationSkillEntryDto is one skill inside a group, and whether it is
+ * included in the exported resume.
+ */
+export interface GenerationSkillEntryDto {
+  text: string;
+  selected: boolean;
 }
 /**
  * GenerationExportDto is the run's export status, embedded in the run
@@ -383,6 +399,14 @@ export interface PatchGenerationItemRequestDto {
   selected?: boolean;
   position?: number /* int */;
   text?: string;
+  /**
+   * DroppedEntries replaces the set of individual skills switched off
+   * inside a skill group — the whole set every time, so the write is
+   * idempotent and order-free. An empty (non-nil) array restores the whole
+   * group. Rejected with 403 for anything but a profile-origin item in a
+   * skills section, and with 400 for an entry that group does not contain.
+   */
+  droppedEntries?: string[];
 }
 /**
  * RerunGenerationRequestDto is the body of
@@ -785,6 +809,13 @@ export interface ExtLink {
 
 export interface QueueBacklogDto {
   queue: string;
+  /**
+   * ProviderClass is permanently "hosted" for any LLM-backed queue since 044
+   * removed the second (local/Ollama) inference path. The field is kept
+   * rather than removed — dropping it would be a breaking change to a
+   * shared DTO for a value that is now constant (plan.md Complexity
+   * Tracking, contracts/configuration.md).
+   */
   providerClass?: string;
   concurrency: number /* int */;
   pending: number /* int */;
@@ -921,7 +952,6 @@ export interface SummaryModelOptionDto {
   label: string;
   description: string;
   cost: string;
-  selfHosted: boolean;
   current: boolean;
 }
 /**
