@@ -66,7 +66,7 @@ func TestMatchJob_SkipsProfileWithoutConfig(t *testing.T) {
 		t.Fatalf("create profile: %v", err)
 	}
 
-	profiles := profile.NewService(testDB.Queries, noopLLM{}, "rendercv")
+	profiles := profile.NewService(testDB.Queries, noopLLM{})
 	svc := matching.NewService(testDB.Queries, profiles, noopLLM{}, 0.5, "")
 
 	_, err = svc.MatchJob(ctx, dbutil.UUIDString(job.ID), nil)

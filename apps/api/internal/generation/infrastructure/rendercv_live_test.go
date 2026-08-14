@@ -25,7 +25,7 @@ func TestLive_RenderCvRenderer_ProducesRealPDF(t *testing.T) {
 	master := domain.RendercvMaster(domain.NormalizeYAMLMap(m).(map[string]any))
 
 	outDir := t.TempDir()
-	r := NewRenderCvRenderer(outDir, "")
+	r := NewRenderCvRenderer(outDir)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 

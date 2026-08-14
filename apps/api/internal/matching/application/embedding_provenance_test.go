@@ -146,7 +146,7 @@ func TestMatchJob_StaleEmbedModelIsReEmbedded(t *testing.T) {
 				},
 				similarity: 0.1,
 			}
-			profiles := profile.NewService(profileRepo, stubLLM{}, "rendercv")
+			profiles := profile.NewService(profileRepo, stubLLM{})
 
 			llmc := &countingLLM{vector: freshVector, servedModel: currentModel}
 			svc := NewService(repo, profiles, llmc, 0.9, "")

@@ -10,10 +10,11 @@ COPY apps/api .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
 
 # ---------------------------------------------------------------------------
-# Runtime: static Go binary + chromium (chromedp PDF rendering) + rendercv
-# (Python/Typst CLI, exec'd for the RenderCV tailoring path) + poppler
-# (pdftotext fallback for resume PDF import).
-FROM python:3.14-slim-bookworm
+# Runtime: static Go binary + chromium (chromedp PDF rendering) + poppler
+# (pdftotext fallback for resume PDF import). RenderCV rendering is in-process
+# via rendercv-go (embedded WASI Typst compiler) — no Python or external
+# RenderCV binary needed.
+FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       chromium \
@@ -23,19 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
     && rm -rf /var/lib/apt/lists/*
 
-# rendercv ships the Typst binary transitively via its `typst` PyPI dependency
-# — no separate Typst install needed. Isolated venv keeps it off the system
-# Python (Debian's PEP 668 "externally managed" guard would otherwise block
-# a bare `pip install`). Pinned to 2.8 (needs Python >=3.12) to match the
-# schema our uploaded rendercv configs target (settings block, alpha2 locale).
-RUN python3 -m venv /opt/rendercv-venv \
-    && /opt/rendercv-venv/bin/pip install --no-cache-dir "rendercv[full]==2.8" click \
-    && ln -s /opt/rendercv-venv/bin/rendercv /usr/local/bin/rendercv
-
 COPY --from=build /out/server /usr/local/bin/server
 
 ENV DOCUMENTS_DIR=/data/documents
-ENV RENDERCV_BIN=/usr/local/bin/rendercv
 # chromedp auto-detects a system Chromium via PATH lookup (tries
 # "chromium", "chromium-browser", "google-chrome", ...) — the Debian
 # `chromium` package installs it under that exact name, no extra flag needed.

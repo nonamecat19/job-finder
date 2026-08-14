@@ -314,7 +314,7 @@ type profileHandles struct {
 }
 
 func composeProfile(p *Platform, router *llm.Router) *profileHandles {
-	profileSvc := profile.NewService(p.DB.Queries, router, p.Config.RendercvBin)
+	profileSvc := profile.NewService(p.DB.Queries, router)
 	return &profileHandles{
 		Profile: profileSvc,
 		Handler: &profilehttp.ProfilesHandler{Profiles: profileSvc},
@@ -401,7 +401,7 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 		return nil, err
 	}
 	htmlRenderer.Store = blobStore
-	rendercvRenderer := generation.NewRenderCvRenderer(cfg.DocumentsDir, cfg.RendercvBin)
+	rendercvRenderer := generation.NewRenderCvRenderer(cfg.DocumentsDir)
 	rendercvRenderer.Store = blobStore
 	shapeSvc, err := resumeshape.NewService(ctx, p.DB.Queries)
 	if err != nil {

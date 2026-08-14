@@ -22,13 +22,12 @@ import (
 )
 
 type Service struct {
-	q           domain.Repository
-	llmc        llm.Provider
-	rendercvBin string
+	q    domain.Repository
+	llmc llm.Provider
 }
 
-func NewService(q domain.Repository, llmc llm.Provider, rendercvBin string) *Service {
-	return &Service{q: q, llmc: llmc, rendercvBin: rendercvBin}
+func NewService(q domain.Repository, llmc llm.Provider) *Service {
+	return &Service{q: q, llmc: llmc}
 }
 
 func (s *Service) List(ctx context.Context) ([]dto.ProfileDto, error) {
@@ -239,7 +238,7 @@ func (s *Service) SaveConfig(ctx context.Context, yamlText string) (dto.ProfileD
 	}
 	defer os.RemoveAll(tempDir)
 
-	smokeRenderer := generation.NewRenderCvRenderer(tempDir, s.rendercvBin)
+	smokeRenderer := generation.NewRenderCvRenderer(tempDir)
 	_, _, err = smokeRenderer.Render(ctx, master, "smoke_test")
 	if err != nil {
 		return dto.ProfileDto{}, fmt.Errorf("smoke test render failed: %w", err)
