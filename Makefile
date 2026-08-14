@@ -71,7 +71,7 @@ test-go:
 		go test ./...
 
 test-react:
-	cd apps/dashboard && npx vitest run
+	cd apps/dashboard && pnpm exec vitest run
 
 test-integration: test-db-setup
 	@echo "Waiting for postgres to be healthy..."
