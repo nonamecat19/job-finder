@@ -30,7 +30,8 @@ The Profile tab is a full structured editor, not an import viewer.
 | 009-FR-011 | Deleting an entry or a section requires explicit confirmation (009-SC-005: verified across **all** delete paths). |
 | 009-FR-012 | A profile with zero sections and zero fields is a valid, non-error state. |
 | 009-FR-013 | Clean layout with clear visual hierarchy, distinguishing section-level from entry-level actions. |
-| 009-FR-014 | Each skill group in the profile can carry a `skillLevel` (`relevant` / `top5` / `top10` / `top15` / `top20` / `all`) — how much of the group's `details` a generated resume renders. `relevant` (only what the vacancy asks for) is the default. It is a profile property, edited per group in the Profile tab, round-tripped through the resume API, and enforced by the generation pipeline (`resume-generation.md` § 2a). |
+| 009-FR-014 | Each skill group in the profile can carry a `skillLevel` (`relevant` / `top5` / `top10` / `top15` / `top20` / `all`) — how much of the group's `details` a generated resume renders. Leaving it unset is **auto**: the count is derived from the group's own size. It is a profile property, edited per group in the Profile tab, round-tripped through the resume API, and enforced by the generation pipeline (`resume-generation.md` § 2a). |
+| 009-FR-014a | Each project in the profile can carry a `projectLevel` (`relevant` / `top3` / `top5` / `all`) — how many of its bullets a generated resume renders — with unset meaning auto, derived from the project's own bullet count. Same shape as `skillLevel`: edited per entry in the Profile tab, round-tripped through the resume API, enforced by the generation pipeline (`resume-generation.md` § 2a). |
 
 Bar: a complete multi-section resume can be built entirely by hand in under 15 minutes
 (009-SC-001), and controls are discoverable without instructions (009-SC-003).

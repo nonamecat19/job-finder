@@ -128,23 +128,60 @@ carries every group over from the master untouched; and `domain.RankSkills` orde
 the vacancy analysis:
 
 - within a group, entries sort by relevance — a match against a **required** vacancy skill
-  outranks a **nice-to-have**, which outranks the rest; ties keep the master's authored order,
+  outranks a **nice-to-have**, which outranks the rest,
 - an entry's score is the best match any of its tokens makes, so a slash-joined entry cannot
   outrank a single required skill by listing more words,
+- **profile evidence breaks ties, and only ties.** Vacancy relevance has three levels, so most
+  of a group ties at one of them and the user's typing order used to decide what a reader sees
+  first — and, under a density cap, what survives. `BuildProfileEvidence` counts how often each
+  word appears in the experience/project/education prose (summaries, positions, bullets; skill
+  details are excluded, since every skill appears there exactly once and would shift nothing),
+  and a phrase scores by its **rarest** word so "React Native" is not carried by "React". A
+  required skill the rest of the profile never mentions still outranks a well-evidenced skill
+  the vacancy did not ask for; evidence can never overturn relevance. Master order remains the
+  final tiebreaker,
 - the ordering is a permutation: nothing is added, reworded or dropped,
 - groups keep the master's order unless `skillsMaxGroups` forces a choice, in which case they
-  sort by how much of the vacancy they cover so the cap keeps the relevant ones,
+  sort by **required-skill count first**, then summed relevance, then evidence — summing alone
+  lets two nice-to-haves outweigh one hard requirement, and the group that loses that
+  comparison loses a required skill off the page entirely once the cap bites,
 - pinned groups (`Spoken Languages`) are left exactly as authored,
 - a group's authored `skills_level` (`relevant` / `top5` / `top10` / `top15` / `top20` / `all`)
   bounds how much of it a tailored resume renders, applied **after** ordering: the count-based
   levels keep the first N entries of the ranked order (`top5` → 5, `top10` → 10, `top15` → 15,
   `top20` → 20, fewer if the group is smaller), `all` keeps everything, and `relevant` keeps
-  only entries the vacancy asks for — `relevant` is also the default for a group with no level
-  or an unrecognised one, and a `relevant` group with nothing matching is dropped from the
-  rendered document, while the profile and workspace still hold it in full. The trim runs on
-  master-fresh skills only; the workspace export path never applies it (the selection is the
-  shape, FR-018),
+  only entries the vacancy asks for — a `relevant` group with nothing matching is dropped from
+  the rendered document, while the profile and workspace still hold it in full,
+- **a group with no level is auto: the count comes from the group's own size.** Half its
+  entries, floored at 4 so a shallow group does not collapse and ceilinged at 12 so a deep one
+  cannot eat the page — a two-line `Languages` group and a thirty-entry `Backend` group are not
+  the same claim, and one fixed default flattened that. The cap bounds *depth*, never
+  *coverage*: every entry the vacancy asks for is kept even when there are more of them than
+  the cap allows, and the auto count only decides how much unasked-for depth follows the
+  matches. `relevant` remains available as an explicit opt-in for vacancy-only groups. The trim
+  runs on master-fresh skills only; the workspace export path never applies it (the selection is
+  the shape, FR-018),
 - the same inputs always produce the same output.
+
+**Projects are shaped the same way, for the same reasons.** `RankProjects` and
+`TrimProjectHighlights` are the projects-section counterparts of the two passes above:
+
+- a project's relevance **sums** over its name, summary and bullets rather than taking the best
+  one — a project touching four required skills is a better answer than one touching a single
+  required skill, which is the opposite of the per-entry skill case where summing would only
+  reward listing more words in one entry. Profile evidence breaks ties, master order breaks
+  those,
+- the reorder only runs when `projectsMax` is going to drop something. Without a cap every
+  project renders, so the master's order is the user's own choice of what to lead with and
+  there is no decision for the score to make. The reorder is a permutation; dropping remains
+  `ApplyHardLimits`' job,
+- a project's authored `project_level` (`relevant` / `top3` / `top5` / `all`) bounds how many
+  bullets it renders, and an unset level is auto: half its bullets, floored at 2 and ceilinged
+  at 5. As with skills, every bullet naming something the vacancy asks about is kept regardless
+  of the cap,
+- `relevant` on a project that matches nothing keeps its **leading bullet** rather than
+  rendering a bare title: an entry with a name and nothing under it reads as an omission, and
+  dropping the project entirely is the cap's decision, not this pass's.
 
 **Achievements are chosen by reference, not written.** `TailoredExperience.Highlights` and
 `TailoredProject.Highlights` are `[]HighlightRef` — `{sourceIndex, rephrased}` — where
@@ -362,7 +399,7 @@ dates are ISO-8601 UTC.
 | `POST` | `/v1/generations` | Start a run — persists the run row, seeds items in master order, enqueues the background pipeline, returns `202 {runId, activityId}` |
 | `GET` | `/v1/generations/{runId}` | The whole run: sections and items, in `position` order |
 | `GET` | `/v1/generations?jobId=&limit=` | Recent runs, newest first |
-| `PATCH` | `/v1/generations/{runId}/items/{itemId}` | Toggle `selected`, move `position`, or edit `text` (AI items only) |
+| `PATCH` | `/v1/generations/{runId}/items/{itemId}` | Toggle `selected`, move `position`, edit `text` (AI items only), or replace `droppedEntries` (skill groups only, §4.3) |
 | `PATCH` | `/v1/generations/{runId}/sections/{sectionId}/order` | Whole-section reorder in one call |
 | `POST` | `/v1/generations/{runId}/rerun` | `202`; replaces the named sections' items (or the whole run) in place, on the same run id |
 | `POST` | `/v1/generations/{runId}/export` | Render-once export: `202` rendering, or `200` with an overflow report |
@@ -381,7 +418,8 @@ Status codes that encode real rules:
   profile has no master content. **No 409 for an existing run** — unlike the never-built
   `/api/tailoring` design, concurrent runs against the same vacancy are legal; the workspace
   opens the newest by default.
-- `PATCH .../items/{itemId}` → **403** when `text` is sent for an `origin="profile"` item
+- `PATCH .../items/{itemId}` → **403** when `text` is sent for an `origin="profile"` item, and when
+  `droppedEntries` is sent for anything but a profile-origin item in a skills section
   (FR-009 at the API boundary); **409** when the run is `running` or the item is `unavailable`.
 - `POST .../rerun` → **409** when the run is already `running`.
 - `POST .../export` → **409** when the run is `running`, or every section has zero selected
@@ -417,7 +455,8 @@ wrapped in `RequireProfileConfig` — a run without master content is a 400, and
 every profile-dependent route avoids that. Entry points are a nav item and a "Tailor for this
 job" action on the job detail view. The left pane groups items into Summary, Work Experience
 (one block per master entry) and Skills; every item is individually selectable, deselectable and
-reorderable **without re-running generation**; and every item shows its origin as a badge.
+reorderable **without re-running generation**; and every item shows its origin as a badge. An
+included skill group is selectable one skill at a time as well (§4.3).
 
 **Client wiring.** `api.generations` mirrors the existing `settings` group; query keys follow the
 established convention (`['generations']`, `['generations', id]`) and mutations invalidate the
@@ -436,7 +475,7 @@ selects can drift from it.
 |---|---|---|
 | `generation_runs` | vacancy, `master_snapshot`, `master_content_hash`, resolved `shape_config`, grounding level, summary option, analysis, `state`, export status/report | `state='ready'` requires every section ready; `partial` = at least one ready and one failed. **No uniqueness on `(profile_id, job_id)`** — concurrent runs against one vacancy are a comparison, not a conflict |
 | `generation_sections` | `kind` (`summary`/`experience`/`skills`), `entry_key`, `position`, `target_count`, `state`, `error`, `fallback_used` | `position` is master order, never model-chosen (028-FR-003); `CHECK (kind <> 'experience' OR entry_key IS NOT NULL)`; 042-SC-007 is measured from `fallback_used` |
-| `generation_items` | `origin`, `source_index`, `source_text`, `edited_text`, `rank`, `position`, `selected`, `unavailable` | `CHECK (origin <> 'profile' OR edited_text IS NULL)` — **042-FR-009 as a schema fact**; `UNIQUE (section_id, origin, source_index)` — no master bullet twice |
+| `generation_items` | `origin`, `source_index`, `source_text`, `edited_text`, `rank`, `position`, `selected`, `unavailable`, `dropped_entries` | `CHECK (origin <> 'profile' OR edited_text IS NULL)` — **042-FR-009 as a schema fact**; `UNIQUE (section_id, origin, source_index)` — no master bullet twice; `dropped_entries` is the per-skill selection inside a skill group (§4.3) |
 
 `entry_key` is the master **company name**, not a synthetic row id: the master is an opaque
 `RendercvMaster` map with no stable per-entry identity, `MergeTailored` already keys experience
@@ -456,6 +495,33 @@ current), unavailability is per-item (`MarkItemsUnavailable`), and an export fro
 still produces the document the user approved rather than one assembled from a profile they have
 since changed. The cost is a jsonb copy per run.
 
+### 4.3 Per-skill selection inside a group
+
+A skill group is one item, but it is not one claim: "Backend: TypeORM, Prisma, NestJS, …" is
+thirty claims on one line, and a group-level toggle made the user drop all thirty to drop one.
+`generation_items.dropped_entries` (migration `00046`) names the individual entries of that
+group's `details` the user switched off. Everything **not** named stays in, so an empty array is
+the untouched group and the column needed no backfill.
+
+Three consequences follow from storing the drop set rather than a kept set:
+
+- **Entries are stored as trimmed display text, not indices.** A rerun re-reads the group from
+  the master snapshot and `RankSkills` may reorder it; an index would then drop a different
+  skill than the one the user pointed at, silently. Text either matches or matches nothing.
+- **It is a selection, not an edit.** `Assemble` filters the master group's `details` down to
+  the kept entries and rewrites nothing else, on a *copy* of the group — so what survives is
+  still byte-identical master text (042-FR-009), and the run's snapshot stays untouched for
+  every other export path. Emptying a group entirely drops the group, the same call
+  `TrimSkillGroups` makes for a `relevant` group with no vacancy match.
+- **The write is the whole set.** `PATCH .../items/{itemId}` takes `droppedEntries` as a full
+  replacement, normalised into group order and deduped, so re-sending it is idempotent and the
+  client never has to reason about ordering. An entry the group does not contain is a 400 (the
+  client is working from a stale copy of the group), and the field is 403 for anything but a
+  profile-origin item in a skills section — an AI-suggested skill is a single entry whose own
+  text may contain commas.
+
+The drop set rides along with `selected` and `position` through a rerun, matched the same way.
+
 **Rerun replaces ordering, not decisions** (042-FR-021). A rerun deletes and recreates the named
 sections' items on **the same run id** — forking would detach the user's selections on the
 sections they did not rerun. Explicit decisions are re-applied where the underlying item still
@@ -468,7 +534,7 @@ the server preserves matches regardless of whether it was shown.
 reachable through `generation_runs.export_document_id` *is* the per-exported-item record, and the
 stage/model provenance columns from `00038` still record which model served each stage.
 
-### 4.3 Suggestions are a separate channel, not a looser mode (042)
+### 4.4 Suggestions are a separate channel, not a looser mode (042)
 
 The AI may propose material the profile does not contain — that is the escape hatch that makes
 strict grounding livable — but it arrives through its own type, its own call, and its own badge.
@@ -646,6 +712,11 @@ tygo-check` fails CI if the committed generated file drifts.
 With projects enabled, each project reproduces its name, link and dates from the master
 profile. 031-SC-007: 100% of generated resumes contain a project count inside the configured
 range, or all available projects when fewer exist.
+
+*Which* projects fill that range, and how many bullets each renders, is decided by
+`RankProjects` and `TrimProjectHighlights` — see §2a. The per-project `project_level` is
+authored in the profile editor next to the project's bullets, the same place `skills_level`
+sits for a skill group.
 
 ## 7. PDF output (020-FR-007, 008, 013, 014)
 
