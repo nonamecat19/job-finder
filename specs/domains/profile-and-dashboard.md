@@ -77,7 +77,8 @@ page. **021 governs; 001-global-dashboard-grid is historical.** See § 4.
 
 **Grid**
 
-- 021-FR-001: 1 column below 640 px, 2 at 640–1023, then progressively up to 5 columns.
+- 021-FR-001: 1 column below 640 px, 2 at 640–1023, 3 at 1024–1919, 4 from 1920 px
+  (**amended by 022** — the ceiling was 5 columns under the monochrome system).
 - 021-FR-002: tiles span multiple columns and/or rows, degrading predictably at each smaller
   breakpoint.
 - 021-FR-003: grid gaps, tile radius, tile padding and border treatment are defined **once**
@@ -98,18 +99,34 @@ with no page-level scroll (021-SC-010, verified at 1920 px and 2560 px); tiles t
 internally keep that region keyboard-reachable and indicate that more content exists below
 the fold.
 
-**Colour**
+**Colour (022 — the tiles direction, superseding 021's monochrome-first rules)**
 
-- 021-FR-005: monochrome-first. Background, surface, elevated surface, border and text tokens
-  are all neutral greyscale, plus exactly one accent.
-- 021-FR-006: the accent is restricted to interactive emphasis — primary buttons, active nav,
-  focus rings, selection — and single-series data emphasis.
-- 021-FR-007: semantic success/warning/danger stay available and distinguishable, in a
-  subdued form consistent with the monochrome system.
-- 021-FR-008: dark and light appearances share identical layout, differing only in neutral
-  token values.
+- 022-FR-001: **light-first.** `:root` is the light appearance and `<html data-theme="light">`
+  is the default; the dark appearance stays complete under `[data-theme='dark']`. This
+  reverses 021-FR-T6, which made dark the default.
+- 022-FR-002: neutrals are *near*-grey, not grey. Background, surface, border and text tokens
+  carry a trace of blue chroma (≤ 0.02) so nothing reads as dead grey. This replaces
+  021-FR-005's strict `oklch(L 0 0)` rule.
+- 022-FR-003: exactly one saturated non-status, non-tint token — `--accent` — used once or
+  twice per screen (the single primary action, active selection, counts). `--focus` derives
+  from it. 021-FR-006 otherwise stands.
+- 022-FR-004: five pastel **tints** (violet, blue, mint, amber, rose) each pair a soft
+  background with a legible same-hue foreground, for icon tiles, avatar squares and category
+  fills. One tint per category, assigned once and kept.
+- 022-FR-005: status success/warning/danger are darkened to clear 4.5:1 on white; their
+  `-soft` variants mix over white in the light appearance, so they are opaque and predictable
+  (021-FR-007's "subdued" framing no longer applies).
+- 022-FR-006: **no gradients anywhere** — not on the canvas, not on tiles. Depth comes from
+  white tiles lifting off a flat canvas on the soft, wide, low-opacity shadow families
+  (`--shadow-sm/card/tile/raise/accent/brand/overlay`), never from stacked greys.
+- 022-FR-007: two type voices — Inter for every sentence, heading and label; a monospace stack
+  for uppercase micro-captions (tile heads, stat captions, field labels, in `--muted`) and
+  every figure (tabular). Roles are tokens: `--type-page-title`, `--type-section-title`,
+  `--type-tile-title`, `--type-body`, `--type-label`, `--type-caption`, `--type-figure`.
+- 021-FR-008: dark and light appearances share identical layout, differing only in token
+  values. **Still binding.**
 - 021-SC-005: 100% of colour values resolve to the shared token set; zero hard-coded colours
-  outside the token definitions.
+  outside the token definitions. **Still binding.**
 
 **Accessibility**
 
@@ -245,12 +262,13 @@ Six invariants, all machine-checked:
 
 | # | Invariant | Checked by |
 |---|---|---|
-| T1 | Every neutral token is `oklch(L 0 0)` — non-zero chroma on a neutral is a defect | vitest parses `index.css` |
-| T2 | Exactly one non-status chromatic token (`--accent`); `--focus` derives from it | same |
+| T1 | ~~Every neutral token is `oklch(L 0 0)`~~ — **amended by 022-FR-002**: every neutral token carries chroma ≤ 0.02, so it reads as near-grey and never as a colour | vitest parses `index.css` |
+| T2 | Exactly one saturated (chroma > 0.05) non-status, **non-tint** token (`--accent`); `--focus` derives from it. The five `--tint-*` pairs added by 022-FR-004 are exempt | same |
 | T3 | No colour literal (hex, `rgb()`, `oklch()`, `color-mix()`) and no Tailwind palette utility (`bg-zinc-*`, …) outside `index.css` | repo-wide grep gate |
 | T4 | Both `[data-theme]` blocks define the identical token set | vitest |
 | T5 | The accent appears **only** on primary buttons, active nav, focus rings, selected/checked states and single-series data emphasis — never on tile backgrounds, headers, borders or decorative fills | grep gate |
-| T6 | Dark is the default; `data-theme` is set on `<html>`, replacing the old `.light` class convention (which was inverted relative to HeroUI) | `tests/e2e/contrast.spec.ts`, which also runs axe's `color-contrast` rule over all nine routes in both appearances |
+| T6 | ~~Dark is the default~~ — **amended by 022-FR-001**: light is the default. `data-theme` is still set on `<html>`, and both appearances stay complete | vitest asserts `index.html`; `tests/e2e/contrast.spec.ts` runs axe's `color-contrast` rule over all nine routes in both appearances |
+| T7 | No gradient is declared anywhere in `index.css` (022-FR-006) | vitest parses `index.css` |
 
 > **`bg-overlay` was the only rename that fails silently.** After the token swap it still
 > compiles and still resolves — to HeroUI's floating-surface colour, which is wrong in all 22
