@@ -110,7 +110,6 @@
   src: url('/fonts/UcCm3FwrK3iLTcvnUwQT9g.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-
 @import '@heroui/styles';
 
 /* design-sync: preview sources live in a dot-dir, which Tailwind's automatic
@@ -124,97 +123,264 @@
   --container-dashboard: 140rem;
 }
 
+/* Tailwind utility surface over the design-system custom properties. Anything
+   a screen needs as a utility class has to be declared here — the raw custom
+   properties below stay the source of truth. */
 @theme inline {
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-background-tertiary: var(--background-tertiary);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-tertiary: var(--surface-tertiary);
+  --color-overlay: var(--overlay);
+  --color-muted: var(--muted);
   --color-faint: var(--faint);
+  --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-separator: var(--separator);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-quiet: var(--accent-quiet);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
   --color-danger-soft: var(--danger-soft);
 
+  --color-tint-violet: var(--tint-violet);
+  --color-tint-violet-fg: var(--tint-violet-fg);
+  --color-tint-blue: var(--tint-blue);
+  --color-tint-blue-fg: var(--tint-blue-fg);
+  --color-tint-mint: var(--tint-mint);
+  --color-tint-mint-fg: var(--tint-mint-fg);
+  --color-tint-amber: var(--tint-amber);
+  --color-tint-amber-fg: var(--tint-amber-fg);
+  --color-tint-rose: var(--tint-rose);
+  --color-tint-rose-fg: var(--tint-rose-fg);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-card: var(--shadow-card);
+  --shadow-tile: var(--shadow-tile);
+  --shadow-raise: var(--shadow-raise);
+  --shadow-accent: var(--shadow-accent);
+  --shadow-brand: var(--shadow-brand);
+  --shadow-overlay: var(--shadow-overlay);
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-:root, [data-theme='dark'] {
-  --background: oklch(0.12 0 0);
-  --background-secondary: oklch(0.15 0 0);
-  --background-tertiary: oklch(0.18 0 0);
-  --foreground: oklch(0.95 0 0);
-  --surface: oklch(0.15 0 0);
-  --surface-secondary: oklch(0.18 0 0);
-  --surface-tertiary: oklch(0.21 0 0);
-  --overlay: oklch(0.24 0 0);
-  --muted: oklch(0.68 0 0);
-  --faint: oklch(0.50 0 0);
-  --border: oklch(0.28 0 0);
-  --border-strong: oklch(0.37 0 0);
-  --separator: oklch(0.28 0 0);
-
-  --accent: oklch(0.72 0.20 260);
-  --accent-foreground: oklch(1 0 0);
-  --accent-soft: color-mix(in oklab, var(--accent) 18%, transparent);
-  --focus: var(--accent);
-
-  --success: oklch(0.62 0.12 160);
-  --success-foreground: oklch(0.10 0 0);
-  --success-soft: color-mix(in oklab, var(--success) 16%, transparent);
-  --warning: oklch(0.68 0.12 85);
-  --warning-foreground: oklch(0.12 0 0);
-  --warning-soft: color-mix(in oklab, var(--warning) 16%, transparent);
-  --danger: oklch(0.60 0.16 15);
-  --danger-foreground: oklch(1 0 0);
-  --danger-soft: color-mix(in oklab, var(--danger) 16%, transparent);
-
-  --radius: 0.75rem;
-
-  color-scheme: dark;
-}
-
-[data-theme='light'] {
-  --background: oklch(0.97 0 0);
-  --background-secondary: oklch(0.94 0 0);
-  --background-tertiary: oklch(0.91 0 0);
-  --foreground: oklch(0.12 0 0);
+/* ---------------------------------------------------------------------------
+   Colour — light-first "tiles" palette. The canvas is a cool near-white, tiles
+   are pure white, and every fill and line is a low-chroma neutral so the one
+   saturated blue and the pastel tints carry all the emphasis.
+   --------------------------------------------------------------------------- */
+:root, [data-theme='light'] {
+  --background: oklch(0.968 0.003 258);
+  --background-secondary: oklch(0.948 0.004 258);
+  --background-tertiary: oklch(0.928 0.005 258);
+  --foreground: oklch(0.22 0.014 265);
   --surface: oklch(1 0 0);
-  --surface-secondary: oklch(0.97 0 0);
-  --surface-tertiary: oklch(0.94 0 0);
-  --overlay: oklch(0.90 0 0);
-  --muted: oklch(0.45 0 0);
-  --faint: oklch(0.60 0 0);
-  --border: oklch(0.88 0 0);
-  --border-strong: oklch(0.80 0 0);
-  --separator: oklch(0.88 0 0);
+  --surface-secondary: oklch(0.988 0.002 258);
+  --surface-tertiary: oklch(0.962 0.004 258);
+  --overlay: oklch(1 0 0);
+  --muted: oklch(0.53 0.012 265);
+  --faint: oklch(0.575 0.012 265);
+  --border: oklch(0.918 0.004 265);
+  --border-strong: oklch(0.862 0.006 265);
+  --separator: oklch(0.940 0.004 265);
 
-  --accent: oklch(0.55 0.18 260);
+  --accent: oklch(0.585 0.190 258);
   --accent-foreground: oklch(1 0 0);
-  --accent-soft: color-mix(in oklab, var(--accent) 12%, transparent);
+  --accent-soft: color-mix(in oklab, var(--accent) 10%, white);
+  --accent-quiet: color-mix(in oklab, var(--accent) 5%, white);
   --focus: var(--accent);
 
-  --success: oklch(0.50 0.08 160);
+  --success: oklch(0.545 0.130 158);
   --success-foreground: oklch(1 0 0);
-  --success-soft: color-mix(in oklab, var(--success) 12%, transparent);
-  --warning: oklch(0.55 0.08 85);
-  --warning-foreground: oklch(0.15 0 0);
-  --warning-soft: color-mix(in oklab, var(--warning) 12%, transparent);
-  --danger: oklch(0.50 0.12 15);
+  --success-soft: color-mix(in oklab, var(--success) 12%, white);
+  --warning: oklch(0.740 0.150 74);
+  --warning-foreground: oklch(0.24 0.03 74);
+  --warning-soft: color-mix(in oklab, var(--warning) 16%, white);
+  --danger: oklch(0.615 0.205 20);
   --danger-foreground: oklch(1 0 0);
-  --danger-soft: color-mix(in oklab, var(--danger) 12%, transparent);
+  --danger-soft: color-mix(in oklab, var(--danger) 11%, white);
 
-  --radius: 0.75rem;
+  /* Pastel tints — icon tiles, avatar squares, category fills. Each pairs a
+     soft background with a legible same-hue foreground. One tint per category,
+     assigned once and kept. */
+  --tint-violet: oklch(0.90 0.055 295);
+  --tint-violet-fg: oklch(0.50 0.170 295);
+  --tint-blue: oklch(0.905 0.050 250);
+  --tint-blue-fg: oklch(0.52 0.170 250);
+  --tint-mint: oklch(0.910 0.055 165);
+  --tint-mint-fg: oklch(0.48 0.110 165);
+  --tint-amber: oklch(0.925 0.070 88);
+  --tint-amber-fg: oklch(0.53 0.120 70);
+  --tint-rose: oklch(0.905 0.050 15);
+  --tint-rose-fg: oklch(0.55 0.180 15);
 
   color-scheme: light;
 }
 
+[data-theme='dark'] {
+  --background: oklch(0.165 0.008 265);
+  --background-secondary: oklch(0.195 0.008 265);
+  --background-tertiary: oklch(0.225 0.008 265);
+  --foreground: oklch(0.965 0.002 265);
+  --surface: oklch(0.215 0.009 265);
+  --surface-secondary: oklch(0.235 0.009 265);
+  --surface-tertiary: oklch(0.265 0.010 265);
+  --overlay: oklch(0.265 0.010 265);
+  --muted: oklch(0.735 0.008 265);
+  --faint: oklch(0.575 0.010 265);
+  --border: oklch(0.295 0.010 265);
+  --border-strong: oklch(0.385 0.012 265);
+  --separator: oklch(0.285 0.010 265);
+
+  --accent: oklch(0.680 0.170 258);
+  --accent-foreground: oklch(0.16 0.02 258);
+  --accent-soft: color-mix(in oklab, var(--accent) 22%, var(--surface));
+  --accent-quiet: color-mix(in oklab, var(--accent) 12%, var(--surface));
+  --focus: var(--accent);
+
+  --success: oklch(0.720 0.130 158);
+  --success-foreground: oklch(0.16 0.02 158);
+  --success-soft: color-mix(in oklab, var(--success) 20%, var(--surface));
+  --warning: oklch(0.800 0.140 78);
+  --warning-foreground: oklch(0.18 0.03 78);
+  --warning-soft: color-mix(in oklab, var(--warning) 20%, var(--surface));
+  --danger: oklch(0.680 0.180 20);
+  --danger-foreground: oklch(0.16 0.02 20);
+  --danger-soft: color-mix(in oklab, var(--danger) 20%, var(--surface));
+
+  --tint-violet: color-mix(in oklab, oklch(0.60 0.16 295) 30%, var(--surface));
+  --tint-violet-fg: oklch(0.80 0.120 295);
+  --tint-blue: color-mix(in oklab, oklch(0.60 0.16 250) 30%, var(--surface));
+  --tint-blue-fg: oklch(0.80 0.110 250);
+  --tint-mint: color-mix(in oklab, oklch(0.60 0.12 165) 30%, var(--surface));
+  --tint-mint-fg: oklch(0.82 0.100 165);
+  --tint-amber: color-mix(in oklab, oklch(0.70 0.13 80) 30%, var(--surface));
+  --tint-amber-fg: oklch(0.86 0.110 85);
+  --tint-rose: color-mix(in oklab, oklch(0.62 0.17 15) 30%, var(--surface));
+  --tint-rose-fg: oklch(0.82 0.110 15);
+
+  color-scheme: dark;
+}
+
+/* Semantic aliases used across the components. */
+:root {
+  --text-body: var(--muted);
+  --text-heading: var(--foreground);
+  --text-meta: var(--faint);
+  --surface-card: var(--surface);
+  --surface-control: var(--surface);
+  --surface-inset: var(--surface-tertiary);
+  --surface-track: var(--background-secondary);
+  --border-card: var(--border);
+  --border-control: var(--border);
+  --link: var(--accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Shape — radii, hairlines and the light-canvas shadow families. Tiles are
+   generously rounded and float on a soft, wide, low-opacity shadow rather than
+   a heavy border. Controls sit one step tighter.
+   --------------------------------------------------------------------------- */
+:root {
+  --radius: 0.875rem;
+  --radius-tile: 1.25rem;
+  --radius-control: 0.75rem;
+
+  --border-width: 1px;
+  --ring-width: 3px;
+
+  --shadow-tint: oklch(0.30 0.03 265);
+  --shadow-sm: 0 1px 2px -1px color-mix(in oklab, var(--shadow-tint) 12%, transparent);
+  --shadow-card: 0 1px 2px -1px color-mix(in oklab, var(--shadow-tint) 10%, transparent), 0 1px 1px color-mix(in oklab, var(--shadow-tint) 4%, transparent);
+  --shadow-tile: 0 1px 2px color-mix(in oklab, var(--shadow-tint) 5%, transparent), 0 10px 24px -12px color-mix(in oklab, var(--shadow-tint) 16%, transparent);
+  --shadow-raise: 0 2px 4px color-mix(in oklab, var(--shadow-tint) 6%, transparent), 0 16px 32px -14px color-mix(in oklab, var(--shadow-tint) 24%, transparent);
+  --shadow-accent: 0 1px 2px color-mix(in oklab, var(--accent) 30%, transparent), 0 6px 16px -8px color-mix(in oklab, var(--accent) 45%, transparent);
+  --shadow-brand: 0 12px 28px -10px color-mix(in oklab, var(--accent) 50%, transparent);
+  --shadow-overlay: 0 24px 48px -16px color-mix(in oklab, var(--shadow-tint) 28%, transparent);
+  --shadow-inset: inset 0 1px 2px color-mix(in oklab, var(--shadow-tint) 6%, transparent);
+
+  --blur-panel: 20px;
+  --transition: 160ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   Type — two voices. Inter carries every sentence, heading and label; the mono
+   stack carries uppercase micro-captions and every figure.
+   --------------------------------------------------------------------------- */
+:root {
+  --font-display: var(--font-sans);
+
+  --tracking-tight: -0.022em;
+  --tracking-wide: 0.06em;
+
+  --type-page-title: 700 1.5rem/2rem var(--font-sans);
+  --type-section-title: 600 1rem/1.5rem var(--font-sans);
+  --type-tile-title: 600 0.875rem/1.25rem var(--font-sans);
+  --type-body: 400 0.875rem/1.25rem var(--font-sans);
+  --type-label: 600 0.75rem/1rem var(--font-sans);
+  /* Uppercase mono caption above a figure or inside a tile head. */
+  --type-caption: 500 0.75rem/1rem var(--font-mono);
+  /* Big tabular figure in a stat tile. */
+  --type-figure: 700 1.875rem/2.25rem var(--font-mono);
+  --type-figure-sm: 700 1.25rem/1.75rem var(--font-mono);
+}
+
+/* ---------------------------------------------------------------------------
+   Spacing and layout — Tailwind's 0.25rem step. The canvas between tiles is
+   part of the composition, so the grid gap never drops below 1rem.
+   --------------------------------------------------------------------------- */
+:root {
+  --gap-grid: 1rem;
+  --gap-grid-lg: 1.25rem;
+  --pad-card: 1.25rem;
+  --pad-tile-body: 1.25rem;
+  --pad-tile-header: 1rem 1.25rem;
+  --pad-page: 1rem;
+  --pad-page-lg: 2rem;
+
+  --container-dashboard: 140rem;
+  --width-sidebar: 15rem;
+  --width-rail: 3.5rem;
+  --width-surface-max: 48rem;
+}
+
+/* Page canvas — one flat colour. No gradients, no imagery, no texture: depth
+   comes from white tiles lifting off the canvas on soft shadows. */
 body {
   @apply bg-background text-foreground antialiased;
   font-family: var(--font-sans);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.25 0.04 260 / 0.3), transparent),
-    radial-gradient(ellipse 60% 40% at 100% 100%, oklch(0.20 0.03 260 / 0.2), transparent);
-  background-attachment: fixed;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+a:hover {
+  color: color-mix(in oklab, var(--accent) 80%, var(--foreground));
+  text-decoration: underline;
 }
 
 /* Themed, thin scrollbars */
@@ -229,6 +395,30 @@ body {
 *::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: 9999px;
-  border: 2px solid transparent;
+  border: 3px solid transparent;
   background-clip: content-box;
+}
+
+/* Motion — colour, border and shadow only. Interactive tiles translate −2px on
+   hover and buttons press 1px; nothing else moves, scales or bounces. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes jf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

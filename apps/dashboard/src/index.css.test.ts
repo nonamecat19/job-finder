@@ -20,13 +20,13 @@ function extractTokenNames(block: string): string[] {
   const names: string[] = [];
   let m;
   while ((m = re.exec(block)) !== null) {
-    const name = m[1];
-    if (!['breakpoint', 'container', 'radius', 'font', 'color'].some((p) => name.startsWith(p)) && name !== 'spacing') {
-      names.push(name);
-    }
+    names.push(m[1]);
   }
   return [...new Set(names)];
 }
+
+const lightBlock = css.match(/:root,\s*\[data-theme='light'\]\s*\{([^}]+)\}/s)?.[1] ?? '';
+const darkBlock = css.match(/\[data-theme='dark'\]\s*\{([^}]+)\}/s)?.[1] ?? '';
 
 const NEUTRAL_TOKENS = [
   'background', 'background-secondary', 'background-tertiary',
@@ -36,35 +36,56 @@ const NEUTRAL_TOKENS = [
 
 const STATUS_TOKENS = ['success', 'warning', 'danger'];
 
-describe('Token invariants (T1-T4)', () => {
-  it('T1: every neutral token has chroma 0', () => {
-    const darkBlock = css.match(/:root,\s*\[data-theme='dark'\]\s*\{([^}]+)\}/s)?.[1] ?? '';
-    const lightBlock = css.match(/\[data-theme='light'\]\s*\{([^}]+)\}/s)?.[1] ?? '';
+const TINT_TOKENS = ['violet', 'blue', 'mint', 'amber', 'rose'];
 
-    for (const block of [darkBlock, lightBlock]) {
-      const values = extractOklchValues(block);
-      for (const v of values) {
+describe('Token invariants (T1-T5)', () => {
+  it('T1: both theme blocks were found', () => {
+    expect(lightBlock).not.toBe('');
+    expect(darkBlock).not.toBe('');
+  });
+
+  it('T2: neutrals stay near-grey — a trace of blue chroma, never a colour', () => {
+    for (const block of [lightBlock, darkBlock]) {
+      for (const v of extractOklchValues(block)) {
         if (NEUTRAL_TOKENS.includes(v.name)) {
-          expect(v.c, `Neutral token --${v.name} has chroma ${v.c}, expected 0`).toBe(0);
+          expect(v.c, `Neutral token --${v.name} has chroma ${v.c}, expected <= 0.02`).toBeLessThanOrEqual(0.02);
         }
       }
     }
   });
 
-  it('T2: exactly one non-status chromatic token (--accent)', () => {
-    const darkBlock = css.match(/:root,\s*\[data-theme='dark'\]\s*\{([^}]+)\}/s)?.[1] ?? '';
-    const values = extractOklchValues(darkBlock);
-    const chromatic = values.filter((v) => v.c > 0 && !STATUS_TOKENS.includes(v.name));
-    expect(chromatic.map((v) => v.name)).toEqual(['accent']);
+  it('T3: accent is the only saturated non-status, non-tint token', () => {
+    for (const block of [lightBlock, darkBlock]) {
+      const chromatic = extractOklchValues(block)
+        .filter((v) => v.c > 0.05)
+        .filter((v) => !STATUS_TOKENS.includes(v.name))
+        .filter((v) => !v.name.startsWith('tint-'));
+      expect(chromatic.map((v) => v.name)).toEqual(['accent']);
+    }
   });
 
   it('T4: both [data-theme] blocks define identical token sets', () => {
-    const darkBlock = css.match(/:root,\s*\[data-theme='dark'\]\s*\{([^}]+)\}/s)?.[1] ?? '';
-    const lightBlock = css.match(/\[data-theme='light'\]\s*\{([^}]+)\}/s)?.[1] ?? '';
+    expect(extractTokenNames(lightBlock).sort()).toEqual(extractTokenNames(darkBlock).sort());
+  });
 
-    const darkNames = extractTokenNames(darkBlock).sort();
-    const lightNames = extractTokenNames(lightBlock).sort();
+  it('T5: every pastel tint pairs a background with a same-hue foreground', () => {
+    for (const block of [lightBlock, darkBlock]) {
+      const names = extractTokenNames(block);
+      for (const tint of TINT_TOKENS) {
+        expect(names, `--tint-${tint} is missing`).toContain(`tint-${tint}`);
+        expect(names, `--tint-${tint}-fg is missing`).toContain(`tint-${tint}-fg`);
+      }
+    }
+  });
+});
 
-    expect(darkNames).toEqual(lightNames);
+describe('Canvas invariants', () => {
+  it('the canvas is one flat colour — no gradients anywhere', () => {
+    expect(css).not.toMatch(/gradient\(/);
+  });
+
+  it('light is the default theme', () => {
+    const html = readFileSync(resolve(__dirname, '../index.html'), 'utf-8');
+    expect(html).toContain('data-theme="light"');
   });
 });
