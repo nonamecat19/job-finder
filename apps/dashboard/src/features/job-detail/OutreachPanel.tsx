@@ -158,7 +158,7 @@ function DraftBody({
       </div>
 
       {tracesOpen && draft.groundingTraces.length > 0 ? (
-        <ul className="space-y-1.5 rounded-md border border-border bg-surface-secondary/60 p-3" data-testid="outreach-traces">
+        <ul className="space-y-1.5 rounded-lg bg-surface-tertiary/60 p-3" data-testid="outreach-traces">
           {draft.groundingTraces.map((tr, i) => (
             <li key={`${tr.signalKind}-${i}`} className="text-xs">
               <span className="font-medium text-foreground">&ldquo;{tr.claim}&rdquo;</span>

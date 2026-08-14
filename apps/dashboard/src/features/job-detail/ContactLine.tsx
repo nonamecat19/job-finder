@@ -21,7 +21,7 @@ const SOURCE_LABEL: Record<JobContactDto['source'], string> = {
 
 function ContactRow({ contact }: { contact: JobContactDto }) {
   return (
-    <li className="flex flex-col gap-1 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-1 rounded-lg px-2.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
         <span className="font-medium text-foreground">{contact.name}</span>
         {contact.title ? <span className="ml-2 text-muted">{contact.title}</span> : null}
@@ -94,7 +94,7 @@ export default function ContactLine({ jobId }: { jobId: string | undefined }) {
       </div>
 
       {expanded && contacts ? (
-        <ul className="mt-3 divide-y divide-border border-t border-border" data-testid="contact-list">
+        <ul className="mt-3 flex flex-col gap-0.5" data-testid="contact-list">
           {contacts.map((c) => (
             <ContactRow key={c.id} contact={c} />
           ))}

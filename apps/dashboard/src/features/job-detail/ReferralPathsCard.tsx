@@ -1,6 +1,7 @@
 import { ArrowRight, Users } from 'lucide-react';
 import type { ReferralContactDto, ReferralPathDto } from '@job-finder/shared';
 import { Chip, LoadingRegion, SkeletonLine } from '../../components/ui';
+import { IconTile } from '../../components/layout';
 import { useReferralPaths } from './hooks';
 
 function strengthTone(score: number): 'green' | 'red' | 'slate' {
@@ -32,10 +33,10 @@ export default function ReferralPathsCard({ jobId }: { jobId: string | undefined
   return (
     <>
       <div className="mb-3 flex items-center gap-2">
-        <Users className="h-4 w-4 text-faint" aria-hidden="true" />
+        <IconTile icon={Users} tint="violet" size="sm" />
         <span className="text-xs text-muted">{paths.length} warm {paths.length === 1 ? 'path' : 'paths'} found</span>
       </div>
-      <ul className="space-y-2">
+      <ul className="flex flex-col gap-2">
         {paths.map((path, i) => (
           <ReferralPathRow key={i} path={path} />
         ))}
@@ -46,7 +47,7 @@ export default function ReferralPathsCard({ jobId }: { jobId: string | undefined
 
 function ReferralPathRow({ path }: { path: ReferralPathDto }) {
   return (
-    <li className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
+    <li className="rounded-lg bg-surface-tertiary/60 p-3 text-sm">
       <div className="flex flex-wrap items-center gap-1.5">
         {path.path.map((contact, i) => (
           <ContactChip key={contact.id} contact={contact} isLast={i === path.path.length - 1} />
@@ -63,7 +64,7 @@ function ReferralPathRow({ path }: { path: ReferralPathDto }) {
 function ContactChip({ contact, isLast }: { contact: ReferralContactDto; isLast: boolean }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className="rounded-md bg-surface-tertiary/60 px-2 py-1 font-medium text-foreground">
+      <span className="rounded-md bg-surface px-2 py-1 font-medium text-foreground shadow-sm">
         {contact.name}
         {contact.role ? <span className="ml-1 font-normal text-faint">· {contact.role}</span> : null}
       </span>

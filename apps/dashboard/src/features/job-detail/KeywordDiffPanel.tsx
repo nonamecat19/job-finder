@@ -73,8 +73,8 @@ export default function KeywordDiffPanel({ jobId }: { jobId: string | undefined 
 
 function GroupHeading({ title, count }: { title: string; count: number }) {
   return (
-    <h3 className="mb-2 text-sm font-semibold text-foreground">
-      {title} <span className="font-normal text-faint">({count})</span>
+    <h3 className="mb-2 [font:var(--type-caption)] uppercase tracking-[var(--tracking-wide)] text-muted">
+      {title} <span className="tabular-nums">({count})</span>
     </h3>
   );
 }
@@ -118,7 +118,7 @@ function MissingRequiredRow({
   const rephrase = suggestion?.rephrase ?? null;
 
   return (
-    <li className="rounded-md border border-border bg-surface-tertiary/40 p-3">
+    <li className="rounded-lg bg-surface-tertiary/60 p-3">
       <div className="flex items-center gap-2">
         <Chip tone="red">{term.canonical}</Chip>
       </div>

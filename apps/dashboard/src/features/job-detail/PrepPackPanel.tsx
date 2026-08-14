@@ -90,7 +90,7 @@ export default function PrepPackPanel({ jobId }: { jobId: string | undefined }) 
         <CompanyNewsSection items={data.companyNews} stale={data.metadata.staleNews} />
       ) : null}
 
-      <div className="print:hidden mt-4 border-t border-border pt-3 text-center text-xs text-faint">
+      <div className="print:hidden mt-4 text-center text-xs text-faint">
         Generated {new Date(data.generatedAt).toLocaleString()}
       </div>
     </div>
@@ -99,10 +99,7 @@ export default function PrepPackPanel({ jobId }: { jobId: string | undefined }) 
 
 function UncoveredGapsBanner({ count }: { count: number }) {
   return (
-    <div
-      className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm text-warning"
-      role="alert"
-    >
+    <div className="mb-4 flex items-start gap-2 rounded-lg bg-warning-soft p-3 text-sm text-warning" role="alert">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <div>
         <span className="font-semibold">{count} uncovered {count === 1 ? 'question' : 'questions'}</span>
@@ -119,7 +116,7 @@ function QuestionCard({ question, index }: { question: InterviewQuestion; index:
   const uncovered = question.mappedStories.length === 0;
 
   return (
-    <div className="print:break-inside-avoid rounded-lg border border-border bg-surface-tertiary/30 p-3">
+    <div className="print:break-inside-avoid rounded-lg bg-surface-tertiary/60 p-3">
       <button
         type="button"
         className="flex w-full items-start gap-2 text-left"
@@ -173,7 +170,7 @@ function UncoveredQuestionCallout({ questionText }: { questionText: string }) {
     .join(' ');
 
   return (
-    <div className="rounded-md border border-dashed border-danger/30 bg-danger-soft/50 p-3 text-sm" role="alert">
+    <div className="rounded-lg bg-danger-soft p-3 text-sm" role="alert">
       <div className="flex items-start gap-2">
         <Star className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
         <div>
@@ -189,7 +186,7 @@ function UncoveredQuestionCallout({ questionText }: { questionText: string }) {
 
 function StoryCard({ story }: { story: StoryMapping }) {
   return (
-    <li className="rounded-md border border-border bg-surface-secondary/60 p-3">
+    <li className="rounded-lg bg-surface p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium text-foreground">{story.storyTitle}</p>
@@ -212,8 +209,8 @@ function StoryCard({ story }: { story: StoryMapping }) {
 
 function GapSummarySection({ keywordGap }: { keywordGap: InterviewPrepPack['keywordGap'] }) {
   return (
-    <div className="mt-4 rounded-lg border border-border bg-surface-tertiary/30 p-3">
-      <h3 className="mb-2 text-sm font-semibold text-foreground">Skill gap awareness</h3>
+    <div className="mt-4 rounded-lg bg-surface-tertiary/60 p-3">
+      <h3 className="mb-2 [font:var(--type-caption)] uppercase tracking-[var(--tracking-wide)] text-muted">Skill gap awareness</h3>
       <p className="mb-2 text-xs text-muted">
         {`${keywordGap.coveragePct}% keyword coverage — these gaps may come up in the interview.`}
       </p>
@@ -253,13 +250,13 @@ function GapSummarySection({ keywordGap }: { keywordGap: InterviewPrepPack['keyw
 function CompanyNewsSection({ items, stale }: { items: CompanyNewsItem[]; stale: boolean }) {
   return (
     <div className="mt-4">
-      <h3 className="mb-2 text-sm font-semibold text-foreground">Company news briefing</h3>
+      <h3 className="mb-2 [font:var(--type-caption)] uppercase tracking-[var(--tracking-wide)] text-muted">Company news briefing</h3>
       {stale ? (
         <p className="mb-2 text-xs italic text-warning">News data may be stale — refresh company intel.</p>
       ) : null}
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         {items.map((item, i) => (
-          <div key={`${item.kind}-${i}`} className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
+          <div key={`${item.kind}-${i}`} className="rounded-lg bg-surface-tertiary/60 p-3 text-sm">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <span className="font-medium text-foreground">{item.label}</span>

@@ -61,7 +61,7 @@ export function IdentityForm({ resume, onChange }: IdentityFormProps) {
 
       <div className="mt-4">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-faint">Social networks</span>
+          <span className="font-mono text-xs font-medium tracking-[0.06em] text-muted uppercase">Social networks</span>
           <Button variant="ghost" onClick={addSocial}>
             + add
           </Button>
@@ -90,7 +90,7 @@ export function IdentityForm({ resume, onChange }: IdentityFormProps) {
 
       <div className="mt-4">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-faint">Custom connections</span>
+          <span className="font-mono text-xs font-medium tracking-[0.06em] text-muted uppercase">Custom connections</span>
           <Button variant="ghost" onClick={addConnection}>
             + add
           </Button>

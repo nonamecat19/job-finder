@@ -1,7 +1,8 @@
 import { useSearchParams } from 'react-router-dom';
 import type { GenerationRunDto, GenerationSectionDto } from '@job-finder/shared';
-import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
-import { Button, EmptyState, ErrorState, LoadingRegion, SkeletonBlock, Spinner, Surface } from '../../components/ui';
+import { PageHeader } from '../../components/layout/PageHeader';
+import { Tile } from '../../components/layout';
+import { Button, Spinner } from '../../components/ui';
 import { useProfiles } from '../profile/hooks';
 import ProjectsBlock from './components/ProjectsBlock';
 import SkillsBlock from './components/SkillsBlock';
@@ -49,27 +50,33 @@ export default function GenerateWorkspacePage() {
     );
   };
 
+  const tileState = !runId ? 'empty' : isLoading ? 'loading' : error ? 'error' : 'ready';
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Generate"
         description="Review your generated resume as an inspectable list while you tune the vacancy."
       />
-      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
-        <Surface className="min-h-0 max-w-none flex-1 overflow-y-auto lg:basis-2/3">
-          <SectionTitle>Generated resume</SectionTitle>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+        <Tile
+          title="Generated resume"
+          className="min-h-0 flex-1 lg:basis-2/3"
+          scroll
+          scrollLabel="Generated resume sections"
+          state={tileState}
+          emptyMessage="Fill in a vacancy on the right and generate a resume to see it here."
+          error={error}
+        >
           <WorkspaceLeftPane
-            runId={runId}
             run={run}
-            isLoading={isLoading}
-            error={error}
             onToggle={(itemId, selected) => toggleItem.mutate({ itemId, selected })}
             onEditText={(itemId, text) => toggleItem.mutate({ itemId, text })}
             onReorder={(sectionId, itemIds) => reorderSection.mutate({ sectionId, itemIds })}
             onDropEntries={(itemId, droppedEntries) => toggleItem.mutate({ itemId, droppedEntries })}
             onRerun={() => rerunRun.mutate(undefined)}
           />
-        </Surface>
+        </Tile>
 
         <div className="min-h-0 w-full shrink-0 overflow-y-auto lg:w-96">
           <VacancyPane
@@ -155,47 +162,27 @@ function exportWarnings(run: GenerationRunDto): string[] {
 }
 
 function WorkspaceLeftPane({
-  runId,
   run,
-  isLoading,
-  error,
   onToggle,
   onEditText,
   onReorder,
   onDropEntries,
   onRerun,
 }: {
-  runId: string | undefined;
   run: GenerationRunDto | undefined;
-  isLoading: boolean;
-  error: unknown;
   onToggle: (itemId: string, selected: boolean) => void;
   onEditText: (itemId: string, text: string) => void;
   onReorder: (sectionId: string, itemIds: string[]) => void;
   onDropEntries: (itemId: string, droppedEntries: string[]) => void;
   onRerun: () => void;
 }) {
-  if (!runId) {
-    return <EmptyState>Fill in a vacancy on the right and generate a resume to see it here.</EmptyState>;
-  }
-  if (isLoading) {
-    return (
-      <LoadingRegion label="loading workspace…" className="space-y-3">
-        <SkeletonBlock className="h-24 w-full" />
-        <SkeletonBlock className="h-24 w-full" />
-      </LoadingRegion>
-    );
-  }
-  if (error) {
-    return <ErrorState error={error} />;
-  }
   if (!run) {
     return null;
   }
   if (run.state === 'running') {
     return (
       <div className="flex items-center gap-2 py-8 text-sm text-muted" role="status">
-        <Spinner label="generating your resume…" />
+        <Spinner label="generating resume…" />
       </div>
     );
   }
@@ -211,7 +198,7 @@ function WorkspaceLeftPane({
     <div className="space-y-4" data-testid="workspace-sections">
       {run.masterChanged ? (
         <div
-          className="flex items-center justify-between gap-2 rounded-md border border-warning/30 bg-warning-soft p-2 text-xs text-warning"
+          className="flex items-center justify-between gap-3 rounded-xl bg-warning-soft px-3 py-2.5 text-xs text-warning"
           data-testid="master-changed-banner"
         >
           <span>
@@ -229,12 +216,12 @@ function WorkspaceLeftPane({
         </div>
       ) : null}
       {run.state === 'partial' ? (
-        <p className="rounded-md border border-warning/30 bg-warning-soft p-2 text-xs text-warning">
+        <p className="rounded-xl bg-warning-soft px-3 py-2.5 text-xs text-warning">
           Some sections did not finish generating. Completed sections are shown below.
         </p>
       ) : null}
       {run.state === 'failed' ? (
-        <p className="rounded-md border border-danger/30 bg-danger-soft p-2 text-xs text-danger">
+        <p className="rounded-xl bg-danger-soft px-3 py-2.5 text-xs text-danger">
           This generation run failed.
         </p>
       ) : null}

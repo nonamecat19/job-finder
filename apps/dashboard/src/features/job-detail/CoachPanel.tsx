@@ -81,7 +81,7 @@ function AssessmentBody({ assessment }: { assessment: NonNullable<ReturnType<typ
 
 function GapCard({ gap }: { gap: FitGapItem }) {
   return (
-    <li className="rounded-lg border border-border bg-surface-tertiary/40 p-3">
+    <li className="rounded-lg bg-surface-tertiary/60 p-3">
       <div className="mb-2 flex items-center gap-2">
         <Chip tone="red">{gap.term}</Chip>
       </div>
@@ -103,7 +103,7 @@ function GapCard({ gap }: { gap: FitGapItem }) {
 
 function EvidenceRow({ evidence }: { evidence: FitGapEvidence }) {
   return (
-    <li className="rounded-md border border-border bg-surface-secondary/60 p-3">
+    <li className="rounded-lg bg-surface p-3 shadow-sm">
       <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs">
         <Chip tone={PROXIMITY_TONE[evidence.proximity]}>{evidence.proximity}</Chip>
         <span className="text-faint">from: {evidence.sourceEntry}</span>

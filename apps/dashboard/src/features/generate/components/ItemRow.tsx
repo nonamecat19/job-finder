@@ -48,9 +48,11 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries }: I
       data-selected={item.selected}
       data-unavailable={item.unavailable}
       className={cn(
-        'flex items-start gap-2 rounded-md border border-border/60 bg-surface px-2 py-1.5 text-sm',
+        'flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm',
+        'transition-[color,background-color] duration-[160ms] ease-[cubic-bezier(0.2,0,0.2,1)]',
+        item.selected && !item.unavailable ? 'bg-surface-tertiary' : undefined,
         isDragging ? 'opacity-60' : undefined,
-        item.unavailable ? 'border-dashed border-danger/40 bg-danger-soft/30' : undefined,
+        item.unavailable ? 'bg-danger-soft/60' : undefined,
       )}
     >
       <button
@@ -59,7 +61,7 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries }: I
         {...listeners}
         aria-label="drag to reorder"
         disabled={item.unavailable}
-        className="mt-0.5 shrink-0 cursor-grab touch-none text-faint disabled:cursor-not-allowed disabled:opacity-30"
+        className="mt-0.5 shrink-0 cursor-grab touch-none text-faint hover:text-muted disabled:cursor-not-allowed disabled:opacity-30"
       >
         <GripVertical className="h-4 w-4" />
       </button>
@@ -80,7 +82,7 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries }: I
         ) : null}
         {perSkill ? (
           <div data-testid="skill-entries">
-            <p className="break-words font-medium">{label}</p>
+            <p className="break-words font-medium text-foreground">{label}</p>
             <div className="mt-1 flex flex-wrap gap-1">
               {entries.map((entry) => (
                 <button
@@ -92,10 +94,10 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries }: I
                   data-selected={entry.selected}
                   onClick={() => toggleEntry(entry.text, !entry.selected)}
                   className={cn(
-                    'rounded-full border px-2 py-0.5 text-xs transition-colors',
+                    'rounded-full px-2 py-0.5 text-xs ring-1 ring-inset transition-colors',
                     entry.selected
-                      ? 'border-accent/40 bg-accent-soft text-accent'
-                      : 'border-border/60 bg-surface-secondary text-faint line-through',
+                      ? 'bg-accent-soft text-accent ring-accent/25'
+                      : 'bg-surface-tertiary text-faint ring-border line-through',
                   )}
                 >
                   {entry.text}
@@ -107,16 +109,18 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries }: I
           <textarea
             value={item.text}
             onChange={(e) => onEditText?.(e.target.value)}
-            className="w-full resize-y rounded border border-border bg-surface-secondary px-2 py-1 text-sm outline-none focus:border-accent"
+            className="w-full resize-y rounded-lg border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-border-strong focus:ring-[3px] focus:ring-accent-soft"
             rows={2}
           />
         ) : (
-          <p className={cn(item.selected ? undefined : 'text-faint line-through', 'break-words')}>{item.text}</p>
+          <p className={cn(item.selected ? 'text-foreground' : 'text-faint line-through', 'break-words')}>
+            {item.text}
+          </p>
         )}
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        {item.edited ? <span className="text-xs text-faint">edited</span> : null}
+        {item.edited ? <span className="font-mono text-[11px] text-faint">edited</span> : null}
         <OriginBadge origin={item.origin} kind={item.kind} />
       </div>
     </li>

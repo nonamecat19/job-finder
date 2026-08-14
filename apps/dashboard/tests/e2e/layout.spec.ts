@@ -6,7 +6,9 @@ const COLUMN_MATRIX: Array<{ width: number; height: number; columns: number }> =
   { width: 768, height: 1024, columns: 2 },
   { width: 1280, height: 900, columns: 3 },
   { width: 1920, height: 1080, columns: 4 },
-  { width: 2560, height: 1440, columns: 5 },
+  // 022-FR-001 lowered the ceiling from 5 columns to 4 — the tiles direction wants a wider
+  // tile, not a denser row.
+  { width: 2560, height: 1440, columns: 4 },
 ];
 
 const FIT_ROUTES = ['/', '/status', '/tracker'];

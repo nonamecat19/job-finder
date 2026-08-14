@@ -19,13 +19,13 @@ interface SignalRowProps {
 
 function SignalRow({ label, value, note }: SignalRowProps) {
   return (
-    <div className="flex items-center justify-between gap-2 py-1 text-sm">
-      <span className="text-faint">{label}</span>
-      <span className="text-foreground">
+    <div className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-sm">
+      <span className="[font:var(--type-caption)] uppercase tracking-[var(--tracking-wide)] text-muted">{label}</span>
+      <span className="[font:var(--type-figure-sm)] tabular-nums text-foreground">
         {value !== null && value !== undefined ? (
           value
         ) : (
-          <span className="italic text-faint" title={note}>
+          <span className="[font:var(--type-body)] italic text-faint" title={note}>
             unknown{note ? ` (${note.replace(/^unknown:\s*/, '')})` : ''}
           </span>
         )}
@@ -60,7 +60,7 @@ export default function GhostSignalPanel({ jobId, ghostSignal }: { jobId: string
     <>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={scoreTone(score)}>{score}</span>
+          <span className={`[font:var(--type-figure-sm)] tabular-nums ${scoreTone(score)}`}>{score}</span>
           <span className="text-xs font-normal text-faint">
             confidence {signals.confidence.toFixed(2)} · {model} · {new Date(createdAt).toLocaleString()}
           </span>
@@ -74,7 +74,7 @@ export default function GhostSignalPanel({ jobId, ghostSignal }: { jobId: string
 
       {signals.explanation ? <p className="mb-3 text-sm leading-6 text-muted">{signals.explanation}</p> : null}
 
-      <div className="divide-y divide-border">
+      <div className="flex flex-col gap-0.5">
         <SignalRow label="Repost count" value={signals.repostCount} note={signals.notes.repost} />
         <SignalRow label="Days open" value={signals.daysOpen} note={signals.notes.daysOpen} />
         <SignalRow label="Cross-board duplicates" value={signals.crossBoardCount} note={signals.notes.crossBoard} />

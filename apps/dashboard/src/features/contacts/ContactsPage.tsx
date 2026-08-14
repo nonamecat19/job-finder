@@ -1,10 +1,10 @@
-import { RefreshCw, Upload } from 'lucide-react';
+import { RefreshCw, Upload, UserRound } from 'lucide-react';
 import { useRef } from 'react';
 import type { ReferralContactDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { DashboardGrid, Tile } from '../../components/layout';
+import { DashboardGrid, IconTile, ListRow, Tile } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
-import { Button, Chip, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock, Surface } from '../../components/ui';
+import { Button, Chip, EmptyState, ErrorState, LoadingRegion, Spinner, SkeletonBlock } from '../../components/ui';
 import { useContacts, useGithubSync, useImportContactsCSV } from './hooks';
 
 export default function ContactsPage() {
@@ -43,44 +43,41 @@ export default function ContactsPage() {
 
       <DashboardGrid>
         <Tile span="full" title="Contacts">
+          <p className="mb-4 [font:var(--type-caption)] text-faint">
+            Expected columns (any order, case-insensitive): name, email, company, role, linkedin_url,
+            github_username.
+          </p>
 
-      <p className="mb-4 text-xs text-faint">
-        Expected columns (any order, case-insensitive): name, email, company, role, linkedin_url, github_username.
-      </p>
+          {importCsv.isSuccess ? (
+            <div className="mb-4 rounded-lg border border-border bg-surface-secondary p-3 text-sm text-muted" role="status">
+              Imported {importCsv.data.imported} of {importCsv.data.total} contacts
+              {importCsv.data.skipped > 0 ? ` (${importCsv.data.skipped} skipped)` : ''}.
+            </div>
+          ) : null}
+          {importCsv.error ? <ErrorState error={importCsv.error} /> : null}
 
-      {importCsv.isSuccess ? (
-        <div className="mb-4 rounded-md border border-border bg-surface-secondary/60 p-3 text-sm text-muted" role="status">
-          Imported {importCsv.data.imported} of {importCsv.data.total} contacts
-          {importCsv.data.skipped > 0 ? ` (${importCsv.data.skipped} skipped)` : ''}.
-        </div>
-      ) : null}
-      {importCsv.error ? <ErrorState error={importCsv.error} /> : null}
+          {error ? <ErrorState error={error} /> : null}
+          {isLoading ? (
+            <LoadingRegion label="loading contacts…" className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonBlock key={i} className="h-10 w-full" />
+              ))}
+            </LoadingRegion>
+          ) : null}
 
-      {error ? <ErrorState error={error} /> : null}
-      {isLoading ? (
-        <LoadingRegion label="loading contacts…" className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <SkeletonBlock key={i} className="h-10 w-full" />
-          ))}
-        </LoadingRegion>
-      ) : null}
+          {!isLoading && contacts && contacts.length === 0 ? (
+            <EmptyState>No contacts yet. Import a CSV to get started.</EmptyState>
+          ) : null}
 
-      {!isLoading && contacts && contacts.length === 0 ? (
-        <EmptyState>No contacts yet. Import a CSV to get started.</EmptyState>
-      ) : null}
-
-      {contacts && contacts.length > 0 ? (
-        <Surface className="p-0">
-          <VirtualList
-            items={contacts}
-            getKey={(c) => c.id}
-            estimateSize={48}
-            gap={0}
-            className="px-4"
-            renderItem={(c) => <ContactRow contact={c} />}
-          />
-        </Surface>
-      ) : null}
+          {contacts && contacts.length > 0 ? (
+            <VirtualList
+              items={contacts}
+              getKey={(c) => c.id}
+              estimateSize={64}
+              gap={4}
+              renderItem={(c) => <ContactRow contact={c} />}
+            />
+          ) : null}
         </Tile>
       </DashboardGrid>
     </div>
@@ -89,34 +86,37 @@ export default function ContactsPage() {
 
 function ContactRow({ contact }: { contact: ReferralContactDto }) {
   const githubSync = useGithubSync();
+  const meta = [contact.role, contact.company].filter(Boolean).join(' · ');
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-sm last:border-0">
-      <div>
-        <span className="font-medium text-foreground">{contact.name}</span>
-        {contact.role ? <span className="ml-1.5 text-muted">{contact.role}</span> : null}
-        {contact.company ? <span className="ml-1.5 text-faint">· {contact.company}</span> : null}
-        {contact.gitHubUsername ? (
-          <span className="ml-1.5">
-            <Chip tone="slate">@{contact.gitHubUsername}</Chip>
-          </span>
-        ) : null}
-      </div>
-      {contact.gitHubUsername ? (
-        <Button
-          variant="secondary"
-          onClick={() => githubSync.mutate(contact.id)}
-          disabled={githubSync.isPending}
-        >
-          {githubSync.isPending ? <Spinner /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-          Sync GitHub
-        </Button>
-      ) : null}
-      {githubSync.isSuccess && githubSync.variables === contact.id ? (
-        <span className="w-full text-xs text-faint">
-          {githubSync.data.connectionsMade} new connection{githubSync.data.connectionsMade === 1 ? '' : 's'} found
+    <ListRow
+      leading={<IconTile icon={UserRound} tint="violet" size="md" />}
+      title={
+        <span className="flex flex-wrap items-center gap-1.5">
+          {contact.name}
+          {contact.gitHubUsername ? <Chip tone="slate">@{contact.gitHubUsername}</Chip> : null}
         </span>
-      ) : null}
-    </div>
+      }
+      meta={meta || undefined}
+      aside={
+        contact.gitHubUsername ? (
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Button
+              variant="secondary"
+              onClick={() => githubSync.mutate(contact.id)}
+              disabled={githubSync.isPending}
+            >
+              {githubSync.isPending ? <Spinner /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+              Sync GitHub
+            </Button>
+            {githubSync.isSuccess && githubSync.variables === contact.id ? (
+              <span className="[font:var(--type-caption)] text-faint">
+                {githubSync.data.connectionsMade} new connection{githubSync.data.connectionsMade === 1 ? '' : 's'} found
+              </span>
+            ) : null}
+          </div>
+        ) : undefined
+      }
+    />
   );
 }

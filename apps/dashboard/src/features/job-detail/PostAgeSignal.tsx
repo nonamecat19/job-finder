@@ -29,16 +29,16 @@ export default function PostAgeSignal() {
       {data.globalState === 'prior' && data.thresholdMsg ? (
         <p className="mb-3 text-sm text-muted">{data.thresholdMsg}</p>
       ) : null}
-      <div className="space-y-2">
+      <div className="flex flex-col gap-1">
         {data.buckets.map((b) => (
-          <div key={b.bucket} className="flex items-center justify-between gap-3 rounded-md bg-surface-secondary/60 px-3 py-2 text-sm">
+          <div key={b.bucket} className="flex items-center justify-between gap-3 rounded-lg bg-surface-tertiary/60 px-3 py-2 text-sm">
             <div className="min-w-0">
               <span className="font-medium capitalize text-foreground">{b.bucket}</span>
               <span className="ml-2 text-xs text-faint">{bucketLabel[b.bucket] ?? b.bucket}</span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {b.state === 'observed' && b.rate !== null ? (
-                <span className="font-semibold tabular-nums text-foreground">{(b.rate * 100).toFixed(0)}%</span>
+                <span className="[font:var(--type-figure-sm)] tabular-nums text-foreground">{(b.rate * 100).toFixed(0)}%</span>
               ) : b.state === 'insufficient' ? (
                 <Chip>not enough data</Chip>
               ) : (

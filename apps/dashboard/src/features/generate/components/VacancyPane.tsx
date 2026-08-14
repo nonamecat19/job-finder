@@ -1,8 +1,8 @@
 import { FileDown } from 'lucide-react';
 import { useState } from 'react';
 import type { GenerationExportDto } from '@job-finder/shared';
-import { Button, Field, Input, Select, Spinner, Surface, Textarea } from '../../../components/ui';
-import { SectionTitle } from '../../../components/layout/PageHeader';
+import { Button, Field, Input, Select, Spinner, Textarea } from '../../../components/ui';
+import { Tile } from '../../../components/layout';
 import { api } from '../../../lib/api';
 import { useSummaryModel } from '../../tailor/hooks';
 
@@ -82,8 +82,7 @@ export default function VacancyPane({
   };
 
   return (
-    <Surface>
-      <SectionTitle>Vacancy</SectionTitle>
+    <Tile title="Vacancy">
       <div className="grid gap-3 md:grid-cols-2">
         <Field label="Company">
           <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." />
@@ -147,8 +146,8 @@ export default function VacancyPane({
       </div>
 
       {onRerun ? (
-        <div className="mt-4 border-t border-subtle pt-3">
-          <SectionTitle>Re-run</SectionTitle>
+        <div className="mt-4 border-t border-border pt-3">
+          <div className="mb-2 font-mono text-xs font-medium tracking-[0.06em] text-muted uppercase">Re-run</div>
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
@@ -184,10 +183,10 @@ export default function VacancyPane({
       ) : null}
 
       {onExport ? (
-        <div className="mt-4 border-t border-subtle pt-3">
-          <SectionTitle>Export</SectionTitle>
+        <div className="mt-4 border-t border-border pt-3">
+          <div className="mb-2 font-mono text-xs font-medium tracking-[0.06em] text-muted uppercase">Export</div>
           {warnings?.map((warning) => (
-            <p key={warning} className="mb-2 rounded-md border border-warning/30 bg-warning-soft p-2 text-xs text-warning">
+            <p key={warning} className="mb-2 rounded-lg bg-warning-soft px-2.5 py-2 text-xs text-warning">
               {warning}
             </p>
           ))}
@@ -223,7 +222,7 @@ export default function VacancyPane({
           ) : null}
         </div>
       ) : null}
-    </Surface>
+    </Tile>
   );
 }
 
@@ -233,7 +232,7 @@ export default function VacancyPane({
 // overflow silently is exactly what the rule forbids.
 function OverflowReport({ report }: { report: NonNullable<GenerationExportDto['report']> }) {
   return (
-    <div className="mt-2 rounded-md border border-warning/30 bg-warning-soft p-2" data-testid="overflow-report">
+    <div className="mt-2 rounded-lg bg-warning-soft p-2.5" data-testid="overflow-report">
       <p className="text-xs text-warning">
         This selection renders as {report.pagesRendered} page{report.pagesRendered === 1 ? '' : 's'}, over your target
         of {report.pagesTarget}. Nothing was dropped or reworded.

@@ -24,8 +24,8 @@ interface SignalRowProps {
 
 function SignalRow({ label, value, stale }: SignalRowProps) {
   return (
-    <div className="flex items-center justify-between gap-2 py-1 text-sm">
-      <span className="text-faint">{label}</span>
+    <div className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-sm">
+      <span className="[font:var(--type-caption)] uppercase tracking-[var(--tracking-wide)] text-muted">{label}</span>
       <span className="flex items-center gap-1.5 text-foreground">
         {value != null ? String(value) : <span className="text-faint">No data yet</span>}
         {stale ? <Chip tone="slate">possibly stale</Chip> : null}
@@ -100,7 +100,7 @@ export default function CompanyIntelCard({ jobId }: { jobId: string }) {
       </div>
 
       {expanded ? (
-        <div className="mt-3 border-t border-border pt-3">
+        <div className="mt-3">
           {intel.website ? (
             <a
               href={intel.website}
@@ -112,7 +112,7 @@ export default function CompanyIntelCard({ jobId }: { jobId: string }) {
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           ) : null}
-          <div className="divide-y divide-border">
+          <div className="flex flex-col gap-0.5">
             <SignalRow label="Funding" value={intel.funding} stale={stale} />
             <SignalRow label="Layoffs" value={intel.layoffs} stale={stale} />
             <SignalRow label="Glassdoor rating" value={intel.glassdoorRating} stale={stale} />

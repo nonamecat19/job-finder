@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { JobSourceDto, SavedSearchDto, SearchQuery } from '@job-finder/shared';
 import { SubscriptionRow } from './SubscriptionRow';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { DashboardGrid, Tile } from '../../components/layout';
+import { DashboardGrid, ListRow, Tile } from '../../components/layout';
 import {
   Button,
   Chip,
@@ -13,6 +13,7 @@ import {
   HealthDot,
   Input,
   LoadingRegion,
+  Select,
   Spinner,
   SkeletonBlock,
 } from '../../components/ui';
@@ -78,7 +79,7 @@ function SourcesPanel() {
   if (!sources?.length) return <EmptyState>No sources configured.</EmptyState>;
 
   return (
-    <ul className="space-y-2">
+    <div>
       {sources.map((s) => (
         <SourceRow
           key={s.key}
@@ -88,7 +89,7 @@ function SourcesPanel() {
           testing={test.isPending && test.variables === s.key}
         />
       ))}
-    </ul>
+    </div>
   );
 }
 
@@ -104,26 +105,30 @@ function SourceRow({
   testing: boolean;
 }) {
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface-secondary/60 p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-2">
-        <HealthDot healthy={source.healthy} />
-        <span className="font-medium text-foreground">{source.key}</span>
-        <Chip>{source.kind}</Chip>
-        {!source.enabled ? <Chip tone="red">disabled</Chip> : null}
-      </div>
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" onClick={onTest} disabled={testing}>
-          {testing ? <Spinner /> : <>test</>}
-        </Button>
-        <button onClick={onToggle} className="text-muted hover:text-foreground" title="toggle">
-          {source.enabled ? (
-            <ToggleRight className="h-6 w-6 text-accent" />
-          ) : (
-            <ToggleLeft className="h-6 w-6 text-faint" />
-          )}
-        </button>
-      </div>
-    </li>
+    <ListRow
+      leading={<HealthDot healthy={source.healthy} />}
+      title={
+        <span className="inline-flex items-center gap-2">
+          {source.key}
+          <Chip>{source.kind}</Chip>
+          {!source.enabled ? <Chip tone="red">disabled</Chip> : null}
+        </span>
+      }
+      aside={
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={onTest} disabled={testing}>
+            {testing ? <Spinner /> : <>test</>}
+          </Button>
+          <button onClick={onToggle} className="text-muted hover:text-foreground" title="toggle">
+            {source.enabled ? (
+              <ToggleRight className="h-6 w-6 text-accent" />
+            ) : (
+              <ToggleLeft className="h-6 w-6 text-faint" />
+            )}
+          </button>
+        </div>
+      }
+    />
   );
 }
 
@@ -166,7 +171,7 @@ export function HostRetrievalPanel() {
       ) : null}
 
       {selectedHost && status ? (
-        <div className="rounded-lg border border-border bg-surface-secondary/60 p-3 text-sm">
+        <div className="rounded-xl border border-border bg-surface-secondary p-4 text-sm">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
             <span>
               <span className="font-medium text-foreground">Rung:</span> {status.currentRung}
@@ -243,11 +248,11 @@ function SearchesPanel() {
         <EmptyState>No saved searches. Create one to start finding jobs.</EmptyState>
       ) : null}
 
-      <ul className="space-y-2">
+      <div>
         {searches?.map((s) => (
           <SearchRow key={s.id} search={s} />
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -263,7 +268,7 @@ function NewSearchForm({ onSubmit }: { onSubmit: (q: { name: string; query: Sear
   };
 
   return (
-    <div className="mb-3 rounded-lg border border-accent/30 bg-accent-soft p-3">
+    <div className="mb-3 rounded-xl border border-border bg-surface-secondary p-4">
       <div className="grid gap-2 sm:grid-cols-3">
         <Field label="Name">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. React remote" />
@@ -275,7 +280,7 @@ function NewSearchForm({ onSubmit }: { onSubmit: (q: { name: string; query: Sear
           <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="optional" />
         </Field>
       </div>
-      <div className="mt-2">
+      <div className="mt-3">
         <Button onClick={handleSubmit} disabled={!name.trim() || !keywords.trim()}>
           create
         </Button>
@@ -289,30 +294,32 @@ function SearchRow({ search }: { search: SavedSearchDto }) {
   const remove = useDeleteSearch();
 
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface-secondary/60 p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <span className="font-medium text-foreground">{search.name}</span>
-        <span className="ml-2 text-xs text-muted">
+    <ListRow
+      title={
+        <span className="inline-flex items-center gap-2">
+          {search.name}
+          {search.cron ? <Chip>{search.cron}</Chip> : null}
+          {!search.enabled ? <Chip tone="red">paused</Chip> : null}
+        </span>
+      }
+      meta={
+        <>
           {search.query.keywords}
           {search.query.location ? ` in ${search.query.location}` : ''}
-        </span>
-        {search.cron ? <Chip>{search.cron}</Chip> : null}
-        {!search.enabled ? <Chip tone="red">paused</Chip> : null}
-        {search.lastRunAt ? (
-          <span className="ml-2 text-xs text-faint">
-            last run {new Date(search.lastRunAt).toLocaleString()}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex items-center gap-2">
-        <Button variant="secondary" onClick={() => run.mutate(search.id)} disabled={run.isPending}>
-          <Play className="h-3 w-3" /> run now
-        </Button>
-        <Button variant="ghost" onClick={() => remove.mutate(search.id)}>
-          delete
-        </Button>
-      </div>
-    </li>
+          {search.lastRunAt ? ` · last run ${new Date(search.lastRunAt).toLocaleString()}` : ''}
+        </>
+      }
+      aside={
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => run.mutate(search.id)} disabled={run.isPending}>
+            <Play className="h-3 w-3" /> run now
+          </Button>
+          <Button variant="ghost" onClick={() => remove.mutate(search.id)}>
+            delete
+          </Button>
+        </div>
+      }
+    />
   );
 }
 
@@ -359,7 +366,7 @@ function SubscriptionsPanel() {
         <EmptyState>No subscriptions. Add a DOU or Djinni subscription URL to scrape job listings.</EmptyState>
       ) : null}
 
-      <ul className="space-y-2">
+      <div>
         {subs?.map((s) => (
           <SubscriptionRow
             key={s.id}
@@ -369,7 +376,7 @@ function SubscriptionsPanel() {
             running={run.isPending && run.variables === s.id}
           />
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -386,18 +393,14 @@ function NewSubscriptionForm({ onSubmit }: { onSubmit: (body: { sourceKey: strin
   };
 
   return (
-    <div className="mb-3 rounded-lg border border-accent/30 bg-accent-soft p-3">
+    <div className="mb-3 rounded-xl border border-border bg-surface-secondary p-4">
       <div className="grid gap-2 sm:grid-cols-3">
         <Field label="Source">
-          <select
-            value={sourceKey}
-            onChange={(e) => setSourceKey(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-foreground shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent-soft"
-          >
+          <Select value={sourceKey} onChange={(e) => setSourceKey(e.target.value)}>
             {SUBSCRIPTION_SOURCES.map((s) => (
               <option key={s.key} value={s.key}>{s.label}</option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Name">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Node.js DOU" />
@@ -406,7 +409,7 @@ function NewSubscriptionForm({ onSubmit }: { onSubmit: (body: { sourceKey: strin
           <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={source?.placeholder} />
         </Field>
       </div>
-      <div className="mt-2">
+      <div className="mt-3">
         <Button onClick={handleSubmit} disabled={!url.trim()}>
           <Plus className="h-3 w-3" /> create
         </Button>
@@ -422,36 +425,43 @@ function RecentRunsPanel() {
     <div>
       {isLoading ? <ListRowsSkeleton label="loading recent runs…" /> : null}
       {runs && runs.length === 0 ? <EmptyState>No runs yet.</EmptyState> : null}
-      <ul className="space-y-1">
+      <div>
         {runs?.map((r) => {
           const verdict = r.verdict;
           const isRunning = r.ok === null;
           return (
-            <li key={r.id} className="flex items-center gap-2 text-sm text-muted">
-              {isRunning ? (
-                <Spinner />
-              ) : verdict === 'blocked' ? (
-                <XCircle className="h-4 w-4 text-danger" />
-              ) : verdict === 'success' || r.ok === true ? (
-                <CheckCircle className="h-4 w-4 text-success" />
-              ) : (
-                <RefreshCw className="h-4 w-4 text-danger" />
-              )}
-              <span className="font-medium">{r.sourceKey}</span>
-              <span className="text-xs text-muted">
-                found {r.found}, {r.new} new
-              </span>
-              {verdict ? <Chip tone={verdict === 'success' ? 'green' : verdict === 'blocked' ? 'red' : 'slate'}>{verdict}</Chip> : null}
-              {r.blockReason ? (
-                <span className="text-xs text-faint" title={r.blockReason}>
-                  {r.blockReason.slice(0, 40)}
+            <ListRow
+              key={r.id}
+              leading={
+                isRunning ? (
+                  <Spinner />
+                ) : verdict === 'blocked' ? (
+                  <XCircle className="h-4 w-4 text-danger" />
+                ) : verdict === 'success' || r.ok === true ? (
+                  <CheckCircle className="h-4 w-4 text-success" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 text-danger" />
+                )
+              }
+              title={
+                <span className="inline-flex items-center gap-2">
+                  {r.sourceKey}
+                  {verdict ? (
+                    <Chip tone={verdict === 'success' ? 'green' : verdict === 'blocked' ? 'red' : 'slate'}>{verdict}</Chip>
+                  ) : null}
                 </span>
-              ) : null}
-              <span className="text-xs text-faint">{new Date(r.startedAt).toLocaleString()}</span>
-            </li>
+              }
+              meta={
+                <>
+                  found {r.found}, {r.new} new
+                  {r.blockReason ? ` · ${r.blockReason.slice(0, 40)}` : ''}
+                </>
+              }
+              aside={new Date(r.startedAt).toLocaleString()}
+            />
           );
         })}
-      </ul>
+      </div>
     </div>
   );
 }

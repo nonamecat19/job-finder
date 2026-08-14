@@ -1,9 +1,9 @@
 import { AlertTriangle, FileDown } from 'lucide-react';
 import { useState } from 'react';
 import type { GeneratedDocumentDto } from '@job-finder/shared';
-import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { DashboardGrid, Tile } from '../../components/layout';
-import { Button, EmptyState, Field, Input, Select, Spinner, Surface, Textarea } from '../../components/ui';
+import { Button, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
 import { useToast } from '../../components/toast';
 import { api } from '../../lib/api';
 import {
@@ -73,107 +73,104 @@ export default function TailorPage() {
       <PageHeader title="Tailor" description="Paste a vacancy to generate a tailored resume." />
 
       <DashboardGrid>
-        <Tile span="full" title="Resume Tailor">
-
-      <Surface>
-        <SectionTitle>Vacancy</SectionTitle>
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-          <Field label="Company">
-            <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." />
-          </Field>
-          <Field label="Title">
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Senior Engineer" />
-          </Field>
-          <Field label="Grounding">
-            <Select value={groundingLevel} onChange={(e) => setGroundingLevel(e.target.value as typeof groundingLevel)}>
-              {GROUNDING_LEVELS.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-        {summaryModel ? (
-          <Field label="Summary writer" className="mt-3">
-            <Select
-              aria-label="Summary writer"
-              value={chosenSummaryOptionId}
-              onChange={(e) => setSummaryOptionId(e.target.value)}
-            >
-              {summaryModel.options.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label} — {o.cost}
-                </option>
-              ))}
-            </Select>
-            {chosenSummaryOption ? (
-              <p className="mt-1 text-xs text-muted">{chosenSummaryOption.description}</p>
-            ) : null}
-          </Field>
-        ) : null}
-        <Field label="Vacancy text" className="mt-3">
-          <Textarea
-            className="h-48"
-            value={vacancy}
-            onChange={(e) => setVacancy(e.target.value)}
-            placeholder="Paste the job posting text here…"
-          />
-        </Field>
-        <div className="mt-3 flex items-center gap-2">
-          <Button disabled={!vacancy.trim() || tailor.isPending} onClick={submit}>
-            Generate resume
-          </Button>
-          {tailor.isPending ? <Spinner label="tailoring resume… (local LLM, be patient)" /> : null}
-        </div>
-        {tailor.isError ? <p className="mt-2 text-sm text-danger">{(tailor.error as Error).message}</p> : null}
-      </Surface>
-
-      {result ? (
-        <Surface>
-          <SectionTitle>Result</SectionTitle>
-          {result.resume.summarySubstituted ? (
-            <SummarySubstitutionNotice model={result.resume.summaryModel} />
+        <Tile span="wide" title="Vacancy">
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+            <Field label="Company">
+              <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." />
+            </Field>
+            <Field label="Title">
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Senior Engineer" />
+            </Field>
+            <Field label="Grounding">
+              <Select value={groundingLevel} onChange={(e) => setGroundingLevel(e.target.value as typeof groundingLevel)}>
+                {GROUNDING_LEVELS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          {summaryModel ? (
+            <Field label="Summary writer" className="mt-3">
+              <Select
+                aria-label="Summary writer"
+                value={chosenSummaryOptionId}
+                onChange={(e) => setSummaryOptionId(e.target.value)}
+              >
+                {summaryModel.options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label} — {o.cost}
+                  </option>
+                ))}
+              </Select>
+              {chosenSummaryOption ? (
+                <p className="mt-1 text-xs text-muted">{chosenSummaryOption.description}</p>
+              ) : null}
+            </Field>
           ) : null}
-          {result.resume.summaryOptionId ? (
-            <p className="mb-2 text-xs text-muted" data-testid="summary-option-used">
-              Summary written by{' '}
-              {summaryModel?.options.find((o) => o.id === result.resume.summaryOptionId)?.label ??
-                result.resume.summaryOptionId}
-            </p>
-          ) : null}
-          <DocumentRow doc={result.resume} />
-          {result.coverLetter ? (
-            <DocumentRow
-              doc={result.coverLetter}
-              editingDoc={editingDoc}
-              onEdit={setEditingDoc}
-              onCancelEdit={() => setEditingDoc(null)}
-              onSave={(doc) => saveLetter.mutate(doc)}
+          <Field label="Vacancy text" className="mt-3">
+            <Textarea
+              className="h-48"
+              value={vacancy}
+              onChange={(e) => setVacancy(e.target.value)}
+              placeholder="Paste the job posting text here…"
             />
-          ) : (
-            <div className="mt-3 flex items-center gap-2">
-              <Button variant="secondary" disabled={coverLetter.isPending} onClick={requestCoverLetter}>
-                Generate cover letter
-              </Button>
-              {coverLetter.isPending ? <Spinner label="writing cover letter…" /> : null}
-            </div>
-          )}
-          {coverLetter.isError ? (
-            <p className="mt-2 text-sm text-danger">{(coverLetter.error as Error).message}</p>
-          ) : null}
-        </Surface>
-      ) : null}
+          </Field>
+          <div className="mt-3 flex items-center gap-2">
+            <Button disabled={!vacancy.trim() || tailor.isPending} onClick={submit}>
+              Generate resume
+            </Button>
+            {tailor.isPending ? <Spinner label="tailoring resume… (local LLM, be patient)" /> : null}
+          </div>
+          {tailor.isError ? <p className="mt-2 text-sm text-danger">{(tailor.error as Error).message}</p> : null}
+        </Tile>
 
-      <Surface>
-        <SectionTitle>History</SectionTitle>
-        {!history || history.length === 0 ? (
-          <EmptyState>No ad-hoc generations yet.</EmptyState>
-        ) : (
-          <ul className="space-y-2">
-            {groupHistory(history).map(([key, docs]) => (
-              <li key={key} className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
-                <div className="mb-2 font-semibold">{key}</div>
+        {result ? (
+          <Tile span="wide" title="Result">
+            {result.resume.summarySubstituted ? (
+              <SummarySubstitutionNotice model={result.resume.summaryModel} />
+            ) : null}
+            {result.resume.summaryOptionId ? (
+              <p className="mb-2 text-xs text-muted" data-testid="summary-option-used">
+                Summary written by{' '}
+                {summaryModel?.options.find((o) => o.id === result.resume.summaryOptionId)?.label ??
+                  result.resume.summaryOptionId}
+              </p>
+            ) : null}
+            <DocumentRow doc={result.resume} />
+            {result.coverLetter ? (
+              <DocumentRow
+                doc={result.coverLetter}
+                editingDoc={editingDoc}
+                onEdit={setEditingDoc}
+                onCancelEdit={() => setEditingDoc(null)}
+                onSave={(doc) => saveLetter.mutate(doc)}
+              />
+            ) : (
+              <div className="mt-3 flex items-center gap-2">
+                <Button variant="secondary" disabled={coverLetter.isPending} onClick={requestCoverLetter}>
+                  Generate cover letter
+                </Button>
+                {coverLetter.isPending ? <Spinner label="writing cover letter…" /> : null}
+              </div>
+            )}
+            {coverLetter.isError ? (
+              <p className="mt-2 text-sm text-danger">{(coverLetter.error as Error).message}</p>
+            ) : null}
+          </Tile>
+        ) : null}
+
+        <Tile
+          span="full"
+          title="History"
+          state={!history || history.length === 0 ? 'empty' : 'ready'}
+          emptyMessage="No ad-hoc generations yet."
+        >
+          <ul className="space-y-4">
+            {history ? groupHistory(history).map(([key, docs]) => (
+              <li key={key} className="text-sm">
+                <div className="mb-2 font-mono text-xs font-medium tracking-[0.06em] text-muted uppercase">{key}</div>
                 <div className="space-y-2">
                   {docs.map((doc) => (
                     <DocumentRow
@@ -187,11 +184,8 @@ export default function TailorPage() {
                   ))}
                 </div>
               </li>
-            ))}
+            )) : null}
           </ul>
-        )}
-      </Surface>
-
         </Tile>
       </DashboardGrid>
     </div>
@@ -201,7 +195,7 @@ export default function TailorPage() {
 function SummarySubstitutionNotice({ model }: { model?: string }) {
   return (
     <div
-      className="mb-3 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm text-warning"
+      className="mb-3 flex items-start gap-2 rounded-xl bg-warning-soft p-3 text-sm text-warning"
       role="status"
     >
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -241,11 +235,11 @@ function DocumentRow({
   const isEditing = editingDoc?.id === doc.id;
 
   return (
-    <div className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
+    <div className="rounded-xl bg-surface-secondary p-3 text-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span>
-          <b>{doc.type === 'resume' ? 'Resume' : 'Cover letter'}</b> v{doc.version}
-          <span className="ml-2 text-xs text-faint">{doc.model}</span>
+          <b className="text-foreground">{doc.type === 'resume' ? 'Resume' : 'Cover letter'}</b> v{doc.version}
+          <span className="ml-2 font-mono text-xs text-faint">{doc.model}</span>
         </span>
         <span className="flex gap-2">
           {doc.type === 'cover_letter' && onEdit ? (

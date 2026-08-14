@@ -36,7 +36,7 @@ export function SectionTabPanel({
           className="max-w-xs font-semibold"
           aria-label="section name"
         />
-        <span className="text-xs text-faint">{ENTRY_TYPE_LABELS[section.entryType] ?? section.entryType}</span>
+        <span className="font-mono text-xs text-faint">{ENTRY_TYPE_LABELS[section.entryType] ?? section.entryType}</span>
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"

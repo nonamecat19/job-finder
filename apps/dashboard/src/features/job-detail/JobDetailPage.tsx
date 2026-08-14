@@ -1,10 +1,10 @@
-import { ArrowLeft, ExternalLink, FileDown, X, FileText, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ExternalLink, FileDown, X, FileText, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DocumentType, GeneratedDocumentDto, JobDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { DashboardGrid, Tile } from '../../components/layout';
+import { DashboardGrid, Tile, IconTile } from '../../components/layout';
 import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
@@ -176,7 +176,7 @@ export default function JobDetailPage() {
         <Tile span="standard" title="Contact">
           <ContactLine jobId={job.id} />
         </Tile>
-        <Tile span="standard" title="Company Intel">
+        <Tile span="standard" title="Company intel">
           <CompanyIntelCard jobId={job.id} />
         </Tile>
         <SalaryEstimateCard
@@ -230,12 +230,12 @@ export default function JobDetailPage() {
           <Tile span="standard" title="Resume">
             <button
               onClick={() => setResumeOpen(true)}
-              className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-surface-secondary"
+              className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-surface-tertiary"
             >
-              <FileText className="h-8 w-8 text-accent" />
+              <IconTile icon={FileText} tint="blue" size="lg" />
               <div className="flex-1">
-                <p className="text-sm font-medium">v{resumeDoc.version}</p>
-                <p className="text-xs text-muted">Click to preview</p>
+                <p className="text-sm font-medium text-foreground">v{resumeDoc.version}</p>
+                <p className="text-xs text-muted">click to preview</p>
               </div>
             </button>
           </Tile>
@@ -243,12 +243,12 @@ export default function JobDetailPage() {
 
         {resumeOpen && resumeDoc && (
           <div className="fixed inset-0 z-50 flex justify-end">
-            <div className="absolute inset-0 bg-black/60" onClick={() => setResumeOpen(false)} />
-            <div className="relative flex h-full w-full max-w-4xl flex-col border-l border-border bg-surface shadow-2xl">
-              <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
+            <div className="absolute inset-0 bg-foreground/40" onClick={() => setResumeOpen(false)} />
+            <div className="relative flex h-full w-full max-w-4xl flex-col bg-surface shadow-overlay">
+              <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
                 <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-accent" />
-                  <h2 className="text-sm font-semibold tracking-wide text-foreground/90">
+                  <IconTile icon={FileText} tint="blue" size="sm" />
+                  <h2 className="[font:var(--type-tile-title)] text-foreground">
                     Resume v{resumeDoc.version}
                   </h2>
                 </div>
@@ -261,7 +261,7 @@ export default function JobDetailPage() {
                   </a>
                   <button
                     onClick={() => setResumeOpen(false)}
-                    className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
+                    className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-tertiary hover:text-foreground"
                     aria-label="Close"
                   >
                     <X className="h-5 w-5" />
@@ -277,12 +277,15 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        <Tile span="wide" title="Danger Zone" tone="default" className="border-red-500/40">
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-muted">Re-scrape this vacancy to refresh its metadata from the source.</p>
-            <Button onClick={() => reenrich.mutate()} disabled={reenrich.isPending} variant="danger">
-              {reenrich.isPending ? 'Enqueuing…' : 'Rescrape vacancy'}
-            </Button>
+        <Tile span="wide" title="Danger zone">
+          <div className="flex items-start gap-3">
+            <IconTile icon={AlertTriangle} tint="rose" size="md" />
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-muted">Re-scrape this vacancy to refresh its metadata from the source.</p>
+              <Button onClick={() => reenrich.mutate()} disabled={reenrich.isPending} variant="danger">
+                {reenrich.isPending ? 'Enqueuing…' : 'Rescrape vacancy'}
+              </Button>
+            </div>
           </div>
         </Tile>
       </DashboardGrid>
@@ -384,9 +387,9 @@ function DocumentsPanel({
           <Spinner label={`generating ${generating.replace('_', ' ')}… (local LLM, be patient)`} />
         ) : null}
       </div>
-      <ul className="space-y-2">
+      <ul className="flex flex-col gap-1.5">
         {documents.map((doc) => (
-          <li key={doc.id} className="rounded-md border border-border bg-surface-secondary/60 p-3 text-sm">
+          <li key={doc.id} className="rounded-lg bg-surface-tertiary/60 p-3 text-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <span>
                 <b>{doc.type === 'resume' ? 'Resume' : 'Cover letter'}</b> v{doc.version}

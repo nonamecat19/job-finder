@@ -51,10 +51,14 @@ export default function WorkEntryBlock({ section, onToggle, onReorder, onEditTex
   };
 
   return (
-    <div className="rounded-md border border-border bg-surface-secondary/60 p-3" data-testid="work-entry-block">
-      <div className="mb-2 flex items-center justify-between text-sm font-semibold">
-        <span>{section.entryLabel ?? section.entryKey ?? 'Experience'}</span>
-        {section.state !== 'ready' ? <span className="text-xs font-normal text-muted">{section.state}</span> : null}
+    <div className="rounded-xl bg-surface-secondary p-3" data-testid="work-entry-block">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-semibold text-foreground">
+          {section.entryLabel ?? section.entryKey ?? 'Experience'}
+        </span>
+        {section.state !== 'ready' ? (
+          <span className="font-mono text-[11px] text-muted uppercase tracking-[0.06em]">{section.state}</span>
+        ) : null}
       </div>
 
       {profileItems.length === 0 ? (
@@ -74,7 +78,7 @@ export default function WorkEntryBlock({ section, onToggle, onReorder, onEditTex
               {selectedItems.length > 0 && unselectedItems.length > 0 ? (
                 <li
                   data-testid="unselected-divider"
-                  className="pt-1 text-[11px] font-medium uppercase tracking-wide text-faint"
+                  className="px-2 pt-2 pb-1 font-mono text-[11px] font-medium text-faint uppercase tracking-[0.06em]"
                 >
                   Ranked, not included — promote to add
                 </li>
@@ -97,8 +101,10 @@ export default function WorkEntryBlock({ section, onToggle, onReorder, onEditTex
           unverified" badge, unselected until the user acts (FR-013). A run
           that produced none still renders this explicit empty state rather
           than a missing or broken section. */}
-      <div className="mt-3 border-t border-dashed border-border/70 pt-2" data-testid="suggestion-group">
-        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-faint">AI suggestions</div>
+      <div className="mt-3 border-t border-border pt-2" data-testid="suggestion-group">
+        <div className="mb-1.5 px-2 font-mono text-[11px] font-medium text-faint uppercase tracking-[0.06em]">
+          AI suggestions
+        </div>
         {suggestionItems.length === 0 ? (
           <p className="text-xs text-muted">No AI suggestions for this role in this run.</p>
         ) : (

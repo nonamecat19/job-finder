@@ -22,9 +22,9 @@ export default function SalaryEstimateCard({
     : estimateRaw ?? '';
 
   return (
-    <Tile span="standard" title="Salary Estimate">
+    <Tile span="standard" title="Salary estimate">
       <div className="flex flex-col gap-1">
-        <span className="text-lg font-semibold">{range}</span>
+        <span className="[font:var(--type-figure-sm)] tabular-nums text-foreground">{range}</span>
         <span className="text-xs text-faint">Estimated from similar positions on Djinni</span>
       </div>
     </Tile>

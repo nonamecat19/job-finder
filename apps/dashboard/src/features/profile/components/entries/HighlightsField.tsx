@@ -33,11 +33,11 @@ export function HighlightsField({ highlights, onChange, className }: HighlightsF
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 -mx-1 text-xs font-semibold uppercase tracking-wide text-faint transition hover:text-foreground"
+        className="-mx-1 inline-flex items-center gap-1.5 rounded px-1 py-0.5 font-mono text-xs font-medium tracking-[0.06em] text-muted uppercase transition hover:text-foreground"
       >
         {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         Highlights
-        {items.length > 0 ? <span className="normal-case tracking-normal text-faint/70">({items.length})</span> : null}
+        {items.length > 0 ? <span className="normal-case tracking-normal text-faint">({items.length})</span> : null}
       </button>
 
       {open ? (

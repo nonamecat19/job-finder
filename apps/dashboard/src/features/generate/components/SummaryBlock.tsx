@@ -19,8 +19,8 @@ export default function SummaryBlock({ section, onToggle, onEditText }: SummaryB
 
   if (!item) {
     return (
-      <div className="rounded-md border border-border bg-surface-secondary/60 p-3" data-testid="summary-block">
-        <div className="mb-2 text-sm font-semibold">Summary</div>
+      <div className="rounded-xl bg-surface-secondary p-3" data-testid="summary-block">
+        <div className="mb-2 font-mono text-xs font-medium tracking-[0.06em] text-muted uppercase">Summary</div>
         <p className="text-xs text-muted">
           {section.state === 'failed' ? 'Summary generation failed for this run.' : 'No summary yet.'}
         </p>
@@ -34,9 +34,9 @@ export default function SummaryBlock({ section, onToggle, onEditText }: SummaryB
   };
 
   return (
-    <div className="rounded-md border border-border bg-surface-secondary/60 p-3" data-testid="summary-block">
-      <div className="mb-2 flex items-center justify-between text-sm font-semibold">
-        <span>Summary</span>
+    <div className="rounded-xl bg-surface-secondary p-3" data-testid="summary-block">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="font-mono text-xs font-medium tracking-[0.06em] text-muted uppercase">Summary</span>
         <OriginBadge origin={item.origin} kind={item.kind} />
       </div>
 
@@ -58,7 +58,9 @@ export default function SummaryBlock({ section, onToggle, onEditText }: SummaryB
         </div>
       ) : (
         <>
-          <p className={item.selected ? 'text-sm' : 'text-sm text-faint line-through'}>{item.text}</p>
+          <p className={item.selected ? 'text-sm text-foreground' : 'text-sm text-faint line-through'}>
+            {item.text}
+          </p>
           <div className="mt-2 flex gap-2">
             {item.selected ? (
               <Button variant="secondary" onClick={() => onToggle(item.id, false)}>

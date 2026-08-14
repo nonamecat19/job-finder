@@ -39,7 +39,7 @@ function FeatureRow({ setting }: { setting: AiFeatureSettingDto }) {
   const dirty = setting.enabled !== enabled || setting.threshold !== threshold;
 
   return (
-    <div className="border-b border-border py-4 last:border-0 last:pb-0 first:pt-0">
+    <div className="rounded-xl border border-border bg-surface-secondary p-4">
       <p className="mb-1 text-sm font-semibold text-foreground">{labels.title}</p>
       <p className="mb-3 text-sm text-muted">
         {labels.description} Below the threshold, or when disabled, it only runs on-demand.
@@ -100,8 +100,8 @@ export default function AiFeatureSettingsCard() {
   }
 
   return (
-    <>
+    <div className="space-y-3">
       {settings.data?.map((s) => <FeatureRow key={s.feature} setting={s} />)}
-    </>
+    </div>
   );
 }

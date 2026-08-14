@@ -2,7 +2,7 @@ import { FileUp, Trash2, Check, AlertCircle, UserRound, Settings2, Plus } from '
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { EntryType, Resume, Section } from '@job-finder/shared';
-import { PageHeader } from '../../components/layout/PageHeader';
+import { PageHeader, SectionTitle, Tile } from '../../components/layout';
 import {
   Button,
   ErrorState,
@@ -12,7 +12,6 @@ import {
   Spinner,
   SkeletonBlock,
   SkeletonLine,
-  Surface,
   Tabs,
   type TabItem,
 } from '../../components/ui';
@@ -242,35 +241,35 @@ function ResumeTabs({ draft, onChange, fileRef, isUploading, isRemoving, onReque
 
   return (
     <>
-      <Tabs aria-label="Profile" className="mb-4" tabs={tabs} active={tab} onChange={setTab} />
+      <Tabs aria-label="Profile" variant="underline" className="mb-4" tabs={tabs} active={tab} onChange={setTab} />
 
-      <TabPanel id="details" active={tab}>
-        <IdentityForm resume={draft} onChange={onChange} />
-      </TabPanel>
-
-      {draft.sections.map((section, i) => (
-        <TabPanel key={i} id={`section-${i}`} active={tab}>
-          <SectionTabPanel
-            section={section}
-            canMoveUp={i > 0}
-            canMoveDown={i < draft.sections.length - 1}
-            onRename={(name) => renameSection(i, name)}
-            onMove={(dir) => moveSection(i, dir)}
-            onDelete={() => deleteSection(i)}
-            onChange={(s) => updateSection(i, s)}
-          />
+      <Tile>
+        <TabPanel id="details" active={tab}>
+          <IdentityForm resume={draft} onChange={onChange} />
         </TabPanel>
-      ))}
 
-      <TabPanel id="add" active={tab}>
-        <Surface className="border-dashed">
-          <h2 className="text-base font-black tracking-tight text-foreground">Add section</h2>
+        {draft.sections.map((section, i) => (
+          <TabPanel key={i} id={`section-${i}`} active={tab}>
+            <SectionTabPanel
+              section={section}
+              canMoveUp={i > 0}
+              canMoveDown={i < draft.sections.length - 1}
+              onRename={(name) => renameSection(i, name)}
+              onMove={(dir) => moveSection(i, dir)}
+              onDelete={() => deleteSection(i)}
+              onChange={(s) => updateSection(i, s)}
+            />
+          </TabPanel>
+        ))}
+
+        <TabPanel id="add" active={tab}>
+          <SectionTitle>Add section</SectionTitle>
           {draft.sections.length === 0 ? (
-            <p className="mt-1 text-sm text-muted">
+            <p className="mb-3 text-sm text-muted">
               This resume has no sections yet. Add one to start building — this is a valid starting point, not an error.
             </p>
           ) : null}
-          <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <div className="flex-1">
               <Field label="Name">
                 <Input
@@ -285,28 +284,28 @@ function ResumeTabs({ draft, onChange, fileRef, isUploading, isRemoving, onReque
               <Plus className="h-4 w-4" /> add section
             </Button>
           </div>
-        </Surface>
-      </TabPanel>
+        </TabPanel>
 
-      <TabPanel id="config" active={tab}>
-        <Surface>
-          <h2 className="text-base font-black tracking-tight text-foreground">Import config</h2>
-          <p className="mt-1 text-sm text-muted">
-            Import a RenderCV YAML config to pre-fill every field. Any existing resume content will be overwritten.
-          </p>
-          <Button variant="secondary" onClick={() => fileRef.current?.click()} disabled={isUploading}>
-            <FileUp className="h-4 w-4" /> import config
-          </Button>
-        </Surface>
+        <TabPanel id="config" active={tab}>
+          <div>
+            <SectionTitle>Import config</SectionTitle>
+            <p className="mb-3 text-sm text-muted">
+              Import a RenderCV YAML config to pre-fill every field. Any existing resume content will be overwritten.
+            </p>
+            <Button variant="secondary" onClick={() => fileRef.current?.click()} disabled={isUploading}>
+              <FileUp className="h-4 w-4" /> import config
+            </Button>
+          </div>
 
-        <Surface className="mt-4 border-danger/40">
-          <h2 className="text-base font-black tracking-tight text-danger">Delete profile</h2>
-          <p className="mt-1 text-sm text-muted">This permanently deletes the profile and its resume content.</p>
-          <Button variant="danger" onClick={onRequestDelete} disabled={isRemoving}>
-            <Trash2 className="h-4 w-4" /> delete profile
-          </Button>
-        </Surface>
-      </TabPanel>
+          <div className="mt-6 rounded-xl border border-danger/30 bg-danger-soft p-4">
+            <h2 className="mb-1 [font:var(--type-section-title)] text-danger">Delete profile</h2>
+            <p className="mb-3 text-sm text-muted">This permanently deletes the profile and its resume content.</p>
+            <Button variant="danger" onClick={onRequestDelete} disabled={isRemoving}>
+              <Trash2 className="h-4 w-4" /> delete profile
+            </Button>
+          </div>
+        </TabPanel>
+      </Tile>
     </>
   );
 }
