@@ -5,7 +5,7 @@ import { cn } from '../../lib/utils';
 
 export function TileSkeleton({ lines = 3, className }: { lines?: number; className?: string }) {
   return (
-    <div className={cn('flex flex-col gap-3 p-4', className)}>
+    <div className={cn('flex flex-col gap-3 p-5', className)}>
       {Array.from({ length: lines }).map((_, i) => (
         <Skeleton key={i} className="h-4 w-full rounded" />
       ))}
@@ -15,7 +15,7 @@ export function TileSkeleton({ lines = 3, className }: { lines?: number; classNa
 
 export function TileEmpty({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-sm text-muted">
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-5 text-sm text-muted">
       {icon}
       <p>{children}</p>
     </div>
@@ -25,7 +25,7 @@ export function TileEmpty({ children, icon }: { children: ReactNode; icon?: Reac
 export function TileError({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const message = error instanceof Error ? error.message : String(error ?? 'An error occurred');
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4">
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-5">
       <p className="text-sm text-danger">{message}</p>
       {onRetry && (
         <Button variant="ghost" size="sm" onPress={onRetry}>

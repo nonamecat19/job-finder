@@ -1,6 +1,12 @@
-export { PageHeader } from './PageHeader';
+export { PageHeader, SectionTitle } from './PageHeader';
 export { DashboardGrid } from './DashboardGrid';
 export type { LayoutMode } from './DashboardGrid';
 export { Tile } from './Tile';
-export type { TileProps, SpanRule } from './Tile';
+export type { TileProps, SpanRule, TileTone } from './Tile';
 export { TileSkeleton, TileEmpty, TileError } from './TileStates';
+export { StatTile } from './StatTile';
+export type { StatTileProps, StatTileDelta } from './StatTile';
+export { IconTile } from './IconTile';
+export type { IconTileProps, IconTileTint, IconTileSize } from './IconTile';
+export { ListRow } from './ListRow';
+export type { ListRowProps } from './ListRow';
