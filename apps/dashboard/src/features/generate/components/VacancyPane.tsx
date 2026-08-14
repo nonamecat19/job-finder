@@ -1,7 +1,9 @@
+import { FileDown } from 'lucide-react';
 import { useState } from 'react';
 import type { GenerationExportDto } from '@job-finder/shared';
 import { Button, Field, Input, Select, Spinner, Surface, Textarea } from '../../../components/ui';
 import { SectionTitle } from '../../../components/layout/PageHeader';
+import { api } from '../../../lib/api';
 import { useSummaryModel } from '../../tailor/hooks';
 
 const GROUNDING_LEVELS = ['strict', 'moderate', 'aggressive'] as const;
@@ -197,9 +199,24 @@ export default function VacancyPane({
           </div>
           {exportError ? <p className="mt-2 text-sm text-danger">{exportError}</p> : null}
           {exportState?.status === 'exported' ? (
-            <p className="mt-2 text-xs text-muted">
-              Exported. Find it in your documents — it contains exactly the items you included.
-            </p>
+            <div className="mt-2">
+              <p className="text-xs text-muted">
+                Exported — it contains exactly the items you included.
+              </p>
+              {exportState.documentId ? (
+                <a
+                  className="mt-2 inline-block"
+                  href={api.documents.pdfUrl(exportState.documentId)}
+                  download
+                >
+                  <Button variant="secondary">
+                    Download PDF <FileDown className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </a>
+              ) : (
+                <p className="mt-1 text-xs text-muted">Find it in your documents.</p>
+              )}
+            </div>
           ) : null}
           {exportState?.status === 'blocked' && exportState.report ? (
             <OverflowReport report={exportState.report} />
