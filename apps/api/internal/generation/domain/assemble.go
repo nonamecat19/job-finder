@@ -29,6 +29,7 @@ func Assemble(master RendercvMaster, sections []Section) (RendercvMaster, error)
 		byCompany[norm(StringField(e, "company"))] = e
 	}
 	masterSkills := AsSliceOfMaps(cvSections["skills"])
+	masterProjects := AsSliceOfMaps(cvSections["projects"])
 
 	for _, sec := range sections {
 		selected := selectedInOrder(sec)
@@ -66,6 +67,11 @@ func Assemble(master RendercvMaster, sections []Section) (RendercvMaster, error)
 				continue
 			}
 			cvSections["skills"] = assembleSkillGroups(masterSkills, selected)
+		case SectionKindProjects:
+			if _, ok := cvSections["projects"]; !ok {
+				continue
+			}
+			cvSections["projects"] = assembleProjects(masterProjects, selected)
 		}
 	}
 
@@ -88,6 +94,25 @@ func selectedInOrder(sec Section) []Item {
 		out = append(out, Item{})
 		copy(out[i+1:], out[i:])
 		out[i] = it
+	}
+	return out
+}
+
+// assembleProjects rebuilds the projects section from the selected items, in
+// the order the workspace shows them. Every project resolves through its
+// SourceIndex back to the master's own entry, so name, link, dates and bullets
+// reach the PDF verbatim — the workspace only ever decided *which* projects
+// and in what order, never their contents. A project has no AI-origin
+// counterpart to parse: nothing in this section is model-written.
+func assembleProjects(masterProjects []map[string]any, selected []Item) []any {
+	out := make([]any, 0, len(selected))
+	for _, it := range selected {
+		if it.Origin != OriginProfile || it.SourceIndex == nil {
+			continue
+		}
+		if idx := *it.SourceIndex; idx >= 0 && idx < len(masterProjects) {
+			out = append(out, masterProjects[idx])
+		}
 	}
 	return out
 }

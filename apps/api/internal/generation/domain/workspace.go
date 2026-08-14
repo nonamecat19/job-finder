@@ -23,16 +23,18 @@ const (
 	ItemKindAchievement ItemKind = "achievement"
 	ItemKindSkillGroup  ItemKind = "skill_group"
 	ItemKindSummary     ItemKind = "summary"
+	ItemKindProject     ItemKind = "project"
 )
 
-// SectionKind is one of the three section granularities data-model.md §2
-// collapses into a single table.
+// SectionKind is one of the section granularities data-model.md §2 collapses
+// into a single table.
 type SectionKind string
 
 const (
 	SectionKindSummary    SectionKind = "summary"
 	SectionKindExperience SectionKind = "experience"
 	SectionKindSkills     SectionKind = "skills"
+	SectionKindProjects   SectionKind = "projects"
 )
 
 // RunState is a generation_runs.state value (data-model.md §4).

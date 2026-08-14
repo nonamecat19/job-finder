@@ -297,7 +297,7 @@ export interface GenerationVacancyDto {
  */
 export interface GenerationSectionDto {
   id: string;
-  kind: string; // summary | experience | skills
+  kind: string; // summary | experience | skills | projects
   entryKey?: string;
   entryLabel?: string;
   position: number /* int */;
@@ -316,7 +316,7 @@ export interface GenerationSectionDto {
 export interface GenerationItemDto {
   id: string;
   origin: string; // profile | ai
-  kind: string; // achievement | skill_group | summary
+  kind: string; // achievement | skill_group | summary | project
   text: string; // effective text: editedText ?? sourceText
   sourceIndex?: number /* int */;
   rank: number /* int */;

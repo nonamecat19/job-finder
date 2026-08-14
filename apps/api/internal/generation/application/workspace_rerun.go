@@ -185,6 +185,19 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 		}
 	}
 
+	// Runs started before the projects section existed have no row for it, and
+	// a rerun can only replace sections it finds. Creating the missing one is
+	// additive — no existing section is touched — so an old run picks up
+	// projects on its next rerun instead of staying permanently without them.
+	created, err := s.backfillProjectsSection(ctx, rid, master, cfg, sections)
+	if err != nil && rec != nil {
+		rec.Step(ctx, "projects section backfill failed", map[string]any{"error": err.Error()})
+	}
+	if created != nil {
+		sections = append(sections, *created)
+		target[created.ID] = true
+	}
+
 	existingItems, err := s.q.ListItemsByRun(ctx, rid)
 	if err != nil {
 		existingItems = nil
@@ -201,6 +214,7 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 
 	var summarySection *sqlcgen.GenerationSection
 	skillsTargeted := false
+	projectsTargeted := false
 	for i := range sections {
 		sec := sections[i]
 		if target[sec.ID] && sec.Kind == string(domain.SectionKindSummary) {
@@ -208,6 +222,9 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 		}
 		if target[sec.ID] && sec.Kind == string(domain.SectionKindSkills) {
 			skillsTargeted = true
+		}
+		if target[sec.ID] && sec.Kind == string(domain.SectionKindProjects) {
+			projectsTargeted = true
 		}
 	}
 
@@ -224,6 +241,14 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 			anyFailed = true
 			if rec != nil {
 				rec.Step(ctx, "skills ranking persistence failed", map[string]any{"error": err.Error()})
+			}
+		}
+	}
+	if projectsTargeted {
+		if err := s.applyRankedProjects(ctx, rid, master, analysis, cfg, oldBySection); err != nil {
+			anyFailed = true
+			if rec != nil {
+				rec.Step(ctx, "projects ranking persistence failed", map[string]any{"error": err.Error()})
 			}
 		}
 	}

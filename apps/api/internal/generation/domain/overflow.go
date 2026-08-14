@@ -81,6 +81,9 @@ func candidateLabel(sec Section, it Item) string {
 	case SectionKindSkills:
 		label, _, _ := strings.Cut(it.EffectiveText(), ":")
 		return "Skills · " + strings.TrimSpace(label)
+	case SectionKindProjects:
+		name, _, _ := strings.Cut(it.EffectiveText(), " · ")
+		return "Projects · " + strings.TrimSpace(name)
 	default:
 		entry := ""
 		if sec.EntryKey != nil {

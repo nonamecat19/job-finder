@@ -44,7 +44,7 @@ type GenerationVacancyDto struct {
 // `position` order.
 type GenerationSectionDto struct {
 	ID           string              `json:"id"`
-	Kind         string              `json:"kind"` // summary | experience | skills
+	Kind         string              `json:"kind"` // summary | experience | skills | projects
 	EntryKey     *string             `json:"entryKey,omitempty"`
 	EntryLabel   *string             `json:"entryLabel,omitempty"`
 	Position     int                 `json:"position"`
@@ -62,7 +62,7 @@ type GenerationSectionDto struct {
 type GenerationItemDto struct {
 	ID          string `json:"id"`
 	Origin      string `json:"origin"` // profile | ai
-	Kind        string `json:"kind"`   // achievement | skill_group | summary
+	Kind        string `json:"kind"`   // achievement | skill_group | summary | project
 	Text        string `json:"text"`   // effective text: editedText ?? sourceText
 	SourceIndex *int   `json:"sourceIndex,omitempty"`
 	Rank        int    `json:"rank"`

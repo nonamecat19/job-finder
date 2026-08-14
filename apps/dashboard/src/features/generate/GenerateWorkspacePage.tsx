@@ -3,6 +3,7 @@ import type { GenerationRunDto, GenerationSectionDto } from '@job-finder/shared'
 import { PageHeader, SectionTitle } from '../../components/layout/PageHeader';
 import { Button, EmptyState, ErrorState, LoadingRegion, SkeletonBlock, Spinner, Surface } from '../../components/ui';
 import { useProfiles } from '../profile/hooks';
+import ProjectsBlock from './components/ProjectsBlock';
 import SkillsBlock from './components/SkillsBlock';
 import SummaryBlock from './components/SummaryBlock';
 import VacancyPane, { type VacancyPaneInput } from './components/VacancyPane';
@@ -104,7 +105,10 @@ function failedSections(run: GenerationRunDto): { id: string; label: string }[] 
     .filter((s) => s.state === 'failed')
     .map((s) => ({
       id: s.id,
-      label: s.entryKey ?? s.entryLabel ?? (s.kind === 'summary' ? 'Summary' : s.kind === 'skills' ? 'Skills' : s.kind),
+      label:
+        s.entryKey ??
+        s.entryLabel ??
+        (s.kind === 'summary' ? 'Summary' : s.kind === 'skills' ? 'Skills' : s.kind === 'projects' ? 'Projects' : s.kind),
     }));
 }
 
@@ -123,6 +127,12 @@ function exportWarnings(run: GenerationRunDto): string[] {
   }
   if (selected(run.sections.find((s) => s.kind === 'skills')).length === 0) {
     warnings.push('This resume has no skills — every skill group is switched off.');
+  }
+  // Only warned about when the profile *has* projects: a resume without a
+  // projects section is a normal resume, not an emptied one.
+  const projectsSection = run.sections.find((s) => s.kind === 'projects');
+  if (projectsSection && projectsSection.items.length > 0 && selected(projectsSection).length === 0) {
+    warnings.push('This resume has no projects — every project is switched off.');
   }
 
   // The summary section is excluded: it is written by the run itself and
@@ -189,6 +199,7 @@ function WorkspaceLeftPane({
 
   const summarySection = run.sections.find((s) => s.kind === 'summary');
   const skillsSection = run.sections.find((s) => s.kind === 'skills');
+  const projectsSection = run.sections.find((s) => s.kind === 'projects');
   const experienceSections = run.sections
     .filter((s): s is GenerationSectionDto => s.kind === 'experience')
     .sort((a, b) => a.position - b.position);
@@ -239,6 +250,10 @@ function WorkspaceLeftPane({
 
       {skillsSection ? (
         <SkillsBlock section={skillsSection} onToggle={onToggle} onReorder={onReorder} onEditText={onEditText} />
+      ) : null}
+
+      {projectsSection ? (
+        <ProjectsBlock section={projectsSection} onToggle={onToggle} onReorder={onReorder} />
       ) : null}
     </div>
   );

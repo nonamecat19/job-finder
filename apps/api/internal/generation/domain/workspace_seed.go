@@ -1,6 +1,9 @@
 package domain
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // SeedFromMaster builds the workspace's starting sections and items directly
 // from the master resume, with no model call: one summary section (empty —
@@ -73,8 +76,91 @@ func SeedFromMaster(master RendercvMaster, cfg ShapeConfig) []Section {
 		State:    SectionReady,
 		Items:    SeedSkillItems(AsSliceOfMaps(sections["skills"]), nil, cfg.SkillsMaxGroups),
 	})
+	position++
+
+	// Projects only get a section when the master has one. Unlike experience
+	// and skills — which every resume carries — a profile with no projects
+	// should show no projects block rather than an empty one asking to be
+	// filled.
+	if projects := AsSliceOfMaps(sections["projects"]); len(projects) > 0 {
+		out = append(out, Section{
+			Kind:        SectionKindProjects,
+			Position:    position,
+			TargetCount: cfg.ProjectsMax,
+			State:       SectionReady,
+			Items:       SeedProjectItems(projects, nil, cfg.ProjectsMax),
+		})
+	}
 
 	return out
+}
+
+// SeedProjectItems builds the projects section's items from the master's
+// projects, in the order `order` names (a RankProjects order, or nil for
+// master order). Same two rules as SeedSkillItems:
+//
+//   - the result is a permutation of `projects` — nothing added, reworded or
+//     dropped,
+//   - projectsMax is a *selection* boundary, not a removal: the projects past
+//     it stay in the list as unselected items the user can promote, rather
+//     than disappearing the way ApplyHardLimits' render-time cap makes them.
+//
+// There is no pinned-project concept: unlike "Spoken Languages", no project is
+// a fact the vacancy cannot reorder.
+func SeedProjectItems(projects []map[string]any, order []int, projectsMax int) []Item {
+	seen := make(map[int]bool, len(projects))
+	ranked := make([]int, 0, len(projects))
+	for _, idx := range order {
+		if idx < 0 || idx >= len(projects) || seen[idx] {
+			continue
+		}
+		seen[idx] = true
+		ranked = append(ranked, idx)
+	}
+	for i := range projects {
+		if !seen[i] {
+			ranked = append(ranked, i)
+		}
+	}
+
+	slots := len(ranked)
+	if projectsMax > 0 {
+		slots = projectsMax
+	}
+
+	items := make([]Item, 0, len(projects))
+	for i, source := range ranked {
+		idx := source
+		items = append(items, Item{
+			Origin:      OriginProfile,
+			Kind:        ItemKindProject,
+			SourceIndex: &idx,
+			SourceText:  projectItemText(projects[source]),
+			Rank:        i,
+			Position:    i,
+			Selected:    i < slots,
+		})
+	}
+	return items
+}
+
+// projectItemText renders a project as the workspace shows it: its name,
+// stripped of the markdown link wrapper the master stores it in, followed by
+// how many bullets it carries — the one number that tells the user what
+// including it costs on the page.
+func projectItemText(p map[string]any) string {
+	name := strings.TrimSpace(StringField(p, "name"))
+	if inner, _, found := strings.Cut(strings.TrimPrefix(name, "["), "]("); found {
+		name = inner
+	}
+	n := len(StringSliceField(p, "highlights"))
+	if n == 0 {
+		return name
+	}
+	if n == 1 {
+		return name + " · 1 bullet"
+	}
+	return name + " · " + strconv.Itoa(n) + " bullets"
 }
 
 // SeedSkillItems builds the skills section's items from the master's skill

@@ -606,6 +606,75 @@ func (s *Service) applyRankedSkills(ctx context.Context, runID pgtype.UUID, mast
 	return nil
 }
 
+// backfillProjectsSection creates the projects section for a run that predates
+// it, returning the created row (nil when the run already has one, or when the
+// master has no projects to show). Items are left to applyRankedProjects, the
+// same split StartRun uses.
+func (s *Service) backfillProjectsSection(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, cfg domain.ShapeConfig, sections []sqlcgen.GenerationSection) (*sqlcgen.GenerationSection, error) {
+	if len(domain.AsSliceOfMaps(domain.CvSections(master)["projects"])) == 0 {
+		return nil, nil
+	}
+	position := 0
+	for _, sec := range sections {
+		if sec.Kind == string(domain.SectionKindProjects) {
+			return nil, nil
+		}
+		if int(sec.Position) >= position {
+			position = int(sec.Position) + 1
+		}
+	}
+	created, err := s.q.CreateSections(ctx, sqlcgen.CreateSectionsParams{
+		RunID:        runID,
+		Kinds:        []string{string(domain.SectionKindProjects)},
+		EntryKeys:    []string{""},
+		EntryLabels:  []string{""},
+		Positions:    []int32{int32(position)},
+		TargetCounts: []int32{int32(cfg.ProjectsMax)},
+	})
+	if err != nil || len(created) == 0 {
+		return nil, err
+	}
+	if err := s.q.SetSectionState(ctx, sqlcgen.SetSectionStateParams{
+		ID: created[0].ID, State: string(domain.SectionReady),
+	}); err != nil {
+		return nil, err
+	}
+	return &created[0], nil
+}
+
+// applyRankedProjects replaces the projects section's master-order seed with
+// the relevance order, the same way applyRankedSkills does for skill groups.
+//
+// No model call is involved: `domain.RankedProjectOrder` is arithmetic over
+// the vacancy analysis and the profile's own evidence, so there is nothing to
+// verify or fall back from. A run whose master has no projects has no projects
+// section, and this is a no-op.
+//
+// oldBySection is the rerun-preservation input: a project the user had
+// promoted or dropped keeps that choice when it still exists (T077).
+func (s *Service) applyRankedProjects(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, oldBySection map[pgtype.UUID][]domain.Item) error {
+	projects := domain.AsSliceOfMaps(domain.CvSections(master)["projects"])
+	if len(projects) == 0 {
+		return nil
+	}
+	sections, err := s.q.ListSectionsByRun(ctx, runID)
+	if err != nil {
+		return err
+	}
+	order := domain.RankedProjectOrder(master, analysis)
+	for _, sec := range sections {
+		if sec.Kind != string(domain.SectionKindProjects) {
+			continue
+		}
+		items := preserveMatchedSelections(oldBySection[sec.ID], domain.SeedProjectItems(projects, order, cfg.ProjectsMax))
+		if err := s.q.DeleteSectionItems(ctx, sec.ID); err != nil {
+			return err
+		}
+		return s.persistWorkspaceItems(ctx, sec.ID, items)
+	}
+	return nil
+}
+
 // withinGroupRankedSkills returns the master's skill groups with each group's
 // entries ordered by vacancy relevance. RankSkills mutates in place and the
 // run's master snapshot must stay byte-identical to what was persisted, so it
@@ -671,6 +740,12 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		anyRankingFailed = true
 		if rec != nil {
 			rec.Step(ctx, "skills ranking persistence failed", map[string]any{"error": err.Error()})
+		}
+	}
+	if err := s.applyRankedProjects(ctx, rid, master, analysis, cfg, nil); err != nil {
+		anyRankingFailed = true
+		if rec != nil {
+			rec.Step(ctx, "projects ranking persistence failed", map[string]any{"error": err.Error()})
 		}
 	}
 	// A ranking persistence failure does not fail the whole run on its own
