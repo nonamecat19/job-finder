@@ -1,15 +1,17 @@
 import type { Entry } from '@job-finder/shared';
-import { Field, Input, Textarea } from '../../../../components/ui';
+import { Field, Input, Select, Textarea } from '../../../../components/ui';
 import { makeEntrySetter } from './entryFormUtils';
 import { HighlightsField } from './HighlightsField';
 
 interface EntryFormProps {
   entry: Entry;
   onChange: (entry: Entry) => void;
+  sectionName?: string;
 }
 
-export function NormalEntryForm({ entry, onChange }: EntryFormProps) {
+export function NormalEntryForm({ entry, onChange, sectionName }: EntryFormProps) {
   const set = makeEntrySetter(entry, onChange);
+  const isProjects = sectionName === 'projects';
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <Field label="Name">
@@ -33,6 +35,21 @@ export function NormalEntryForm({ entry, onChange }: EntryFormProps) {
       <Field label="Summary" className="sm:col-span-2">
         <Textarea value={entry.summary ?? ''} onChange={(e) => set('summary', e.target.value || undefined)} rows={2} />
       </Field>
+      {isProjects ? (
+        <Field label="How many bullets to show on a generated resume">
+          <Select
+            value={entry.projectLevel ?? 'auto'}
+            onChange={(e) => set('projectLevel', e.target.value === 'auto' ? undefined : e.target.value)}
+            aria-label="Project density"
+          >
+            <option value="auto">Auto — scaled to this project&apos;s bullet count</option>
+            <option value="relevant">Only the bullets the job asks about</option>
+            <option value="top3">3 bullets</option>
+            <option value="top5">5 bullets</option>
+            <option value="all">All bullets</option>
+          </Select>
+        </Field>
+      ) : null}
       <HighlightsField
         highlights={entry.highlights}
         onChange={(highlights) => set('highlights', highlights)}

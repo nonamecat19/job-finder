@@ -575,6 +575,11 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		// RankSkills just ordered, before the group cap in ApplyHardLimits
 		// picks which groups make the page.
 		domain.TrimSkillGroups(merged, analysis)
+		// Projects get the same two passes for the same reason: relevance
+		// decides which ones survive the cap in ApplyHardLimits, and each
+		// project's authored density decides how many bullets it renders.
+		domain.RankProjects(merged, analysis, cfg)
+		domain.TrimProjectHighlights(merged, analysis)
 		report := domain.ApplyHardLimits(master, merged, cfg)
 		recordShortfalls(ctx, rec, report)
 		// 033 FR-001: drop ungrounded skill tokens on the primary pass, not
@@ -883,6 +888,8 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 		domain.ApplySectionToggles(reMerged, cfg)
 		domain.RankSkills(reMerged, analysis, cfg)
 		domain.TrimSkillGroups(reMerged, analysis)
+		domain.RankProjects(reMerged, analysis, cfg)
+		domain.TrimProjectHighlights(reMerged, analysis)
 		domain.ApplyHardLimits(master, reMerged, cfg)
 		reViolations := domain.VerifyStructureIntegrity(master, reMerged)
 		if len(reViolations) == 0 {
@@ -914,6 +921,8 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 	domain.ApplySectionToggles(reMerged, cfg)
 	domain.RankSkills(reMerged, analysis, cfg)
 	domain.TrimSkillGroups(reMerged, analysis)
+	domain.RankProjects(reMerged, analysis, cfg)
+	domain.TrimProjectHighlights(reMerged, analysis)
 	domain.ApplyHardLimits(master, reMerged, cfg)
 	reDrift := domain.VerifyHighlightGrounding(master, reMerged)
 	if len(reDrift) == 0 {

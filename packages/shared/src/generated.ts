@@ -838,11 +838,20 @@ export interface Entry {
   details?: string;
   /**
    * SkillLevel is the density of a skill group's details list on generated
-   * resumes: "relevant" (only what the vacancy asks for, the default),
+   * resumes: unset (auto — a count derived from how many skills the group
+   * holds), "relevant" (only what the vacancy asks for), "top5" (5),
    * "top10" (~10), "top15" (~15), "top20" (~20) or "all" (everything). Only
    * meaningful for entries in the skills section.
    */
   skillLevel?: string;
+  /**
+   * ProjectLevel is the density of a project's bullet list on generated
+   * resumes: unset (auto — a count derived from how many bullets the project
+   * has), "relevant" (only the bullets the vacancy asks about), "top3" (3),
+   * "top5" (5) or "all" (everything). Only meaningful for entries in the
+   * projects section.
+   */
+  projectLevel?: string;
   bullet?: string;
   number?: string;
   reversedNumber?: string;

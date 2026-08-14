@@ -113,6 +113,9 @@ func mapEntry(entryType dto.EntryType, sectionName string, raw any) dto.Entry {
 		e.Location = strPtr(m, "location", consumed)
 		e.Summary = strPtr(m, "summary", consumed)
 		e.Highlights = strSlice(m, "highlights", consumed)
+		if sectionName == "projects" {
+			e.ProjectLevel = strPtr(m, "project_level", consumed)
+		}
 	case dto.EntryPublication:
 		e.Title = strPtr(m, "title", consumed)
 		e.Authors = strSlice(m, "authors", consumed)
@@ -271,6 +274,9 @@ func entryToRaw(entryType dto.EntryType, sectionName string, e dto.Entry) any {
 		setOrDelete(m, "location", e.Location)
 		setOrDelete(m, "summary", e.Summary)
 		setSliceOrDelete(m, "highlights", e.Highlights)
+		if sectionName == "projects" {
+			setOrDelete(m, "project_level", e.ProjectLevel)
+		}
 	case dto.EntryPublication:
 		setOrDelete(m, "title", e.Title)
 		setSliceOrDelete(m, "authors", e.Authors)
