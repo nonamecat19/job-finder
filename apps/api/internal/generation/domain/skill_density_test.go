@@ -8,8 +8,9 @@ import (
 
 // TrimSkillGroups is the render-time enforcement of each skill group's
 // authored density level. These tests pin the levels against the relevance
-// order RankSkills produces, the "relevant" default for an unset or unknown
-// level, the pinned-group exemption and the empty-"relevant"-group drop.
+// order RankSkills produces, the auto count an unset or unknown level derives
+// from the group's own size, the pinned-group exemption and the
+// empty-"relevant"-group drop.
 
 func skillsDoc(groups ...[3]string) RendercvMaster {
 	raw := make([]any, 0, len(groups))
@@ -32,29 +33,107 @@ func groupDetails(t *testing.T, doc RendercvMaster) map[string]string {
 	return out
 }
 
-func TestTrimSkillGroups_NoLevelDefaultsToRelevant(t *testing.T) {
+// An unset level is auto: the group is small enough that autoSkillMin holds
+// all of it, so nothing is trimmed and the vacancy match still leads.
+func TestTrimSkillGroups_NoLevelKeepsSmallGroupWhole(t *testing.T) {
 	doc := skillsDoc([3]string{"Backend", "Go, Node.js, Kafka", ""})
 	analysis := VacancyAnalysis{RequiredSkills: []string{"Go"}}
 
 	RankSkills(doc, analysis, ShapeConfig{SkillsEnabled: true})
-	if !TrimSkillGroups(doc, analysis) {
-		t.Error("changed = false, want true (unset level defaults to relevant-only)")
+	if TrimSkillGroups(doc, analysis) {
+		t.Error("changed = true, want false (auto keeps a group under the floor whole)")
 	}
-	if got := groupDetails(t, doc)["Backend"]; got != "Go" {
-		t.Errorf("details = %q, want %q", got, "Go")
+	if got := groupDetails(t, doc)["Backend"]; got != "Go, Node.js, Kafka" {
+		t.Errorf("details = %q, want %q", got, "Go, Node.js, Kafka")
 	}
 }
 
-func TestTrimSkillGroups_UnknownLevelDefaultsToRelevant(t *testing.T) {
-	doc := skillsDoc([3]string{"Backend", "Go, Node.js, Kafka", "medium"})
+func TestTrimSkillGroups_UnknownLevelBehavesAsAuto(t *testing.T) {
+	skills := make([]string, 20)
+	for i := range skills {
+		skills[i] = fmt.Sprintf("s%02d", i)
+	}
+	doc := skillsDoc([3]string{"Backend", strings.Join(skills, ", "), "medium"})
+
+	RankSkills(doc, VacancyAnalysis{}, ShapeConfig{SkillsEnabled: true})
+	if !TrimSkillGroups(doc, VacancyAnalysis{}) {
+		t.Error("changed = false, want true (legacy 'medium' behaves as auto)")
+	}
+	if got := len(splitSkillEntries(groupDetails(t, doc)["Backend"])); got != 10 {
+		t.Errorf("kept %d entries, want 10 (half of 20)", got)
+	}
+}
+
+// Auto scales with the group: half its entries, floored at autoSkillMin and
+// ceilinged at autoSkillMax, so a deep group says more than a shallow one.
+func TestTrimSkillGroups_AutoScalesWithGroupSize(t *testing.T) {
+	cases := []struct {
+		size, want int
+	}{
+		{3, 3},   // under the floor: kept whole
+		{6, 4},   // floor
+		{14, 7},  // half
+		{30, 12}, // ceiling
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("size%d", c.size), func(t *testing.T) {
+			skills := make([]string, c.size)
+			for i := range skills {
+				skills[i] = fmt.Sprintf("s%02d", i)
+			}
+			doc := skillsDoc([3]string{"Backend", strings.Join(skills, ", "), ""})
+
+			RankSkills(doc, VacancyAnalysis{}, ShapeConfig{SkillsEnabled: true})
+			TrimSkillGroups(doc, VacancyAnalysis{})
+
+			if got := len(splitSkillEntries(groupDetails(t, doc)["Backend"])); got != c.want {
+				t.Errorf("kept %d entries, want %d", got, c.want)
+			}
+		})
+	}
+}
+
+// The cap bounds depth, never coverage: a vacancy asking for more skills than
+// the auto cap keeps gets all of them.
+func TestTrimSkillGroups_AutoKeepsEveryVacancyMatch(t *testing.T) {
+	skills := make([]string, 20)
+	required := make([]string, 0, 14)
+	for i := range skills {
+		skills[i] = fmt.Sprintf("s%02d", i)
+		if i < 14 {
+			required = append(required, skills[i])
+		}
+	}
+	doc := skillsDoc([3]string{"Backend", strings.Join(skills, ", "), ""})
+	analysis := VacancyAnalysis{RequiredSkills: required}
+
+	RankSkills(doc, analysis, ShapeConfig{SkillsEnabled: true})
+	TrimSkillGroups(doc, analysis)
+
+	if got := len(splitSkillEntries(groupDetails(t, doc)["Backend"])); got != 14 {
+		t.Errorf("kept %d entries, want 14 (every required skill, past the auto ceiling of %d)", got, autoSkillMax)
+	}
+}
+
+// "relevant" stays available for the user who wants only what the vacancy
+// asked for — including the drop of a group that matches nothing.
+func TestTrimSkillGroups_RelevantIsStillOptIn(t *testing.T) {
+	doc := skillsDoc(
+		[3]string{"Backend", "Go, Node.js, Kafka", SkillLevelRelevant},
+		[3]string{"Design", "Figma, Sketch", SkillLevelRelevant},
+	)
 	analysis := VacancyAnalysis{RequiredSkills: []string{"Go"}}
 
 	RankSkills(doc, analysis, ShapeConfig{SkillsEnabled: true})
 	if !TrimSkillGroups(doc, analysis) {
-		t.Error("changed = false, want true (legacy 'medium' behaves as relevant-only)")
+		t.Error("changed = false, want true")
 	}
-	if got := groupDetails(t, doc)["Backend"]; got != "Go" {
+	details := groupDetails(t, doc)
+	if got := details["Backend"]; got != "Go" {
 		t.Errorf("details = %q, want %q", got, "Go")
+	}
+	if _, ok := details["Design"]; ok {
+		t.Error("Design group survived, want it dropped (relevant, nothing matched)")
 	}
 }
 

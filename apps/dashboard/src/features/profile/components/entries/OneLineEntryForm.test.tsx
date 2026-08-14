@@ -23,11 +23,11 @@ describe('OneLineEntryForm', () => {
     expect(screen.queryByLabelText('Skill density')).not.toBeInTheDocument()
   })
 
-  it('defaults an unset level to only the skills the job asks for', () => {
+  it('shows an unset level as auto', () => {
     render(
       <OneLineEntryForm sectionName="skills" entry={{ label: 'Backend' }} onChange={vi.fn()} />,
     )
-    expect(screen.getByLabelText('Skill density')).toHaveValue('relevant')
+    expect(screen.getByLabelText('Skill density')).toHaveValue('auto')
   })
 
   it('reflects an existing level', () => {
@@ -41,7 +41,7 @@ describe('OneLineEntryForm', () => {
     expect(screen.getByLabelText('Skill density')).toHaveValue('top10')
   })
 
-  it('writes the chosen level, and clears it for the relevant default', async () => {
+  it('writes the chosen level, and clears it for auto', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
     render(
@@ -78,6 +78,11 @@ describe('OneLineEntryForm', () => {
     )
 
     await user.selectOptions(picker, 'relevant')
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining<Partial<Entry>>({ skillLevel: 'relevant' }),
+    )
+
+    await user.selectOptions(picker, 'auto')
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining<Partial<Entry>>({ skillLevel: undefined }),
     )

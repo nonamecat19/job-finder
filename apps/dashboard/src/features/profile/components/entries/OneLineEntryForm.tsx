@@ -37,10 +37,11 @@ export function OneLineEntryForm({ entry, onChange, sectionName }: EntryFormProp
       {isSkills ? (
         <Field label="How many to show on a generated resume">
           <Select
-            value={entry.skillLevel ?? 'relevant'}
-            onChange={(e) => set('skillLevel', e.target.value === 'relevant' ? undefined : e.target.value)}
+            value={entry.skillLevel ?? 'auto'}
+            onChange={(e) => set('skillLevel', e.target.value === 'auto' ? undefined : e.target.value)}
             aria-label="Skill density"
           >
+            <option value="auto">Auto — scaled to this group&apos;s size</option>
             <option value="relevant">Only the skills the job asks for</option>
             <option value="top5">5 by relevance</option>
             <option value="top10">~10 by relevance</option>
