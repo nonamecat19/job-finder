@@ -159,7 +159,7 @@ and `ACTIVITY_STALE_AFTER + ACTIVITY_SWEEP_INTERVAL < 5m`.
 | --- | --- | --- |
 | `DOCUMENTS_DIR` | local document path | `./data/documents` |
 | `RESUME_GROUNDING_LEVEL` | how far tailoring may depart from the master | `moderate` |
-| `RENDERCV_BIN` | RenderCV executable | `rendercv` |
+| `RENDERCV_BIN` | **Obsolete** — loaded but not read; rendering is in-process via `rendercv-go` | `rendercv` |
 | `MINIO_ENDPOINT` | `host:port`, no scheme | empty = MinIO disabled |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | credentials | `minioadmin` |
 | `MINIO_BUCKET` | bucket | `documents` |

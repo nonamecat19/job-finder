@@ -108,7 +108,7 @@ Recreates the test database, brings up compose, waits, then runs the three Playw
 | `adapters/live/live_test.go` (job-scraper library) | real job boards |
 | `internal/*/application/live_test.go` — ghostjob, recruiter, salary | the real chat provider |
 | `internal/generation/**/`*`_live_test.go` | RenderCV, PDF rendering, eval corpus |
-| `internal/generation/rendercv_live_test.go` | the real RenderCV binary |
+| `internal/generation/rendercv_live_test.go` | RenderCV in-process (no external binary needed) |
 | `internal/generation/pdf_renderer_live_test.go` | real PDF rendering |
 | `internal/retrieval/service_integration_test.go` | the real fetch ladder |
 

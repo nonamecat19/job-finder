@@ -739,9 +739,10 @@ The chromedp density-ladder fitter earlier revisions of this section described â
 `internal/generation/singlepage`, a 9-step ladder over CSS custom properties, ranked
 blocked-feedback by re-measuring each candidate's removal â€” was never built. The package
 contains only `doc.go`. Page measurement and fitting are `RenderCvRenderer`
-(`internal/generation/infrastructure`), which shells out to the Typst-based `rendercv`
-binary (`RENDERCV_BIN`) rather than driving a headless Chrome instance, and `CountPages`
-measures the rendered PDF directly instead of estimating content height in CSS pixels.
+(`internal/generation/infrastructure`), which renders in-process via the `rendercv-go`
+library; the embedded WASI Typst compiler and a fixed font set are compiled into the Go
+binary; no external rendering process or runtime is invoked. `CountPages` reads the
+`rendercv-go`-produced PDF directly instead of estimating content height in CSS pixels.
 
 Two fitting strategies exist side by side, because two different rules govern what each may
 change:

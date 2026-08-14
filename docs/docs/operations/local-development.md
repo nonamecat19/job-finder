@@ -16,7 +16,6 @@ description: Prerequisites, environment setup, every Makefile target, ports, and
 | Docker + Compose | Postgres, Redis, MinIO, Ollama, asynqmon |
 | `sqlc` at the pinned version | `make sqlc-install` |
 | `tygo` at the pinned version | `make tygo-install` |
-| `rendercv` | PDF resume rendering (`RENDERCV_BIN`) |
 
 ## First run
 

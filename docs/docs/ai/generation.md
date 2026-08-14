@@ -65,7 +65,7 @@ func NewService(q Repository, profiles ProfileStore, htmlRenderer *HtmlPdfRender
 | `q` | `Repository` port over `GeneratedDocument` |
 | `profiles` | `ProfileStore` — the master document |
 | `htmlRenderer` | HTML → PDF path (cover letters) |
-| `rendercv` | RenderCV path (resumes), binary from `RENDERCV_BIN` |
+| `rendercv` | RenderCV path (resumes), in-process via `rendercv-go` |
 | `llmc` | the `generation` router |
 | `genModel` | `LLM_MODEL_GENERATION`; `docModel()` falls back to the provider default |
 | `defaultLevel` | `RESUME_GROUNDING_LEVEL` |
@@ -131,7 +131,7 @@ like matching.
 
 | Renderer | Used for | Mechanism |
 | --- | --- | --- |
-| `RenderCvRenderer` | resumes | shells out to `RENDERCV_BIN` with a generated RendercvMaster config |
+| `RenderCvRenderer` | resumes | renders in-process via the `rendercv-go` library (embedded WASI Typst compiler + fixed font set, no external runtime) |
 | `HtmlPdfRenderer` | cover letters | HTML template → PDF |
 
 Templates live in `internal/generation/templates`; `rendercv_config.go` and
