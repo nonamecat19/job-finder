@@ -103,3 +103,72 @@ func TestRankSkillsIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// Vacancy relevance is coarse — required, nice-to-have, or nothing — so most
+// entries in a group tie. The profile breaks those ties: a skill the candidate
+// actually wrote about outranks one that only appears in the skills list.
+func TestRankSkillsBreaksTiesOnProfileEvidence(t *testing.T) {
+	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"skills": []any{
+			map[string]any{"label": "Backend", "details": "Elixir, Kafka, Haskell"},
+		},
+		"experience": []any{
+			map[string]any{
+				"company":    "Acme",
+				"highlights": []any{"Built the Kafka ingest pipeline", "Tuned Kafka consumer lag"},
+			},
+		},
+	}}}
+
+	RankSkills(doc, VacancyAnalysis{}, DefaultShapeConfig())
+
+	if got := skillDetails(t, doc)[0]; got != "Kafka, Elixir, Haskell" {
+		t.Errorf("details = %q, want the evidenced skill first", got)
+	}
+}
+
+// Evidence is a tiebreaker, never an override: a required skill the rest of
+// the profile never mentions still outranks a well-evidenced skill the vacancy
+// did not ask for.
+func TestRankSkillsEvidenceNeverOutranksTheVacancy(t *testing.T) {
+	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"skills": []any{
+			map[string]any{"label": "Backend", "details": "Kafka, Elixir"},
+		},
+		"experience": []any{
+			map[string]any{
+				"company":    "Acme",
+				"highlights": []any{"Built the Kafka ingest pipeline", "Tuned Kafka consumer lag"},
+			},
+		},
+	}}}
+
+	RankSkills(doc, VacancyAnalysis{RequiredSkills: []string{"Elixir"}}, DefaultShapeConfig())
+
+	if got := skillDetails(t, doc)[0]; got != "Elixir, Kafka" {
+		t.Errorf("details = %q, want the required skill first", got)
+	}
+}
+
+// Summing relevance lets two nice-to-haves outweigh one hard requirement, and
+// under a group cap that costs a required skill its place on the page.
+func TestRankGroupsPrefersRequiredCoverageOverSummedScore(t *testing.T) {
+	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
+		"skills": []any{
+			map[string]any{"label": "Tooling", "details": "Redis, Docker"},
+			map[string]any{"label": "Backend", "details": "Go, Elixir"},
+		},
+	}}}
+	cfg := DefaultShapeConfig()
+	cfg.SkillsMaxGroups = 1
+
+	RankSkills(doc, VacancyAnalysis{
+		RequiredSkills:   []string{"Go"},
+		NiceToHaveSkills: []string{"Redis", "Docker"},
+	}, cfg)
+
+	groups := AsSliceOfMaps(CvSections(doc)["skills"])
+	if got := StringField(groups[0], "label"); got != "Backend" {
+		t.Errorf("first group = %q, want the group carrying the required skill", got)
+	}
+}

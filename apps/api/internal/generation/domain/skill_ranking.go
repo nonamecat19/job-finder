@@ -42,11 +42,16 @@ func RankSkills(doc RendercvMaster, analysis VacancyAnalysis, cfg ShapeConfig) {
 		return
 	}
 
+	// Two signals, in this order: what the vacancy asks for, then what the
+	// candidate's own experience evidences. See profile_evidence.go for why
+	// the second one exists and why it can never overturn the first.
+	evidence := BuildProfileEvidence(doc)
+
 	for _, g := range groups {
 		if IsPinnedSkillGroup(StringField(g, "label")) {
 			continue
 		}
-		g["details"] = rankDetails(StringField(g, "details"), analysis)
+		g["details"] = rankDetails(StringField(g, "details"), analysis, evidence)
 	}
 
 	// Without a cap every group renders, so their order is the master's
@@ -54,25 +59,34 @@ func RankSkills(doc RendercvMaster, analysis VacancyAnalysis, cfg ShapeConfig) {
 	// to lose a slot, and that choice belongs to the score rather than to
 	// whichever group the user happened to write first.
 	if cfg.SkillsMaxGroups > 0 && len(groups) > cfg.SkillsMaxGroups {
-		sections["skills"] = rankGroups(sections["skills"], analysis)
+		sections["skills"] = rankGroups(sections["skills"], analysis, evidence)
 	}
 }
 
 // rankDetails reorders one group's comma-separated skills by vacancy
-// relevance, preserving each entry's original text and the master's order
-// among equally relevant entries.
-func rankDetails(details string, analysis VacancyAnalysis) string {
+// relevance, breaking ties on how much the candidate's own experience
+// evidences the skill and, for entries the profile evidences equally, on the
+// master's order. Each entry's original text is preserved.
+func rankDetails(details string, analysis VacancyAnalysis, evidence ProfileEvidence) string {
 	entries := splitSkillEntries(details)
 	if len(entries) < 2 {
 		return details
 	}
 	scores := make([]int, len(entries))
+	backing := make([]int, len(entries))
 	order := make([]int, len(entries))
 	for i, e := range entries {
 		scores[i] = skillEntryScore(e, analysis)
+		backing[i] = evidence.Score(e)
 		order[i] = i
 	}
-	sort.SliceStable(order, func(a, b int) bool { return scores[order[a]] > scores[order[b]] })
+	sort.SliceStable(order, func(a, b int) bool {
+		i, j := order[a], order[b]
+		if scores[i] != scores[j] {
+			return scores[i] > scores[j]
+		}
+		return backing[i] > backing[j]
+	})
 
 	ranked := make([]string, 0, len(entries))
 	for _, i := range order {
@@ -84,12 +98,20 @@ func rankDetails(details string, analysis VacancyAnalysis) string {
 // rankGroups orders skill groups by the vacancy relevance of their contents.
 // Pinned groups sort after the ranked ones and keep their relative order; the
 // cap in ApplyHardLimits keeps them regardless of position.
-func rankGroups(raw any, analysis VacancyAnalysis) []any {
+//
+// The first key is how many *required* skills a group carries, not the summed
+// score: summing lets two nice-to-haves outweigh one hard requirement, and the
+// group that loses that comparison loses a required skill off the page
+// entirely when the cap bites. Summed score breaks a tie in required coverage,
+// and profile evidence breaks a tie in that.
+func rankGroups(raw any, analysis VacancyAnalysis, evidence ProfileEvidence) []any {
 	items, ok := raw.([]any)
 	if !ok {
 		return nil
 	}
+	required := make([]int, len(items))
 	scores := make([]int, len(items))
+	backing := make([]int, len(items))
 	pinned := make([]bool, len(items))
 	order := make([]int, len(items))
 	for i, item := range items {
@@ -103,7 +125,12 @@ func rankGroups(raw any, analysis VacancyAnalysis) []any {
 			continue
 		}
 		for _, e := range splitSkillEntries(StringField(g, "details")) {
-			scores[i] += skillEntryScore(e, analysis)
+			score := skillEntryScore(e, analysis)
+			if score == requiredSkillWeight {
+				required[i]++
+			}
+			scores[i] += score
+			backing[i] += evidence.Score(e)
 		}
 	}
 	sort.SliceStable(order, func(a, b int) bool {
@@ -111,7 +138,13 @@ func rankGroups(raw any, analysis VacancyAnalysis) []any {
 		if pinned[i] != pinned[j] {
 			return !pinned[i]
 		}
-		return scores[i] > scores[j]
+		if required[i] != required[j] {
+			return required[i] > required[j]
+		}
+		if scores[i] != scores[j] {
+			return scores[i] > scores[j]
+		}
+		return backing[i] > backing[j]
 	})
 
 	out := make([]any, 0, len(items))
