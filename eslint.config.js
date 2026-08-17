@@ -28,6 +28,11 @@ export default tseslint.config(
       "apps/api/**",
       "apps/dashboard/.ds-sync/**",
       "apps/dashboard/ds-bundle/**",
+      // Fetched/built WASM assets (046-real-resume-preview) — includes Go's
+      // own wasm_exec.js glue, third-party code this repo doesn't author and
+      // that isn't held to hand-written rules for the same FR-010 reason as
+      // generated.ts above. Gitignored; not committed.
+      "apps/dashboard/public/wasm/**",
     ],
   },
   js.configs.recommended,
