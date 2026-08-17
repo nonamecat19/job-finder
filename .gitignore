@@ -25,6 +25,13 @@ apps/api/data/
 apps/dashboard/test-results/
 apps/dashboard/playwright-report/
 
+# Built WASM artifacts for the in-browser resume preview (046) — large binaries
+# fetched/built, not committed source. See apps/dashboard/public/wasm/README.md.
+apps/dashboard/public/wasm/*.wasm
+apps/dashboard/public/wasm/wasm_exec.js
+apps/dashboard/public/wasm/fonts/
+apps/dashboard/public/wasm/packages/
+
 # .claude/ is excluded by a global gitignore (~/.gitignore_global). Re-include
 # the committed hook registry and speckit skills so every clone/worktree gets
 # them (FR-028, 024-agent-context-consolidation); settings.local.json
