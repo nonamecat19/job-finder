@@ -1,8 +1,9 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Sparkles } from 'lucide-react';
+import { useState } from 'react';
 import type { GenerationItemDto } from '@job-finder/shared';
-import { Checkbox } from '../../../components/ui';
+import { Button, Checkbox, Spinner } from '../../../components/ui';
 import { cn } from '../../../lib/utils';
 import OriginBadge from './OriginBadge';
 
@@ -16,16 +17,26 @@ export interface ItemRowProps {
    * out, sent as the whole set. Present only where item.skillEntries is.
    */
   onDropEntries?: (droppedEntries: string[]) => void;
+  /**
+   * Rewrite: 2-3 grounded alternate phrasings of this bullet. Present only
+   * for a selected, origin="ai" achievement item — the server rejects the
+   * request for anything else (only an AI-origin item's text can ever be
+   * saved, per FR-009).
+   */
+  onRewrite?: () => Promise<string[]>;
 }
 
 // T028: checkbox, effective text, origin badge, a dnd-kit drag handle, and an
 // `unavailable` presentation (FR-022 — the source item's master bullet no
 // longer resolves, but the row still renders rather than silently
 // disappearing).
-export default function ItemRow({ item, onToggle, onEditText, onDropEntries }: ItemRowProps) {
+export default function ItemRow({ item, onToggle, onEditText, onDropEntries, onRewrite }: ItemRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const editable = item.origin === 'ai' && item.selected && !!onEditText;
+  const rewritable = item.origin === 'ai' && item.kind === 'achievement' && item.selected && !!onRewrite;
+  const [rewriting, setRewriting] = useState(false);
+  const [variants, setVariants] = useState<string[] | null>(null);
   const entries = item.skillEntries ?? [];
   // Per-skill chips replace the flat "Label: a, b, c" line for a skill group.
   // Only while the group itself is in: a switched-off group is not a place to
@@ -117,10 +128,63 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries }: I
             {item.text}
           </p>
         )}
+
+        {rewriting ? (
+          <div className="mt-1.5 flex items-center gap-2 text-xs text-muted">
+            <Spinner /> rewriting this bullet…
+          </div>
+        ) : null}
+
+        {variants && !rewriting ? (
+          <div className="mt-1.5 flex flex-col gap-1" data-testid="rewrite-variants">
+            {variants.length === 0 ? (
+              <p className="text-xs text-muted">No alternative phrasing available for this bullet.</p>
+            ) : (
+              variants.map((v) => (
+                <div
+                  key={v}
+                  className="flex items-start gap-2 rounded-lg border border-dashed border-border-strong bg-surface-secondary px-2 py-1.5"
+                >
+                  <p className="min-w-0 flex-1 text-xs text-muted">{v}</p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      onEditText?.(v);
+                      setVariants(null);
+                    }}
+                  >
+                    use
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
         {item.edited ? <span className="font-mono text-[11px] text-faint">edited</span> : null}
+        {rewritable ? (
+          <button
+            type="button"
+            title="rewrite this bullet"
+            aria-label="rewrite this bullet"
+            disabled={rewriting}
+            onClick={async () => {
+              setRewriting(true);
+              setVariants(null);
+              try {
+                const result = await onRewrite!();
+                setVariants(result);
+              } finally {
+                setRewriting(false);
+              }
+            }}
+            className="rounded-lg p-1 text-faint hover:bg-surface-tertiary hover:text-accent disabled:opacity-50"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
         <OriginBadge origin={item.origin} kind={item.kind} />
       </div>
     </li>

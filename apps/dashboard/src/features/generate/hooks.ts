@@ -62,6 +62,16 @@ export function useExportGenerationRun(runId: string | undefined) {
   });
 }
 
+// useRewriteGenerationItem is the rewrite-variants call: 2-3 grounded
+// alternate phrasings of one item's text. Ephemeral — no query-cache write,
+// since nothing is persisted until the caller applies a variant through
+// useToggleGenerationItem's text path.
+export function useRewriteGenerationItem(runId: string | undefined) {
+  return useMutation({
+    mutationFn: (itemId: string) => api.generations.rewriteItem(runId!, itemId),
+  });
+}
+
 // applyItemPatch returns a new run with one item's fields updated — the pure
 // transform both the optimistic toggle and the optimistic reorder build on.
 function applyItemPatch(

@@ -9,6 +9,8 @@ export interface WorkEntryBlockProps {
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
   /** Present so an included (selected) origin="ai" item can be edited in place (T056, FR-015). */
   onEditText?: (itemId: string, text: string) => void;
+  /** Present so a selected origin="ai" achievement can offer alternate phrasings. */
+  onRewrite?: (itemId: string) => Promise<string[]>;
 }
 
 // T029/T048: one work entry — its label, the profile's ranked achievements in
@@ -24,7 +26,7 @@ export interface WorkEntryBlockProps {
 // "included vs not" is `selected`, so that is the divider: selected items
 // first (the resume as it stands), then everything else the user can
 // promote — one continuous, draggable list, not two separate ones.
-export default function WorkEntryBlock({ section, onToggle, onReorder, onEditText }: WorkEntryBlockProps) {
+export default function WorkEntryBlock({ section, onToggle, onReorder, onEditText, onRewrite }: WorkEntryBlockProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   // T055: the client groups items by origin. A suggestion is never
@@ -115,6 +117,7 @@ export default function WorkEntryBlock({ section, onToggle, onReorder, onEditTex
                 item={item}
                 onToggle={(selected) => onToggle(item.id, selected)}
                 onEditText={onEditText ? (text) => onEditText(item.id, text) : undefined}
+                onRewrite={onRewrite ? () => onRewrite(item.id) : undefined}
               />
             ))}
           </ul>
