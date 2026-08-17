@@ -26,6 +26,7 @@ import type {
   OutreachDraftDto,
   OutreachToneOptionDto,
   PostAgeResponseDto,
+  PreviewDocumentDto,
   ProfileDto,
   QueueBacklogResponse,
   Resume,
@@ -349,6 +350,10 @@ export const api = {
     export: (runId: string) =>
       request<GenerationExportDto>(`/v1/generations/${runId}/export`, { method: 'POST' }),
     exportStatus: (runId: string) => request<GenerationExportDto>(`/v1/generations/${runId}/export`),
+    // 046: the live preview's YAML source — a pure read, no export-status
+    // side effect. See specs/046-real-resume-preview/contracts/preview-document.md.
+    previewDocument: (runId: string) =>
+      request<PreviewDocumentDto>(`/v1/generations/${runId}/preview-document`),
     remove: (runId: string) => request<void>(`/v1/generations/${runId}`, { method: 'DELETE' }),
   },
 };

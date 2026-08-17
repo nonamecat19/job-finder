@@ -245,6 +245,20 @@ export type DocumentType = typeof DocumentTypeResume | typeof DocumentTypeCoverL
 // source: generation_workspace.go
 
 /**
+ * PreviewDocumentDto is `GET /v1/generations/{runId}/preview-document`
+ * (046-real-resume-preview): the RenderCV YAML for the run's current
+ * selection, assembled the same way an export would but without rendering.
+ * The dashboard's in-browser WASM pipeline turns Yaml into a PDF preview.
+ */
+export interface PreviewDocumentDto {
+  yaml: string;
+  /**
+   * SectionsHash lets the client skip a redundant WASM re-render when two
+   * edits resolve to the same effective document.
+   */
+  sectionsHash: string;
+}
+/**
  * GenerationRunDto is the whole workspace: run, sections, items
  * (`GET /v1/generations/{runId}`, resume-generation.md § 4.1).
  */

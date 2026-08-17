@@ -34,6 +34,10 @@ type WorkspaceGenerator interface {
 	// AI-suggested achievement bullet. Never persists anything — applying a
 	// variant goes through PatchGenerationItem.
 	RewriteGenerationItem(ctx context.Context, runID, itemID string) (dto.GenerationRewriteResponseDto, error)
+	// PreviewDocument is 046: the run's current selection assembled into
+	// RenderCV YAML, without rendering it — the source the dashboard's
+	// in-browser WASM pipeline turns into a live PDF preview.
+	PreviewDocument(ctx context.Context, runID string) (dto.PreviewDocumentDto, error)
 }
 
 type GenerationsHandler struct {
@@ -51,6 +55,7 @@ func (h *GenerationsHandler) Mount(r chi.Router) {
 	r.Post("/generations/{runId}/rerun", h.rerun)
 	r.Post("/generations/{runId}/export", h.export)
 	r.Get("/generations/{runId}/export", h.exportStatus)
+	r.Get("/generations/{runId}/preview-document", h.previewDocument)
 }
 
 func (h *GenerationsHandler) start(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +154,20 @@ func (h *GenerationsHandler) export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusAccepted, out)
+}
+
+// previewDocument is `GET /v1/generations/{runId}/preview-document` (046): a
+// pure read, no export-status transition, no `409` for an empty selection —
+// see PreviewDocument's doc comment for why an in-progress edit is not a
+// refusal the way an export attempt is.
+func (h *GenerationsHandler) previewDocument(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "runId")
+	out, err := h.Workspace.PreviewDocument(r.Context(), runID)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (h *GenerationsHandler) exportStatus(w http.ResponseWriter, r *http.Request) {

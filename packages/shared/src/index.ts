@@ -76,6 +76,9 @@ export type StartGenerationRequestDto = Gen.StartGenerationRequestDto;
 export type PatchGenerationItemRequestDto = Gen.PatchGenerationItemRequestDto;
 export type RerunGenerationRequestDto = Gen.RerunGenerationRequestDto;
 export type GenerationRewriteResponseDto = Gen.GenerationRewriteResponseDto;
+// 046: the real-preview YAML source, no Nullable<> needed for the same
+// reason as the workspace DTOs above (both fields are plain, non-pointer strings).
+export type PreviewDocumentDto = Gen.PreviewDocumentDto;
 export type HostPacingDto = Gen.HostPacingDto;
 export type JobListResponse = Omit<Gen.JobListResponse, 'items'> & { items: JobDto[] };
 export type JobSignalDto = Omit<Gen.JobSignalDto, 'signals'> & { signals: GhostSignalBreakdownDto };
