@@ -67,6 +67,12 @@ make run-frontend          # dashboard :5173 (proxies /api)
 `make run-all` starts both. Migrations are embedded in the binary and applied by
 `cmd/server` at startup — there is no separate migrate command.
 
+The Generate page's live resume preview renders in-browser via two WASM modules built from a
+sibling `../rendercv-go` checkout. They're fetched assets, not committed to this repo — build them
+with `pnpm --filter @job-finder/dashboard build-wasm` (needs `../rendercv-go` present next to this
+repo). See `apps/dashboard/public/wasm/README.md`. The dashboard still runs without them; the
+preview pane just shows its unsupported/error fallback until they exist.
+
 The trunk is not protected: nothing rejects a commit or push to `master`. See
 [`specs/domains/platform-operations.md`](specs/domains/platform-operations.md) § 1 for what
 was withdrawn and why.
