@@ -185,7 +185,7 @@ describe('StatusPage backlog panel (019-ai-job-throughput US4)', () => {
 
     expect(screen.getByText('Match')).toBeInTheDocument();
     expect(screen.getByText('hosted')).toBeInTheDocument();
-    expect(screen.getByText(/684/)).toBeInTheDocument();
+    expect(screen.getAllByText(/684/).length).toBeGreaterThan(0);
     expect(screen.getByText(/37m/)).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });

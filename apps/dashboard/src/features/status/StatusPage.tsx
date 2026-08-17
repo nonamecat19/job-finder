@@ -11,9 +11,9 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import type { ActivityOp, ActivityRunDto } from '@job-finder/shared';
+import type { ActivityOp, ActivityRunDto, QueueBacklogDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { DashboardGrid, IconTile, ListRow, Tile, type IconTileTint } from '../../components/layout';
+import { IconTile, Tile, type IconTileTint } from '../../components/layout';
 import { VirtualList } from '../../components/VirtualList';
 import {
   Button,
@@ -52,6 +52,24 @@ const QUEUE_LABELS: Record<string, string> = {
   'ghost:score': 'Ghost score',
 };
 
+const QUEUE_ICONS: Record<string, LucideIcon> = {
+  ingest: Inbox,
+  match: GitCompare,
+  generate: Sparkles,
+  enrich: Wand2,
+  'salary:infer': DollarSign,
+  'ghost:score': Ghost,
+};
+
+const QUEUE_TINTS: Record<string, IconTileTint> = {
+  ingest: 'blue',
+  match: 'violet',
+  generate: 'mint',
+  enrich: 'amber',
+  'salary:infer': 'blue',
+  'ghost:score': 'rose',
+};
+
 const OP_TONES: Record<ActivityOp, 'green' | 'red' | 'slate'> = {
   ingest: 'slate',
   match: 'slate',
@@ -81,10 +99,11 @@ const OP_TINTS: Record<ActivityOp, IconTileTint> = {
 };
 
 export default function StatusPage() {
-  const { data, isLoading, error } = useActivity(100);
+  const { data, isLoading, error, dataUpdatedAt } = useActivity(100);
   const { data: backlog } = useQueueBacklog();
   const retry = useRetryActivity();
   const cancelAll = useCancelAllActivity();
+  const updatedAgo = useLiveAgo(dataUpdatedAt);
 
   const failed =
     data?.recent.filter(
@@ -96,131 +115,146 @@ export default function StatusPage() {
   }, {});
   const anyCancelled = failed.some((r) => r.state === 'cancelled');
 
+  const totalPending = backlog?.queues.reduce((sum, q) => sum + q.pending, 0) ?? 0;
+  const totalActive = backlog?.queues.reduce((sum, q) => sum + q.active, 0) ?? 0;
+  const totalRate = backlog?.queues.reduce((sum, q) => sum + q.processedPerMinute, 0) ?? 0;
+  const anyUnhealthy = backlog?.queues.some((q) => q.error) ?? false;
+
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col gap-4">
       <PageHeader
         title="Status"
         description="Live and recent activity across scraping, matching, generation and enrichment."
+        actions={
+          backlog ? (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-1.5">
+                <span
+                  className={cn(
+                    'inline-block h-2 w-2 shrink-0 rounded-full',
+                    anyUnhealthy ? 'bg-danger shadow-[0_0_0_3px_var(--danger-soft)]' : 'bg-success shadow-[0_0_0_3px_var(--success-soft)]',
+                  )}
+                />
+                <span className="text-sm font-semibold text-foreground">{totalPending} queued</span>
+                <span className="font-mono text-xs tabular-nums text-faint">
+                  · {totalActive} active · {totalRate.toFixed(1)}/min
+                </span>
+              </div>
+              {updatedAgo ? (
+                <span className="font-mono text-xs tabular-nums text-faint">updated {updatedAgo}</span>
+              ) : null}
+            </div>
+          ) : undefined
+        }
       />
 
       {isLoading ? <ActivitySkeleton /> : null}
       {error ? <ErrorState error={error} /> : null}
 
-      <DashboardGrid>
+      {backlog && backlog.queues.length > 0 ? <QueueStrip queues={backlog.queues} /> : null}
 
       {failed.length > 0 ? (
-        <Tile
-          span="full"
-          title={`Failed / cancelled (${failed.length})`}
-          action={
-            <Button
-              variant="secondary"
-              onClick={() => retry.mutate(undefined)}
-              disabled={retry.isPending}
-            >
-              <RotateCw className="h-3 w-3" /> retry all
-            </Button>
-          }
-        >
-          {anyCancelled ? (
-            <p className="mb-3 text-sm text-muted">
-              Some of these were cancelled, not failed — an upstream AI provider
-              hit its rate limit, so the rest of that batch was skipped instead of
-              also erroring out. Retry once the limit resets.
-            </p>
-          ) : null}
-          <ul className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-danger/35 bg-danger-soft px-3 py-2">
+          <span className="shrink-0 text-sm font-semibold text-danger">{failed.length} failed / cancelled</span>
+          <div className="flex flex-wrap items-center gap-1.5">
             {Object.entries(failedByOp).map(([op, count]) => (
-              <li key={op} className="flex items-center gap-2 rounded-lg border border-border bg-surface-secondary px-3 py-1.5">
-                <Chip tone={OP_TONES[op as ActivityOp] ?? 'slate'}>
-                  {OP_LABELS[op as ActivityOp] ?? op}
-                </Chip>
-                <span className="font-mono text-sm tabular-nums text-muted">{count}</span>
-                <Button
-                  variant="ghost"
-                  onClick={() => retry.mutate(op)}
-                  disabled={retry.isPending}
-                >
+              <span key={op} className="flex items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pr-1 pl-1">
+                <Chip tone={OP_TONES[op as ActivityOp] ?? 'slate'}>{OP_LABELS[op as ActivityOp] ?? op}</Chip>
+                <span className="font-mono text-xs tabular-nums text-muted">{count}</span>
+                <Button variant="ghost" onClick={() => retry.mutate(op)} disabled={retry.isPending}>
                   <RotateCw className="h-3 w-3" /> retry
                 </Button>
-              </li>
+              </span>
             ))}
-          </ul>
-        </Tile>
+          </div>
+          {anyCancelled ? (
+            <span className="min-w-0 flex-1 text-xs text-muted">
+              Some of these were cancelled, not failed — an upstream provider hit its rate limit. Retry once it
+              resets.
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1" />
+          )}
+          <Button variant="secondary" onClick={() => retry.mutate(undefined)} disabled={retry.isPending}>
+            <RotateCw className="h-3 w-3" /> retry all
+          </Button>
+        </div>
       ) : null}
 
-      {backlog && backlog.queues.length > 0
-        ? backlog.queues.map((q) => (
-            <Tile
-              key={q.queue}
-              span="compact"
-              title={QUEUE_LABELS[q.queue] ?? q.queue}
-              action={
-                q.providerClass ? (
-                  <Chip tone={q.providerClass === 'hosted' ? 'green' : 'slate'}>{q.providerClass}</Chip>
-                ) : (
-                  <span className="[font:var(--type-caption)] text-faint">—</span>
-                )
-              }
-              footer={
-                q.error ? (
-                  <span className="text-danger">error</span>
-                ) : (
-                  <span>
-                    {q.active} active · {q.processedPerMinute.toFixed(1)}/min · {formatEta(q.etaSeconds)} · conc {q.concurrency}
-                  </span>
-                )
-              }
-            >
-              <div className="flex flex-col gap-1.5">
-                <span className="[font:var(--type-caption)] uppercase tracking-[var(--tracking-wide)] text-muted">
-                  pending
-                </span>
-                <span className="[font:var(--type-figure)] tabular-nums">{q.pending}</span>
-              </div>
-            </Tile>
-          ))
-        : null}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[5fr_7fr]">
+        <Tile
+          title="Active"
+          className="min-h-0"
+          scroll
+          scrollLabel="Active runs"
+          action={
+            data && data.active.length > 0 ? (
+              <Button variant="secondary" onClick={() => cancelAll.mutate()} disabled={cancelAll.isPending}>
+                <X className="h-3 w-3" /> cancel all ({data.active.length})
+              </Button>
+            ) : undefined
+          }
+        >
+          {data && data.active.length === 0 ? (
+            <EmptyState>Nothing running.</EmptyState>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {(data?.active ?? []).map((run) => (
+                <ActiveCard key={run.id} run={run} />
+              ))}
+            </div>
+          )}
+        </Tile>
 
-      <Tile
-        span="wide"
-        title="Active"
-        action={
-          data && data.active.length > 0 ? (
-            <Button
-              variant="secondary"
-              onClick={() => cancelAll.mutate()}
-              disabled={cancelAll.isPending}
-            >
-              <X className="h-3 w-3" /> cancel all ({data.active.length})
-            </Button>
-          ) : undefined
-        }
-      >
-        {data && data.active.length === 0 ? (
-          <EmptyState>Nothing running.</EmptyState>
-        ) : (
-          <VirtualList
-            items={data?.active ?? []}
-            getKey={(run) => run.id}
-            estimateSize={64}
-            gap={4}
-            maxHeight="32rem"
-            collapseThreshold={Infinity}
-            renderItem={(run) => <ActiveCard run={run} />}
-          />
-        )}
-      </Tile>
+        <Tile title="Recent" className="min-h-0" scroll={false}>
+          {data && data.recent.length === 0 ? <EmptyState>No activity yet.</EmptyState> : <RecentTable runs={data?.recent ?? []} />}
+        </Tile>
+      </div>
+    </div>
+  );
+}
 
-      <Tile span="full" title="Recent">
-        {data && data.recent.length === 0 ? (
-          <EmptyState>No activity yet.</EmptyState>
-        ) : (
-          <RecentTable runs={data?.recent ?? []} />
-        )}
-      </Tile>
-
-      </DashboardGrid>
+function QueueStrip({ queues }: { queues: QueueBacklogDto[] }) {
+  return (
+    <div className="grid grid-cols-2 divide-x divide-separator overflow-hidden rounded-2xl border border-border bg-surface shadow-tile sm:grid-cols-3 lg:grid-cols-6 lg:divide-x">
+      {queues.map((q) => {
+        const Icon = QUEUE_ICONS[q.queue] ?? Inbox;
+        const loadPct = q.concurrency > 0 ? Math.min(100, Math.round((q.active / q.concurrency) * 100)) : 0;
+        return (
+          <div key={q.queue} className="flex flex-col gap-2 px-3.5 py-2.5">
+            <div className="flex items-center gap-2">
+              <IconTile icon={Icon} tint={QUEUE_TINTS[q.queue] ?? 'blue'} size="sm" />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                {QUEUE_LABELS[q.queue] ?? q.queue}
+              </span>
+              <span
+                className={cn(
+                  'inline-block h-2 w-2 shrink-0 rounded-full',
+                  q.error ? 'bg-danger shadow-[0_0_0_3px_var(--danger-soft)]' : 'bg-success shadow-[0_0_0_3px_var(--success-soft)]',
+                )}
+              />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="[font:var(--type-figure-sm)] tabular-nums text-foreground">{q.pending}</span>
+              <span className="text-xs text-faint">pending</span>
+            </div>
+            <div className="h-[3px] overflow-hidden rounded-full bg-surface-tertiary">
+              <div className="h-full bg-accent" style={{ width: `${loadPct}%` }} />
+            </div>
+            <div className="font-mono text-xs tabular-nums text-muted">
+              {q.active} active · {q.processedPerMinute.toFixed(1)}/min · {formatEta(q.etaSeconds ?? null)}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {q.providerClass ? (
+                <Chip tone={q.providerClass === 'hosted' ? 'green' : 'slate'}>{q.providerClass}</Chip>
+              ) : (
+                <span className="[font:var(--type-caption)] text-faint">—</span>
+              )}
+              <span className="font-mono text-xs tabular-nums text-faint">conc {q.concurrency}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -251,37 +285,34 @@ function ActiveCard({ run }: { run: ActivityRunDto }) {
   const cancel = useCancelActivity();
   const Icon = OP_ICONS[run.op as ActivityOp];
   return (
-    <ListRow
-      leading={<IconTile icon={Icon} tint={OP_TINTS[run.op as ActivityOp]} size="md" />}
-      title={
-        <span className="flex flex-wrap items-center gap-2">
-          {run.jobId ? (
-            <Link to={`/jobs/${run.jobId}`} className="font-semibold text-accent hover:underline">
-              {run.label}
-            </Link>
-          ) : (
-            <span className="font-semibold text-foreground">{run.label}</span>
-          )}
-          {run.state === 'queued' ? <Chip tone="slate">queued</Chip> : null}
-        </span>
-      }
-      meta={run.step ?? undefined}
-      aside={
-        <div className="flex shrink-0 items-center gap-3">
-          {elapsed !== null ? (
-            <span className="font-mono text-xs tabular-nums text-faint">{elapsed}</span>
-          ) : null}
+    <div className="rounded-2xl border border-border bg-surface p-3.5 shadow-card">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <IconTile icon={Icon} tint={OP_TINTS[run.op as ActivityOp]} size="sm" />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip tone={OP_TONES[run.op as ActivityOp] ?? 'slate'}>{OP_LABELS[run.op as ActivityOp] ?? run.op}</Chip>
+              {run.jobId ? (
+                <Link to={`/jobs/${run.jobId}`} className="truncate font-semibold text-accent hover:underline">
+                  {run.label}
+                </Link>
+              ) : (
+                <span className="truncate font-semibold text-foreground">{run.label}</span>
+              )}
+              {run.state === 'queued' ? <Chip tone="slate">queued</Chip> : null}
+            </div>
+            {run.step ? <p className="truncate text-sm text-muted">{run.step}</p> : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2.5">
+          {elapsed !== null ? <span className="font-mono text-xs tabular-nums text-faint">{elapsed}</span> : null}
           {run.state === 'running' ? <Spinner /> : null}
-          <Button
-            variant="ghost"
-            onClick={() => cancel.mutate(run.id)}
-            disabled={cancel.isPending}
-          >
+          <Button variant="ghost" onClick={() => cancel.mutate(run.id)} disabled={cancel.isPending}>
             <X className="h-3 w-3" /> cancel
           </Button>
         </div>
-      }
-    />
+      </div>
+    </div>
   );
 }
 
@@ -289,8 +320,8 @@ const RECENT_ROW_GRID = 'grid grid-cols-[minmax(6rem,auto)_1fr_minmax(7rem,auto)
 
 function RecentTable({ runs }: { runs: ActivityRunDto[] }) {
   return (
-    <div>
-      <div className={cn(RECENT_ROW_GRID, 'px-3 py-2 [font:var(--type-caption)] uppercase tracking-[var(--tracking-wide)] text-muted')}>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className={cn(RECENT_ROW_GRID, 'shrink-0 border-b border-border px-5 py-2 [font:var(--type-caption)] uppercase tracking-[var(--tracking-wide)] text-muted')}>
         <span>Op</span>
         <span>Label</span>
         <span>State</span>
@@ -301,6 +332,9 @@ function RecentTable({ runs }: { runs: ActivityRunDto[] }) {
         getKey={(run) => run.id}
         estimateSize={40}
         gap={0}
+        maxHeight="100%"
+        collapseThreshold={Infinity}
+        className="flex-1 px-2"
         renderItem={(run) => <RecentRow run={run} />}
       />
     </div>
@@ -360,6 +394,22 @@ function useLiveElapsed(startedAt: string | null) {
 
   if (!startedAt) return null;
   return formatDuration(now - new Date(startedAt).getTime());
+}
+
+/** "Xs ago" / "Xm ago" for the last successful poll, ticking every second. */
+function useLiveAgo(since: number | undefined) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!since) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [since]);
+
+  if (!since) return null;
+  const seconds = Math.max(0, Math.round((now - since) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  return `${Math.floor(seconds / 60)}m ago`;
 }
 
 function formatDuration(ms: number | null | undefined) {
