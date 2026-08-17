@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -18,7 +16,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
-	"github.com/job-finder/api/internal/apperr"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
@@ -45,14 +42,6 @@ const (
 var coverLetterMaxTokens = 1024
 
 var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9]+`)
-
-type AdHocInput struct {
-	Vacancy        string
-	Company        string
-	Title          string
-	GroundingLevel *domain.GroundingLevel
-	Hints          *domain.VacancyHints
-}
 
 type coverLetterResult struct {
 	Letter string `json:"letter"`
@@ -223,186 +212,6 @@ func sanitize(s string) string {
 		out = out[:60]
 	}
 	return out
-}
-
-func (s *Service) masterFor(ctx context.Context, profileID *string) (domain.RendercvMaster, error) {
-	var prof sqlcgen.Profile
-	var err error
-	if profileID != nil && *profileID != "" {
-		prof, err = s.profiles.Get(ctx, *profileID)
-	} else {
-		prof, err = s.profiles.GetDefault(ctx)
-	}
-	if err == nil && prof.RendercvConfig != nil {
-		return domain.MasterFromProfile(prof)
-	}
-
-	// Dev fallback to masterPath if no profile exists
-	data, err := os.ReadFile(s.masterPath)
-	if err != nil {
-		return nil, fmt.Errorf("generation: read master resume from %s: %w", s.masterPath, err)
-	}
-	master, err := domain.ParseRendercv(string(data))
-	if err != nil {
-		return nil, fmt.Errorf("generation: parse master resume: %w", err)
-	}
-	return master, nil
-}
-
-// GenerateAdHoc tailors a resume from pasted vacancy text with no backing Job
-// row, persisting it as a GeneratedDocument with jobId NULL so it shows up in
-// the ad-hoc history list. It no longer writes a cover letter: that was a paid
-// call and a share of the wait on every run, wanted or not, and is now
-// requested explicitly against the finished resume (035 FR-013).
-func (s *Service) GenerateAdHoc(ctx context.Context, in AdHocInput) (dto.GeneratedDocumentDto, error) {
-	level := s.defaultLevel
-	if in.GroundingLevel != nil {
-		level = *in.GroundingLevel
-	}
-	master, err := s.masterFor(ctx, nil)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-
-	company := in.Company
-	if company == "" {
-		company = "vacancy"
-	}
-	title := in.Title
-	if title == "" {
-		title = "resume"
-	}
-	baseName := sanitize(company + "-" + title)
-
-	// Resolved once, at the top of the run: every step downstream uses this
-	// value, so a settings change mid-run cannot alter this document.
-	cfg := s.shapeConfig(ctx)
-
-	resumeCtx, resumeServed := llm.WithServedModelCapture(ctx)
-	prov := &runProvenance{}
-	merged, analysis, err := s.tailorRendercvResume(resumeCtx, master, in.Vacancy, level, cfg, in.Hints, nil, prov)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	resumeContent, err := json.Marshal(merged)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	resumePdfPath, err := s.renderResume(ctx, master, merged, analysis, level, cfg, baseName+"-resume-"+strconv.FormatInt(time.Now().UnixMilli(), 10), nil)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	resumeRow, err := s.q.InsertGeneratedDocument(ctx, withProvenance(sqlcgen.InsertGeneratedDocumentParams{
-		Type: string(dto.DocumentTypeResume), Version: 1, Content: resumeContent, PdfPath: &resumePdfPath, Model: s.docModel(*resumeServed),
-		Company: &company, Title: &title, Vacancy: &in.Vacancy,
-	}, prov))
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	return toDocumentDto(resumeRow), nil
-}
-
-// GenerateCoverLetterFor writes a cover letter for an already-generated
-// resume, reusing that document's vacancy and company so the letter is aimed
-// at the same posting the resume was tailored to (035 FR-013).
-func (s *Service) GenerateCoverLetterFor(ctx context.Context, resumeID string) (dto.GeneratedDocumentDto, error) {
-	rid, err := dbutil.ParseUUID(resumeID)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, apperr.NotFound("document", resumeID)
-	}
-	resume, err := s.q.GetDocumentByID(ctx, rid)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, apperr.NotFound("document", resumeID)
-	}
-	if resume.Type != string(dto.DocumentTypeResume) {
-		return dto.GeneratedDocumentDto{}, apperr.Conflict("cover letters are generated from a resume, not a " + resume.Type)
-	}
-
-	master, err := s.masterFor(ctx, nil)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	var extraNotes *string
-	if prof, profErr := s.profiles.GetDefault(ctx); profErr == nil {
-		extraNotes = prof.ExtraNotes
-	}
-
-	company, title, vacancy := "vacancy", "resume", ""
-	if resume.Company != nil {
-		company = *resume.Company
-	}
-	if resume.Title != nil {
-		title = *resume.Title
-	}
-	if resume.Vacancy != nil {
-		vacancy = *resume.Vacancy
-	}
-	baseName := sanitize(company + "-" + title)
-
-	profileText := domain.RendercvToText(master)
-	coverCtx, coverServed := llm.WithServedModelCapture(ctx)
-	letter, err := s.writeCoverLetter(coverCtx, profileText, extraNotes, company, title, vacancy)
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	coverContent, err := json.Marshal(map[string]string{"text": letter})
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	var namePtr *string
-	if basics, _ := master["cv"].(map[string]any); basics != nil {
-		if n, _ := basics["name"].(string); n != "" {
-			namePtr = &n
-		}
-	}
-	coverPdfPath, err := s.htmlRenderer.RenderCoverLetter(ctx, letter, namePtr, company, title, fmt.Sprintf("%s-cover-%d.pdf", baseName, time.Now().UnixMilli()))
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	coverRow, err := s.q.InsertGeneratedDocument(ctx, sqlcgen.InsertGeneratedDocumentParams{
-		JobId: resume.JobId, Type: string(dto.DocumentTypeCoverLetter), Version: nextCoverVersion(ctx, s, resume),
-		Content: coverContent, PdfPath: &coverPdfPath, Model: s.docModel(*coverServed),
-		Company: &company, Title: &title, Vacancy: &vacancy,
-	})
-	if err != nil {
-		return dto.GeneratedDocumentDto{}, err
-	}
-	return toDocumentDto(coverRow), nil
-}
-
-// nextCoverVersion keeps the existing (jobId, type, version) uniqueness rule:
-// a second request for the same job supersedes rather than collides. Ad-hoc
-// documents have a NULL jobId and are not covered by the constraint, so they
-// stay at version 1.
-func nextCoverVersion(ctx context.Context, s *Service, resume sqlcgen.GeneratedDocument) int32 {
-	if !resume.JobId.Valid {
-		return 1
-	}
-	existing, err := s.q.ListDocumentsForJob(ctx, resume.JobId)
-	if err != nil {
-		return 1
-	}
-	next := int32(1)
-	for _, d := range existing {
-		if d.Type == string(dto.DocumentTypeCoverLetter) && d.Version >= next {
-			next = d.Version + 1
-		}
-	}
-	return next
-}
-
-// ListAdHocDocuments returns all documents generated from pasted vacancy
-// text (jobId NULL), newest first.
-func (s *Service) ListAdHocDocuments(ctx context.Context) ([]dto.GeneratedDocumentDto, error) {
-	rows, err := s.q.ListAdHocDocuments(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]dto.GeneratedDocumentDto, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, toDocumentDto(r))
-	}
-	return out, nil
 }
 
 // selectWithCompleteness runs the economy selection stage and gates its output

@@ -53,9 +53,6 @@ export const queryKeys = {
     list: (limit?: number) => ['activity', 'list', limit ?? null] as const,
     queues: ['activity', 'queues'] as const,
   },
-  documents: {
-    adHoc: ['documents', 'ad-hoc'] as const,
-  },
   companies: {
     all: ['companies'] as const,
     detail: (jobId: string) => ['companies', 'detail', jobId] as const,

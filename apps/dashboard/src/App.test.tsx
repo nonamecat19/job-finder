@@ -69,7 +69,7 @@ describe('App', () => {
 
   it('renders exactly one link per nav label (no duplicate nav DOM)', () => {
     renderWithProviders(<App />)
-    for (const label of ['Feed', 'Tracker', 'Tailor', 'Status', 'Sources', 'Profile']) {
+    for (const label of ['Feed', 'Tracker', 'Status', 'Sources', 'Profile']) {
       expect(screen.getAllByRole('link', { name: label })).toHaveLength(1)
     }
     expect(screen.getAllByRole('navigation')).toHaveLength(1)

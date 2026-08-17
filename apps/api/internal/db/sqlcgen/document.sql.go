@@ -109,50 +109,6 @@ func (q *Queries) InsertGeneratedDocument(ctx context.Context, arg InsertGenerat
 	return i, err
 }
 
-const listAdHocDocuments = `-- name: ListAdHocDocuments :many
-SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd", "summaryOptionId" FROM "GeneratedDocument"
-WHERE "jobId" IS NULL
-ORDER BY "createdAt" DESC
-`
-
-func (q *Queries) ListAdHocDocuments(ctx context.Context) ([]GeneratedDocument, error) {
-	rows, err := q.db.Query(ctx, listAdHocDocuments)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GeneratedDocument
-	for rows.Next() {
-		var i GeneratedDocument
-		if err := rows.Scan(
-			&i.ID,
-			&i.JobId,
-			&i.Type,
-			&i.Version,
-			&i.Content,
-			&i.PdfPath,
-			&i.Model,
-			&i.CreatedAt,
-			&i.Company,
-			&i.Title,
-			&i.Vacancy,
-			&i.SummaryModel,
-			&i.SummarySubstituted,
-			&i.SelectionModel,
-			&i.SelectionEscalated,
-			&i.StageCostUsd,
-			&i.SummaryOptionId,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listDocumentsForJob = `-- name: ListDocumentsForJob :many
 SELECT id, "jobId", type, version, content, "pdfPath", model, "createdAt", company, title, vacancy, "summaryModel", "summarySubstituted", "selectionModel", "selectionEscalated", "stageCostUsd", "summaryOptionId" FROM "GeneratedDocument"
 WHERE "jobId" = $1

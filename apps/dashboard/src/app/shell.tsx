@@ -2,7 +2,6 @@ import {
   Activity,
   BriefcaseBusiness,
   ClipboardList,
-  FileEdit,
   LayoutPanelLeft,
   Plug,
   Rss,
@@ -27,7 +26,6 @@ type NavItem = { to: string; label: string; icon: LucideIcon; tint: IconTileTint
 const navItems: NavItem[] = [
   { to: '/', label: 'Feed', icon: Rss, tint: 'violet' },
   { to: '/tracker', label: 'Tracker', icon: ClipboardList, tint: 'blue' },
-  { to: '/tailor', label: 'Tailor', icon: FileEdit, tint: 'mint' },
   { to: '/generate', label: 'Generate', icon: LayoutPanelLeft, tint: 'amber' },
   { to: '/status', label: 'Status', icon: Activity, tint: 'violet' },
   { to: '/sources', label: 'Sources', icon: Settings2, tint: 'blue' },

@@ -15,7 +15,6 @@ type Repository interface {
 	GetDocumentByID(ctx context.Context, id pgtype.UUID) (sqlcgen.GeneratedDocument, error)
 	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
 	InsertGeneratedDocument(ctx context.Context, arg sqlcgen.InsertGeneratedDocumentParams) (sqlcgen.GeneratedDocument, error)
-	ListAdHocDocuments(ctx context.Context) ([]sqlcgen.GeneratedDocument, error)
 	ListDocumentsForJob(ctx context.Context, jobid pgtype.UUID) ([]sqlcgen.GeneratedDocument, error)
 	MaxDocumentVersion(ctx context.Context, arg sqlcgen.MaxDocumentVersionParams) (int32, error)
 	UpdateDocumentContent(ctx context.Context, arg sqlcgen.UpdateDocumentContentParams) (sqlcgen.GeneratedDocument, error)

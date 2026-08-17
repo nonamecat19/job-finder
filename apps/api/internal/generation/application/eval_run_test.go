@@ -12,8 +12,8 @@ import (
 //
 // This is why the harness is in package `application` rather than a subpackage:
 // tailorRendercvResume, renderToPageTarget and renderDeps are all unexported,
-// and the two exported entry points (Generate, GenerateAdHoc) require Postgres
-// and write activity rows. A subpackage could reach none of it, and driving the
+// and the exported entry point (Generate) requires Postgres and writes
+// activity rows. A subpackage could reach none of it, and driving the
 // pipeline through its exported surface would mean the gate needs a database to
 // measure text quality.
 

@@ -14,9 +14,8 @@ type (
 	VacancyAnalysis = domain.VacancyAnalysis
 	SummaryOption   = domain.SummaryOption
 
-	AdHocInput = application.AdHocInput
-	Routers    = application.GenerationRouters
-	Service    = application.Service
+	Routers = application.GenerationRouters
+	Service = application.Service
 
 	HtmlPdfRenderer  = infrastructure.HtmlPdfRenderer
 	RenderCvRenderer = infrastructure.RenderCvRenderer

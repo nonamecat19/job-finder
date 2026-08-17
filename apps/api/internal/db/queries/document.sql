@@ -17,11 +17,6 @@ SELECT * FROM "GeneratedDocument"
 WHERE "jobId" = $1
 ORDER BY "type" ASC, "version" DESC;
 
--- name: ListAdHocDocuments :many
-SELECT * FROM "GeneratedDocument"
-WHERE "jobId" IS NULL
-ORDER BY "createdAt" DESC;
-
 -- name: GetDocumentByID :one
 SELECT * FROM "GeneratedDocument" WHERE "id" = $1;
 

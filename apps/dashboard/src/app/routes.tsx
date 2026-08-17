@@ -7,7 +7,6 @@ import ProfilePage from '../features/profile/ProfilePage';
 import SettingsPage from '../features/settings/SettingsPage';
 import SourcesPage from '../features/sources/SourcesPage';
 import StatusPage from '../features/status/StatusPage';
-import TailorPage from '../features/tailor/TailorPage';
 import TrackerPage from '../features/tracker/TrackerPage';
 
 export type LayoutMode = 'flow' | 'fit';
@@ -45,7 +44,6 @@ export function AppRoutes() {
         }
       />
       <Route path="/profile/:tab?" element={<ProfilePage />} />
-      <Route path="/tailor" element={<TailorPage />} />
       <Route
         path="/generate"
         element={

@@ -154,25 +154,6 @@ export const api = {
         body: JSON.stringify({ text }),
       }),
     pdfUrl: (id: string) => `/api/documents/${id}/pdf`,
-    tailor: (body: {
-      vacancy: string;
-      company?: string;
-      title?: string;
-      groundingLevel?: string;
-      requiredSkills?: string[];
-      niceToHave?: string[];
-      experienceLevel?: string;
-      // 034: omit to use the stored default. Sending one applies it to this
-      // run and makes it the new default.
-      summaryOptionId?: string;
-    }) =>
-      request<{ resume: GeneratedDocumentDto; coverLetter: GeneratedDocumentDto | null }>('/documents/tailor', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-    coverLetter: (resumeId: string) =>
-      request<GeneratedDocumentDto>(`/documents/${resumeId}/cover-letter`, { method: 'POST' }),
-    listAdHoc: () => request<GeneratedDocumentDto[]>('/documents/ad-hoc'),
   },
   profiles: {
     list: () => request<ProfileDto[]>('/profiles'),
