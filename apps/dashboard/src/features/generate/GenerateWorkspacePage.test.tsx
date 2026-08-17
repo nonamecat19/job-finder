@@ -11,24 +11,32 @@ vi.mock('./hooks', () => ({
   useReorderGenerationSection: vi.fn(),
   useExportGenerationRun: vi.fn(),
   useRerunGenerationRun: vi.fn(),
+  useRewriteGenerationItem: vi.fn(),
+  useSummaryModel: vi.fn(),
 }));
 vi.mock('../profile/hooks', () => ({
   useProfiles: vi.fn(),
 }));
-vi.mock('../tailor/hooks', () => ({
-  useSummaryModel: vi.fn(),
+vi.mock('../job-detail/hooks', () => ({
+  useJobDetail: vi.fn(),
+}));
+vi.mock('../../lib/api', () => ({
+  api: { jobs: { list: vi.fn() } },
 }));
 
+import { api } from '../../lib/api';
 import {
   useExportGenerationRun,
   useGenerationRun,
   useRerunGenerationRun,
   useReorderGenerationSection,
+  useRewriteGenerationItem,
   useStartGenerationRun,
   useToggleGenerationItem,
 } from './hooks';
 import { useProfiles } from '../profile/hooks';
-import { useSummaryModel } from '../tailor/hooks';
+import { useJobDetail } from '../job-detail/hooks';
+import { useSummaryModel } from './hooks';
 
 const mockedUseGenerationRun = vi.mocked(useGenerationRun);
 const mockedUseStartGenerationRun = vi.mocked(useStartGenerationRun);
@@ -36,12 +44,25 @@ const mockedUseToggleGenerationItem = vi.mocked(useToggleGenerationItem);
 const mockedUseReorderGenerationSection = vi.mocked(useReorderGenerationSection);
 const mockedUseExportGenerationRun = vi.mocked(useExportGenerationRun);
 const mockedUseRerunGenerationRun = vi.mocked(useRerunGenerationRun);
+const mockedUseRewriteGenerationItem = vi.mocked(useRewriteGenerationItem);
 const mockedUseProfiles = vi.mocked(useProfiles);
+const mockedUseJobDetail = vi.mocked(useJobDetail);
 const mockedUseSummaryModel = vi.mocked(useSummaryModel);
+
+const JOB = {
+  id: 'job-1',
+  company: 'Acme',
+  title: 'Senior Engineer',
+  location: 'Berlin',
+  remote: true,
+  salaryRaw: '€80,000',
+  description: 'Own the pipelines.',
+};
 
 function baseRun(overrides: Partial<GenerationRunDto> = {}): GenerationRunDto {
   return {
     id: 'run-1',
+    jobId: 'job-1',
     state: 'ready',
     vacancy: { company: 'Acme', title: 'Senior Engineer' },
     groundingLevel: 'moderate',
@@ -162,6 +183,7 @@ function runWithSuggestion(): GenerationRunDto {
 
 function setup() {
   mockedUseProfiles.mockReturnValue({ data: [{ id: 'profile-1' }] } as any);
+  mockedUseJobDetail.mockReturnValue({ data: JOB, isLoading: false } as any);
   mockedUseSummaryModel.mockReturnValue({ data: undefined } as any);
   mockedUseStartGenerationRun.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false } as any);
   mockedUseToggleGenerationItem.mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
@@ -177,25 +199,67 @@ function setup() {
     isPending: false,
     isError: false,
   } as any);
+  mockedUseRewriteGenerationItem.mockReturnValue({
+    mutateAsync: vi.fn().mockResolvedValue({ variants: [] }),
+    isPending: false,
+  } as any);
 }
 
 describe('GenerateWorkspacePage', () => {
-  it('renders the two-pane layout', () => {
+  it('shows a compact pickable job list when no job is selected at all', async () => {
     setup();
+    vi.mocked(api.jobs.list).mockResolvedValue({
+      items: [{ id: 'job-2', title: 'Backend Engineer', company: 'Globex', matchResult: { score: 71 } }],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+    } as any);
+    window.history.pushState({}, '', '/generate');
     mockedUseGenerationRun.mockReturnValue({ data: undefined, isLoading: false, error: null } as any);
 
     renderWithProviders(<GenerateWorkspacePage />);
 
-    // Left pane: the generated-resume surface (empty state with no run yet).
+    expect(await screen.findByTestId('job-picker-list')).toBeInTheDocument();
+    expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
+  });
+
+  it('picking a job from the list sets jobId in the URL', async () => {
+    setup();
+    vi.mocked(api.jobs.list).mockResolvedValue({
+      items: [{ id: 'job-2', title: 'Backend Engineer', company: 'Globex', matchResult: { score: 71 } }],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+    } as any);
+    window.history.pushState({}, '', '/generate');
+    mockedUseGenerationRun.mockReturnValue({ data: undefined, isLoading: false, error: null } as any);
+
+    const user = userEvent.setup();
+    renderWithProviders(<GenerateWorkspacePage />);
+
+    await user.click(await screen.findByText('Backend Engineer'));
+
+    expect(window.location.search).toContain('jobId=job-2');
+  });
+
+  it('renders the vacancy card and a Generate CTA once a job is picked but no run exists yet', () => {
+    setup();
+    window.history.pushState({}, '', '/generate?jobId=job-1');
+    mockedUseGenerationRun.mockReturnValue({ data: undefined, isLoading: false, error: null } as any);
+
+    renderWithProviders(<GenerateWorkspacePage />);
+
+    // Vacancy card (read-only job display).
+    expect(screen.getByText('Senior Engineer')).toBeInTheDocument();
+    // Left pane: the generated-resume surface, empty state with a CTA.
     expect(screen.getByRole('heading', { name: /generated resume/i })).toBeInTheDocument();
-    // Right pane: the vacancy controls.
-    expect(screen.getByText(/^vacancy$/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /generate/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /generate resume/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/grounding level/i)).toBeInTheDocument();
   });
 
   it('shows progress rather than an empty workspace for a running run', () => {
     setup();
-    window.history.pushState({}, '', '/generate?runId=run-1');
+    window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
     mockedUseGenerationRun.mockReturnValue({
       data: baseRun({ state: 'running', sections: [] }),
       isLoading: false,
@@ -205,17 +269,19 @@ describe('GenerateWorkspacePage', () => {
     renderWithProviders(<GenerateWorkspacePage />);
 
     expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.queryByText(/fill in a vacancy/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no run yet/i)).not.toBeInTheDocument();
   });
 
   it('renders a ready run\'s sections', () => {
     setup();
-    window.history.pushState({}, '', '/generate?runId=run-1');
+    window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
     mockedUseGenerationRun.mockReturnValue({ data: baseRun(), isLoading: false, error: null } as any);
 
     renderWithProviders(<GenerateWorkspacePage />);
 
-    expect(screen.getByText('Shipped the thing')).toBeInTheDocument();
+    // Appears twice: once in the editable workspace list, once in the
+    // read-only PDF preview pane, which mirrors the same selected items.
+    expect(screen.getAllByText('Shipped the thing').length).toBeGreaterThan(0);
   });
 
   // T036 / SC-006: toggling an item previews the change through a PATCH
@@ -227,7 +293,7 @@ describe('GenerateWorkspacePage', () => {
     mockedUseToggleGenerationItem.mockReturnValue({ mutate: toggleMutate, isPending: false } as any);
     const startMutate = vi.fn();
     mockedUseStartGenerationRun.mockReturnValue({ mutate: startMutate, isPending: false, isError: false } as any);
-    window.history.pushState({}, '', '/generate?runId=run-1');
+    window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
     mockedUseGenerationRun.mockReturnValue({ data: baseRun(), isLoading: false, error: null } as any);
 
     const user = userEvent.setup();
@@ -248,7 +314,7 @@ describe('GenerateWorkspacePage', () => {
     setup();
     const toggleMutate = vi.fn();
     mockedUseToggleGenerationItem.mockReturnValue({ mutate: toggleMutate, isPending: false } as any);
-    window.history.pushState({}, '', '/generate?runId=run-1');
+    window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
     const run = baseRun();
     run.sections[0].items.push({
       id: 'item-ai-1',
@@ -290,7 +356,7 @@ describe('GenerateWorkspacePage', () => {
       isError: false,
       data: undefined,
     } as any);
-    window.history.pushState({}, '', '/generate?runId=run-1');
+    window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
     const run = runWithSuggestion();
     mockedUseGenerationRun.mockReturnValue({ data: run, isLoading: false, error: null } as any);
 
@@ -314,7 +380,7 @@ describe('GenerateWorkspacePage', () => {
   // AI-written content they chose to include.
   it('warns before export about empty sections and included AI content', () => {
     setup();
-    window.history.pushState({}, '', '/generate?runId=run-1');
+    window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
     const run = runWithSuggestion();
     run.sections[0].items = run.sections[0].items.map((i) =>
       i.origin === 'ai' ? { ...i, selected: true } : i,
@@ -345,7 +411,7 @@ describe('GenerateWorkspacePage', () => {
         },
       },
     } as any);
-    window.history.pushState({}, '', '/generate?runId=run-1');
+    window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
     mockedUseGenerationRun.mockReturnValue({ data: runWithSuggestion(), isLoading: false, error: null } as any);
 
     renderWithProviders(<GenerateWorkspacePage />);
@@ -354,5 +420,25 @@ describe('GenerateWorkspacePage', () => {
     expect(report).toHaveTextContent('3 pages');
     expect(report).toHaveTextContent('Acme Inc. · bullet 8');
     expect(report.querySelector('button')).toBeNull();
+  });
+
+  // Failed sections get an inline retry control now that the standalone
+  // right-rail "Run controls" tile is gone.
+  it('offers a per-section retry for a failed section', async () => {
+    setup();
+    const rerunMutate = vi.fn();
+    mockedUseRerunGenerationRun.mockReturnValue({ mutate: rerunMutate, isPending: false, isError: false } as any);
+    window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
+    const run = baseRun({ state: 'partial' });
+    run.sections[0].state = 'failed';
+    mockedUseGenerationRun.mockReturnValue({ data: run, isLoading: false, error: null } as any);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    const user = userEvent.setup();
+    renderWithProviders(<GenerateWorkspacePage />);
+
+    await user.click(screen.getByRole('button', { name: /retry section/i }));
+
+    expect(rerunMutate).toHaveBeenCalledWith(['sec-1']);
   });
 });

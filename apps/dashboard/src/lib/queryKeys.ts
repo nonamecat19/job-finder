@@ -4,6 +4,12 @@ export const queryKeys = {
   jobs: {
     all: ['jobs'] as const,
     list: (filters: JobFilters) => ['jobs', 'list', filters] as const,
+    // Separate namespace from `list` above: that key backs useInfiniteJobs
+    // (useInfiniteQuery), and sharing a key between an infinite query and a
+    // plain useQuery makes react-query reuse whichever cache entry was
+    // populated first, crashing the other with "getNextPageParam is not a
+    // function" once both are mounted with matching filters.
+    picker: (filters: JobFilters) => ['jobs', 'picker', filters] as const,
     detail: (id: string | undefined) => ['jobs', 'detail', id] as const,
     documents: (id: string | undefined) => ['jobs', 'documents', id] as const,
     documentStatuses: (id: string | undefined) => ['jobs', 'documents', 'status', id] as const,

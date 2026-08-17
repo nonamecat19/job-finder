@@ -12,6 +12,16 @@ export const generations = {
   get: (id: string | undefined) => ['generations', id] as const,
 };
 
+// 034: the summary-model menu. One query serves the options and the current
+// choice, because a menu fetched separately from the selection can disagree
+// with it about which options exist.
+export function useSummaryModel() {
+  return useQuery({
+    queryKey: ['settings', 'summary-model'],
+    queryFn: () => api.settings.getSummaryModel(),
+  });
+}
+
 export function useGenerationRun(runId: string | undefined) {
   return useQuery({
     queryKey: generations.get(runId),

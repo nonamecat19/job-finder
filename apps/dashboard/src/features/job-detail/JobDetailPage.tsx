@@ -8,8 +8,6 @@ import { DashboardGrid, Tile, IconTile } from '../../components/layout';
 import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
-import { useStartGenerationRun } from '../generate/hooks';
-import { useProfiles } from '../profile/hooks';
 import {
   useGenerateDocument,
   useJobDetail,
@@ -47,15 +45,9 @@ export default function JobDetailPage() {
 
   const qc = useQueryClient();
   const { data: job, isLoading } = useJobDetail(id);
-  const { data: profiles } = useProfiles();
-  const profileId = profiles?.[0]?.id;
-  const tailorForJob = useStartGenerationRun();
   const handleTailorForJob = () => {
-    if (!profileId || !id) return;
-    tailorForJob.mutate(
-      { profileId, jobId: id },
-      { onSuccess: (data) => navigate(`/generate?runId=${data.runId}`) },
-    );
+    if (!id) return;
+    navigate(`/generate?jobId=${id}`);
   };
   const { data: documents } = useJobDocuments(id);
   const { data: statuses } = useJobDocumentStatuses(id, !!generating);
@@ -124,13 +116,9 @@ export default function JobDetailPage() {
                 open posting <ExternalLink className="h-4 w-4" aria-hidden="true" />
               </Button>
             </a>
-            <Button
-              variant="secondary"
-              onClick={handleTailorForJob}
-              disabled={!profileId || tailorForJob.isPending}
-            >
+            <Button variant="secondary" onClick={handleTailorForJob}>
               <Sparkles className="h-4 w-4" aria-hidden="true" />
-              {tailorForJob.isPending ? 'starting…' : 'tailor for this job'}
+              tailor for this job
             </Button>
             {job.status === 'hidden' ? (
               <Button variant="secondary" onClick={() => undoNotFit.mutate()} disabled={undoNotFit.isPending}>
