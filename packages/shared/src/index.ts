@@ -75,6 +75,7 @@ export type OverflowCandidateDto = Gen.OverflowCandidateDto;
 export type StartGenerationRequestDto = Gen.StartGenerationRequestDto;
 export type PatchGenerationItemRequestDto = Gen.PatchGenerationItemRequestDto;
 export type RerunGenerationRequestDto = Gen.RerunGenerationRequestDto;
+export type GenerationRewriteResponseDto = Gen.GenerationRewriteResponseDto;
 export type HostPacingDto = Gen.HostPacingDto;
 export type JobListResponse = Omit<Gen.JobListResponse, 'items'> & { items: JobDto[] };
 export type JobSignalDto = Omit<Gen.JobSignalDto, 'signals'> & { signals: GhostSignalBreakdownDto };

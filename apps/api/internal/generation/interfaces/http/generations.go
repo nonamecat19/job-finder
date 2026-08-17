@@ -30,6 +30,10 @@ type WorkspaceGenerator interface {
 	// RerunGenerationRun is Phase 8 (T076): whole-run or named-section rerun,
 	// in place on the same run id.
 	RerunGenerationRun(ctx context.Context, runID string, req dto.RerunGenerationRequestDto) (runID2, activityID string, err error)
+	// RewriteGenerationItem returns grounded alternate phrasings of one
+	// AI-suggested achievement bullet. Never persists anything — applying a
+	// variant goes through PatchGenerationItem.
+	RewriteGenerationItem(ctx context.Context, runID, itemID string) (dto.GenerationRewriteResponseDto, error)
 }
 
 type GenerationsHandler struct {
@@ -42,6 +46,7 @@ func (h *GenerationsHandler) Mount(r chi.Router) {
 	r.Get("/generations/{runId}", h.get)
 	r.Delete("/generations/{runId}", h.remove)
 	r.Patch("/generations/{runId}/items/{itemId}", h.patchItem)
+	r.Post("/generations/{runId}/items/{itemId}/rewrite", h.rewriteItem)
 	r.Patch("/generations/{runId}/sections/{sectionId}/order", h.reorderSection)
 	r.Post("/generations/{runId}/rerun", h.rerun)
 	r.Post("/generations/{runId}/export", h.export)
@@ -110,6 +115,17 @@ func (h *GenerationsHandler) patchItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := h.Workspace.PatchGenerationItem(r.Context(), runID, itemID, body)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *GenerationsHandler) rewriteItem(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "runId")
+	itemID := chi.URLParam(r, "itemId")
+	out, err := h.Workspace.RewriteGenerationItem(r.Context(), runID, itemID)
 	if err != nil {
 		httpx.WriteAppError(w, err)
 		return

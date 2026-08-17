@@ -10,6 +10,7 @@ import type {
   FreshMatchNotificationDto,
   GeneratedDocumentDto,
   GenerationExportDto,
+  GenerationRewriteResponseDto,
   GenerationRunDto,
   HostRetrievalStatusDto,
   InterviewPrepPack,
@@ -331,6 +332,10 @@ export const api = {
       body: { selected?: boolean; position?: number; text?: string; droppedEntries?: string[] },
     ) =>
       request(`/v1/generations/${runId}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    rewriteItem: (runId: string, itemId: string) =>
+      request<GenerationRewriteResponseDto>(`/v1/generations/${runId}/items/${itemId}/rewrite`, {
+        method: 'POST',
+      }),
     reorder: (runId: string, sectionId: string, itemIds: string[]) =>
       request(`/v1/generations/${runId}/sections/${sectionId}/order`, {
         method: 'PATCH',

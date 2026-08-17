@@ -110,6 +110,15 @@ type OverflowCandidateDto struct {
 	Rank      int    `json:"rank"`
 }
 
+// GenerationRewriteResponseDto is the body of
+// `POST /v1/generations/{runId}/items/{itemId}/rewrite` — grounded alternate
+// phrasings of the item's current text. Empty when the model's proposals
+// didn't survive the grounding check; never an error for that case (the
+// same "report, never fail" idiom the page-fit loop uses).
+type GenerationRewriteResponseDto struct {
+	Variants []string `json:"variants"`
+}
+
 // StartGenerationRequestDto is the body of `POST /v1/generations`. Exactly
 // one of JobID / Vacancy is expected; the handler validates that, not this
 // struct (rest-api.md's 400 conditions).
