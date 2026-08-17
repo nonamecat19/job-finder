@@ -48,12 +48,12 @@ export default function SourcesPage() {
       />
       <DashboardGrid>
         <Tile span="full" title="Job sources"><SourcesPanel /></Tile>
-        <Tile span="full" title="Host retrieval status"><HostRetrievalPanel /></Tile>
-        <Tile span="full" title="Employer roster"><RosterPanel /></Tile>
-        <Tile span="full" title="Board candidates"><CandidatesPanel /></Tile>
-        <Tile span="full" title="Subscriptions"><SubscriptionsPanel /></Tile>
-        <Tile span="full" title="Saved searches"><SearchesPanel /></Tile>
-        <Tile span="full" title="Recent runs"><RecentRunsPanel /></Tile>
+        <Tile span="wide" title="Host retrieval status"><HostRetrievalPanel /></Tile>
+        <Tile span="wide" title="Subscriptions"><SubscriptionsPanel /></Tile>
+        <Tile span="wide" title="Employer roster"><RosterPanel /></Tile>
+        <Tile span="wide" title="Board candidates"><CandidatesPanel /></Tile>
+        <Tile span="wide" title="Saved searches"><SearchesPanel /></Tile>
+        <Tile span="wide" title="Recent runs"><RecentRunsPanel /></Tile>
       </DashboardGrid>
     </div>
   );
@@ -79,9 +79,9 @@ function SourcesPanel() {
   if (!sources?.length) return <EmptyState>No sources configured.</EmptyState>;
 
   return (
-    <div>
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4 3xl:grid-cols-6">
       {sources.map((s) => (
-        <SourceRow
+        <SourceCard
           key={s.key}
           source={s}
           onToggle={() => update.mutate({ key: s.key, body: { enabled: !s.enabled } })}
@@ -93,7 +93,7 @@ function SourcesPanel() {
   );
 }
 
-function SourceRow({
+function SourceCard({
   source,
   onToggle,
   onTest,
@@ -105,30 +105,33 @@ function SourceRow({
   testing: boolean;
 }) {
   return (
-    <ListRow
-      leading={<HealthDot healthy={source.healthy} />}
-      title={
-        <span className="inline-flex items-center gap-2">
-          {source.key}
-          <Chip>{source.kind}</Chip>
-          {!source.enabled ? <Chip tone="red">disabled</Chip> : null}
-        </span>
-      }
-      aside={
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={onTest} disabled={testing}>
-            {testing ? <Spinner /> : <>test</>}
-          </Button>
-          <button onClick={onToggle} className="text-muted hover:text-foreground" title="toggle">
-            {source.enabled ? (
-              <ToggleRight className="h-6 w-6 text-accent" />
-            ) : (
-              <ToggleLeft className="h-6 w-6 text-faint" />
-            )}
-          </button>
-        </div>
-      }
-    />
+    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-1 pl-2">
+      <HealthDot healthy={source.healthy} />
+      <span className="truncate text-sm font-semibold text-foreground">{source.key}</span>
+      <Chip>{source.kind}</Chip>
+      {!source.enabled ? <Chip tone="red">off</Chip> : null}
+      <div className="ml-auto flex shrink-0 items-center">
+        <button
+          onClick={onTest}
+          disabled={testing}
+          title="test"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-surface-tertiary hover:text-foreground disabled:cursor-not-allowed disabled:text-faint"
+        >
+          {testing ? <Spinner /> : <RefreshCw className="h-3.5 w-3.5" />}
+        </button>
+        <button
+          onClick={onToggle}
+          title="toggle"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-surface-tertiary hover:text-foreground"
+        >
+          {source.enabled ? (
+            <ToggleRight className="h-4 w-4 text-accent" />
+          ) : (
+            <ToggleLeft className="h-4 w-4 text-faint" />
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -152,15 +155,19 @@ export function HostRetrievalPanel() {
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {hosts.map((h) => (
-          <Button
+          <button
             key={h}
-            variant={selectedHost === h ? 'primary' : 'secondary'}
             onClick={() => setSelectedHost(selectedHost === h ? null : h)}
+            className={
+              selectedHost === h
+                ? 'truncate rounded-xl border border-accent bg-accent-soft px-3 py-2 text-left text-sm font-semibold text-accent'
+                : 'truncate rounded-xl border border-border bg-surface-secondary px-3 py-2 text-left text-sm font-medium text-foreground hover:border-border-strong'
+            }
           >
             {h}
-          </Button>
+          </button>
         ))}
       </div>
 
@@ -425,43 +432,40 @@ function RecentRunsPanel() {
     <div>
       {isLoading ? <ListRowsSkeleton label="loading recent runs…" /> : null}
       {runs && runs.length === 0 ? <EmptyState>No runs yet.</EmptyState> : null}
-      <div>
+      <div className="flex flex-col gap-1">
         {runs?.map((r) => {
           const verdict = r.verdict;
           const isRunning = r.ok === null;
           return (
-            <ListRow
+            <div
               key={r.id}
-              leading={
-                isRunning ? (
+              className="flex items-center gap-2 rounded-lg py-1 px-1.5 text-xs hover:bg-surface-tertiary"
+            >
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                {isRunning ? (
                   <Spinner />
                 ) : verdict === 'blocked' ? (
-                  <XCircle className="h-4 w-4 text-danger" />
+                  <XCircle className="h-3.5 w-3.5 text-danger" />
                 ) : verdict === 'success' || r.ok === true ? (
-                  <CheckCircle className="h-4 w-4 text-success" />
+                  <CheckCircle className="h-3.5 w-3.5 text-success" />
                 ) : (
-                  <RefreshCw className="h-4 w-4 text-danger" />
-                )
-              }
-              title={
-                <span className="inline-flex items-center gap-2">
-                  {r.sourceKey}
-                  {verdict ? (
-                    <Chip tone={verdict === 'success' ? 'green' : verdict === 'blocked' ? 'red' : 'slate'}>{verdict}</Chip>
-                  ) : null}
-                </span>
-              }
-              meta={
-                <>
-                  found {r.found}, {r.new} new
-                  {r.blockReason ? ` · ${r.blockReason.slice(0, 40)}` : ''}
-                </>
-              }
-              aside={new Date(r.startedAt).toLocaleString()}
-            />
+                  <RefreshCw className="h-3.5 w-3.5 text-danger" />
+                )}
+              </span>
+              <span className="shrink-0 truncate font-semibold text-foreground">{r.sourceKey}</span>
+              {verdict ? (
+                <Chip tone={verdict === 'success' ? 'green' : verdict === 'blocked' ? 'red' : 'slate'}>{verdict}</Chip>
+              ) : null}
+              <span className="min-w-0 flex-1 truncate text-muted">
+                found {r.found}, {r.new} new
+                {r.blockReason ? ` · ${r.blockReason.slice(0, 40)}` : ''}
+              </span>
+              <span className="shrink-0 font-mono text-faint">{new Date(r.startedAt).toLocaleString()}</span>
+            </div>
           );
         })}
       </div>
     </div>
   );
 }
+
