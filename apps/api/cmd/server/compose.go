@@ -77,8 +77,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/recruiter"
 	recruiterhttp "github.com/job-finder/api/internal/recruiter/interfaces/http"
-	"github.com/job-finder/api/internal/referral"
-	referralhttp "github.com/job-finder/api/internal/referral/interfaces/http"
 	"github.com/job-finder/api/internal/resumeshape"
 	resumeshapehttp "github.com/job-finder/api/internal/resumeshape/interfaces/http"
 	"github.com/job-finder/api/internal/retrieval"
@@ -108,7 +106,6 @@ type App struct {
 	GhostJob      *ghostjobhttp.GhostJobHandler
 	Coach         *coachhttp.CoachHandler
 	Contacts      *recruiterhttp.ContactsHandler
-	Referral      *referralhttp.ReferralHandler
 	Outreach      *outreachhttp.OutreachHandler
 	AiFeatures    *aifeaturehttp.AiFeatureHandler
 	ResumeShape   *resumeshapehttp.ResumeShapeHandler
@@ -577,11 +574,6 @@ func composeRecruiter(p *Platform, defaultRouter *llm.Router) *recruiterHandles 
 	}
 }
 
-func composeReferral(p *Platform) *referralhttp.ReferralHandler {
-	referralSvc := referral.NewService(p.DB.Queries, p.DB.Queries, referral.NewGitHubCrossReferencer())
-	return &referralhttp.ReferralHandler{Referral: referralSvc}
-}
-
 func composeOutreach(p *Platform, recruiterSvc *recruiter.Service, companyIntelSvc *companyintel.Service, defaultRouter *llm.Router) *outreachhttp.OutreachHandler {
 	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, defaultRouter, "")
 	return &outreachhttp.OutreachHandler{Outreach: outreachSvc}
@@ -789,7 +781,6 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		GhostJob:      ghostH.HTTPHandler,
 		Coach:         composeCoach(p, keywordH.RephraseModel, profileH.Profile),
 		Contacts:      recruiterH.Handler,
-		Referral:      composeReferral(p),
 		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.OutreachRouter),
 		AiFeatures:    matchingH.AiFeatureHandler,
 		ResumeShape:   generationH.ResumeShape,

@@ -3,7 +3,6 @@ import type {
   ApplicationDto,
   BoardCandidateDto,
   CompanyIntelDto,
-  ContactImportResultDto,
   DocumentStatusDto,
   DocumentType,
   EmployerBoardDto,
@@ -12,7 +11,6 @@ import type {
   GeneratedDocumentDto,
   GenerationExportDto,
   GenerationRunDto,
-  GithubSyncResultDto,
   HostRetrievalStatusDto,
   InterviewPrepPack,
   JobContactDto,
@@ -33,8 +31,6 @@ import type {
   ResumeDto,
   ResumeShapeConfigDto,
   SummaryModelSettingDto,
-  ReferralContactDto,
-  ReferralPathDto,
   SavedSearchDto,
   SearchQuery,
   SourceRunDto,
@@ -132,7 +128,6 @@ export const api = {
     contacts: (id: string) => request<JobContactDto[]>(`/jobs/${id}/contacts`),
     refreshContacts: (id: string) =>
       request<JobContactDto[]>(`/jobs/${id}/contacts/refresh`, { method: 'POST' }),
-    referralPaths: (id: string) => request<ReferralPathDto[]>(`/jobs/${id}/referral-paths`),
     addManual: (url: string) => requestManualAdd('/jobs/manual', { url }),
     saveManual: (body: ManualVacancyDraftDto & { title: string; company: string; description: string }) =>
       requestManualAdd('/jobs/manual/fill-in', body),
@@ -267,16 +262,6 @@ export const api = {
     list: () => request<FreshMatchNotificationDto[]>('/notifications'),
     markSeen: (id: string) => request<void>(`/notifications/${id}/seen`, { method: 'POST' }),
     unseenCount: () => request<{ count: number }>('/notifications/unseen-count'),
-  },
-  contacts: {
-    list: () => request<ReferralContactDto[]>('/contacts'),
-    import: (file: File) => {
-      const fd = new FormData();
-      fd.append('file', file);
-      return request<ContactImportResultDto>('/contacts/import', { method: 'POST', body: fd });
-    },
-    githubSync: (contactId: string) =>
-      request<GithubSyncResultDto>(`/contacts/${contactId}/github-sync`, { method: 'POST' }),
   },
   roster: {
     list: () => request<{ employers: EmployerBoardDto[] }>('/roster'),

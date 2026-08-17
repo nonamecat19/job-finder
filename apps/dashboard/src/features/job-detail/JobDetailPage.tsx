@@ -33,7 +33,6 @@ import KeywordDiffPanel from './KeywordDiffPanel';
 import OutreachPanel from './OutreachPanel';
 import PostAgeSignal from './PostAgeSignal';
 import PrepPackPanel from './PrepPackPanel';
-import ReferralPathsCard from './ReferralPathsCard';
 import SalaryEstimateCard from './SalaryEstimateCard';
 
 type DetailedJob = JobDto & { documents: GeneratedDocumentDto[] };
@@ -186,10 +185,6 @@ export default function JobDetailPage() {
           estimateCurrency={job.salaryEstimateCurrency}
           isEstimated={job.salaryIsEstimated}
         />
-        <Tile span="standard" title="Referral paths">
-          <ReferralPathsCard jobId={id} />
-        </Tile>
-
         <Tile span="wide" title="ATS keyword match">
           <KeywordDiffPanel jobId={id} />
         </Tile>

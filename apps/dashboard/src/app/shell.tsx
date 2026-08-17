@@ -8,7 +8,6 @@ import {
   Rss,
   Settings2,
   UserRound,
-  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -30,7 +29,6 @@ const navItems: NavItem[] = [
   { to: '/tracker', label: 'Tracker', icon: ClipboardList, tint: 'blue' },
   { to: '/tailor', label: 'Tailor', icon: FileEdit, tint: 'mint' },
   { to: '/generate', label: 'Generate', icon: LayoutPanelLeft, tint: 'amber' },
-  { to: '/contacts', label: 'Contacts', icon: Users, tint: 'rose' },
   { to: '/status', label: 'Status', icon: Activity, tint: 'violet' },
   { to: '/sources', label: 'Sources', icon: Settings2, tint: 'blue' },
   { to: '/profile', label: 'Profile', icon: UserRound, tint: 'mint' },

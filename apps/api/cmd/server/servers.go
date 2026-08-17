@@ -59,7 +59,7 @@ func buildServers(p *Platform, app *App) *Servers {
 		app.Subs.Mount, app.ManualAdd.Mount, app.Activity.Mount, app.Keyword.Mount,
 		app.PostAge.Mount, app.Notification.Mount, app.Companies.Mount,
 		app.GhostJob.Mount, app.Coach.Mount,
-		app.Contacts.Mount, app.Referral.Mount,
+		app.Contacts.Mount,
 		app.Outreach.Mount, app.AiFeatures.Mount, app.ResumeShape.Mount, app.SummaryModel.Mount,
 		app.InterviewPrep.Mount, app.Health.Mount,
 		app.Hosts.Mount,

@@ -451,31 +451,6 @@ export interface JobContactDto {
   confidence: number /* float64 */;
   fetchedAt: string;
 }
-export interface ReferralContactDto {
-  id: string;
-  name: string;
-  email?: string;
-  company?: string;
-  role?: string;
-  linkedInUrl?: string;
-  gitHubUsername?: string;
-}
-export interface ReferralPathDto {
-  path: ReferralContactDto[];
-  score: number /* float64 */;
-  length: number /* int */;
-}
-export interface ContactImportResultDto {
-  imported: number /* int */;
-  skipped: number /* int */;
-  total: number /* int */;
-}
-export interface GithubSyncResultDto {
-  contact: ReferralContactDto;
-  followersScanned: number /* int */;
-  followingScanned: number /* int */;
-  connectionsMade: number /* int */;
-}
 export interface GroundingTraceDto {
   claim: string;
   signalKind: string;

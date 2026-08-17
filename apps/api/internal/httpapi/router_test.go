@@ -28,7 +28,6 @@ import (
 	postagehttp "github.com/job-finder/api/internal/postage/interfaces/http"
 	profilehttp "github.com/job-finder/api/internal/profile/interfaces/http"
 	recruiterhttp "github.com/job-finder/api/internal/recruiter/interfaces/http"
-	referralhttp "github.com/job-finder/api/internal/referral/interfaces/http"
 	resumeshapehttp "github.com/job-finder/api/internal/resumeshape/interfaces/http"
 	subscriptionshttp "github.com/job-finder/api/internal/subscriptions/interfaces/http"
 	"github.com/job-finder/api/internal/testutil"
@@ -62,7 +61,6 @@ func allMounts() []func(chi.Router) {
 		(&ghostjobhttp.GhostJobHandler{}).Mount,
 		(&coachhttp.CoachHandler{}).Mount,
 		(&recruiterhttp.ContactsHandler{}).Mount,
-		(&referralhttp.ReferralHandler{}).Mount,
 		(&outreachhttp.OutreachHandler{}).Mount,
 		(&aifeaturehttp.AiFeatureHandler{}).Mount,
 		(&resumeshapehttp.ResumeShapeHandler{}).Mount,

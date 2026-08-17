@@ -14,8 +14,6 @@ import type {
   PostAgeBucketDto,
   PostAgeResponseDto,
   ProfileDto,
-  ReferralContactDto,
-  ReferralPathDto,
   SavedSearchDto,
   SourceRunDto,
   StatsDto,
@@ -293,28 +291,6 @@ export function mockPostAgeResponse(overrides: Partial<PostAgeResponseDto> = {})
     priorRate: 0.2,
     priorLabel: 'Typical baseline — not yet your data',
     thresholdMsg: null,
-    ...overrides,
-  }
-}
-
-export function mockReferralContact(overrides: Partial<ReferralContactDto> = {}): ReferralContactDto {
-  return {
-    id: 'contact-1',
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    company: 'Acme Corp',
-    role: 'Engineering Manager',
-    linkedInUrl: 'https://linkedin.com/in/janedoe',
-    gitHubUsername: 'janedoe',
-    ...overrides,
-  }
-}
-
-export function mockReferralPath(overrides: Partial<ReferralPathDto> = {}): ReferralPathDto {
-  return {
-    path: [mockReferralContact({ id: 'me', name: 'You' }), mockReferralContact()],
-    score: 0.72,
-    length: 2,
     ...overrides,
   }
 }

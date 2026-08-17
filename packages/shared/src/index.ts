@@ -57,13 +57,9 @@ export type ActivityListResponse = Omit<Gen.ActivityListResponse, 'active' | 're
 export type AdhocVacancyDto = Gen.AdhocVacancyDto;
 export type AiFeatureSettingDto = Gen.AiFeatureSettingDto;
 export type BoardCandidateDto = Nullable<Gen.BoardCandidateDto, 'inferredFromJobId'>;
-export type ContactImportResultDto = Gen.ContactImportResultDto;
 export type CustomConnection = Gen.CustomConnection;
 export type EmployerBoardDto = Nullable<Gen.EmployerBoardDto, 'lastSuccessAt'>;
 export type GenerateRequestDto = Gen.GenerateRequestDto;
-export type GithubSyncResultDto = Omit<Gen.GithubSyncResultDto, 'contact'> & {
-  contact: ReferralContactDto;
-};
 export type GroundingTraceDto = Gen.GroundingTraceDto;
 // 042: the resume generation workspace's wire shapes. Every pointer field on
 // these DTOs already carries `omitempty` (dto/generation_workspace.go), so
@@ -83,7 +79,6 @@ export type HostPacingDto = Gen.HostPacingDto;
 export type JobListResponse = Omit<Gen.JobListResponse, 'items'> & { items: JobDto[] };
 export type JobSignalDto = Omit<Gen.JobSignalDto, 'signals'> & { signals: GhostSignalBreakdownDto };
 export type QueueBacklogResponse = Omit<Gen.QueueBacklogResponse, 'queues'> & { queues: QueueBacklogDto[] };
-export type ReferralPathDto = Omit<Gen.ReferralPathDto, 'path'> & { path: ReferralContactDto[] };
 export type RendercvSummary = Gen.RendercvSummary;
 export type RendercvSummaryExperience = Gen.RendercvSummaryExperience;
 export type ResumeDto = Omit<Gen.ResumeDto, 'resume'> & { resume: Resume };
@@ -182,9 +177,6 @@ export type ProfileDto = Nullable<Gen.ProfileDto, 'extraNotes'>;
 export type QueueBacklogDto = Nullable<Gen.QueueBacklogDto, 'etaSeconds' | 'providerClass'> & {
     providerClass: 'local' | 'hosted' | null;
   };
-
-export type ReferralContactDto = Nullable<Gen.ReferralContactDto,
-  'email' | 'company' | 'role' | 'linkedInUrl' | 'gitHubUsername'>;
 
 export type Resume = Omit<Gen.Resume, 'unrecognized' | 'sections'> & {
   unrecognized?: Record<string, unknown>;
