@@ -4,6 +4,7 @@ import FeedPage from '../features/feed/FeedPage';
 import GenerateWorkspacePage from '../features/generate/GenerateWorkspacePage';
 import JobDetailPage from '../features/job-detail/JobDetailPage';
 import ProfilePage from '../features/profile/ProfilePage';
+import ResumesPage from '../features/resumes/ResumesPage';
 import SettingsPage from '../features/settings/SettingsPage';
 import SourcesPage from '../features/sources/SourcesPage';
 import StatusPage from '../features/status/StatusPage';
@@ -49,6 +50,14 @@ export function AppRoutes() {
         element={
           <RequireProfileConfig>
             <GenerateWorkspacePage />
+          </RequireProfileConfig>
+        }
+      />
+      <Route
+        path="/resumes"
+        element={
+          <RequireProfileConfig>
+            <ResumesPage />
           </RequireProfileConfig>
         }
       />
