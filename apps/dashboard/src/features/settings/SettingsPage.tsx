@@ -4,6 +4,7 @@ import { DashboardGrid, Tile } from '../../components/layout';
 import { Button } from '../../components/ui';
 import { useClearJobs } from '../feed/hooks';
 import AiFeatureSettingsCard from './AiFeatureSettingsCard';
+import AppearanceSettingsCard from './AppearanceSettingsCard';
 import ResumeShapeCard from './ResumeShapeCard';
 
 export default function SettingsPage() {
@@ -22,6 +23,9 @@ export default function SettingsPage() {
         description="Manage account-level preferences."
       />
       <DashboardGrid>
+        <Tile span="standard" title="Appearance">
+          <AppearanceSettingsCard />
+        </Tile>
         <Tile span="standard" title="AI features">
           <AiFeatureSettingsCard />
         </Tile>

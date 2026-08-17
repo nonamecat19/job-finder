@@ -283,6 +283,41 @@ export function Checkbox(props: ComponentPropsWithoutRef<'input'>) {
   );
 }
 
+export function Switch({
+  checked,
+  onChange,
+  label,
+  className,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+        checked ? 'bg-accent' : 'bg-border-strong',
+        'focus:outline-none focus:ring-[3px] focus:ring-accent-soft',
+        className,
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-4 w-4 transform rounded-full bg-surface shadow-sm transition-transform',
+          checked ? 'translate-x-6' : 'translate-x-1',
+        )}
+      />
+    </button>
+  );
+}
+
 export function Surface({
   as,
   children,
