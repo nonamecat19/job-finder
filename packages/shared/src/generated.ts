@@ -311,7 +311,7 @@ export interface GenerationVacancyDto {
  */
 export interface GenerationSectionDto {
   id: string;
-  kind: string; // summary | experience | skills | projects
+  kind: string; // summary | experience | skills | projects | certifications | education
   entryKey?: string;
   entryLabel?: string;
   position: number /* int */;
@@ -319,6 +319,14 @@ export interface GenerationSectionDto {
   state: string; // running | ready | failed
   error?: string;
   fallbackUsed: boolean;
+  /**
+   * Enabled excludes the whole section from export/preview when false,
+   * independent of any item's own selection — the per-run "disable this
+   * section" switch. Seeded from the account's resume-shape settings when
+   * the run is created, changed afterward only via
+   * `PATCH /v1/generations/{runId}/sections/{sectionId}`.
+   */
+  enabled: boolean;
   items: GenerationItemDto[];
 }
 /**
@@ -330,7 +338,7 @@ export interface GenerationSectionDto {
 export interface GenerationItemDto {
   id: string;
   origin: string; // profile | ai
-  kind: string; // achievement | skill_group | summary | project
+  kind: string; // achievement | skill_group | summary | project | certification | education
   text: string; // effective text: editedText ?? sourceText
   sourceIndex?: number /* int */;
   rank: number /* int */;
@@ -431,6 +439,15 @@ export interface PatchGenerationItemRequestDto {
    * skills section, and with 400 for an entry that group does not contain.
    */
   droppedEntries?: string[];
+}
+/**
+ * PatchGenerationSectionRequestDto is the body of
+ * `PATCH /v1/generations/{runId}/sections/{sectionId}` — currently just the
+ * per-run enable/disable switch, kept as its own endpoint separate from
+ * `.../order` since the two have unrelated validation.
+ */
+export interface PatchGenerationSectionRequestDto {
+  enabled?: boolean;
 }
 /**
  * RerunGenerationRequestDto is the body of
@@ -926,8 +943,10 @@ export interface AiFeatureSettingDto {
 }
 export interface ResumeShapeConfigDto {
   summaryLines: number /* int */;
+  summaryEnabled: boolean;
   skillsEnabled: boolean;
   skillsMaxGroups: number /* int */;
+  experienceEnabled: boolean;
   experienceBulletsMin: number /* int */;
   experienceBulletsMax: number /* int */;
   targetPages: number /* int */;
@@ -938,6 +957,7 @@ export interface ResumeShapeConfigDto {
   certificationsEnabled: boolean;
   certificationsMin: number /* int */;
   certificationsMax: number /* int */;
+  educationEnabled: boolean;
   fontSize: number /* int */;
 }
 /**

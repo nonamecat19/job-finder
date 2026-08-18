@@ -23,6 +23,8 @@ type WorkspaceGenerator interface {
 	// toggle/edit/reorder and whole-section reorder (resume-generation.md § 4.1).
 	PatchGenerationItem(ctx context.Context, runID, itemID string, req dto.PatchGenerationItemRequestDto) (dto.GenerationItemDto, error)
 	ReorderSection(ctx context.Context, runID, sectionID string, itemIDs []string) (dto.GenerationSectionDto, error)
+	// SetSectionEnabled is the per-run "disable this section" switch.
+	SetSectionEnabled(ctx context.Context, runID, sectionID string, enabled bool) (dto.GenerationSectionDto, error)
 	// ExportGenerationRun and GetGenerationExport are Phase 7 (US5): the
 	// render-once export and its idempotent short-poll.
 	ExportGenerationRun(ctx context.Context, runID string) (dto.GenerationExportDto, error)
@@ -52,6 +54,7 @@ func (h *GenerationsHandler) Mount(r chi.Router) {
 	r.Patch("/generations/{runId}/items/{itemId}", h.patchItem)
 	r.Post("/generations/{runId}/items/{itemId}/rewrite", h.rewriteItem)
 	r.Patch("/generations/{runId}/sections/{sectionId}/order", h.reorderSection)
+	r.Patch("/generations/{runId}/sections/{sectionId}", h.patchSection)
 	r.Post("/generations/{runId}/rerun", h.rerun)
 	r.Post("/generations/{runId}/export", h.export)
 	r.Get("/generations/{runId}/export", h.exportStatus)
@@ -198,6 +201,26 @@ func (h *GenerationsHandler) rerun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]string{"runId": newRunID, "activityId": activityID})
+}
+
+func (h *GenerationsHandler) patchSection(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "runId")
+	sectionID := chi.URLParam(r, "sectionId")
+	var body dto.PatchGenerationSectionRequestDto
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.Enabled == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "enabled is required")
+		return
+	}
+	out, err := h.Workspace.SetSectionEnabled(r.Context(), runID, sectionID, *body.Enabled)
+	if err != nil {
+		httpx.WriteAppError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (h *GenerationsHandler) reorderSection(w http.ResponseWriter, r *http.Request) {
