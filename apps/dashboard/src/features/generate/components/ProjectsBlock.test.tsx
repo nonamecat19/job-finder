@@ -27,6 +27,7 @@ function section(items: GenerationItemDto[]): GenerationSectionDto {
     targetCount: 2,
     state: 'ready',
     fallbackUsed: false,
+    enabled: true,
     items,
   } as GenerationSectionDto;
 }
@@ -43,6 +44,7 @@ describe('ProjectsBlock', () => {
         ])}
         onToggle={vi.fn()}
         onReorder={vi.fn()}
+        onToggleEnabled={vi.fn()}
       />,
     );
 
@@ -59,6 +61,7 @@ describe('ProjectsBlock', () => {
         section={section([item({ id: 'b', selected: false })])}
         onToggle={onToggle}
         onReorder={vi.fn()}
+        onToggleEnabled={vi.fn()}
       />,
     );
 
@@ -68,7 +71,7 @@ describe('ProjectsBlock', () => {
   });
 
   it('renders an explicit empty state', () => {
-    renderWithProviders(<ProjectsBlock section={section([])} onToggle={vi.fn()} onReorder={vi.fn()} />);
+    renderWithProviders(<ProjectsBlock section={section([])} onToggle={vi.fn()} onReorder={vi.fn()} onToggleEnabled={vi.fn()} />);
 
     expect(screen.getByText(/no projects in your profile/i)).toBeInTheDocument();
   });

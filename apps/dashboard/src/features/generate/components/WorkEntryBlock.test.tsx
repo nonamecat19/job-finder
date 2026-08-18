@@ -13,6 +13,7 @@ function section(overrides: Partial<GenerationSectionDto> = {}): GenerationSecti
     targetCount: 8,
     state: 'ready',
     fallbackUsed: false,
+    enabled: true,
     items: [],
     ...overrides,
   };
@@ -22,7 +23,7 @@ describe('WorkEntryBlock', () => {
   // T035: a work entry with zero master bullets must render the explicit
   // empty state — never a fabricated bullet standing in for one.
   it('renders the explicit empty state for an entry with zero bullets', () => {
-    renderWithProviders(<WorkEntryBlock section={section()} onToggle={vi.fn()} onReorder={vi.fn()} />);
+    renderWithProviders(<WorkEntryBlock section={section()} onToggle={vi.fn()} onReorder={vi.fn()} onToggleEnabled={vi.fn()} />);
 
     expect(screen.getByText(/no bullets in your profile for this role/i)).toBeInTheDocument();
     expect(screen.queryByTestId('item-row')).not.toBeInTheDocument();
@@ -58,7 +59,7 @@ describe('WorkEntryBlock', () => {
       ],
     });
 
-    renderWithProviders(<WorkEntryBlock section={sec} onToggle={vi.fn()} onReorder={vi.fn()} />);
+    renderWithProviders(<WorkEntryBlock section={sec} onToggle={vi.fn()} onReorder={vi.fn()} onToggleEnabled={vi.fn()} />);
 
     const rows = screen.getAllByTestId('item-row');
     expect(rows).toHaveLength(2);

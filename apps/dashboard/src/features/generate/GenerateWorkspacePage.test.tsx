@@ -12,6 +12,7 @@ vi.mock('./hooks', () => ({
   useExportGenerationRun: vi.fn(),
   useRerunGenerationRun: vi.fn(),
   useRewriteGenerationItem: vi.fn(),
+  useSetSectionEnabled: vi.fn(),
   useSummaryModel: vi.fn(),
 }));
 vi.mock('../profile/hooks', () => ({
@@ -31,6 +32,7 @@ import {
   useRerunGenerationRun,
   useReorderGenerationSection,
   useRewriteGenerationItem,
+  useSetSectionEnabled,
   useStartGenerationRun,
   useToggleGenerationItem,
 } from './hooks';
@@ -45,6 +47,7 @@ const mockedUseReorderGenerationSection = vi.mocked(useReorderGenerationSection)
 const mockedUseExportGenerationRun = vi.mocked(useExportGenerationRun);
 const mockedUseRerunGenerationRun = vi.mocked(useRerunGenerationRun);
 const mockedUseRewriteGenerationItem = vi.mocked(useRewriteGenerationItem);
+const mockedUseSetSectionEnabled = vi.mocked(useSetSectionEnabled);
 const mockedUseProfiles = vi.mocked(useProfiles);
 const mockedUseJobDetail = vi.mocked(useJobDetail);
 const mockedUseSummaryModel = vi.mocked(useSummaryModel);
@@ -70,8 +73,10 @@ function baseRun(overrides: Partial<GenerationRunDto> = {}): GenerationRunDto {
     masterChanged: false,
     shapeConfig: {
       summaryLines: 4,
+      summaryEnabled: true,
       skillsEnabled: true,
       skillsMaxGroups: 0,
+      experienceEnabled: true,
       experienceBulletsMin: 8,
       experienceBulletsMax: 10,
       targetPages: 2,
@@ -82,6 +87,7 @@ function baseRun(overrides: Partial<GenerationRunDto> = {}): GenerationRunDto {
       certificationsEnabled: true,
       certificationsMin: 0,
       certificationsMax: 0,
+      educationEnabled: true,
       fontSize: 10,
     },
     export: { status: '' },
@@ -95,6 +101,7 @@ function baseRun(overrides: Partial<GenerationRunDto> = {}): GenerationRunDto {
         targetCount: 8,
         state: 'ready',
         fallbackUsed: false,
+        enabled: true,
         items: [
           {
             id: 'item-1',
@@ -141,6 +148,7 @@ function runWithSuggestion(): GenerationRunDto {
       targetCount: 0,
       state: 'ready',
       fallbackUsed: false,
+      enabled: true,
       items: [
         {
           id: 'item-summary',
@@ -162,6 +170,7 @@ function runWithSuggestion(): GenerationRunDto {
       targetCount: 0,
       state: 'ready',
       fallbackUsed: false,
+      enabled: true,
       items: [
         {
           id: 'item-skill',
@@ -188,6 +197,7 @@ function setup() {
   mockedUseStartGenerationRun.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false } as any);
   mockedUseToggleGenerationItem.mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
   mockedUseReorderGenerationSection.mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
+  mockedUseSetSectionEnabled.mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
   mockedUseExportGenerationRun.mockReturnValue({
     mutate: vi.fn(),
     isPending: false,
@@ -242,19 +252,23 @@ describe('GenerateWorkspacePage', () => {
     expect(window.location.search).toContain('jobId=job-2');
   });
 
-  it('renders the vacancy card and a Generate CTA once a job is picked but no run exists yet', () => {
+  it('renders the vacancy card and a Generate CTA once a job is picked but no run exists yet', async () => {
     setup();
     window.history.pushState({}, '', '/generate?jobId=job-1');
     mockedUseGenerationRun.mockReturnValue({ data: undefined, isLoading: false, error: null } as any);
 
+    const user = userEvent.setup();
     renderWithProviders(<GenerateWorkspacePage />);
 
-    // Vacancy card (read-only job display).
-    expect(screen.getByText('Senior Engineer')).toBeInTheDocument();
-    // Left pane: the generated-resume surface, empty state with a CTA.
-    expect(screen.getByRole('heading', { name: /generated resume/i })).toBeInTheDocument();
+    // Left pane: the generated-resume surface, empty state with a CTA — the
+    // default tab.
+    expect(screen.getByRole('tab', { name: /generated resume/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /generate resume/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/grounding level/i)).toBeInTheDocument();
+
+    // Vacancy card (read-only job display) lives under the other tab.
+    await user.click(screen.getByRole('tab', { name: /job description/i }));
+    expect(await screen.findByText('Senior Engineer')).toBeInTheDocument();
   });
 
   it('shows progress rather than an empty workspace for a running run', () => {

@@ -1,12 +1,15 @@
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import type { GenerationSectionDto } from '@job-finder/shared';
+import { Switch } from '../../../components/ui';
+import { cn } from '../../../lib/utils';
 import ItemRow from './ItemRow';
 
 export interface SkillsBlockProps {
   section: GenerationSectionDto; // kind === 'skills'
   onToggle: (itemId: string, selected: boolean) => void;
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
+  onToggleEnabled: (sectionId: string, enabled: boolean) => void;
   /** Present so an included (selected) origin="ai" skill can be edited in place (T056, FR-015). */
   onEditText?: (itemId: string, text: string) => void;
   /** Per-skill inclusion inside a profile skill group: the whole drop set. */
@@ -19,7 +22,14 @@ export interface SkillsBlockProps {
 // then the ones skillsMaxGroups left out, which are shown unselected rather
 // than removed, FR-011), then the AI-suggested skills in their own visually
 // distinct group, off by default (FR-013).
-export default function SkillsBlock({ section, onToggle, onReorder, onEditText, onDropEntries }: SkillsBlockProps) {
+export default function SkillsBlock({
+  section,
+  onToggle,
+  onReorder,
+  onToggleEnabled,
+  onEditText,
+  onDropEntries,
+}: SkillsBlockProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const profileItems = section.items.filter((it) => it.origin === 'profile');
@@ -45,11 +55,19 @@ export default function SkillsBlock({ section, onToggle, onReorder, onEditText, 
     <div className="rounded-xl bg-surface-secondary p-3" data-testid="skills-block">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-semibold text-foreground">Skills</span>
-        {section.state !== 'ready' ? (
-          <span className="font-mono text-[11px] text-muted uppercase tracking-[0.06em]">{section.state}</span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {section.state !== 'ready' ? (
+            <span className="font-mono text-[11px] text-muted uppercase tracking-[0.06em]">{section.state}</span>
+          ) : null}
+          <Switch
+            checked={section.enabled}
+            onChange={(enabled) => onToggleEnabled(section.id, enabled)}
+            label="include skills in export"
+          />
+        </div>
       </div>
 
+      <div className={cn(!section.enabled && 'pointer-events-none opacity-50')}>
       {profileItems.length === 0 ? (
         <p className="text-xs text-muted">No skill groups in your profile.</p>
       ) : (
@@ -103,6 +121,7 @@ export default function SkillsBlock({ section, onToggle, onReorder, onEditText, 
             ))}
           </ul>
         )}
+      </div>
       </div>
     </div>
   );

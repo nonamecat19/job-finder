@@ -5,20 +5,17 @@ import { Switch } from '../../../components/ui';
 import { cn } from '../../../lib/utils';
 import ItemRow from './ItemRow';
 
-export interface ProjectsBlockProps {
-  section: GenerationSectionDto; // kind === 'projects'
+export interface CertificationsBlockProps {
+  section: GenerationSectionDto; // kind === 'certifications'
   onToggle: (itemId: string, selected: boolean) => void;
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
   onToggleEnabled: (sectionId: string, enabled: boolean) => void;
 }
 
-// Projects read like skill groups: one row per project, ordered by vacancy
-// relevance, with the ones past `projectsMax` shown unselected rather than
-// removed so the user can promote them. There is no AI-suggestion group —
-// nothing in this section is model-written, so there is nothing to suggest or
-// edit in place: a project's name, dates and bullets come from the profile
-// verbatim, and the density of its bullets is a profile setting.
-export default function ProjectsBlock({ section, onToggle, onReorder, onToggleEnabled }: ProjectsBlockProps) {
+// Certifications read exactly like projects: one row per certification,
+// nothing model-written, so nothing to suggest or edit in place — a
+// certification's name and issuer come from the profile verbatim.
+export default function CertificationsBlock({ section, onToggle, onReorder, onToggleEnabled }: CertificationsBlockProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const selectedItems = section.items.filter((it) => it.selected);
@@ -39,9 +36,9 @@ export default function ProjectsBlock({ section, onToggle, onReorder, onToggleEn
   };
 
   return (
-    <div className="rounded-xl bg-surface-secondary p-3" data-testid="projects-block">
+    <div className="rounded-xl bg-surface-secondary p-3" data-testid="certifications-block">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-semibold text-foreground">Projects</span>
+        <span className="text-sm font-semibold text-foreground">Certifications</span>
         <div className="flex items-center gap-2">
           {section.state !== 'ready' ? (
             <span className="font-mono text-[11px] text-muted uppercase tracking-[0.06em]">{section.state}</span>
@@ -49,14 +46,14 @@ export default function ProjectsBlock({ section, onToggle, onReorder, onToggleEn
           <Switch
             checked={section.enabled}
             onChange={(enabled) => onToggleEnabled(section.id, enabled)}
-            label="include projects in export"
+            label="include certifications in export"
           />
         </div>
       </div>
 
       <div className={cn(!section.enabled && 'pointer-events-none opacity-50')}>
         {section.items.length === 0 ? (
-          <p className="text-xs text-muted">No projects in your profile.</p>
+          <p className="text-xs text-muted">No certifications in your profile.</p>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={orderedItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>

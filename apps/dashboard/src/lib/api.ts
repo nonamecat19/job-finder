@@ -12,6 +12,7 @@ import type {
   GenerationExportDto,
   GenerationRewriteResponseDto,
   GenerationRunDto,
+  GenerationSectionDto,
   HostRetrievalStatusDto,
   InterviewPrepPack,
   JobContactDto,
@@ -322,6 +323,11 @@ export const api = {
       request(`/v1/generations/${runId}/sections/${sectionId}/order`, {
         method: 'PATCH',
         body: JSON.stringify({ itemIds }),
+      }),
+    setSectionEnabled: (runId: string, sectionId: string, enabled: boolean) =>
+      request<GenerationSectionDto>(`/v1/generations/${runId}/sections/${sectionId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled }),
       }),
     rerun: (runId: string, sections?: string[]) =>
       request<{ runId: string; activityId: string }>(`/v1/generations/${runId}/rerun`, {

@@ -8,6 +8,8 @@ import { DashboardGrid, Tile, IconTile } from '../../components/layout';
 import { Button, Chip, LoadingRegion, ScoreBadge, Spinner, SkeletonBlock, SkeletonLine, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
+import { cn } from '../../lib/utils';
+import { RESUME_DARK_FILTER, useTheme } from '../../lib/theme';
 import {
   useGenerateDocument,
   useJobDetail,
@@ -20,6 +22,7 @@ import {
   useUndoJobNotFit,
   useUnmarkJobApplied,
 } from './hooks';
+import { useLatestGenerationRunForJob } from '../generate/hooks';
 import CoachPanel from './CoachPanel';
 import CompanyIntelCard from './CompanyIntelCard';
 import ContactLine from './ContactLine';
@@ -42,12 +45,19 @@ export default function JobDetailPage() {
   const [countAtGenerate, setCountAtGenerate] = useState(0);
   const [editingDoc, setEditingDoc] = useState<{ id: string; text: string } | null>(null);
   const handledMutationRef = useRef<DocumentType | null>(null);
+  const { resumeDark } = useTheme();
 
   const qc = useQueryClient();
   const { data: job, isLoading } = useJobDetail(id);
+  // Resume the most recent run for this job rather than always starting a
+  // fresh one over the top of it — a run already carries the user's
+  // selections, edits and drag order, none of which a brand-new run has.
+  const { data: latestRun } = useLatestGenerationRunForJob(id);
   const handleTailorForJob = () => {
     if (!id) return;
-    navigate(`/generate?jobId=${id}`);
+    const params = new URLSearchParams({ jobId: id });
+    if (latestRun) params.set('runId', latestRun.id);
+    navigate(`/generate?${params}`);
   };
   const { data: documents } = useJobDocuments(id);
   const { data: statuses } = useJobDocumentStatuses(id, !!generating);
@@ -118,7 +128,7 @@ export default function JobDetailPage() {
             </a>
             <Button variant="secondary" onClick={handleTailorForJob}>
               <Sparkles className="h-4 w-4" aria-hidden="true" />
-              tailor for this job
+              Generate resume
             </Button>
             {job.status === 'hidden' ? (
               <Button variant="secondary" onClick={() => undoNotFit.mutate()} disabled={undoNotFit.isPending}>
@@ -251,11 +261,18 @@ export default function JobDetailPage() {
                   </button>
                 </div>
               </div>
-              <iframe
-                title="Resume preview"
-                src={`${api.documents.pdfUrl(resumeDoc.id)}#toolbar=0&navpanes=0&scrollbar=0`}
-                className="flex-1 w-full border-0 bg-white"
-              />
+              {/* The browser's own PDF viewer owns this document's chrome, so
+                  dark mode here is the same luminance flip the canvas preview
+                  uses — screened over the sheet colour so the page reads as the
+                  design system's dark surface rather than pure black. */}
+              <div className={cn('flex min-h-0 flex-1', resumeDark ? 'bg-paper-dark' : 'bg-paper')}>
+                <iframe
+                  title="Resume preview"
+                  src={`${api.documents.pdfUrl(resumeDoc.id)}#toolbar=0&navpanes=0&scrollbar=0`}
+                  className={cn('w-full flex-1 border-0', resumeDark && 'mix-blend-screen')}
+                  style={resumeDark ? { filter: RESUME_DARK_FILTER } : undefined}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -360,9 +377,6 @@ function DocumentsPanel({
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button disabled={!!generating} onClick={() => onGenerate('resume')}>
-          Generate resume
-        </Button>
         <Button disabled={!!generating} onClick={() => onGenerate('cover_letter')}>
           Generate cover letter
         </Button>

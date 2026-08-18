@@ -1,10 +1,11 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { GenerationItemDto } from '@job-finder/shared';
 import { Button, Checkbox, Spinner } from '../../../components/ui';
 import { cn } from '../../../lib/utils';
+import { usePreviewHighlight } from '../preview/highlight';
 import OriginBadge from './OriginBadge';
 
 export interface ItemRowProps {
@@ -24,13 +25,27 @@ export interface ItemRowProps {
    * saved, per FR-009).
    */
   onRewrite?: () => Promise<string[]>;
+  /**
+   * Whether a PDF-sourced hover on this item scrolls the row into view here.
+   * Off inside an experience entry (WorkEntryBlock owns that scroll itself,
+   * to the entry's top rather than the single achievement) — on everywhere
+   * else, where the item has no enclosing block of its own to scroll to.
+   */
+  scrollOnHover?: boolean;
 }
 
 // T028: checkbox, effective text, origin badge, a dnd-kit drag handle, and an
 // `unavailable` presentation (FR-022 — the source item's master bullet no
 // longer resolves, but the row still renders rather than silently
 // disappearing).
-export default function ItemRow({ item, onToggle, onEditText, onDropEntries, onRewrite }: ItemRowProps) {
+export default function ItemRow({
+  item,
+  onToggle,
+  onEditText,
+  onDropEntries,
+  onRewrite,
+  scrollOnHover = true,
+}: ItemRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const editable = item.origin === 'ai' && item.selected && !!onEditText;
@@ -44,6 +59,17 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries, onR
   const perSkill = entries.length > 0 && !!onDropEntries && item.selected && !item.unavailable;
   const label = item.text.split(':')[0];
 
+  // Cross-pane highlighting (preview/highlight.tsx): hovering this row lights
+  // up the block it produced in the PDF, and a hover that started over the PDF
+  // scrolls this row into view.
+  const { hover, setHover } = usePreviewHighlight();
+  const highlighted = hover?.itemId === item.id;
+  const rowRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    if (!scrollOnHover || hover?.itemId !== item.id || hover.source !== 'pdf') return;
+    rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [hover, item.id, scrollOnHover]);
+
   const toggleEntry = (text: string, selected: boolean) => {
     const dropped = entries.filter((e) => (e.text === text ? !selected : !e.selected)).map((e) => e.text);
     onDropEntries?.(dropped);
@@ -51,9 +77,15 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries, onR
 
   return (
     <li
-      ref={setNodeRef}
+      ref={(el) => {
+        setNodeRef(el);
+        rowRef.current = el;
+      }}
       style={style}
+      onMouseEnter={() => setHover({ itemId: item.id, source: 'list' })}
+      onMouseLeave={() => setHover(null)}
       data-testid="item-row"
+      data-highlighted={highlighted}
       data-item-id={item.id}
       data-origin={item.origin}
       data-selected={item.selected}
@@ -64,6 +96,7 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries, onR
         item.selected && !item.unavailable ? 'bg-surface-tertiary' : undefined,
         isDragging ? 'opacity-60' : undefined,
         item.unavailable ? 'bg-danger-soft/60' : undefined,
+        highlighted ? 'bg-accent-soft ring-1 ring-accent/50' : undefined,
       )}
     >
       <button
@@ -124,7 +157,7 @@ export default function ItemRow({ item, onToggle, onEditText, onDropEntries, onR
             rows={2}
           />
         ) : (
-          <p className={cn(item.selected ? 'text-foreground' : 'text-faint line-through', 'break-words')}>
+          <p className={cn(item.selected ? 'text-foreground' : 'text-faint', 'break-words')}>
             {item.text}
           </p>
         )}

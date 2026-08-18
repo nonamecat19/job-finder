@@ -34,6 +34,20 @@ export function useGenerationRun(runId: string | undefined) {
   });
 }
 
+/**
+ * The most recent generation run for a job, if any — so a "generate resume"
+ * entry point elsewhere (Job Detail) can resume the workspace the user left
+ * off in instead of always starting a fresh run over the top of it.
+ */
+export function useLatestGenerationRunForJob(jobId: string | undefined) {
+  return useQuery({
+    queryKey: [...generations.all, 'list', jobId, 1] as const,
+    queryFn: () => api.generations.list({ jobId, limit: 1 }),
+    enabled: !!jobId,
+    select: (runs) => runs[0],
+  });
+}
+
 export function useStartGenerationRun() {
   const qc = useQueryClient();
 
@@ -179,13 +193,47 @@ export function useReorderGenerationSection(runId: string | undefined) {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (p: { sectionId: string; itemIds: string[] }) => api.generations.reorder(runId!, p.sectionId, p.itemIds),
+    mutationFn: (p: { sectionId: string; itemIds: string[] }) =>
+      api.generations.reorder(runId!, p.sectionId, p.itemIds),
     onMutate: async (p) => {
       if (!runId) return undefined;
       await qc.cancelQueries({ queryKey: generations.get(runId) });
       const previous = qc.getQueryData<GenerationRunDto>(generations.get(runId));
       if (previous) {
         qc.setQueryData<GenerationRunDto>(generations.get(runId), applyReorder(previous, p.sectionId, p.itemIds));
+      }
+      return { previous };
+    },
+    onError: (_err, _p, context) => {
+      if (runId && context?.previous) qc.setQueryData(generations.get(runId), context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: generations.get(runId) }),
+  });
+}
+
+function applySectionEnabled(run: GenerationRunDto, sectionId: string, enabled: boolean): GenerationRunDto {
+  return {
+    ...run,
+    sections: run.sections.map((section) => (section.id === sectionId ? { ...section, enabled } : section)),
+  };
+}
+
+// The per-run "disable this section" switch: excludes a whole section from
+// export/preview instantly, no rerun required — optimistic the same way
+// useReorderGenerationSection is, since flipping a switch shouldn't wait on
+// a round trip either.
+export function useSetSectionEnabled(runId: string | undefined) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (p: { sectionId: string; enabled: boolean }) =>
+      api.generations.setSectionEnabled(runId!, p.sectionId, p.enabled),
+    onMutate: async (p) => {
+      if (!runId) return undefined;
+      await qc.cancelQueries({ queryKey: generations.get(runId) });
+      const previous = qc.getQueryData<GenerationRunDto>(generations.get(runId));
+      if (previous) {
+        qc.setQueryData<GenerationRunDto>(generations.get(runId), applySectionEnabled(previous, p.sectionId, p.enabled));
       }
       return { previous };
     },

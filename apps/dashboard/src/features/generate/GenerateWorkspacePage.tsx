@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import type { GenerationRunDto, GenerationSectionDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { Tile } from '../../components/layout';
-import { Button, Field, Select, Spinner } from '../../components/ui';
+import { Tile, TileEmpty, TileError, TileSkeleton } from '../../components/layout';
+import { Button, Field, Select, Spinner, Tabs } from '../../components/ui';
+import { PreviewHighlightProvider } from './preview/highlight';
 import { useProfiles } from '../profile/hooks';
+import CertificationsBlock from './components/CertificationsBlock';
+import EducationBlock from './components/EducationBlock';
 import JobPickerList from './components/JobPickerList';
 import ProjectsBlock from './components/ProjectsBlock';
 import ResumePreviewPane from './components/ResumePreviewPane';
@@ -18,6 +22,7 @@ import {
   useRerunGenerationRun,
   useReorderGenerationSection,
   useRewriteGenerationItem,
+  useSetSectionEnabled,
   useStartGenerationRun,
   useSummaryModel,
   useToggleGenerationItem,
@@ -46,10 +51,15 @@ export default function GenerateWorkspacePage() {
   const exportRun = useExportGenerationRun(runId);
   const rerunRun = useRerunGenerationRun(runId);
   const rewriteItem = useRewriteGenerationItem(runId);
+  const setSectionEnabled = useSetSectionEnabled(runId);
   const { data: summaryModel } = useSummaryModel();
 
   const [groundingLevel, setGroundingLevel] = useState<(typeof GROUNDING_LEVELS)[number]>('moderate');
   const [summaryOptionId, setSummaryOptionId] = useState<string | undefined>(undefined);
+  // The preview is the thing being judged, so it gets the room: two thirds of
+  // the workspace by default, and the whole viewport on demand.
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [leftTab, setLeftTab] = useState<'resume' | 'job'>('resume');
 
   const vacancyJobId = run?.jobId ?? jobId;
 
@@ -77,61 +87,106 @@ export default function GenerateWorkspacePage() {
 
   const tileState = !run ? 'empty' : isLoading ? 'loading' : error ? 'error' : 'ready';
 
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <PageHeader
-        title="Generate resume"
-        description="Pick what goes in, rewrite what needs it, and watch the PDF change as you go."
+  // The preview block is the sheet: A4 proportions, driven by the height it
+  // has. It takes only the width that shape needs — the item list on the left
+  // gets everything else.
+  const previewTile = (
+    <Tile
+      title="PDF preview"
+      className="m-auto aspect-a4 h-full min-h-0 w-auto max-w-full"
+      contentClassName="min-h-0 flex-1 pt-0"
+      action={
+        <button
+          type="button"
+          aria-label={previewFullscreen ? 'exit full screen preview' : 'full screen preview'}
+          title={previewFullscreen ? 'exit full screen preview' : 'full screen preview'}
+          onClick={() => setPreviewFullscreen((v) => !v)}
+          className="rounded-lg p-1 text-faint hover:bg-surface-tertiary hover:text-foreground"
+        >
+          {previewFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
+      }
+    >
+      <ResumePreviewPane
+        run={run}
+        profile={profiles?.find((p) => p.id === profileId)}
+        onRemoveItem={(itemId) => toggleItem.mutate({ itemId, selected: false })}
+        onReorder={(sectionId, itemIds) => reorderSection.mutate({ sectionId, itemIds })}
+        onExport={run ? () => exportRun.mutate() : undefined}
+        exportPending={exportRun.isPending}
+        exportDisabled={!run || run.state === 'running'}
+        exportState={exportRun.data ?? run?.export}
+        exportError={exportRun.isError ? (exportRun.error as Error).message : undefined}
+        warnings={run ? exportWarnings(run) : undefined}
       />
+    </Tile>
+  );
 
-      <div className="mt-4 flex items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <VacancySummaryBar jobId={vacancyJobId} />
-        </div>
-        {!run ? (
-          <div className="flex w-60 shrink-0 flex-col gap-2">
-            <Field label="Grounding">
+  // The vacancy, the pre-run controls and the item list are all one column:
+  // everything the user manipulates on the left, the document they are judging
+  // on the right, and no page chrome above either of them.
+  const leftColumn = (
+    <div className="flex min-h-0 w-full min-w-0 flex-col gap-4 lg:min-w-[26rem] lg:flex-1">
+      {!run ? (
+        <div className="flex flex-col gap-2">
+          <Field label="Grounding">
+            <Select
+              aria-label="Grounding level"
+              value={groundingLevel}
+              onChange={(e) => setGroundingLevel(e.target.value as typeof groundingLevel)}
+            >
+              {GROUNDING_LEVELS.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {summaryModel ? (
+            <Field label="Summary writer">
               <Select
-                aria-label="Grounding level"
-                value={groundingLevel}
-                onChange={(e) => setGroundingLevel(e.target.value as typeof groundingLevel)}
+                aria-label="Summary writer"
+                value={summaryOptionId ?? summaryModel.optionId}
+                onChange={(e) => setSummaryOptionId(e.target.value)}
               >
-                {GROUNDING_LEVELS.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
+                {summaryModel.options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label} — {o.cost}
                   </option>
                 ))}
               </Select>
             </Field>
-            {summaryModel ? (
-              <Field label="Summary writer">
-                <Select
-                  aria-label="Summary writer"
-                  value={summaryOptionId ?? summaryModel.optionId}
-                  onChange={(e) => setSummaryOptionId(e.target.value)}
-                >
-                  {summaryModel.options.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label} — {o.cost}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
 
-      {startRun.isError ? <p className="mt-2 text-sm text-danger">{(startRun.error as Error).message}</p> : null}
+      {startRun.isError ? <p className="text-sm text-danger">{(startRun.error as Error).message}</p> : null}
+      {rerunRun.isError ? <p className="text-sm text-danger">{(rerunRun.error as Error).message}</p> : null}
 
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-        <Tile
-          title="Generated resume"
-          className="min-h-0 flex-1 lg:basis-2/3"
-          scroll
-          scrollLabel="Generated resume sections"
-          state={tileState}
-          emptyMessage={
+      <Tile
+        action={
+          <Tabs
+            aria-label="Generate workspace view"
+            tabs={[
+              { id: 'resume', label: 'Generated resume' },
+              { id: 'job', label: 'Job description' },
+            ]}
+            active={leftTab}
+            onChange={(id) => setLeftTab(id as typeof leftTab)}
+          />
+        }
+        className="min-h-0 flex-1"
+        scroll
+        scrollLabel={leftTab === 'resume' ? 'Generated resume sections' : 'Job description'}
+      >
+        {leftTab === 'job' ? (
+          <VacancySummaryBar jobId={vacancyJobId} bare />
+        ) : tileState === 'loading' ? (
+          <TileSkeleton className="p-0" />
+        ) : tileState === 'error' ? (
+          <TileError error={error} />
+        ) : tileState === 'empty' ? (
+          <TileEmpty>
             <div className="flex flex-col items-center gap-3 text-center">
               <p className="max-w-[44ch] text-sm text-muted">
                 No run yet for this vacancy. Generate a resume to review it here as an inspectable list.
@@ -141,9 +196,8 @@ export default function GenerateWorkspacePage() {
               </Button>
               {startRun.isPending ? <Spinner label="starting generation…" /> : null}
             </div>
-          }
-          error={error}
-        >
+          </TileEmpty>
+        ) : (
           <WorkspaceLeftPane
             run={run}
             onToggle={(itemId, selected) => toggleItem.mutate({ itemId, selected })}
@@ -153,29 +207,39 @@ export default function GenerateWorkspacePage() {
             onRerun={() => rerunRun.mutate(undefined)}
             onRerunSections={(sections) => rerunRun.mutate(sections)}
             onRewrite={(itemId) => rewriteItem.mutateAsync(itemId).then((r) => r.variants)}
+            onToggleEnabled={(sectionId, enabled) => setSectionEnabled.mutate({ sectionId, enabled })}
           />
-        </Tile>
-
-        <div className="flex min-h-0 w-full shrink-0 flex-col gap-4 overflow-y-auto lg:w-96">
-          {rerunRun.isError ? (
-            <p className="text-sm text-danger">{(rerunRun.error as Error).message}</p>
-          ) : null}
-
-          <Tile title="PDF preview" className="min-h-0 flex-1">
-            <ResumePreviewPane
-              run={run}
-              profile={profiles?.find((p) => p.id === profileId)}
-              onExport={run ? () => exportRun.mutate() : undefined}
-              exportPending={exportRun.isPending}
-              exportDisabled={!run || run.state === 'running'}
-              exportState={exportRun.data ?? run?.export}
-              exportError={exportRun.isError ? (exportRun.error as Error).message : undefined}
-              warnings={run ? exportWarnings(run) : undefined}
-            />
-          </Tile>
-        </div>
-      </div>
+        )}
+      </Tile>
     </div>
+  );
+
+  return (
+    <PreviewHighlightProvider>
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+          {leftColumn}
+
+          {/* Width comes from the sheet's aspect ratio against the height it
+              has, so this column never claims more than the page needs. */}
+          <div className="flex min-h-0 w-full shrink-0 flex-col lg:w-auto">
+            {previewFullscreen ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-dashed border-border text-sm text-faint">
+                Preview is full screen.
+              </div>
+            ) : (
+              previewTile
+            )}
+          </div>
+        </div>
+
+        {previewFullscreen ? (
+          <div className="fixed inset-0 z-50 flex bg-background p-4" data-testid="preview-fullscreen">
+            {previewTile}
+          </div>
+        ) : null}
+      </div>
+    </PreviewHighlightProvider>
   );
 }
 
@@ -186,27 +250,37 @@ export default function GenerateWorkspacePage() {
 // which no grounding check ever verified (FR-016).
 function exportWarnings(run: GenerationRunDto): string[] {
   const warnings: string[] = [];
+  // A section the user switched off entirely is intentionally excluded, not
+  // accidentally emptied — it gets no "you emptied this" nag below.
+  const enabledSections = run.sections.filter((s) => s.enabled !== false);
   const selected = (section: GenerationSectionDto | undefined) =>
     section?.items.filter((i) => i.selected && !i.unavailable) ?? [];
 
-  if (selected(run.sections.find((s) => s.kind === 'summary')).length === 0) {
+  if (selected(enabledSections.find((s) => s.kind === 'summary')).length === 0) {
     warnings.push('This resume has no summary — nothing is included in the summary section.');
   }
-  if (selected(run.sections.find((s) => s.kind === 'skills')).length === 0) {
+  if (selected(enabledSections.find((s) => s.kind === 'skills')).length === 0) {
     warnings.push('This resume has no skills — every skill group is switched off.');
   }
-  // Only warned about when the profile *has* projects: a resume without a
-  // projects section is a normal resume, not an emptied one.
-  const projectsSection = run.sections.find((s) => s.kind === 'projects');
-  if (projectsSection && projectsSection.items.length > 0 && selected(projectsSection).length === 0) {
-    warnings.push('This resume has no projects — every project is switched off.');
+  // Only warned about when the profile *has* projects/certifications: a
+  // resume without one of these sections is a normal resume, not an emptied
+  // one.
+  for (const [kind, label] of [
+    ['projects', 'projects'],
+    ['certifications', 'certifications'],
+    ['education', 'education'],
+  ] as const) {
+    const section = enabledSections.find((s) => s.kind === kind);
+    if (section && section.items.length > 0 && selected(section).length === 0) {
+      warnings.push(`This resume has no ${label} — every ${label.replace(/s$/, '')} is switched off.`);
+    }
   }
 
   // The summary section is excluded: it is written by the run itself and
   // grounded by its own stage, and warning about it on every single export
   // would train the user to ignore the warning that matters — an unverified
   // *suggestion* they chose to include (FR-016).
-  const aiIncluded = run.sections
+  const aiIncluded = enabledSections
     .filter((s) => s.kind !== 'summary')
     .flatMap((s) => selected(s))
     .filter((i) => i.origin === 'ai').length;
@@ -223,15 +297,20 @@ function exportWarnings(run: GenerationRunDto): string[] {
 // failedSections is T078's per-section-retry input: every `failed` section,
 // labelled for the control ("Acme Inc." for an experience block, "Summary" /
 // "Skills" for the singleton ones).
+const SECTION_KIND_LABELS: Record<string, string> = {
+  summary: 'Summary',
+  skills: 'Skills',
+  projects: 'Projects',
+  certifications: 'Certifications',
+  education: 'Education',
+};
+
 function failedSections(run: GenerationRunDto): { id: string; label: string }[] {
   return run.sections
     .filter((s) => s.state === 'failed')
     .map((s) => ({
       id: s.id,
-      label:
-        s.entryKey ??
-        s.entryLabel ??
-        (s.kind === 'summary' ? 'Summary' : s.kind === 'skills' ? 'Skills' : s.kind === 'projects' ? 'Projects' : s.kind),
+      label: s.entryKey ?? s.entryLabel ?? SECTION_KIND_LABELS[s.kind] ?? s.kind,
     }));
 }
 
@@ -247,6 +326,7 @@ function WorkspaceLeftPane({
   onRerun,
   onRerunSections,
   onRewrite,
+  onToggleEnabled,
 }: {
   run: GenerationRunDto | undefined;
   onToggle: (itemId: string, selected: boolean) => void;
@@ -256,6 +336,7 @@ function WorkspaceLeftPane({
   onRerun: () => void;
   onRerunSections: (sections: string[]) => void;
   onRewrite: (itemId: string) => Promise<string[]>;
+  onToggleEnabled: (sectionId: string, enabled: boolean) => void;
 }) {
   if (!run) {
     return null;
@@ -271,6 +352,8 @@ function WorkspaceLeftPane({
   const summarySection = run.sections.find((s) => s.kind === 'summary');
   const skillsSection = run.sections.find((s) => s.kind === 'skills');
   const projectsSection = run.sections.find((s) => s.kind === 'projects');
+  const certificationsSection = run.sections.find((s) => s.kind === 'certifications');
+  const educationSection = run.sections.find((s) => s.kind === 'education');
   const experienceSections = run.sections
     .filter((s): s is GenerationSectionDto => s.kind === 'experience')
     .sort((a, b) => a.position - b.position);
@@ -326,7 +409,17 @@ function WorkspaceLeftPane({
         </div>
       ) : null}
 
-      {summarySection ? <SummaryBlock section={summarySection} onToggle={onToggle} onEditText={onEditText} /> : null}
+      {summarySection ? (
+        <SummaryBlock
+          section={summarySection}
+          onToggle={onToggle}
+          onEditText={onEditText}
+          onRegenerate={() => {
+            if (window.confirm(RERUN_WARNING)) onRerunSections([summarySection.id]);
+          }}
+          onToggleEnabled={onToggleEnabled}
+        />
+      ) : null}
 
       {experienceSections.map((section) => (
         <WorkEntryBlock
@@ -336,6 +429,7 @@ function WorkspaceLeftPane({
           onReorder={onReorder}
           onEditText={onEditText}
           onRewrite={onRewrite}
+          onToggleEnabled={onToggleEnabled}
         />
       ))}
 
@@ -346,11 +440,35 @@ function WorkspaceLeftPane({
           onReorder={onReorder}
           onEditText={onEditText}
           onDropEntries={onDropEntries}
+          onToggleEnabled={onToggleEnabled}
         />
       ) : null}
 
       {projectsSection ? (
-        <ProjectsBlock section={projectsSection} onToggle={onToggle} onReorder={onReorder} />
+        <ProjectsBlock
+          section={projectsSection}
+          onToggle={onToggle}
+          onReorder={onReorder}
+          onToggleEnabled={onToggleEnabled}
+        />
+      ) : null}
+
+      {certificationsSection ? (
+        <CertificationsBlock
+          section={certificationsSection}
+          onToggle={onToggle}
+          onReorder={onReorder}
+          onToggleEnabled={onToggleEnabled}
+        />
+      ) : null}
+
+      {educationSection ? (
+        <EducationBlock
+          section={educationSection}
+          onToggle={onToggle}
+          onReorder={onReorder}
+          onToggleEnabled={onToggleEnabled}
+        />
       ) : null}
     </div>
   );

@@ -32,6 +32,7 @@ function section(items: GenerationItemDto[]): GenerationSectionDto {
     targetCount: 6,
     state: 'ready',
     fallbackUsed: false,
+    enabled: true,
     items,
   } as GenerationSectionDto;
 }
@@ -39,7 +40,7 @@ function section(items: GenerationItemDto[]): GenerationSectionDto {
 describe('SkillsBlock per-skill toggles', () => {
   it('renders every skill in an included group as its own control', () => {
     renderWithProviders(
-      <SkillsBlock section={section([item()])} onToggle={vi.fn()} onReorder={vi.fn()} onDropEntries={vi.fn()} />,
+      <SkillsBlock section={section([item()])} onToggle={vi.fn()} onReorder={vi.fn()} onDropEntries={vi.fn()} onToggleEnabled={vi.fn()} />,
     );
 
     expect(screen.getAllByTestId('skill-entry').map((el) => el.textContent)).toEqual(['Go', 'NestJS', 'Redis']);
@@ -64,6 +65,7 @@ describe('SkillsBlock per-skill toggles', () => {
         onToggle={vi.fn()}
         onReorder={vi.fn()}
         onDropEntries={onDropEntries}
+        onToggleEnabled={vi.fn()}
       />,
     );
 
@@ -89,6 +91,7 @@ describe('SkillsBlock per-skill toggles', () => {
         onToggle={vi.fn()}
         onReorder={vi.fn()}
         onDropEntries={onDropEntries}
+        onToggleEnabled={vi.fn()}
       />,
     );
 
@@ -106,6 +109,7 @@ describe('SkillsBlock per-skill toggles', () => {
         onToggle={vi.fn()}
         onReorder={vi.fn()}
         onDropEntries={vi.fn()}
+        onToggleEnabled={vi.fn()}
       />,
     );
 

@@ -8,7 +8,7 @@ import { useJobDetail } from '../../job-detail/hooks';
 // against, shown here and edited only from the job itself. Every run is
 // job-backed now, so this always renders from a jobId — before a run exists
 // (picked from Feed/Job Detail) and unchanged once it does.
-export default function VacancySummaryBar({ jobId }: { jobId: string }) {
+export default function VacancySummaryBar({ jobId, bare = false }: { jobId: string; bare?: boolean }) {
   const { data: job, isLoading } = useJobDetail(jobId);
 
   if (isLoading || !job) {
@@ -16,7 +16,14 @@ export default function VacancySummaryBar({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="flex items-start gap-4 rounded-2xl border border-border bg-surface p-4 shadow-tile" data-testid="vacancy-summary-bar">
+    <div
+      className={
+        bare
+          ? 'flex items-start gap-4'
+          : 'flex items-start gap-4 rounded-2xl border border-border bg-surface p-4 shadow-tile'
+      }
+      data-testid="vacancy-summary-bar"
+    >
       <IconTile icon={BriefcaseBusiness} tint="amber" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
@@ -28,7 +35,15 @@ export default function VacancySummaryBar({ jobId }: { jobId: string }) {
           </span>
         </div>
 
-        <p className="mt-2.5 line-clamp-2 max-w-[78ch] text-sm leading-relaxed text-muted">{job.description}</p>
+        <p
+          className={
+            bare
+              ? 'mt-2.5 max-w-[78ch] whitespace-pre-wrap text-sm leading-relaxed text-muted'
+              : 'mt-2.5 line-clamp-2 max-w-[78ch] text-sm leading-relaxed text-muted'
+          }
+        >
+          {job.description}
+        </p>
 
         <p className="mt-2 text-xs text-faint">
           Read-only — this vacancy came from the job you picked in Feed.{' '}

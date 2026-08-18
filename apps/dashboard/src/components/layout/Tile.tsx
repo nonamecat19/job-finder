@@ -43,6 +43,8 @@ export type TileProps = {
   onRetry?: () => void;
   children?: ReactNode;
   className?: string;
+  /** Classes for the (non-scrolling) body wrapper — for a tile whose content fills its height. */
+  contentClassName?: string;
 };
 
 export function Tile({
@@ -60,6 +62,7 @@ export function Tile({
   onRetry,
   children,
   className,
+  contentClassName,
 }: TileProps) {
   const body = (() => {
     switch (state) {
@@ -80,7 +83,7 @@ export function Tile({
             <div className="p-5">{children}</div>
           </ScrollShadow>
         ) : (
-          <div className="p-5">{children}</div>
+          <div className={cn('p-5', contentClassName)}>{children}</div>
         )) : null;
       default:
         return null;
