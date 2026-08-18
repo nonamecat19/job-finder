@@ -159,6 +159,111 @@ func TestLoadEnvOverride(t *testing.T) {
 	}
 }
 
+// TestCapabilityRoutingDefaultsToGo guards FR-020: an unlisted capability
+// routes to "go", and AI_SERVICE_URL/AI_SERVICE_TOKEN stay optional when no
+// capability is routed to python (K3-5).
+func TestCapabilityRoutingDefaultsToGo(t *testing.T) {
+	if err := unsetForTest(t); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GATEWAY_URL", "http://litellm:4000")
+	t.Setenv("LITELLM_MASTER_KEY", "sk-test")
+	t.Setenv("RABBITMQ_URL", "amqp://jobfinder:test@localhost:5672/")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.CapabilityRouting("ghost"); got != "go" {
+		t.Errorf("CapabilityRouting(ghost) = %q, want go", got)
+	}
+}
+
+// TestCapabilityRoutingParsesPairs guards the AI_CAPABILITY_ROUTING parse
+// path and per-capability override (FR-020).
+func TestCapabilityRoutingParsesPairs(t *testing.T) {
+	if err := unsetForTest(t); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GATEWAY_URL", "http://litellm:4000")
+	t.Setenv("LITELLM_MASTER_KEY", "sk-test")
+	t.Setenv("RABBITMQ_URL", "amqp://jobfinder:test@localhost:5672/")
+	t.Setenv("AI_SERVICE_URL", "http://ai:8000")
+	t.Setenv("AI_SERVICE_TOKEN", "shared-secret")
+	t.Setenv("AI_CAPABILITY_ROUTING", "ghost=python, match=go")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.CapabilityRouting("ghost"); got != "python" {
+		t.Errorf("CapabilityRouting(ghost) = %q, want python", got)
+	}
+	if got := cfg.CapabilityRouting("match"); got != "go" {
+		t.Errorf("CapabilityRouting(match) = %q, want go", got)
+	}
+	if got := cfg.CapabilityRouting("salary"); got != "go" {
+		t.Errorf("CapabilityRouting(salary) = %q, want go (unlisted)", got)
+	}
+}
+
+// TestCapabilityRoutingRejectsMalformedEntry guards the fail-loudly rule:
+// a malformed AI_CAPABILITY_ROUTING entry is a startup error naming it,
+// never silently ignored.
+func TestCapabilityRoutingRejectsMalformedEntry(t *testing.T) {
+	if err := unsetForTest(t); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GATEWAY_URL", "http://litellm:4000")
+	t.Setenv("LITELLM_MASTER_KEY", "sk-test")
+	t.Setenv("RABBITMQ_URL", "amqp://jobfinder:test@localhost:5672/")
+	t.Setenv("AI_CAPABILITY_ROUTING", "ghost=maybe")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load: want error for invalid mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "ghost=maybe") {
+		t.Errorf("Load error = %q, want it to name the malformed entry", err.Error())
+	}
+}
+
+// TestPythonRoutingRequiresAIServiceCredentials guards K3-5: once any
+// capability is routed to python, AI_SERVICE_URL and AI_SERVICE_TOKEN
+// become required.
+func TestPythonRoutingRequiresAIServiceCredentials(t *testing.T) {
+	cases := []struct {
+		name    string
+		url     string
+		token   string
+		wantKey string
+	}{
+		{name: "both unset", url: "", token: "", wantKey: "AI_SERVICE_URL"},
+		{name: "token unset", url: "http://ai:8000", token: "", wantKey: "AI_SERVICE_TOKEN"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := unsetForTest(t); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("GATEWAY_URL", "http://litellm:4000")
+			t.Setenv("LITELLM_MASTER_KEY", "sk-test")
+			t.Setenv("RABBITMQ_URL", "amqp://jobfinder:test@localhost:5672/")
+			t.Setenv("AI_CAPABILITY_ROUTING", "ghost=python")
+			t.Setenv("AI_SERVICE_URL", tc.url)
+			t.Setenv("AI_SERVICE_TOKEN", tc.token)
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load: want error naming %s, got nil", tc.wantKey)
+			}
+			if !strings.Contains(err.Error(), tc.wantKey) {
+				t.Errorf("Load error = %q, want it to name %s", err.Error(), tc.wantKey)
+			}
+		})
+	}
+}
+
 func unsetForTest(t *testing.T) error {
 	t.Helper()
 	all := append([]string{

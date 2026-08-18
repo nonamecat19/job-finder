@@ -1,0 +1,79 @@
+{
+  "captured_at": "2026-08-18T12:48Z",
+  "n_postings": 6,
+  "mean_absolute_score_deviation": 5.0,
+  "mean_absolute_score_deviation_pct_of_scale": 5.0,
+  "sc004_target": "<=5% mean deviation, <=5% outcome changes",
+  "outcome_changes": 0,
+  "outcome_changes_pct": 0.0,
+  "verdict": "BORDERLINE \u2014 mean deviation lands exactly at the 5% boundary on only 6 single-run samples; real LLM non-determinism, not an obvious prompt/logic bug. Outcome-category parity is clean (0/6 changed). NOT sufficient evidence to delete the Go path (T079) on this sample size.",
+  "known_fidelity_gap": "Python-path JobSignal.signals.repostCount/daysOpen/crossBoardCount/alwaysHiringCount persist as 0/null even though the snapshot carried real values and the model's explanation correctly used them \u2014 NewResultHandler doesn't carry the snapshot breakdown into the stored signals blob. Score/confidence/explanation/topSignals are correct; only the structured breakdown fields are lost. Needs a fix before this could be called full parity (FR-022: stored field sets should match).",
+  "comparisons": [
+    {
+      "jobId": "bd76687b-34fc-4a2b-ad92-1cdec7f60980",
+      "title": "Customer Support Specialist / HelpDesk Plus",
+      "go_score": 55,
+      "python_score": 65,
+      "abs_deviation": 10,
+      "go_outcome": "suspicious",
+      "python_outcome": "suspicious",
+      "go_explanation": "The posting has been open for 150 days, which is well past the 45-day threshold and moderately raises suspicion. It has been reposted once, indicating some persistence but not an aggressive pattern. There are zero cross-board duplicates, which is neutral. The always-hiring count is 1, meaning this is the only posting seen from this company \u2014 a normal case that does not suggest ghosting. The combination of long days open and a single repost pushes the score slightly above the midpoint, but without stronger signals like many reposts or multiple always-hiring postings, it does not reach high suspicion.",
+      "python_explanation": "The posting has been open for 150 days, well beyond the 45-day threshold, which significantly increases suspicion. Additionally, it has reappeared once across ingestion runs, indicating a repost. The cross-board duplicates count is 0, and the always-hiring count is 1 (the normal case for a single observed posting), so these do not raise further concern. The combination of advanced age and a single repost drives the score, but age alone is noted not to be sufficient for a very high score."
+    },
+    {
+      "jobId": "851ded20-dd57-4efb-9852-caea291a228c",
+      "title": "Growth Marketing Manager / Nimbus Cloud Co",
+      "go_score": 30,
+      "python_score": 20,
+      "abs_deviation": 10,
+      "go_outcome": "not_suspicious",
+      "python_outcome": "not_suspicious",
+      "go_explanation": "The posting has been open for 95 days, which is well past the 45-day threshold and contributes some suspicion. It has been reposted once, which slightly compounds the age concern. However, there are zero cross-board duplicates and only one always-hiring count, meaning this is the only posting seen from this company \u2014 a normal, non-suspicious pattern. Age and a single repost raise the score modestly, but without other compounding signals, it stays low.",
+      "python_explanation": "The only suspicious signal is the posting's age of 95 days, which moderately raises suspicion. However, the repost count is only 1 (which can happen for legitimately hard-to-fill roles) and there are no cross-board duplicates. The always-hiring count is 1, meaning this is the only observed posting from this company, which is normal and not a red flag. Age alone is never sufficient for a high score, so the overall assessment remains low."
+    },
+    {
+      "jobId": "e0e2af7c-a0a7-42d3-afbb-c842668a4808",
+      "title": "Product Designer / Lighthouse Studio",
+      "go_score": 10,
+      "python_score": 5,
+      "abs_deviation": 5,
+      "go_outcome": "not_suspicious",
+      "python_outcome": "not_suspicious",
+      "go_explanation": "The posting has been reposted once and has been open for 20 days. However, 20 days is not unusually long, and a single repost is not a strong indicator of ghosting. There are no cross-board duplicates and only one posting from this company, which is the normal case. Therefore, the score is low.",
+      "python_explanation": "The posting has only been reposted once and has been open for just 20 days, which is well under the 45-day threshold. The always-hiring count is 1, indicating this is the only posting from the company in the last 90 days \u2014 a normal scenario that does not suggest ghosting. There are no cross-board duplicates. With no red-flag signals present, the likelihood of this being a ghost job is very low."
+    },
+    {
+      "jobId": "11e55c3e-6f2c-405a-a631-39071d1071bf",
+      "title": "Senior Backend Engineer / Acme Robotics",
+      "go_score": 5,
+      "python_score": 5,
+      "abs_deviation": 0,
+      "go_outcome": "not_suspicious",
+      "python_outcome": "not_suspicious",
+      "go_explanation": "The posting has been open only 10 days, well under the 45-day threshold where age becomes suspicious. It has been reposted once, which is a very mild signal but not unusual for a live role. There are zero cross-board duplicates, and the always-hiring count is 1, meaning this is the only posting seen from this company \u2014 a normal baseline, not a red flag. None of the measured signals indicate ghosting behavior.",
+      "python_explanation": "The posting has only been seen once (repost count = 1), has been open for 10 days (well under the 45-day threshold), there are no cross-board duplicates, and the always-hiring count is 1, which is the normal case for a company with a single observed posting. None of these signals indicate a ghost job."
+    },
+    {
+      "jobId": "249838c5-ca2c-4599-8b6c-96ce025314a8",
+      "title": "Staff Data Scientist / Vertex Analytics",
+      "go_score": 5,
+      "python_score": 5,
+      "abs_deviation": 0,
+      "go_outcome": "not_suspicious",
+      "python_outcome": "not_suspicious",
+      "go_explanation": "The posting has been reposted once and has been open for only 3 days, which is not suspicious. There are no cross-board duplicates, and the always-hiring count is 1, meaning this is the only posting from this company, which is normal. These signals do not indicate a ghost job.",
+      "python_explanation": "The posting has been reposted once and has been open for only 3 days, which is very short. It is the only posting seen from this company in the last 90 days, which is normal, and there are no cross-board duplicates. None of these signals indicate ghost job behavior, so the score is low."
+    },
+    {
+      "jobId": "5ea1d346-92b1-436f-ab66-3fd32b057b66",
+      "title": "Warehouse Associate / QuickShip Logistics",
+      "go_score": 20,
+      "python_score": 15,
+      "abs_deviation": 5,
+      "go_outcome": "not_suspicious",
+      "python_outcome": "not_suspicious",
+      "go_explanation": "The posting has been open for 60 days, which exceeds the 45-day threshold and contributes to suspicion. However, age alone is not sufficient for a high score. The repost count is 1, indicating the posting has reappeared once, which is a mild signal. Cross-board duplicates are 0, so no additional concern there. The always-hiring count is 1, meaning this is the only posting from this company, which is normal and not a red flag. Overall, the signals are weak, so the score is low.",
+      "python_explanation": "This posting has been open for 60 days, which is above the 45-day threshold that can contribute to suspicion, but age alone is never sufficient for a high score. It has been reposted only once, which is low and not itself a strong ghost signal. There are zero cross-board duplicates, so no amplification there. The always-hiring count is 1, meaning this is the only posting seen from this company \u2014 that's the normal case and not a red flag. No signal strongly indicates the employer has no intent to fill this role. Overall, the score is low."
+    }
+  ]
+}

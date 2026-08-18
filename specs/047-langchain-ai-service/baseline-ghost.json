@@ -1,0 +1,164 @@
+[
+  {
+    "id": "9016e90a-b2fb-4c38-a642-5ad0d67f8bc2",
+    "jobId": "bd76687b-34fc-4a2b-ad92-1cdec7f60980",
+    "kind": "ghost",
+    "score": 55,
+    "model": "ghost",
+    "createdAt": "2026-08-18T09:44:33Z",
+    "signals": {
+      "repostCount": 1,
+      "daysOpen": 150,
+      "crossBoardCount": 0,
+      "alwaysHiringCount": 1,
+      "confidence": 0.9,
+      "explanation": "The posting has been open for 150 days, which is well past the 45-day threshold and moderately raises suspicion. It has been reposted once, indicating some persistence but not an aggressive pattern. There are zero cross-board duplicates, which is neutral. The always-hiring count is 1, meaning this is the only posting seen from this company \u2014 a normal case that does not suggest ghosting. The combination of long days open and a single repost pushes the score slightly above the midpoint, but without stronger signals like many reposts or multiple always-hiring postings, it does not reach high suspicion.",
+      "topSignals": [
+        "Days open: 150",
+        "Repost count: 1"
+      ],
+      "notes": {
+        "alwaysHiring": "measured",
+        "crossBoard": "measured",
+        "daysOpen": "measured",
+        "repost": "measured"
+      }
+    }
+  },
+  {
+    "id": "fe6d46da-6e19-4ad9-b328-48c296164c75",
+    "jobId": "851ded20-dd57-4efb-9852-caea291a228c",
+    "kind": "ghost",
+    "score": 30,
+    "model": "ghost",
+    "createdAt": "2026-08-18T09:44:37Z",
+    "signals": {
+      "repostCount": 1,
+      "daysOpen": 95,
+      "crossBoardCount": 0,
+      "alwaysHiringCount": 1,
+      "confidence": 0.9,
+      "explanation": "The posting has been open for 95 days, which is well past the 45-day threshold and contributes some suspicion. It has been reposted once, which slightly compounds the age concern. However, there are zero cross-board duplicates and only one always-hiring count, meaning this is the only posting seen from this company \u2014 a normal, non-suspicious pattern. Age and a single repost raise the score modestly, but without other compounding signals, it stays low.",
+      "topSignals": [
+        "Days open: 95",
+        "Repost count: 1"
+      ],
+      "notes": {
+        "alwaysHiring": "measured",
+        "crossBoard": "measured",
+        "daysOpen": "measured",
+        "repost": "measured"
+      }
+    }
+  },
+  {
+    "id": "781c0570-7130-4bee-94a2-b4bd14e020bc",
+    "jobId": "e0e2af7c-a0a7-42d3-afbb-c842668a4808",
+    "kind": "ghost",
+    "score": 10,
+    "model": "ghost",
+    "createdAt": "2026-08-18T09:44:44Z",
+    "signals": {
+      "repostCount": 1,
+      "daysOpen": 20,
+      "crossBoardCount": 0,
+      "alwaysHiringCount": 1,
+      "confidence": 0.9,
+      "explanation": "The posting has been reposted once and has been open for 20 days. However, 20 days is not unusually long, and a single repost is not a strong indicator of ghosting. There are no cross-board duplicates and only one posting from this company, which is the normal case. Therefore, the score is low.",
+      "topSignals": [
+        "Repost count: 1",
+        "Days open: 20",
+        "Cross-board duplicates: 0",
+        "Always-hiring count: 1"
+      ],
+      "notes": {
+        "alwaysHiring": "measured",
+        "crossBoard": "measured",
+        "daysOpen": "measured",
+        "repost": "measured"
+      }
+    }
+  },
+  {
+    "id": "b51513b3-61c0-42f3-a5ff-6d702cb23c23",
+    "jobId": "11e55c3e-6f2c-405a-a631-39071d1071bf",
+    "kind": "ghost",
+    "score": 5,
+    "model": "ghost",
+    "createdAt": "2026-08-18T09:44:52Z",
+    "signals": {
+      "repostCount": 1,
+      "daysOpen": 10,
+      "crossBoardCount": 0,
+      "alwaysHiringCount": 1,
+      "confidence": 0.95,
+      "explanation": "The posting has been open only 10 days, well under the 45-day threshold where age becomes suspicious. It has been reposted once, which is a very mild signal but not unusual for a live role. There are zero cross-board duplicates, and the always-hiring count is 1, meaning this is the only posting seen from this company \u2014 a normal baseline, not a red flag. None of the measured signals indicate ghosting behavior.",
+      "topSignals": [
+        "Days open: 10 (well under 45-day suspicion threshold)",
+        "Repost count: 1 (mild, common for active roles)",
+        "Cross-board duplicates: 0 (no duplication concern)",
+        "Always-hiring count: 1 (normal single-posting case)"
+      ],
+      "notes": {
+        "alwaysHiring": "measured",
+        "crossBoard": "measured",
+        "daysOpen": "measured",
+        "repost": "measured"
+      }
+    }
+  },
+  {
+    "id": "5bbe1f13-1347-414b-a54e-98805c35c276",
+    "jobId": "249838c5-ca2c-4599-8b6c-96ce025314a8",
+    "kind": "ghost",
+    "score": 5,
+    "model": "ghost",
+    "createdAt": "2026-08-18T09:44:58Z",
+    "signals": {
+      "repostCount": 1,
+      "daysOpen": 3,
+      "crossBoardCount": 0,
+      "alwaysHiringCount": 1,
+      "confidence": 0.9,
+      "explanation": "The posting has been reposted once and has been open for only 3 days, which is not suspicious. There are no cross-board duplicates, and the always-hiring count is 1, meaning this is the only posting from this company, which is normal. These signals do not indicate a ghost job.",
+      "topSignals": [
+        "Repost count: 1",
+        "Days open: 3",
+        "Cross-board duplicates: 0",
+        "Always-hiring count: 1"
+      ],
+      "notes": {
+        "alwaysHiring": "measured",
+        "crossBoard": "measured",
+        "daysOpen": "measured",
+        "repost": "measured"
+      }
+    }
+  },
+  {
+    "id": "1b1b782e-1b30-4b00-9e79-6f5120e171af",
+    "jobId": "5ea1d346-92b1-436f-ab66-3fd32b057b66",
+    "kind": "ghost",
+    "score": 20,
+    "model": "ghost",
+    "createdAt": "2026-08-18T09:45:01Z",
+    "signals": {
+      "repostCount": 1,
+      "daysOpen": 60,
+      "crossBoardCount": 0,
+      "alwaysHiringCount": 1,
+      "confidence": 0.9,
+      "explanation": "The posting has been open for 60 days, which exceeds the 45-day threshold and contributes to suspicion. However, age alone is not sufficient for a high score. The repost count is 1, indicating the posting has reappeared once, which is a mild signal. Cross-board duplicates are 0, so no additional concern there. The always-hiring count is 1, meaning this is the only posting from this company, which is normal and not a red flag. Overall, the signals are weak, so the score is low.",
+      "topSignals": [
+        "Days open: 60",
+        "Repost count: 1"
+      ],
+      "notes": {
+        "alwaysHiring": "measured",
+        "crossBoard": "measured",
+        "daysOpen": "measured",
+        "repost": "measured"
+      }
+    }
+  }
+]

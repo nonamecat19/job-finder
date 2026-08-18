@@ -14,6 +14,7 @@ import (
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/events"
+	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/nonamecat19/job-scraper/adapters/djinni"
@@ -129,7 +130,19 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		_ = rabbitConn.Close()
 		return nil, err
 	}
-	var enqueuer queue.Enqueuer = &events.PublishEnqueuer{Publisher: publisher}
+	baseEnqueuer := &events.PublishEnqueuer{Publisher: publisher}
+	// SnapshotEnqueuer intercepts only the "ghost" work type, and only when
+	// AI_CAPABILITY_ROUTING routes it to python (C8-3): every other
+	// dispatch — including ghost itself when routed to go — passes through
+	// to baseEnqueuer unchanged, so this substitution is safe everywhere
+	// p.Enqueuer is already injected (jobsources, manualadd, activity http,
+	// jobs, generation).
+	var enqueuer queue.Enqueuer = &ghostjob.SnapshotEnqueuer{
+		Base:    baseEnqueuer,
+		Repo:    database.Queries,
+		Pub:     publisher,
+		Routing: cfg.CapabilityRouting,
+	}
 
 	admin, err := events.NewAdmin(cfg.RabbitMQURL)
 	if err != nil {

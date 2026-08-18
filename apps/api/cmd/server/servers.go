@@ -12,6 +12,7 @@ import (
 
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/events"
+	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/queue"
@@ -58,6 +59,29 @@ func (p *Platform) consumer(name string, policy queue.TaskPolicy, handler func(c
 				}
 				return nil
 			},
+		},
+	}
+}
+
+// resultConcurrency bounds how many result deliveries results.backend
+// processes at once. Results are cheap persistence writes, not model calls,
+// so a small fixed pool is enough; there is no per-work-type policy to
+// derive it from the way there.consumer has.
+const resultConcurrency = 4
+
+// resultConsumer builds the Consumer for results.backend (T061,
+// contracts/messaging.md M5, M6): one queue shared by every capability's
+// result, dispatched to the per-capability handler registry.HandleResultDelivery
+// resolves (events/results.go).
+func (p *Platform) resultConsumer(registry events.ResultRegistry) namedConsumer {
+	return namedConsumer{
+		name: "results",
+		c: &events.Consumer{
+			Dial:        func() (*amqp.Connection, error) { return amqp.Dial(p.Config.RabbitMQURL) },
+			Queue:       events.ResultQueue,
+			Concurrency: resultConcurrency,
+			Logger:      p.Logger,
+			HandlerFunc: registry.HandleResultDelivery(p.Logger),
 		},
 	}
 }
@@ -130,8 +154,19 @@ func buildServers(p *Platform, app *App) *Servers {
 		p.consumer("generate", p.policyFor(queue.TypeGenerate), app.Generation.ProcessTask),
 		p.consumer("enrich", p.policyFor(queue.TypeEnrich), app.Enrichment.ProcessTask),
 		p.consumer("salary", p.policyFor(queue.TypeSalaryInfer), app.Salary.ProcessTask),
-		p.consumer("ghost", p.policyFor(queue.TypeGhostScore), app.Ghost.ProcessTask),
 	}
+
+	// ghost's Go consumer only runs while ghost is routed to go (C8-3):
+	// once AI_CAPABILITY_ROUTING routes it to python, the AI service is the
+	// sole consumer of work.ghost, and this process instead consumes its
+	// result off results.backend (registered below).
+	resultRegistry := events.ResultRegistry{}
+	if p.Config.CapabilityRouting(ghostjob.Kind) == "python" {
+		resultRegistry[events.EventGhostCompleted] = ghostjob.NewResultHandler(p.DB, "jobfinder-ai")
+	} else {
+		consumers = append(consumers, p.consumer("ghost", p.policyFor(queue.TypeGhostScore), app.Ghost.ProcessTask))
+	}
+	consumers = append(consumers, p.resultConsumer(resultRegistry))
 
 	return &Servers{HTTP: srv, Consumers: consumers}
 }

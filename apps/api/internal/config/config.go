@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -16,6 +17,16 @@ type Config struct {
 
 	GatewayURL       string `mapstructure:"GATEWAY_URL"`
 	LiteLLMMasterKey string `mapstructure:"LITELLM_MASTER_KEY"`
+
+	AIServiceURL   string `mapstructure:"AI_SERVICE_URL"`
+	AIServiceToken string `mapstructure:"AI_SERVICE_TOKEN"`
+
+	// AICapabilityRoutingRaw is the unparsed AI_CAPABILITY_ROUTING value
+	// (contracts/configuration.md K1, FR-020): comma-separated
+	// "capability=mode" pairs, mode one of "python" or "go". load() parses
+	// it into aiCapabilityRouting; use CapabilityRouting to read it.
+	AICapabilityRoutingRaw string `mapstructure:"AI_CAPABILITY_ROUTING"`
+	aiCapabilityRouting    map[string]string
 
 	KeywordRephraseCacheTTLSec int `mapstructure:"KEYWORD_REPHRASE_CACHE_TTL_SEC"`
 
@@ -151,7 +162,66 @@ func load() (*Config, error) {
 	if err := validateDBPool(cfg); err != nil {
 		return nil, err
 	}
+	routing, err := parseCapabilityRouting(cfg.AICapabilityRoutingRaw)
+	if err != nil {
+		return nil, err
+	}
+	cfg.aiCapabilityRouting = routing
 	return cfg, nil
+}
+
+// parseCapabilityRouting parses AI_CAPABILITY_ROUTING (K1, FR-020):
+// comma-separated "capability=mode" pairs, mode one of "python" or "go". An
+// empty value parses to no overrides (every capability absent, meaning
+// "go"). A malformed entry is a startup error naming that entry, rather
+// than being silently ignored.
+func parseCapabilityRouting(raw string) (map[string]string, error) {
+	routing := make(map[string]string)
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return routing, nil
+	}
+	for _, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("config: AI_CAPABILITY_ROUTING entry %q is not capability=mode", pair)
+		}
+		name := strings.TrimSpace(parts[0])
+		mode := strings.TrimSpace(parts[1])
+		if name == "" {
+			return nil, fmt.Errorf("config: AI_CAPABILITY_ROUTING entry %q has an empty capability name", pair)
+		}
+		if mode != "python" && mode != "go" {
+			return nil, fmt.Errorf("config: AI_CAPABILITY_ROUTING entry %q has mode %q, want \"python\" or \"go\"", pair, mode)
+		}
+		routing[name] = mode
+	}
+	return routing, nil
+}
+
+// CapabilityRouting reports the configured transport for capability:
+// "python" or "go". Absent means "go" until that capability is cut over
+// (FR-020, K1).
+func (c *Config) CapabilityRouting(capability string) string {
+	if mode, ok := c.aiCapabilityRouting[capability]; ok {
+		return mode
+	}
+	return "go"
+}
+
+// hasPythonRouting reports whether any capability is routed to python,
+// governing K3-5's second clause.
+func (c *Config) hasPythonRouting() bool {
+	for _, mode := range c.aiCapabilityRouting {
+		if mode == "python" {
+			return true
+		}
+	}
+	return false
 }
 
 // validateAISurface enforces K1: the gateway must be configured before any
@@ -166,6 +236,14 @@ func validateAISurface(cfg *Config) error {
 	}
 	if cfg.RabbitMQURL == "" {
 		return fmt.Errorf("config: RABBITMQ_URL is required")
+	}
+	if cfg.hasPythonRouting() {
+		if cfg.AIServiceURL == "" {
+			return fmt.Errorf("config: AI_SERVICE_URL is required once a capability is routed to python (AI_CAPABILITY_ROUTING)")
+		}
+		if cfg.AIServiceToken == "" {
+			return fmt.Errorf("config: AI_SERVICE_TOKEN is required once a capability is routed to python (AI_CAPABILITY_ROUTING)")
+		}
 	}
 	return nil
 }
