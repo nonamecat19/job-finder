@@ -131,6 +131,25 @@ func TestInvoke_RateLimitedRetriesOnceHonouringRetryAfter(t *testing.T) {
 	}
 }
 
+// TestInvoke_UnreachableServiceReturnsClassifiedError proves H6-4: when the
+// AI service can't be reached at all (connection refused, not a 404 or a
+// classified failure), the caller gets a plain Go error and a nil Response
+// — never a substituted or fabricated result.
+func TestInvoke_UnreachableServiceReturnsClassifiedError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	unreachableURL := srv.URL
+	srv.Close() // closes the listener, so the port refuses connections
+
+	c := New(unreachableURL, "secret", nil, time.Second, nil)
+	resp, err := c.Invoke(t.Context(), "rephrase", struct{}{}, RequestContext{})
+	if err == nil {
+		t.Fatal("Invoke: want error for an unreachable service, got nil")
+	}
+	if resp != nil {
+		t.Errorf("Response = %+v, want nil (no substituted result on transport failure)", resp)
+	}
+}
+
 func TestInvoke_PerCapabilityTimeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(50 * time.Millisecond)
