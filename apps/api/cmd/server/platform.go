@@ -11,11 +11,16 @@ import (
 	"github.com/nonamecat19/job-scraper/model"
 
 	"github.com/job-finder/api/internal/activity"
+	"github.com/job-finder/api/internal/aiclient"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
+	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/events"
+	"github.com/job-finder/api/internal/generation"
+	"github.com/job-finder/api/internal/generation/domain"
 	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/api/internal/salary"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/nonamecat19/job-scraper/adapters/djinni"
 	"github.com/nonamecat19/job-scraper/adapters/jobleads"
@@ -49,6 +54,64 @@ type Platform struct {
 
 	DjinniSession   ports.SessionProvider
 	JobLeadsSession ports.SessionProvider
+
+	// AIClient calls the AI service's interactive HTTP surface (rephrase,
+	// recruiter, outreach, embed — contracts/http.md H1-1). Nil when
+	// AI_SERVICE_URL is unset, which is only valid while every capability
+	// still routes to go (config.go's Validate).
+	AIClient *aiclient.Client
+
+	// GenLate is generation.SnapshotEnqueuer's ProfileStore/ShapeProvider/
+	// SummaryModelProvider, bound once composeGeneration builds the real
+	// profile/shape/summary services — see lateGenerationSnapshot.
+	GenLate *lateGenerationSnapshot
+}
+
+// lateGenerationSnapshot breaks the same construction-order cycle
+// lateSourceConfig breaks for job sources: buildPlatform wraps p.Enqueuer
+// with generation.SnapshotEnqueuer before profileSvc/shapeSvc/summarySvc
+// exist (composeGeneration builds them later), and every composeX call that
+// captures p.Enqueuer by value in between (composeJobSources, composeMatching,
+// ...) must see the final wrapped enqueuer, not a version wrapped again
+// afterward. Binding this pointer's target after the fact reaches every
+// value that already captured it, since the enqueuer field types are
+// interfaces, not values.
+type lateGenerationSnapshot struct {
+	profiles domain.ProfileStore
+	shape    generation.ShapeProvider
+	summary  generation.SummaryModelProvider
+}
+
+func (l *lateGenerationSnapshot) Bind(profiles domain.ProfileStore, shape generation.ShapeProvider, summary generation.SummaryModelProvider) {
+	l.profiles, l.shape, l.summary = profiles, shape, summary
+}
+
+func (l *lateGenerationSnapshot) Get(ctx context.Context, id string) (sqlcgen.Profile, error) {
+	if l.profiles == nil {
+		return sqlcgen.Profile{}, fmt.Errorf("generation snapshot: profile store not bound yet")
+	}
+	return l.profiles.Get(ctx, id)
+}
+
+func (l *lateGenerationSnapshot) GetDefault(ctx context.Context) (sqlcgen.Profile, error) {
+	if l.profiles == nil {
+		return sqlcgen.Profile{}, fmt.Errorf("generation snapshot: profile store not bound yet")
+	}
+	return l.profiles.GetDefault(ctx)
+}
+
+func (l *lateGenerationSnapshot) Shape(ctx context.Context) domain.ShapeConfig {
+	if l.shape == nil {
+		return domain.DefaultShapeConfig()
+	}
+	return l.shape.Shape(ctx)
+}
+
+func (l *lateGenerationSnapshot) SummaryOption(ctx context.Context) domain.SummaryOption {
+	if l.summary == nil {
+		return domain.DefaultSummaryOption()
+	}
+	return l.summary.SummaryOption(ctx)
 }
 
 // lateSourceConfig is a ports.SourceConfigStore that gets its real store after
@@ -143,6 +206,32 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		Pub:     publisher,
 		Routing: cfg.CapabilityRouting,
 	}
+	// salary.SnapshotEnqueuer intercepts only the "salary" work type, on the
+	// same routing condition, chained the same way.
+	enqueuer = &salary.SnapshotEnqueuer{
+		Base:    enqueuer,
+		Repo:    database.Queries,
+		Pub:     publisher,
+		Routing: cfg.CapabilityRouting,
+	}
+	// generation.SnapshotEnqueuer intercepts only the "generate" work type,
+	// and only the legacy merged-resume/cover-letter path — a 042 workspace
+	// run always passes through regardless of routing (publish.go). Its
+	// ProfileStore/ShapeProvider/SummaryModelProvider are not ready yet at
+	// this point in startup (composeGeneration builds them); genLate is
+	// bound once they are, and every value below that captures this
+	// enqueuer sees the bound version because genLate is a pointer.
+	genLate := &lateGenerationSnapshot{}
+	enqueuer = &generation.SnapshotEnqueuer{
+		Base:         enqueuer,
+		Repo:         database.Queries,
+		Profiles:     genLate,
+		Shape:        genLate,
+		Summary:      genLate,
+		DefaultLevel: domain.ParseGroundingLevel(cfg.ResumeGroundingLvl),
+		Pub:          publisher,
+		Routing:      cfg.CapabilityRouting,
+	}
 
 	admin, err := events.NewAdmin(cfg.RabbitMQURL)
 	if err != nil {
@@ -169,6 +258,11 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 
+	var aiClient *aiclient.Client
+	if cfg.AIServiceURL != "" {
+		aiClient = aiclient.New(cfg.AIServiceURL, cfg.AIServiceToken, nil, 0, slog.Default())
+	}
+
 	return &Platform{
 		Config:      cfg,
 		DB:          database,
@@ -188,6 +282,10 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		SourceConfig:    sourceConfig,
 		DjinniSession:   djinniSession,
 		JobLeadsSession: jobLeadsSession,
+
+		AIClient: aiClient,
+
+		GenLate: genLate,
 	}, nil
 }
 

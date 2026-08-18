@@ -13,6 +13,7 @@
 | `AI_SERVICE_TOKEN` | backend, AI service | **yes** | Shared secret for the interactive HTTP surface (H7-1) |
 | `AI_CAPABILITY_ROUTING` | backend | no | Per-capability switch: `python` or `go` (FR-020). Absent = `go` until a capability is cut over |
 | `LANGFUSE_PAYLOAD_RETENTION_DAYS` | retention job | no | Default 30 (FR-018) |
+| `RETENTION_CLICKHOUSE_URL` / `_USER` / `_PASSWORD` | backend (retention job only) | no | Native-protocol ClickHouse DSN, e.g. `clickhouse://clickhouse:9000/default`. Empty disables the job (K5-4, K5-5) |
 
 ## K2. Variables the AI service receives
 
@@ -62,6 +63,29 @@
   timings, token counts and cost (FR-018, SC-015).
 - **K5-3**: The purge MUST be automatic and verifiable — an operator can confirm no payload
   older than the limit remains, without trusting that the job ran.
+- **K5-4**: Implemented as `apps/api/internal/platform/langfuseretention`, riding the ingestion
+  scheduler's existing 5-minute tick (`internal/jobsources/interfaces/worker/scheduler.go`), the
+  same pattern 036's `internal/platform/observability` pruner uses. It talks to Langfuse's own
+  ClickHouse store directly and blanks the `input`/`output` columns on `traces`, `observations`,
+  `events_full` and `events_core` (whichever exist in the running Langfuse version) for rows
+  older than the cutoff, leaving every other column untouched — verified live against
+  Langfuse 4.6.0's pinned ClickHouse schema (`apps/api/internal/platform/langfuseretention/prune_integration_test.go`).
+  This is deliberately **not** 036's pruner (`observability.Pruner`, `EVAL_PRUNE_*`): that one
+  deletes whole trace rows through Langfuse's public API, which is the only retention primitive
+  the public API exposes and does not satisfy K5-2. Langfuse's own "Data Retention" project
+  setting was also ruled out: on self-hosted instances it is Enterprise-licensed (requires
+  `LANGFUSE_EE_LICENSE_KEY`, which this deployment does not set), and even licensed it deletes
+  whole `Traces`/`Observations`/`Scores` rows rather than selectively purging payload columns —
+  confirmed against Langfuse's own docs and GitHub discussions as of 2026-08, not assumed.
+- **K5-5**: New variables (not in K1, added after that table was written): `RETENTION_CLICKHOUSE_URL`,
+  `RETENTION_CLICKHOUSE_USER`, `RETENTION_CLICKHOUSE_PASSWORD` — the ClickHouse credential the
+  retention job uses, consumed by `apps/api` only. Named `RETENTION_CLICKHOUSE_*` rather than
+  `LANGFUSE_CLICKHOUSE_*` for the same reason 036 contracts C2-2 named the collector-deletion key
+  `EVAL_PRUNE_*` instead of `LANGFUSE_*`: the application container must never receive a
+  `LANGFUSE_*`-named variable, since that prefix is reserved for credentials that act on
+  Langfuse's own API/store on the application's behalf. Empty (the default, since the Langfuse
+  service group is dev-only — `docker-compose.prod.yml` does not deploy it) disables the job,
+  matching K5-1's own job being a no-op rather than a failure when unconfigured.
 
 ## K6. Documentation obligations
 

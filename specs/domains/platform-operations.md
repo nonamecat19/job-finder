@@ -186,21 +186,21 @@ Two non-obvious filter memberships:
 their pins, and uses `golangci-lint-action` rather than `make lint-go` **only** for result
 caching — the config and pin are identical, so the verdicts match.
 
-`integration test` runs Postgres as **`pgvector/pgvector:pg16`, not stock postgres**, because
-the schema has `vector(768)` columns, with `POSTGRES_DB: jobfinder_test` so no separate
-`createdb` step is needed. Its run is two steps, and **the ordering is load-bearing**:
+`integration test` declares **no `services:` block and no `DATABASE_URL`**. The suite starts
+its own infrastructure: `apps/api/internal/testinfra` runs a **`pgvector/pgvector:pg16`
+container (not stock postgres**, because the schema has `vector(768)` columns), a RabbitMQ
+container for `internal/events`, a ClickHouse container for the Langfuse retention test, and
+the pinned LiteLLM image on the real `gateway/config.yaml` for the gateway routing test (its
+upstreams pointed at an in-test stub, so no provider is contacted and no key is needed), one
+of each per test binary, reaped by testcontainers' ryuk when the binary exits. The job is
+therefore one step, `go test -tags integration ./...`, and a laptop runs exactly what the
+runner runs.
 
-```bash
-go test -tags integration ./internal/db/... -run TestMigrate   # 1. create the schema
-go test -tags integration ./...                                # 2. everything else
-```
-
-`go test ./...` runs packages in parallel and the other integration-tagged packages assume an
-existing schema, so a single combined invocation can start a dependent package before
-migration finishes. The advisory lock in `internal/dbtest/database.go:112-116` serialises `TRUNCATE`
-between suites but does nothing for schema ordering. CI needs no
+Schema ordering is not load-bearing any more either: each package's first `dbtest` call
+migrates a template database inside that package's own container and clones it per suite, so
+no package can observe another's half-migrated schema. CI needs no
 `COMPOSE_PROJECT_NAME`/`POSTGRES_HOST_PORT` handling — those exist to stop local worktrees
-colliding on one host, and a runner is a fresh container.
+colliding on one host, and containers get ephemeral ports.
 
 The deleted `e2e (playwright)` job needed **no** database, Redis or Go backend: the specs
 mock every API call through `page.route('**/api/…')` or assert headings and URLs only, and
@@ -208,8 +208,9 @@ mock every API call through `page.route('**/api/…')` or assert headings and UR
 `reuseExistingServer: !process.env.CI`. Recorded because it makes the job cheap to restore —
 reinstating it is a workflow file, not infrastructure.
 
-Re-runnability (023-FR-021) holds because no job depends on mutable external state: service
-containers are fresh per run and no job contacts a live job board.
+Re-runnability (023-FR-021) holds because no job depends on mutable external state: every
+container is created fresh by the test binary that uses it and no job contacts a live job
+board.
 
 ### 2.2 The ruleset to apply on upgrade
 
