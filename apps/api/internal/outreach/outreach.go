@@ -14,6 +14,9 @@ type (
 	ContactsProvider = application.ContactsProvider
 	IntelProvider    = application.IntelProvider
 	Service          = application.Service
+
+	Drafter   = application.Drafter
+	AIDrafter = application.AIDrafter
 )
 
 const (

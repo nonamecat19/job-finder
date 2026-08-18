@@ -6,19 +6,12 @@ import (
 	"strings"
 
 	"github.com/job-finder/api/internal/outreach/domain"
-	"github.com/job-finder/api/internal/platform/llm"
 )
 
 func (s *Service) generateGrounded(ctx context.Context, tone domain.Tone, contactName, companyName string, facts []domain.Fact) (string, []domain.GroundingTrace) {
 	var lastViolation string
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		prompt := domain.BuildPrompt(tone, contactName, companyName, facts, lastViolation)
-		out, err := llm.CompleteStructured[domain.DraftOutput](ctx, s.llmc, prompt, &llm.CompleteOptions{
-			System: "You write brief, honest outreach messages. You never state a specific fact about a " +
-				"company or team that is not explicitly given to you as an allowed fact. Vagueness is always " +
-				"preferred to invention.",
-			Model: s.model,
-		})
+		out, err := s.drafter.Draft(ctx, tone, contactName, companyName, facts, lastViolation)
 		if err != nil {
 			lastViolation = "generation failed: " + err.Error()
 			continue

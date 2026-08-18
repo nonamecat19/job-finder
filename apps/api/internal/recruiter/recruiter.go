@@ -11,6 +11,10 @@ type (
 	ScrapingService = domain.ScrapingService
 
 	Service = application.Service
+
+	ContactExtractor   = application.ContactExtractor
+	AIContactExtractor = application.AIContactExtractor
+	ExtractedContact   = application.ExtractedContact
 )
 
 var NewService = application.NewService

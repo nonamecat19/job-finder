@@ -60,9 +60,13 @@ const toolloopPkg = "github.com/job-finder/api/internal/platform/llm/application
 // tools, in the style of gateway_config_test.go's requestedGenerationGroups.
 // Adding one here is the decision point; discovery below makes it impossible to
 // skip.
-var declaredToolPackages = map[string]bool{
-	"github.com/job-finder/api/internal/salary/application": true,
-}
+// Empty since 047 T103: salary's Go tool loop is deleted — apps/ai's
+// LangGraph loop is the only tool-calling exchange left, and it holds no
+// database credentials at all (FR-008), so this fence has nothing left to
+// police. Left as a declared, empty map rather than deleting the test, so a
+// future tool-calling package re-triggers this file's whole point instead of
+// silently having nothing to add itself to.
+var declaredToolPackages = map[string]bool{}
 
 // forbiddenPrefixes are capabilities no lookup may reach, directly or through
 // any dependency.
