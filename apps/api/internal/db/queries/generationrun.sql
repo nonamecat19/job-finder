@@ -72,6 +72,12 @@ RETURNING *;
 -- name: ListSectionsByRun :many
 SELECT * FROM generation_sections WHERE run_id = $1 ORDER BY position;
 
+-- name: UpdateSectionEnabled :one
+-- The per-run "disable this section" switch (PATCH .../sections/{sectionId}):
+-- excludes the section from export/preview via Assemble without touching its
+-- items, so re-enabling it restores exactly the selection it had.
+UPDATE generation_sections SET enabled = $2 WHERE id = $1 RETURNING *;
+
 -- name: SetSectionState :exec
 UPDATE generation_sections SET
     state = $2,

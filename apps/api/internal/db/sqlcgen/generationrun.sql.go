@@ -158,7 +158,7 @@ FROM (
         unnest($5::int[]) AS p,
         unnest($6::int[]) AS tc
 ) AS x
-RETURNING id, run_id, kind, entry_key, entry_label, position, target_count, state, error, fallback_used
+RETURNING id, run_id, kind, entry_key, entry_label, position, target_count, state, error, fallback_used, enabled
 `
 
 type CreateSectionsParams struct {
@@ -205,6 +205,7 @@ func (q *Queries) CreateSections(ctx context.Context, arg CreateSectionsParams) 
 			&i.State,
 			&i.Error,
 			&i.FallbackUsed,
+			&i.Enabled,
 		); err != nil {
 			return nil, err
 		}
@@ -430,7 +431,7 @@ func (q *Queries) ListRunsByProfile(ctx context.Context, arg ListRunsByProfilePa
 }
 
 const listSectionsByRun = `-- name: ListSectionsByRun :many
-SELECT id, run_id, kind, entry_key, entry_label, position, target_count, state, error, fallback_used FROM generation_sections WHERE run_id = $1 ORDER BY position
+SELECT id, run_id, kind, entry_key, entry_label, position, target_count, state, error, fallback_used, enabled FROM generation_sections WHERE run_id = $1 ORDER BY position
 `
 
 func (q *Queries) ListSectionsByRun(ctx context.Context, runID pgtype.UUID) ([]GenerationSection, error) {
@@ -453,6 +454,7 @@ func (q *Queries) ListSectionsByRun(ctx context.Context, runID pgtype.UUID) ([]G
 			&i.State,
 			&i.Error,
 			&i.FallbackUsed,
+			&i.Enabled,
 		); err != nil {
 			return nil, err
 		}
@@ -643,4 +645,35 @@ type UpdateItemTextParams struct {
 func (q *Queries) UpdateItemText(ctx context.Context, arg UpdateItemTextParams) error {
 	_, err := q.db.Exec(ctx, updateItemText, arg.ID, arg.EditedText)
 	return err
+}
+
+const updateSectionEnabled = `-- name: UpdateSectionEnabled :one
+UPDATE generation_sections SET enabled = $2 WHERE id = $1 RETURNING id, run_id, kind, entry_key, entry_label, position, target_count, state, error, fallback_used, enabled
+`
+
+type UpdateSectionEnabledParams struct {
+	ID      pgtype.UUID `json:"id"`
+	Enabled bool        `json:"enabled"`
+}
+
+// The per-run "disable this section" switch (PATCH .../sections/{sectionId}):
+// excludes the section from export/preview via Assemble without touching its
+// items, so re-enabling it restores exactly the selection it had.
+func (q *Queries) UpdateSectionEnabled(ctx context.Context, arg UpdateSectionEnabledParams) (GenerationSection, error) {
+	row := q.db.QueryRow(ctx, updateSectionEnabled, arg.ID, arg.Enabled)
+	var i GenerationSection
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.Kind,
+		&i.EntryKey,
+		&i.EntryLabel,
+		&i.Position,
+		&i.TargetCount,
+		&i.State,
+		&i.Error,
+		&i.FallbackUsed,
+		&i.Enabled,
+	)
+	return i, err
 }

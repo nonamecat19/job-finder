@@ -17,6 +17,9 @@ SET "summaryLines" = $1,
     "certificationsMin" = $12,
     "certificationsMax" = $13,
     "fontSize" = $14,
+    "experienceEnabled" = $15,
+    "summaryEnabled" = $16,
+    "educationEnabled" = $17,
     "updatedAt" = now()
 WHERE "id" = 'default'
 RETURNING *;

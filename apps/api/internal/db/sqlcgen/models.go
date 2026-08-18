@@ -206,6 +206,7 @@ type GenerationSection struct {
 	State        string      `json:"state"`
 	Error        *string     `json:"error"`
 	FallbackUsed bool        `json:"fallback_used"`
+	Enabled      bool        `json:"enabled"`
 }
 
 type HostRetrievalState struct {
@@ -359,6 +360,9 @@ type ResumeShapeSetting struct {
 	CertificationsMin     int32            `json:"certificationsMin"`
 	CertificationsMax     int32            `json:"certificationsMax"`
 	FontSize              int32            `json:"fontSize"`
+	ExperienceEnabled     bool             `json:"experienceEnabled"`
+	SummaryEnabled        bool             `json:"summaryEnabled"`
+	EducationEnabled      bool             `json:"educationEnabled"`
 }
 
 type SalaryCache struct {

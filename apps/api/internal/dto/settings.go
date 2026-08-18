@@ -8,8 +8,10 @@ type AiFeatureSettingDto struct {
 
 type ResumeShapeConfigDto struct {
 	SummaryLines          int  `json:"summaryLines"`
+	SummaryEnabled        bool `json:"summaryEnabled"`
 	SkillsEnabled         bool `json:"skillsEnabled"`
 	SkillsMaxGroups       int  `json:"skillsMaxGroups"`
+	ExperienceEnabled     bool `json:"experienceEnabled"`
 	ExperienceBulletsMin  int  `json:"experienceBulletsMin"`
 	ExperienceBulletsMax  int  `json:"experienceBulletsMax"`
 	TargetPages           int  `json:"targetPages"`
@@ -20,6 +22,7 @@ type ResumeShapeConfigDto struct {
 	CertificationsEnabled bool `json:"certificationsEnabled"`
 	CertificationsMin     int  `json:"certificationsMin"`
 	CertificationsMax     int  `json:"certificationsMax"`
+	EducationEnabled      bool `json:"educationEnabled"`
 	FontSize              int  `json:"fontSize"`
 }
 
