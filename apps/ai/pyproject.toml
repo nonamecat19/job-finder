@@ -21,6 +21,7 @@ dev = [
     "pytest==9.1.1",
     "pip-audit==2.10.1",
     "datamodel-code-generator==0.74.0",
+    "testcontainers[rabbitmq]==4.15.0",
 ]
 
 [build-system]
@@ -47,3 +48,6 @@ packages = ["jobfinder_ai"]
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/contract", "tests/integration"]
 pythonpath = ["src"]
+markers = [
+    "docker: needs a running Docker daemon (testcontainers). Never skipped — a missing daemon fails the suite.",
+]
