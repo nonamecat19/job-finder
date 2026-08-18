@@ -45,15 +45,15 @@ flowchart TB
     end
     subgraph Data
         PG[("Postgres 16 + pgvector")]
-        RD[("Redis — asynq")]
+        RMQ[("RabbitMQ — internal/events")]
         FS[("Documents: MinIO or disk")]
     end
     SIDE["JobSpy service (external, JOBSPY_URL)"]
     U --> DASH --> HTTP
     HTTP --> PG
-    HTTP -->|enqueue| RD
-    SCHED -->|enqueue| RD
-    RD --> W1 & W2 & W3 & W4 & W5 & W6
+    HTTP -->|publish| RMQ
+    SCHED -->|publish| RMQ
+    RMQ --> W1 & W2 & W3 & W4 & W5 & W6
     W1 --> SIDE
     W1 & W2 & W3 & W4 & W5 & W6 --> PG
     W3 --> FS
@@ -71,11 +71,12 @@ debug.
 | Single-user, self-hosted | no multi-tenant isolation, no horizontal scaling requirement |
 | Workers need the same DB and config as the API | shared process avoids duplicating wiring |
 | Operators are the users | one `make run-backend` beats a compose topology |
-| But: task types have very different concurrency | six **separate** asynq servers, one per type |
+| But: task types have very different concurrency | six **separate** RabbitMQ queues and consumers, one per work type |
 
-The last row is the interesting one. Rather than one worker pool with weighted queues,
-each task type gets its own `asynq.Server` so `Concurrency` is a hard per-type ceiling
-(`internal/queue/queue.go:22-37`, `cmd/server/servers.go:29-44`).
+The last row is the interesting one. Rather than one worker pool with weighted queues, each
+work type gets its own `work.<work_type>` queue and its own `events.Consumer`, whose
+RabbitMQ prefetch is a hard per-type ceiling (`internal/events/topology.go`,
+`cmd/server/servers.go`).
 
 ## Runtime boundaries
 
@@ -96,7 +97,7 @@ flowchart LR
         SRC["jobsources adapters"]
         RET["retrieval ladder"]
         STORE["storage"]
-        Q["asynq client"]
+        Q["events.Enqueuer"]
     end
     REST --> Core
     Core --> SQL & LLMR & SRC & RET & STORE & Q
@@ -104,16 +105,16 @@ flowchart LR
 
 Every arrow leaving `Core` crosses an interface the core declared
 ([ports and adapters](/principles/dependency-injection)). That is what makes the domain
-testable without Postgres, Redis, or a network.
+testable without Postgres, RabbitMQ, or a network.
 
-## The six queues at a glance
+## The six work queues at a glance
 
 ```mermaid
 flowchart LR
     ING2["ingest"] -->|"new Job rows"| MATCH2["match"]
     ING2 --> ENR["enrich"]
-    ING2 --> GHOST["ghost:score"]
-    ING2 --> SAL["salary:infer"]
+    ING2 --> GHOST["ghost"]
+    ING2 --> SAL["salary"]
     MATCH2 -->|"user shortlists"| GEN2["generate"]
 ```
 
@@ -127,7 +128,7 @@ flowchart LR
 | One job source is down | that source's `ingest` task; `SourceRun.ok=false`, other sources unaffected |
 | Cerebras key revoked | affected task fails terminally with the reason on its `ActivityRun`; Ollama tasks unaffected |
 | Provider 429 | breaker holds that provider; queued tasks cancelled, retried by the operator later |
-| Redis down | HTTP reads still serve from Postgres; enqueues fail |
+| RabbitMQ down | HTTP reads still serve from Postgres; publishes fail; consumers reconnect with bounded backoff once it returns |
 | Postgres down | readiness fails (`/api/health/ready`); the process stays up |
 | A worker goroutine wedges | the activity sweeper closes out its stale `ActivityRun` |
 

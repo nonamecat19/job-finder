@@ -1,62 +1,55 @@
 ---
 title: Queue monitoring
 sidebar_position: 6
-description: asynqmon in development, what to look at, and a triage playbook for stuck or failing queues.
+description: The RabbitMQ management UI in development, what to look at, and a triage playbook for stuck or failing queues.
 ---
 
 # Queue monitoring
 
-## asynqmon
+## RabbitMQ management UI
 
-Spec 018 added `hibiken/asynqmon` to the development compose stack.
-
-```yaml
-# docker-compose.yml
-asynqmon:
-  image: hibiken/asynqmon:0.7.2
-  command: ["--redis-addr=redis:6379", "--port=8090"]
-  depends_on:
-    - redis
-  ports:
-    - "8090:8090"
-```
-
-Open http://localhost:8090 after `make up`.
+asynqmon is gone along with asynq and Redis. RabbitMQ's own management plugin fills the
+same "look inside the broker" role, published in development at `http://localhost:15672`
+after `make up`.
 
 :::warning Development only
-The compose file says it plainly: *"docker-compose.prod.yml — no auth in front of it, so
-it must never ship to production."* asynqmon is deliberately absent from
-`docker-compose.prod.yml`. It offers full task inspection **and mutation** — anyone who
-reaches the port can delete or replay your queue.
+Like asynqmon before it, the management UI is not published in `docker-compose.prod.yml` —
+no auth in front of it, so it must never ship to production. In production, reach it through
+`docker compose exec rabbitmq rabbitmqctl` or a tunnel.
 :::
 
-Two other notes from the same block:
-
-- **Port 8090, not 8080** — 8080 is the dashboard's port in the production compose file
-  and the README.
-- **No healthcheck** — the image is distroless, with no shell, wget or curl to probe with;
-  readiness is verified externally.
+Unlike asynqmon, the management UI reads live broker state directly rather than something
+asynq curated — it shows every exchange, queue and binding `internal/events/topology.go`
+declares, not just work-type-shaped queues, and it has no notion of "retry count" or
+"archived" the way asynq's Redis structures did (see below).
 
 ## What it shows
 
 ```mermaid
 flowchart TB
-    A["asynqmon :8090"] --> Q["Queues: ingest, match, generate, enrich, salary:infer, ghost:score"]
-    Q --> ST["Per queue: active, pending, scheduled, retry, archived, completed"]
-    A --> T["Task inspection: payload, error, retry count"]
-    A --> ACT["Actions: run now, delete, archive, retry"]
-    A --> H["Per-queue history"]
+    A["RabbitMQ management UI :15672"] --> Q["Queues: work.<type>, delay.<type>.<rung>, dlq.<type>, results.backend"]
+    Q --> ST["Per queue: ready, unacked, consumers, message rates"]
+    A --> T["Message inspection (get, don't requeue): payload, headers"]
+    A --> ACT["Actions: purge a queue, publish a message"]
 ```
+
+RabbitMQ has no per-message "retry count" or "archived" state the way asynq's Redis
+structures did — that information now lives in the message's `x-attempt` and
+`x-first-failure-reason` headers (`internal/events/retry.go`), visible only by opening the
+message, and in which queue it currently sits (a work queue, a `delay.*` rung, or a `dlq.*`).
 
 ## Two views, two purposes
 
 | View | Source | Use it for |
 | --- | --- | --- |
-| asynqmon (`:8090`) | Redis, via asynq | queue mechanics: is the task there, how many retries, what is the raw payload |
+| RabbitMQ management UI (`:15672`) | The broker itself | queue mechanics: is the message there, which rung/DLQ, what is the raw payload and headers |
 | Status page (`/api/activity`) | Postgres `ActivityRun` | business meaning: which job, which step, why it failed |
+| `GET /api/health/ready` | Postgres + RabbitMQ management API | `dlq_depth` per work type, without opening the management UI |
 
-Both are needed. A task can be gone from Redis while its `ActivityRun` still says
-`queued` — which is exactly the case the [sweeper](/async/activity-tracking) resolves.
+All three are needed. A message can be gone from RabbitMQ while its `ActivityRun` still says
+`queued` — which is exactly the case the [sweeper](/async/activity-tracking) resolves,
+though note the sweeper itself no longer checks the broker before doing so (see
+[Activity tracking](/async/activity-tracking)).
 
 ## Triage playbook
 
@@ -75,7 +68,9 @@ flowchart TD
 
 ### Tasks are retrying
 
-Open the task in asynqmon and read the error.
+Open the message in the RabbitMQ management UI — while it sits in a work or delay queue —
+and read the payload/headers, or check `x-first-failure-reason` once it lands in a
+`dlq.<work_type>`.
 
 | Error text | Meaning | Action |
 | --- | --- | --- |
@@ -100,36 +95,74 @@ its own Ollama tier. To find which upstream actually served a request, read the
 sequenceDiagram
     participant You
     participant AR as /api/activity
-    participant AM as asynqmon
+    participant MU as RabbitMQ mgmt UI
     participant SW as Sweeper
     You->>AR: run shows running, old step
-    You->>AM: is the task active?
-    alt task active
-        AM-->>You: yes — genuinely working, check the heartbeat and deadline
-    else task gone
-        AM-->>You: not present
+    You->>MU: check the queue — is a delivery unacked for this work type?
+    alt delivery in flight
+        MU-->>You: yes — genuinely working, check the heartbeat and deadline
+    else nothing in flight
+        MU-->>You: not present
         SW->>AR: within ACTIVITY_STALE_AFTER + sweep interval, marks it interrupted
     end
 ```
 
 Defaults put the maximum detection delay at three minutes (`2m` stale + `1m` sweep), and
-`validateLiveness` refuses to boot with settings that would exceed five.
+`validateLiveness` refuses to boot with settings that would exceed five. RabbitMQ has no
+per-message "is this task active" query the way asynq's Inspector did, so this cross-check
+is a manual read of consumer/unacked counts, not something the sweeper itself performs.
 
-### Redis was flushed
+### RabbitMQ queue was purged, or a message was lost
 
-Queued `ActivityRun` rows have no task behind them. The sweeper's queued pass detects this
-via `Inspector.GetTaskInfo` and marks them `interrupted` after
-`ACTIVITY_QUEUED_GRACE` (default 30 minutes). Re-run the affected searches.
+Queued `ActivityRun` rows have no message behind them. Unlike under asynq, the sweeper's
+queued pass no longer checks the broker at all — it unconditionally marks any row still
+`queued` past `ACTIVITY_QUEUED_GRACE` (default 30 minutes) as `interrupted`, whether or not
+a message ever actually existed. Re-run the affected searches.
 
 ## Safe actions
 
 | Action | Where | Safe? |
 | --- | --- | --- |
-| Retry a failed task | Status page or asynqmon | yes — handlers re-read state |
-| Cancel all queued | `POST /api/activity/cancel-all` | yes |
-| Delete a task in asynqmon | asynqmon | leaves an orphan `ActivityRun`; the sweeper cleans it up |
-| Archive in asynqmon | asynqmon | yes |
-| Flush Redis | `redis-cli` | loses all pending work; `ActivityRun` rows are swept afterwards |
+| Retry a failed run | Status page (`POST /api/activity/retry`) | yes — handlers re-read state |
+| Cancel one run / cancel all queued | Status page | marks the `ActivityRun` row cancelled only — the message may still be delivered and processed (see [Activity tracking](/async/activity-tracking)) |
+| Re-dispatch a message stuck in a DLQ | RabbitMQ management UI, manual | yes, once the failure cause is fixed — see [below](#rabbitmq-dead-letter-re-dispatch) |
+| Purge a queue in the management UI | RabbitMQ management UI | discards messages permanently; leaves orphaned `ActivityRun` rows for the sweeper to close out |
+
+## RabbitMQ dead-letter re-dispatch
+
+Every work type has a dead-letter queue, `dlq.<work_type>` (e.g. `dlq.ingest`), bound to the
+`jobfinder.dlx` exchange. A message lands there either because it was non-retryable (a
+terminal `Failure` category) or because it exhausted its retry budget on the fixed backoff
+ladder — `1s → 10s → 1m → 10m` — reusing the longest rung past four attempts
+(`apps/api/internal/events/retry.go`). The message carries an `x-first-failure-reason`
+header recording why it was first dead-lettered, and an `x-attempt` header at the count it
+reached.
+
+The backend health endpoint (`GET /api/health/ready`) reports DLQ depth per work type under
+`dlq_depth`, so a non-empty DLQ is visible without opening the RabbitMQ management UI. It
+does not affect the endpoint's overall `ok` status — a non-empty DLQ is a signal to
+investigate, not an outage.
+
+To re-dispatch a message stuck in a DLQ once its cause is fixed (e.g. a bad credential
+corrected, a downstream bug patched):
+
+1. Open the RabbitMQ management UI (`:15672` in development; not published in production —
+   use `docker compose exec rabbitmq rabbitmqctl` or a tunnel there) and inspect the message
+   in `dlq.<work_type>` to confirm the fix actually addresses `x-first-failure-reason`.
+2. **Reset the `x-attempt` header to `0`** before republishing — leaving the exhausted
+   attempt count in place sends it straight back to `dlq.<work_type>` the moment it fails
+   once more, since `Decide` treats `x-attempt` as already-consumed budget.
+3. Republish the message body and headers to the `jobfinder.work` exchange with the
+   work type as routing key (e.g. routing key `ingest` for `dlq.ingest`) — the same
+   exchange and routing convention `apps/api/internal/events/topology.go` binds every
+   `work.<work_type>` queue to. Do not publish directly to `work.<work_type>`; publishing to
+   the exchange keeps routing centralized in the topology's bindings.
+4. Confirm the message is gone from the DLQ and its result lands on `jobfinder.results` (or
+   check `/api/health/ready`'s `dlq_depth` for that work type dropping).
+
+There is no automated re-dispatch tool yet — this is a manual operator action, deliberately
+gated behind inspecting the failure reason first, since blindly replaying a DLQ can
+re-trigger the same terminal failure for every message in it.
 
 ## Logs
 
@@ -142,4 +175,5 @@ Structured `slog` output from the process complements both views. Useful prefixe
 | `retrieval: browser rung unavailable, will skip` | headless browser failed to initialise |
 | `retrieval: flaresolverr rung configured` | FlareSolverr is in the ladder |
 | `salary: LEVELS_FYI_CSV not set` | optional salary source disabled |
-| `asynq worker error` | a worker server exited |
+| `events: consumer disconnected, reconnecting` | a consumer's broker connection dropped and is retrying with backoff |
+| `consumer error` | a consumer's `Run` returned (context cancelled, or a non-retriable dial failure) |

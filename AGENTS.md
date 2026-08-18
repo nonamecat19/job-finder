@@ -50,7 +50,8 @@ is ever committed.
 
 ## Project layout
 
-- `apps/api` — Go backend (HTTP API, asynq workers, ingestion scheduler)
+- `apps/api` — Go backend (HTTP API, RabbitMQ event consumers, ingestion scheduler)
+- `apps/ai` — Python AI orchestration service (LangChain/LangGraph, FastAPI + FastStream)
 - `apps/dashboard` — React/Vite dashboard
 - `packages/shared` — shared TS types, generated from Go DTOs via tygo
 - `specs/` — requirement records. `specs/domains/*.md` hold the rules that
@@ -68,9 +69,9 @@ is ever committed.
 
 - `make test-lint` — the merge gate: `lint-go` (golangci-lint, pinned in
   `apps/api/.golangci-version`) + `lint-web` (ESLint, `eslint.config.js`) +
-  `test-go` (Go unit tests) + `test-react` (Vitest). No Python is in this
-  repository, and `test-lint` never claimed to check it. Run it, or
-  `make lint-go` / `make lint-web` individually, before opening a pull
+  `lint-py` (ruff + mypy strict) + `test-go` (Go unit tests) + `test-react`
+  (Vitest) + `test-py` (pytest, `apps/ai`). Run it, or `make lint-go` /
+  `make lint-web` / `make lint-py` individually, before opening a pull
   request — it reports each violation with file, line and rule, and passes
   in seconds. `make test-integration` and `make test-e2e` are separate
   targets (they need containers/a browser) and are not part of

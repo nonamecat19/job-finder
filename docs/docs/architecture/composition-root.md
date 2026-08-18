@@ -48,18 +48,20 @@ flowchart TD
     SS --> TR["retrieval.ConfigureDefaultTransport(state, rateOverrides)"]
     TR --> RS["retrieval.NewServiceImpl"]
     RS --> SCR["scraping.New(retrieval)"]
-    CFG --> RO["queue.RedisOpt(REDIS_URL)"]
-    RO --> AC["asynq.Client + Inspector"]
+    CFG --> RO["amqp.Dial(RabbitMQURL)"]
+    RO --> TOPO["events.DeclareTopology"]
+    TOPO --> PUB["events.NewPublisher + events.NewAdmin"]
     CFG --> POL["queue.PoliciesFromConfig — validated"]
     CFG --> MIN["minio client (only if MINIO_ENDPOINT set)"]
     POL --> SW["activity.NewSweeper"]
-    DBP & SCR & AC & MIN & SW --> PLAT["*Platform"]
+    DBP & SCR & PUB & MIN & SW --> PLAT["*Platform"]
 ```
 
 Two details worth internalising (`cmd/server/platform.go`):
 
 - **Failure unwinds what it opened.** Every early return closes the database and the
-  scraping service before returning the error — no leaked pool on a bad `REDIS_URL`.
+  scraping service before returning the error — no leaked pool or connection on a bad
+  `RabbitMQURL`.
 - **`MinioReady` is nil when MinIO is disabled** (`platform.go:100-110`), and the
   readiness handler treats nil as "not configured" rather than "unhealthy". Optionality is
   represented by absence, not by a boolean flag.
@@ -128,25 +130,26 @@ Routing state lives in `gateway/config.yaml` and environment variables. Because 
 itself implements `Provider`, no service knows routing exists.
 
 The same routers are handed to the activity handler as `queue.ClassResolver`s —
-`queueClassResolvers` (`compose.go:694-709`) maps each policy's queue to the router that
-serves it — so the queue view can report which provider class each queue will run on right
-now.
+`queueClassResolvers` maps each policy's queue to the router that serves it — so the queue
+view can report a provider class per queue, though since 044 removed the local/hosted split
+this is always `hosted` for any LLM-backed queue.
 
 ## What `buildServers` owns
 
-`servers.go:54-84`: the chi router with 26 mounts, and the six workers. Each worker is
-built by `Platform.worker(...)` which composes admission gate → deadline middleware →
-handler:
+`servers.go`: the chi router with its mounts, and the six `events.Consumer`s. Each is built
+by `Platform.consumer(...)` which composes admission gate → deadline middleware → handler,
+then wraps a handler failure as a durable retry/dead-letter publish before ack:
 
 ```mermaid
 flowchart LR
-    T["task delivered"] --> GATE["queue.Gate — provider-class admission"]
+    D["delivery"] --> GATE["queue.Gate — semaphore admission"]
     GATE --> DL["queue.DeadlineMiddleware — MaxDuration + heartbeat"]
     DL --> HANDLER["service ProcessTask"]
+    HANDLER -->|error| RETRY["events.HandleFailure — retry or DLQ publish"]
 ```
 
-`policyFor(taskType)` panics for an unknown type (`servers.go:45-52`) — every wired worker
-must have a validated policy. That is a startup invariant, not a runtime error path.
+`policyFor(taskType)` panics for an unknown type (`servers.go`) — every wired consumer must
+have a validated policy. That is a startup invariant, not a runtime error path.
 
 ## Adding a feature to the graph
 
@@ -155,5 +158,6 @@ must have a validated policy. That is a startup invariant, not a runtime error p
 3. Add its handler to the `App` struct at the top of `compose.go`, and fold the handles in
    from `buildContexts`.
 4. Add `app.X.Mount` to the `NewRouter(...)` call in `servers.go`.
-5. If it is async: add the task type, queue name, payload, and a `TaskPolicy` in
-   `internal/queue`, then a `p.worker(...)` line.
+5. If it is async: add the work type to `internal/queue` and `events.WorkTypes`
+   (`internal/events/topology.go`), a payload, a `TaskPolicy`, then a `p.consumer(...)`
+   line in `buildServers`.

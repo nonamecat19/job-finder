@@ -15,7 +15,7 @@ under [`docs/`](docs/); agent workflow rules are in [`AGENTS.md`](AGENTS.md).
 
 ```
 apps/api              Go backend (chi HTTP API, sqlc + goose on Postgres/pgvector,
-                      asynq workers on Redis, LiteLLM gateway, scraping/retrieval ladder)
+                      RabbitMQ event consumers, LiteLLM gateway, scraping/retrieval ladder)
 apps/dashboard        React dashboard (Vite, Tailwind, TanStack Query, dnd-kit)
 packages/shared       Shared TS types (NormalizedJob, DTOs, JSON Resume subset)
 ```
@@ -30,10 +30,10 @@ docker compose up --build
 
 Dashboard: http://localhost:8080 · API: http://localhost:3000/api/health
 
-Queue monitoring (dev only, not in `docker-compose.prod.yml`): asynqmon at
-http://localhost:8090 — live view of the six asynq queues (ingest, match, generate,
-enrich, salary, ghost), task inspection, retry/delete/archive actions, and per-queue
-history.
+Queue monitoring: RabbitMQ's management UI at http://localhost:15672 (loopback-only in
+dev) — live view of the six work queues (ingest, match, generate, enrich, salary,
+ghost), their delay/retry queues, and per-work-type dead-letter queues
+(`docs/docs/async/monitoring.md`).
 
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 

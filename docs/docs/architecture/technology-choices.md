@@ -15,7 +15,7 @@ description: What was chosen, what it replaced, and the trade-off each choice ac
 | DB access | `sqlc` over pgx | generated type-safe Go from hand-written SQL |
 | Migrations | `goose` | plain SQL with `-- +goose Up` / `Down` markers |
 | Database | Postgres + `pgvector` | relational data and embeddings in one store |
-| Queue | `asynq` on Redis | Go-native, inspectable, asynqmon UI available |
+| Queue | RabbitMQ, direct `amqp091-go` | quorum queues, dead-lettering and delayed retry natively; management UI available |
 | Inference | Ollama (default), Cerebras (optional) | local-first, remote opt-in |
 | Object storage | MinIO, or local disk | optional; absence means disk |
 | Frontend | React 19 + Vite 6 | fast dev loop |
@@ -38,21 +38,22 @@ flowchart LR
     end
     subgraph After
         G["Go + chi"] --> SQ["sqlc + goose"]
-        G --> AQ["asynq"]
+        G --> RMQ["RabbitMQ, one queue per work type"]
     end
     N -.->|"same single-process model"| G
     DR -.->|"identical initial schema"| SQ
-    BQ -.->|"queue per task type"| AQ
+    BQ -.->|"queue per task type"| RMQ
 ```
 
 The evidence is still in the tree: `00001_init.sql:1-5` states it reuses Drizzle's initial
-migration SQL verbatim so `goose up` produces a byte-identical schema, and `queue.go`
-describes its queue layout as mirroring "the BullMQ setup's separate queues".
+migration SQL verbatim so `goose up` produces a byte-identical schema. The queue-per-type
+shape BullMQ set also outlived an intermediate stop at `asynq` (on Redis): the API moved to
+RabbitMQ, one `work.<work_type>` quorum queue per type, in the 047 migration.
 
 :::note What the current tree actually runs
-Go backend, sqlc + goose, asynq on Redis, and Ollama as the local-first LLM provider.
-Hosted inference, when enabled, goes through the LiteLLM gateway rather than through a
-provider adapter in Go.
+Go backend, sqlc + goose, RabbitMQ (`internal/events`), and Ollama as the local-first LLM
+provider. Hosted inference, when enabled, goes through the LiteLLM gateway rather than
+through a provider adapter in Go.
 :::
 
 ## Why sqlc rather than an ORM
@@ -69,22 +70,25 @@ Accepted trade-offs: no dynamic query builder (complex filters are written out),
 generated code in the diff. Gained: the query you read is the query that runs, and schema
 drift is a compile error rather than a runtime surprise.
 
-## Why asynq with one server per task type
+## Why one RabbitMQ queue and consumer per work type
 
-A single `asynq.Server` with a `Queues` weight map shares one worker pool across queues —
-weights control *priority*, not a per-queue ceiling. Since local inference tolerates one
-concurrent request while hosted inference tolerates several, each task type needs its own
-hard cap, so each gets its own server (`internal/queue/queue.go:22-37`).
+A single connection with a shared weighted queue map would control *priority*, not a
+per-queue ceiling. Each work type needs its own hard concurrency cap — historically because
+local inference tolerated one concurrent request while hosted inference tolerated several;
+since 044 removed that split it is simply each work type's own configured concurrency — so
+each gets its own `work.<work_type>` queue and its own `events.Consumer`, whose RabbitMQ
+`Qos` prefetch is that hard ceiling (`internal/events/topology.go`,
+`internal/queue/policy.go`).
 
 ```mermaid
 flowchart TB
-    subgraph Rejected["One server, weighted queues"]
+    subgraph Rejected["One queue, shared pool"]
         SP["shared pool of N workers"] --> Q1["match"] & Q2["generate"] & Q3["ingest"]
     end
-    subgraph Chosen["Six servers"]
-        S1["pool sized to match policy"] --> QQ1["match"]
-        S2["pool sized to generate policy"] --> QQ2["generate"]
-        S3["INGEST_CONCURRENCY"] --> QQ3["ingest"]
+    subgraph Chosen["Six work queues, six consumers"]
+        S1["prefetch sized to match policy"] --> QQ1["work.match"]
+        S2["prefetch sized to generate policy"] --> QQ2["work.generate"]
+        S3["INGEST_CONCURRENCY"] --> QQ3["work.ingest"]
     end
 ```
 

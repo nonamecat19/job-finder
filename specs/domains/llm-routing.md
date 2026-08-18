@@ -356,8 +356,8 @@ transitive dependency tree into a deliberately tight `go.mod`.
 
 The Go LangGraph ports are smaller again — a message-state graph with conditional edges, without the
 durable checkpointer, interrupt/resume or time-travel that make the Python original worth having.
-The durability they lack, this platform already has and better: asynq on Redis, Postgres, and the
-per-task deadline and heartbeat middleware in § 4.
+The durability they lack, this platform already has and better: RabbitMQ (`internal/events`),
+Postgres, and the per-task deadline and heartbeat middleware in § 4.
 
 **What is built instead**, when the need is real rather than anticipated:
 
@@ -367,7 +367,7 @@ per-task deadline and heartbeat middleware in § 4.
   `internal/platform/llm/application/toolloop`. See § 2.5.
 - Provider abstraction, failover, retry, model swap without rebuild: already the LiteLLM proxy's job
   (§ 2.1). A framework would duplicate it, worse.
-- Durable multi-step orchestration: already asynq (§ 4).
+- Durable multi-step orchestration: already RabbitMQ + the events package (§ 4).
 - Observability of cost, latency and served tier: proxy callbacks, not client instrumentation.
 
 **The one exception worth revisiting**: `langchaingo`'s `textsplitter` is a genuinely useful leaf and
@@ -535,10 +535,10 @@ same way a direct-Ollama failure would (029-FR-010).
 | 019-FR-017 | Raising concurrency never produces conflicting or duplicated stored results. |
 | 030-FR-013 | The per-task admission control that distinguishes local from hosted execution survives 030 unchanged. |
 
-Each task type gets its own asynq **queue and server** (`internal/queue/queue.go`) — a
-single server's `Queues` map only weights priority within one shared pool, it is not a
-per-queue concurrency ceiling. Queues: `ingest`, `match`, `generate`, `enrich`,
-`salary:infer`, `ghost:score`.
+Each work type gets its own RabbitMQ **queue and `events.Consumer`**
+(`internal/events/topology.go`, `internal/queue/queue.go`) — a single shared pool with a
+weight map would only weight priority, not a per-queue concurrency ceiling. Queues:
+`work.ingest`, `work.match`, `work.generate`, `work.enrich`, `work.salary`, `work.ghost`.
 
 **Timeouts and recovery**
 
@@ -577,14 +577,14 @@ the existing LLM block.
 | `ENRICH_CONCURRENCY` | `1` | Same. Deliberately low — these are authenticated per-job page fetches |
 | `AI_TASK_TIMEOUT_MATCH` | `5m` | Deadline for `match` |
 | `AI_TASK_TIMEOUT_GENERATE` | `15m` | Deadline for `generate` |
-| `AI_TASK_TIMEOUT_SALARY` | `5m` | Deadline for `salary:infer` |
-| `AI_TASK_TIMEOUT_GHOST` | `5m` | Deadline for `ghost:score` |
+| `AI_TASK_TIMEOUT_SALARY` | `5m` | Deadline for `salary` |
+| `AI_TASK_TIMEOUT_GHOST` | `5m` | Deadline for `ghost` |
 | `AI_TASK_TIMEOUT_ENRICH` | `10m` | Deadline for `enrich` |
 | `AI_TASK_TIMEOUT_INGEST` | `30m` | Deadline for `ingest` |
 | `ACTIVITY_HEARTBEAT_INTERVAL` | `30s` | How often a running worker refreshes `ActivityRun.heartbeatAt` |
 | `ACTIVITY_STALE_AFTER` | `2m` | A `running` row silent this long is `interrupted` |
 | `ACTIVITY_SWEEP_INTERVAL` | `1m` | Sweeper period; a sweep also runs once at startup |
-| `ACTIVITY_QUEUED_GRACE` | `30m` | A `queued` row older than this with no live asynq task is `interrupted` |
+| `ACTIVITY_QUEUED_GRACE` | `30m` | A `queued` row older than this is `interrupted` unconditionally — RabbitMQ has no cheap per-message existence check the way asynq's Inspector did, so this is no longer cross-checked against the broker |
 | `OLLAMA_KEEP_ALIVE` | `30m` | Sent as `keep_alive` so a local model stays resident across a queue drain. Ignored by Ollama Cloud; an empty string omits the field |
 | `LLM_MAX_IDLE_CONNS_PER_HOST` | `4` | Go's default of 2 forces a fresh TLS handshake on the third concurrent hosted request |
 
@@ -594,8 +594,9 @@ rejected; `ACTIVITY_STALE_AFTER` must be **at least twice** the heartbeat interv
 `ACTIVITY_STALE_AFTER + ACTIVITY_SWEEP_INTERVAL` must stay under five minutes to satisfy
 019-FR-009 / 019-SC-005.
 
-The asynq pool for an LLM task type is sized `max(AI_CONCURRENCY_CLOUD,
-AI_CONCURRENCY_LOCAL)`; the admission gate then enforces whichever applies at run time.
+The RabbitMQ consumer's prefetch for an LLM task type is sized to `policy.Concurrency`
+(`AI_CONCURRENCY_CLOUD` since 044 removed the local/hosted split); the admission gate
+enforces the same figure at run time.
 
 **Non-goal, guarded by test:** no pacing key (`ratelimit` / `retrieval`) changes. AI provider
 traffic does not pass through the paced transport and must not start doing so (019-FR-003).

@@ -8,16 +8,18 @@ description: Every task type — payload, queue, policy, producers, handler and 
 
 ## Summary
 
-| Task type | Queue | Payload | Handler | Deadline env |
+| Work type | Queue | Payload | Handler | Deadline env |
 | --- | --- | --- | --- | --- |
-| `ingest` | `ingest` | `IngestPayload` | `ingestion.Handler.ProcessTask` | `AI_TASK_TIMEOUT_INGEST` |
-| `match` | `match` | `MatchPayload` | `matching.Handler.ProcessTask` | `AI_TASK_TIMEOUT_MATCH` |
-| `generate` | `generate` | `GeneratePayload` | `generation.Handler.ProcessTask` | `AI_TASK_TIMEOUT_GENERATE` |
-| `enrich` | `enrich` | `EnrichPayload` | `enrichment.Handler.ProcessTask` | `AI_TASK_TIMEOUT_ENRICH` |
-| `salary:infer` | `salary:infer` | `SalaryInferPayload` | `salary.Handler.ProcessTask` | `AI_TASK_TIMEOUT_SALARY` |
-| `ghost:score` | `ghost:score` | `GhostScorePayload` | `ghostjob` worker | `AI_TASK_TIMEOUT_GHOST` |
+| `ingest` | `work.ingest` | `IngestPayload` | `ingestion.Handler.ProcessTask` | `AI_TASK_TIMEOUT_INGEST` |
+| `match` | `work.match` | `MatchPayload` | `matching.Handler.ProcessTask` | `AI_TASK_TIMEOUT_MATCH` |
+| `generate` | `work.generate` | `GeneratePayload` | `generation.Handler.ProcessTask` | `AI_TASK_TIMEOUT_GENERATE` |
+| `enrich` | `work.enrich` | `EnrichPayload` | `enrichment.Handler.ProcessTask` | `AI_TASK_TIMEOUT_ENRICH` |
+| `salary` | `work.salary` | `SalaryInferPayload` | `salary.Handler.ProcessTask` | `AI_TASK_TIMEOUT_SALARY` |
+| `ghost` | `work.ghost` | `GhostScorePayload` | `ghostjob` worker | `AI_TASK_TIMEOUT_GHOST` |
 
-Wiring is in `cmd/server/servers.go:75-80`.
+asynq's colon-namespaced work-type convention (`salary:infer`, `ghost:score`) is gone —
+work types are now the flat set `internal/events.WorkTypes` declares: `ingest`, `enrich`,
+`match`, `generate`, `salary`, `ghost`. Wiring is in `cmd/server/servers.go` (`buildServers`).
 
 ## Producer graph
 
@@ -29,8 +31,8 @@ flowchart TD
     SUB["Subscription run / run-all"] --> ING
     ING --> MATCH["match"]
     ING --> ENR["enrich"]
-    ING --> GHOST["ghost:score"]
-    ING --> SAL["salary:infer"]
+    ING --> GHOST["ghost"]
+    ING --> SAL["salary"]
     ENR --> MATCH
     ENR --> GHOST
     HTTP3["POST /jobs/{id}/generate"] --> GEN["generate"]
@@ -54,10 +56,12 @@ type IngestPayload struct {
 Exactly one of `SearchID` / `SubscriptionID` is set; both nil means "scrape with an empty
 query" — a direct source test (`queue.go:51-59`).
 
-**Retries: `IngestMaxRetry = 2`** (three deliveries). The comment records the history: it
-was 0, inherited from BullMQ's `{ attempts: 1 }`, and a single 503 cost a source its whole
-cron window. Permanent failures are wrapped in `asynq.SkipRetry` by `ingestion.permanent`,
-so the budget only ever covers transient faults.
+**Retries: `IngestMaxRetry = 2`** (three attempts total, unchanged by the RabbitMQ
+migration — see [Workers and queues](/async/workers-and-queues) for how the other five work
+types' budgets *did* change). The comment records the history: it was 0, inherited from
+BullMQ's `{ attempts: 1 }`, and a single 503 cost a source its whole cron window. Permanent
+failures are wrapped in `queue.SkipRetry` by `ingestion.permanent`, so the budget only ever
+covers transient faults.
 
 **Writes:** `Job` rows, `SourceRun` counters. **Fans out to:** `match`, `enrich`,
 `ghost:score`, `salary:infer`.
@@ -95,12 +99,12 @@ type GeneratePayload struct {
 The only payload carrying a discriminator. `ProfileID` nil means the default profile.
 Longest deadline (`15m`) — tailoring plus rendering.
 
-## `salary:infer`
+## `salary`
 
 `SalaryInferPayload{JobID, ActivityID}`. Infers a salary range, caching into `SalaryCache`.
 Uses the `default` LLM task key.
 
-## `ghost:score`
+## `ghost`
 
 ```go
 // Triggered by ingestion and by the manual POST /api/jobs/{id}/ghost-score
@@ -117,20 +121,20 @@ re-score the corpus against a paid provider. Writes `JobSignal`, unique on
 
 ## Policy table
 
-Built and validated once at startup by `PoliciesFromConfig`
-(`internal/queue/policy.go:40-95`):
+Built and validated once at startup by `PoliciesFromConfig` (`internal/queue/policy.go`):
 
-| Task | LocalConcurrency | HostedConcurrency | MaxDuration | LLMTaskKey |
-| --- | --- | --- | --- | --- |
-| `ingest` | `INGEST_CONCURRENCY` | same | `AI_TASK_TIMEOUT_INGEST` | — |
-| `match` | `AI_CONCURRENCY_LOCAL` | `AI_CONCURRENCY_CLOUD` | `AI_TASK_TIMEOUT_MATCH` | `match` |
-| `generate` | `AI_CONCURRENCY_LOCAL` | `AI_CONCURRENCY_CLOUD` | `AI_TASK_TIMEOUT_GENERATE` | `generation` |
-| `enrich` | `ENRICH_CONCURRENCY` | same | `AI_TASK_TIMEOUT_ENRICH` | — |
-| `salary:infer` | `AI_CONCURRENCY_LOCAL` | `AI_CONCURRENCY_CLOUD` | `AI_TASK_TIMEOUT_SALARY` | `default` |
-| `ghost:score` | `AI_CONCURRENCY_LOCAL` | `AI_CONCURRENCY_CLOUD` | `AI_TASK_TIMEOUT_GHOST` | `ghost` |
+| Task | Concurrency | MaxDuration | LLMTaskKey |
+| --- | --- | --- | --- |
+| `ingest` | `INGEST_CONCURRENCY` | `AI_TASK_TIMEOUT_INGEST` | — |
+| `match` | `AI_CONCURRENCY_CLOUD` | `AI_TASK_TIMEOUT_MATCH` | `match` |
+| `generate` | `AI_CONCURRENCY_CLOUD` | `AI_TASK_TIMEOUT_GENERATE` | `generation` |
+| `enrich` | `ENRICH_CONCURRENCY` | `AI_TASK_TIMEOUT_ENRICH` | — |
+| `salary` | `AI_CONCURRENCY_CLOUD` | `AI_TASK_TIMEOUT_SALARY` | `default` |
+| `ghost` | `AI_CONCURRENCY_CLOUD` | `AI_TASK_TIMEOUT_GHOST` | `ghost` |
 
-`PoolSize()` is `max(local, hosted)` — the asynq pool size, with the gate enforcing the
-applicable limit at run time.
+`PoolSize()` is `policy.Concurrency` — since 044 removed the local/hosted split there is a
+single concurrency figure per work type, used both as the RabbitMQ consumer's prefetch and
+the `Gate` semaphore's size.
 
 Validation rejects concurrency `< 1` and non-positive durations, and enforces the liveness
 bounds: `ACTIVITY_STALE_AFTER >= 2 × ACTIVITY_HEARTBEAT_INTERVAL`, and
@@ -144,28 +148,31 @@ stateDiagram-v2
     Queued --> Active
     Active --> Completed
     Active --> RetryState: transient error
-    RetryState --> Active: after backoff
-    RetryState --> Archived: retries exhausted
-    Active --> Archived: asynq.SkipRetry
+    RetryState --> Active: republished from a delay.<work_type>.<rung> queue
+    RetryState --> DeadLettered: retries exhausted (dlq.<work_type>)
+    Active --> DeadLettered: queue.SkipRetry (non-retryable)
     Active --> TimedOut: MaxDuration exceeded
-    TimedOut --> Active: asynq redelivery (run restarts cleanly)
+    TimedOut --> Active: redelivery after retry publish (run restarts cleanly)
     Active --> Cancelled: provider rate limited
     Completed --> [*]
-    Archived --> [*]
+    DeadLettered --> [*]
     Cancelled --> [*]
 ```
 
 :::note Timed out is safe to retry
-`ErrDeadlineExceeded`'s comment (`middleware.go:73-77`): the run is already finalised
-`timed_out` by the time the error returns, so an asynq retry simply starts a fresh run.
+`ErrDeadlineExceeded`'s comment (`middleware.go`): the run is already finalised `timed_out`
+by the time the error returns, so the retry that follows simply starts a fresh run.
 :::
 
-## Adding a task type
+## Adding a work type
 
-1. Add `TypeX` and `QueueX` constants in `internal/queue/queue.go`.
+1. Add `TypeX` and `QueueX` constants in `internal/queue/queue.go`, and add `"x"` to
+   `events.WorkTypes` (`internal/events/topology.go`) so its `work.x`, `delay.x.<rung>` and
+   `dlq.x` queues get declared.
 2. Define `XPayload` with an `ActivityID *string` field.
 3. Add a `TaskPolicy` entry in `PoliciesFromConfig`, plus its config fields.
-4. Implement `ProcessTask(ctx, *asynq.Task)` on the owning package's handler.
-5. Add `p.worker("x", p.policyFor(queue.TypeX), resolver, app.X.ProcessTask)` in
-   `buildServers`.
-6. Add the queue to `queueForOp` in `internal/activity` so the sweeper can inspect it.
+4. Implement `ProcessTask(ctx, *queue.Task)` on the owning package's handler.
+5. Add `p.consumer("x", p.policyFor(queue.TypeX), app.X.ProcessTask)` in `buildServers`
+   (`cmd/server/servers.go`).
+6. Add the queue to `queueOrder` in `internal/activity/interfaces/http/activity.go` so
+   `/activity/queues` can report it.

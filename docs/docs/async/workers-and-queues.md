@@ -6,71 +6,69 @@ description: Worker construction, the admission gate, the deadline middleware, a
 
 # Workers and queues
 
-## Building a worker
+## Building a consumer
 
 ```go
 // cmd/server/servers.go
-func (p *Platform) worker(name string, policy queue.TaskPolicy, resolver queue.ClassResolver,
-                          handler func(context.Context, *asynq.Task) error) namedWorker {
-    gate := queue.NewGate(policy, resolver)
+func (p *Platform) consumer(name string, policy queue.TaskPolicy,
+                             handler func(context.Context, *queue.Task) error) namedConsumer {
+    gate := queue.NewGate(policy)
     deadline := queue.NewDeadlineMiddleware(policy, p.DB.Queries, p.Config.ActivityHeartbeatInterval)
     wrapped := gate.Middleware(deadline.Middleware(handler))
-    mux := asynq.NewServeMux()
-    mux.HandleFunc(policy.TaskType, wrapped)
-    return namedWorker{
+
+    return namedConsumer{
         name: name,
-        srv: asynq.NewServer(p.RedisOpt, asynq.Config{
+        c: &events.Consumer{
+            Dial:        func() (*amqp.Connection, error) { return amqp.Dial(p.Config.RabbitMQURL) },
+            Queue:       "work." + policy.TaskType,
             Concurrency: policy.PoolSize(),
-            Queues:      map[string]int{policy.Queue: 1},
-        }),
-        mux: mux,
+            HandlerFunc: func(ctx context.Context, d amqp.Delivery) error {
+                // decode headers, build a queue.Task from d.Body, run wrapped;
+                // on failure, publish a retry/dead-letter via events.HandleFailure
+                // and still ack the original delivery (never nack-and-redeliver)
+            },
+        },
     }
 }
 ```
 
 ```mermaid
 flowchart LR
-    POL["TaskPolicy"] --> GATE["queue.NewGate(policy, resolver)"]
+    POL["TaskPolicy"] --> GATE["queue.NewGate(policy)"]
     POL --> DL["queue.NewDeadlineMiddleware(policy, queries, heartbeat)"]
     GATE --> W["gate.Middleware(deadline.Middleware(handler))"]
     DL --> W
-    W --> MUX["asynq.ServeMux — one task type"]
-    POL --> SRV["asynq.Server — Concurrency = PoolSize(), one queue"]
+    W --> MUX["events.Consumer.HandlerFunc — one work type"]
+    POL --> SRV["events.Consumer — Concurrency = PoolSize() = RabbitMQ prefetch, one queue"]
     MUX --> SRV
 ```
 
-Each server handles exactly one task type on exactly one queue. `Queues: {queue: 1}` is a
-single-entry weight map, since weighting is meaningless with one queue — the ceiling comes
-from `Concurrency`.
+Each consumer handles exactly one work type on exactly one queue (`work.<work_type>`).
+`Concurrency` becomes the consumer's `Qos` prefetch count and bounds the number of
+deliveries handled concurrently by that consumer's goroutine pool
+(`internal/events/consumer.go`).
 
 ## The admission gate
 
 ```go
 type Gate struct {
-    hosted   *semaphore.Weighted
-    local    *semaphore.Weighted
-    resolver ClassResolver
-}
-
-type ClassResolver interface {
-    ProviderClass() llm.ProviderClass
+    sem *semaphore.Weighted
 }
 ```
 
-`*llm.Router` satisfies `ClassResolver` directly, which is why `buildServers` passes
-`app.MatchRouter`, `app.GenerationRouter`, `app.DefaultRouter`, `app.GhostRouter` as the
-resolvers, and `nil` for `ingest` and `enrich`.
+`NewGate(policy)` sizes a single semaphore from `policy.Concurrency` — there is no
+class-resolver split any more. Since 044 removed the local-vs-hosted routing, there is one
+inference path and therefore one pool per work type; `Gate` no longer takes a
+`ClassResolver` (`internal/queue/middleware.go:16-34`).
 
 ```mermaid
 sequenceDiagram
-    participant A as asynq
+    participant C as events.Consumer
     participant G as Gate
-    participant S as semaphore (class)
+    participant S as semaphore
     participant D as Deadline middleware
     participant H as Handler
-    A->>G: task
-    G->>G: resolver nil? → local
-    G->>G: else ProviderClass()
+    C->>G: delivery
     G->>S: Acquire(ctx, 1)
     alt slot free
         S-->>G: acquired
@@ -80,32 +78,27 @@ sequenceDiagram
         G->>S: Release(1)
     else ctx cancelled while waiting
         S-->>G: ctx error
-        G-->>A: error, no handler run
+        G-->>C: error, no handler run
     end
 ```
 
-Three properties from the doc comments (`internal/queue/middleware.go:22-58`):
-
-1. **Acquisition is context-aware** — a task waiting for a slot still honours its deadline
-   and shutdown.
-2. **Class is resolved once per task and does not change mid-flight**, even if settings
-   flip while the task waits.
-3. **Non-LLM types bypass class resolution entirely** and always use the local semaphore,
-   which for them is sized to their single configured concurrency.
+**Acquisition is context-aware** — a delivery waiting for a slot still honours its deadline
+and shutdown (`internal/queue/middleware.go:22-34`).
 
 ## Pool size versus limit
 
 ```mermaid
 flowchart TD
-    A["asynq.Config.Concurrency = PoolSize() = max(local, hosted)"] --> B["fixed at server construction"]
-    C["Gate semaphores: local and hosted, sized separately"] --> D["enforced per task at run time"]
-    B --> E["worker goroutines exist"]
-    D --> F["only the allowed number run concurrently"]
+    A["Consumer.Concurrency = PoolSize() = policy.Concurrency"] --> B["RabbitMQ Qos prefetch, fixed at consumer construction"]
+    C["Gate semaphore, sized the same"] --> D["enforced per delivery at run time"]
+    B --> E["prefetched deliveries can be in flight"]
+    D --> F["only the allowed number actually run concurrently"]
 ```
 
-Why not just size the pool to the right number? Because `asynq.Config.Concurrency` is
-fixed at construction while the provider class can change at any moment via Settings. The
-pool is sized to the maximum; the semaphore does the real work.
+The prefetch and the semaphore are sized identically today (both `policy.Concurrency`), so
+the gate is currently redundant with prefetch for admission — it stays because
+`DeadlineMiddleware` and `Gate` compose independently of the transport, and because prefetch
+alone does not block a goroutine the way `Gate.Acquire` does.
 
 ## Deadline middleware
 
@@ -137,41 +130,67 @@ stateDiagram-v2
 
 ```go
 // runServers
-for _, w := range servers.Workers {
-    go func() { w.srv.Run(w.mux) }()
+for _, c := range servers.Consumers {
+    go func() { c.c.Run(ctx) }()
 }
 go scheduler.Run(ctx)
 go p.Sweeper.Run(ctx)
 <-ctx.Done()
-for _, w := range servers.Workers { w.srv.Shutdown() }
 shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 return servers.HTTP.Shutdown(shutdownCtx)
 ```
+
+Each `events.Consumer.Run` exits on its own once `ctx` is cancelled — it finishes in-flight
+deliveries up to `ShutdownGrace` (default 30s), then nacks-with-requeue anything still
+outstanding, rather than being shut down explicitly from `runServers` the way `asynq.Server`
+was (`internal/events/consumer.go`).
 
 ```mermaid
 sequenceDiagram
     participant OS
     participant M as main
-    participant W as workers
+    participant C as consumers
     participant H as HTTP
     participant P as platform resources
     OS->>M: SIGINT / SIGTERM
     M->>M: ctx cancelled
-    M->>W: Shutdown() each — stop pulling, finish in-flight
+    M->>C: ctx.Done() — finish in-flight, then nack-requeue what's left after ShutdownGrace
     M->>H: Shutdown(10s timeout) — drain requests
-    M->>P: deferred closes: DB, scraping, asynq client, inspector
+    M->>P: deferred closes: DB, scraping, broker connections
 ```
 
-Workers stop first so no new task starts while the HTTP server is still draining. A task
-that is mid-flight when the process dies anyway is handled by the
-[sweeper](/async/activity-tracking).
+Consumers stop pulling as soon as `ctx` is cancelled so no new delivery starts while the
+HTTP server is still draining. A delivery that is mid-flight when the process dies anyway is
+requeued by RabbitMQ and picked up again on reconnect, or handled by the
+[sweeper](/async/activity-tracking) for the `ActivityRun` side.
 
 ## Scheduling
 
-The ingestion scheduler is a plain goroutine with a ticker, not asynq's periodic-task
-mechanism — because "due" here is per-`SavedSearch` cron compared against `lastRunAt`, with
-a compare-and-swap claim to prevent double runs
-([scheduler](/ingestion/scheduler)).
+The ingestion scheduler is a plain goroutine with a ticker — because "due" here is
+per-`SavedSearch` cron compared against `lastRunAt`, with a compare-and-swap claim to
+prevent double runs ([scheduler](/ingestion/scheduler)). This was true under asynq too;
+nothing here changed with the RabbitMQ migration.
+
+## Retry budget: down from 25 to a fixed ladder
+
+**This is the one deliberate behavior change in the migration**, not a straight port. Every
+work type's retries now go through a fixed four-rung backoff ladder — `1s → 10s → 1m → 10m`
+— republished to `delay.<work_type>.<rung>` queues (`internal/events/retry.go`,
+`internal/events/topology.go`).
+
+| Work type | Max attempts | Note |
+| --- | --- | --- |
+| `ingest` | 3 | `IngestMaxRetry = 2` retries, unchanged from before the migration |
+| `enrich`, `match`, `generate`, `salary`, `ghost` | 5 | down from asynq's inherited default of **25** |
+
+asynq's default `MaxRetry` was 25, carried over literally by five of these work types. At 25
+attempts against a paid LLM gateway, a request that has already exhausted its provider chain
+would be retried well past the point of any plausible recovery — and a delay queue per
+attempt would mean roughly 150 queues to declare. Five attempts across the four-rung ladder
+covers the failure retries actually fix (a transient provider outage or a rate-limit window)
+without burning budget on one that they do not. An attempt beyond the ladder's length reuses
+its longest rung (`10m`) rather than growing the ladder. See data-model.md § 6 for the full
+rationale.
 
 ## Operational levers
 

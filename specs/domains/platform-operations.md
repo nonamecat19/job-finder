@@ -1,8 +1,8 @@
 # Domain: Platform Operations
 
 Consolidates **023** enforced workflow quality gates, **007** CI test gate (superseded by
-023), **008** health/readiness checks, **018** asynqmon queue monitoring, **026** DB
-connection capacity.
+023), **008** health/readiness checks, **018** queue monitoring (asynqmon, superseded by the
+RabbitMQ management UI — see § 6), **026** DB connection capacity.
 
 Implementation: `.github/workflows/`, `Makefile`, `.claude/settings.json`,
 `apps/api/internal/health/`, `internal/dbutil/`, `docker-compose*.yml`. How it works:
@@ -540,27 +540,39 @@ retries):
 | `minio` | a `/dev/tcp` probe of `/minio/health/live` | The first HTTP response line contains `200` |
 | `postgres` | `pg_isready -U jobfinder` | Native Postgres readiness |
 
-## 6. Queue monitoring (018)
+## 6. Queue monitoring (018, superseded by the RabbitMQ migration)
 
-Asynqmon, dev-only, at `http://localhost:8090`.
+Spec 018 shipped asynqmon, dev-only, at `http://localhost:8090`, against the asynq/Redis
+queue. **asynq is gone (047)**; asynqmon went with it. Its dev-only replacement is
+RabbitMQ's own management UI, at `http://localhost:15672` — see
+[`docs/docs/async/monitoring.md`](../../docs/docs/async/monitoring.md) for what it shows.
+018's original requirements below are kept for history; they describe asynqmon, not what
+runs today:
 
-- 018-FR-001: lists all six queues — `ingest`, `match`, `generate`, `enrich`, `salary:infer`,
-  `ghost:score`.
+- 018-FR-001: listed all six queues — `ingest`, `match`, `generate`, `enrich`, `salary:infer`,
+  `ghost:score` (asynq's colon-namespaced names; today's work types are `ingest`, `match`,
+  `generate`, `enrich`, `salary`, `ghost`, each with its own `work.<work_type>` queue).
 - 018-FR-002: per-queue live counts by state — pending, active, scheduled, retry, archived,
-  completed.
+  completed. The RabbitMQ management UI has no equivalent of "retry" or "archived" state;
+  it shows a message's current queue (a work queue, a `delay.*` rung, or a `dlq.*`) and its
+  `x-attempt` / `x-first-failure-reason` headers instead.
 - 018-FR-003: drill into a queue to list tasks with type, payload, state and, for failures,
-  the error.
-- 018-FR-004: retry, archive and delete, individually or in bulk.
-- 018-FR-005: recent historical daily processed/failed counts per queue.
+  the error. The RabbitMQ UI can inspect a message's payload and headers the same way.
+- 018-FR-004: retry, archive and delete, individually or in bulk. RabbitMQ has no
+  per-message cancel/delete-by-id; there is no equivalent bulk action today (see the
+  `/activity/{id}/cancel` caveat in `docs/docs/async/activity-tracking.md`).
+- 018-FR-005: recent historical daily processed/failed counts per queue. No equivalent;
+  RabbitMQ's management UI reports live counts, not a history.
 - 018-FR-006/007: its own port, distinct from the API, started with the rest of the dev stack
-  (018-SC-004: one extra service, zero extra configuration).
-- 018-FR-008: **local/dev network only — never exposed in production.** It is absent from
-  `docker-compose.prod.yml`, and that is a security boundary, not an oversight. It offers
-  unauthenticated task deletion.
+  (018-SC-004: one extra service, zero extra configuration). Still true of the RabbitMQ
+  management UI at `:15672`.
+- 018-FR-008: **local/dev network only — never exposed in production.** Still true: the
+  RabbitMQ management UI is likewise absent from `docker-compose.prod.yml`.
 
 Bars: any queue's pending/active/failed count readable within 5 seconds of opening it
 (018-SC-001); a failed task's error found and retried in under 30 seconds without a script
-(018-SC-002); state changes visible within 5 seconds (018-SC-003).
+(018-SC-002); state changes visible within 5 seconds (018-SC-003). These bars predate the
+migration and were not re-measured against the RabbitMQ UI.
 
 ## 7. Database connection capacity (026)
 

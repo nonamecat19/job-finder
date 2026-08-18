@@ -1,14 +1,15 @@
 ---
 title: Async overview
 sidebar_position: 1
-description: Why work is queued, the asynq topology, and the principles governing tasks.
+description: Why work is queued, the RabbitMQ topology, and the principles governing tasks.
 ---
 
 # Async overview
 
 ## Topology
 
-Six task types, six queues, six `asynq.Server` instances, all inside the one process.
+Six work types, six work queues, six `events.Consumer` instances, all inside the one
+process, consuming over RabbitMQ (`internal/events`).
 
 ```mermaid
 flowchart TB
@@ -17,29 +18,30 @@ flowchart TB
         SCHED["Ingestion scheduler"]
         WORK["Workers fanning out"]
     end
-    R[("Redis")]
-    subgraph Servers["Six asynq servers"]
-        S1["ingest — INGEST_CONCURRENCY"]
-        S2["match — AI concurrency by class"]
-        S3["generate — AI concurrency by class"]
-        S4["enrich — ENRICH_CONCURRENCY"]
-        S5["salary:infer — AI concurrency by class"]
-        S6["ghost:score — AI concurrency by class"]
+    EX["jobfinder.work exchange"]
+    subgraph Consumers["Six events.Consumer instances"]
+        S1["work.ingest — INGEST_CONCURRENCY"]
+        S2["work.match — AI_CONCURRENCY_CLOUD"]
+        S3["work.generate — AI_CONCURRENCY_CLOUD"]
+        S4["work.enrich — ENRICH_CONCURRENCY"]
+        S5["work.salary — AI_CONCURRENCY_CLOUD"]
+        S6["work.ghost — AI_CONCURRENCY_CLOUD"]
     end
     PG[("Postgres — ActivityRun")]
-    HTTP --> R
-    SCHED --> R
-    WORK --> R
-    R --> S1 & S2 & S3 & S4 & S5 & S6
+    HTTP --> EX
+    SCHED --> EX
+    WORK --> EX
+    EX --> S1 & S2 & S3 & S4 & S5 & S6
     S1 & S2 & S3 & S4 & S5 & S6 --> PG
 ```
 
-## Why one server per task type
+## Why one consumer per work type
 
-Stated in `internal/queue/queue.go:22-37`: a single `asynq.Server`'s `Queues` map controls
-priority weighting *within* one shared pool — it is not a hard per-queue ceiling. Local
-Ollama tolerates one concurrent inference while a hosted provider tolerates several, so
-each task type needs its own cap, and therefore its own server.
+Each work type gets its own `work.<work_type>` queue (`internal/events/topology.go`) and its
+own `events.Consumer`, so RabbitMQ's `Qos` prefetch — set to `policy.PoolSize()` — is a hard
+per-queue ceiling rather than a shared-pool weighting. Local Ollama tolerated one concurrent
+inference while a hosted provider tolerated several; since 044 removed the local/hosted split
+there is a single concurrency pool per work type, sized by `TaskPolicy.Concurrency`.
 
 ## Principles
 
@@ -63,18 +65,14 @@ page, it did not happen.
 
 ### Concurrency is admission-controlled, not pool-controlled
 
-The worker pool is sized to `max(local, hosted)`; the actual limit is enforced at run time
-by a semaphore chosen from the resolved provider class
-(`internal/queue/middleware.go:22-58`). Flipping a task to a hosted provider changes its
-effective concurrency with no restart.
+The consumer's RabbitMQ prefetch is sized to `policy.PoolSize()`; the actual limit is
+enforced at run time by `Gate`, a single semaphore per work type
+(`internal/queue/middleware.go:22-58`).
 
 ```mermaid
 flowchart LR
-    T["task delivered"] --> G{"resolver.ProviderClass()"}
-    G -->|hosted| SH["hosted semaphore — AI_CONCURRENCY_CLOUD"]
-    G -->|local or nil resolver| SL["local semaphore — AI_CONCURRENCY_LOCAL or fixed"]
-    SH --> D["deadline middleware"]
-    SL --> D
+    T["delivery"] --> G["Gate.Acquire"]
+    G --> D["deadline middleware"]
     D --> H["handler"]
     H --> REL["release slot on return"]
 ```
@@ -86,8 +84,11 @@ heartbeat. A wedged handler is finalised `timed_out` rather than holding a slot 
 
 ### Retries are bounded and classified
 
-Transient failures retry with backoff; permanent ones are wrapped in `asynq.SkipRetry`;
-provider rate limits cancel. See [Errors](/principles/error-handling).
+Transient failures retry over the fixed backoff ladder (`1s → 10s → 1m → 10m`, republished
+to a `delay.<work_type>.<rung>` queue); permanent ones are wrapped in `queue.SkipRetry` and
+go straight to the dead-letter queue; provider rate limits enter the ladder at the `1m` rung.
+See [Errors](/principles/error-handling) and the retry-budget note in
+[Workers and queues](/async/workers-and-queues).
 
 ### Nothing important depends on a worker surviving
 
@@ -98,12 +99,12 @@ a correctly-marked `interrupted` run, not a permanent "running" ghost.
 
 | Queue | Concurrency source | Deadline default | LLM key | Producer |
 | --- | --- | --- | --- | --- |
-| `ingest` | `INGEST_CONCURRENCY` (2) | `30m` | — | scheduler, HTTP, subscriptions |
-| `match` | AI, by class | `5m` | `match` | ingest, enrich |
-| `generate` | AI, by class | `15m` | `generation` | HTTP, aifeature auto-gen |
-| `enrich` | `ENRICH_CONCURRENCY` (1) | `10m` | — | ingest, backfill |
-| `salary:infer` | AI, by class | `5m` | `default` | ingest, match |
-| `ghost:score` | AI, by class | `5m` | `ghost` | ingest, HTTP |
+| `work.ingest` | `INGEST_CONCURRENCY` (2) | `30m` | — | scheduler, HTTP, subscriptions |
+| `work.match` | `AI_CONCURRENCY_CLOUD` | `5m` | `match` | ingest, enrich |
+| `work.generate` | `AI_CONCURRENCY_CLOUD` | `15m` | `generation` | HTTP, aifeature auto-gen |
+| `work.enrich` | `ENRICH_CONCURRENCY` (1) | `10m` | — | ingest, backfill |
+| `work.salary` | `AI_CONCURRENCY_CLOUD` | `5m` | `default` | ingest, match |
+| `work.ghost` | `AI_CONCURRENCY_CLOUD` | `5m` | `ghost` | ingest, HTTP |
 
 ## Lifecycle of a task
 
@@ -111,14 +112,14 @@ a correctly-marked `interrupted` run, not a permanent "running" ghost.
 sequenceDiagram
     participant P as Producer
     participant AR as ActivityRun
-    participant R as Redis
+    participant EX as jobfinder.work
     participant G as Gate
     participant D as Deadline middleware
     participant H as Handler
-    P->>AR: create run (queued) with queueTaskId
-    P->>R: Enqueue(payload with activityId)
-    R->>G: deliver
-    G->>G: acquire a slot for the resolved class
+    P->>AR: create run (queued) with activityId
+    P->>EX: publish(payload with activityId)
+    EX->>G: deliver (work.<work_type>)
+    G->>G: acquire a slot
     G->>D: proceed
     D->>AR: SetTimeout, Start, heartbeat loop
     D->>H: run
@@ -132,11 +133,12 @@ sequenceDiagram
     G->>G: release the slot
 ```
 
-## Redis
+## RabbitMQ
 
-`queue.RedisOpt(redisURL)` parses `redis://[:password@]host[:port][/db]` into asynq's
-options, defaulting to `localhost:6379` (`queue.go:94-117`). Tests use database index `1`
-(`TEST_REDIS_URL`), keeping development data intact.
+The API connects to `RabbitMQURL` (`amqp://` DSN) and declares the full topology
+(exchanges, work/delay/dead-letter queues) idempotently on startup and on every consumer
+reconnect (`internal/events/topology.go`). There is no Redis in this path any more; Redis
+was asynq's broker and is gone along with it.
 
 ## Next
 
@@ -144,4 +146,4 @@ options, defaulting to `localhost:6379` (`queue.go:94-117`). Tests use database 
 - [Workers and queues](/async/workers-and-queues) — gates, deadlines, shutdown
 - [Activity tracking](/async/activity-tracking) — runs, heartbeats, the sweeper
 - [Notifications](/async/notifications) — fresh matches and analytics
-- [Monitoring](/async/monitoring) — asynqmon and triage
+- [Monitoring](/async/monitoring) — RabbitMQ and triage

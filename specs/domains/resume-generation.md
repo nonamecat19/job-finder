@@ -429,7 +429,7 @@ Every write endpoint takes a row-level `SELECT … FOR UPDATE` on the run first
 (`GetRunForUpdate`), matching the discipline 020 specified for drafts. `PATCH .../items/{id}`
 is idempotent: re-sending the same body is a no-op landing on the same row.
 
-**Worker wiring.** `POST /v1/generations` enqueues the existing asynq `TypeGenerate` task with
+**Worker wiring.** `POST /v1/generations` publishes the existing `generate` work type with
 `GenerationRunID` set on `GeneratePayload` — wire-nullable, so old callers leave it nil and the
 merged-resume path is unchanged. `generation.Handler.ProcessTask` sees the field and dispatches
 to `application.Service.StartRun`, or to `RerunRun` when the payload also carries `IsRerun`.

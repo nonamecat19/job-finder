@@ -72,22 +72,22 @@ sequenceDiagram
     participant B as Browser
     participant H as JobsHandler
     participant A as activity.Recorder
-    participant C as asynq.Client
-    participant W as generate worker
+    participant C as events.Enqueuer
+    participant W as generate consumer
     B->>H: POST /api/jobs/{id}/generate
     H->>H: validate job exists
     H->>A: create ActivityRun (queued)
-    H->>C: Enqueue(generate payload)
+    H->>C: EnqueueContext(ctx, "generate", payload)
     H-->>B: 202 with activity id
-    C-->>W: deliver
+    C-->>W: deliver (work.generate)
     W->>A: running + heartbeat
     W->>W: build documents, render PDF
     W->>A: succeeded
     B->>H: GET /api/activity (poll)
 ```
 
-The HTTP request returns as soon as the task is durable in Redis. Progress is observed
-through `/api/activity`, never by holding the connection open.
+The HTTP request returns as soon as the message is durably published to RabbitMQ. Progress
+is observed through `/api/activity`, never by holding the connection open.
 
 ## Error mapping
 
@@ -120,17 +120,20 @@ Response envelope (`internal/httpapi/helpers.go:12-16`):
 
 ## Timeouts and shutdown
 
-`http.Server` sets `ReadHeaderTimeout: 10s` (`cmd/server/servers.go:71`). On SIGINT or
-SIGTERM the context from `signal.NotifyContext` (`main.go:31`) cancels; workers shut down
-first, then the HTTP server drains with a 10-second timeout
-(`servers.go:108-114`).
+`http.Server` sets `ReadHeaderTimeout: 10s` (`cmd/server/servers.go`). On SIGINT or SIGTERM
+the context from `signal.NotifyContext` (`main.go`) cancels; consumers and the HTTP server
+drain **concurrently** off the same `ctx`, not consumers-then-HTTP in sequence as under
+asynq: each `events.Consumer.Run` reacts to `ctx.Done()` by finishing in-flight deliveries
+(up to `ShutdownGrace`, default 30s) while `runServers` calls `servers.HTTP.Shutdown` with
+its own 10-second timeout in parallel (`servers.go`).
 
 ```mermaid
 stateDiagram-v2
     [*] --> Serving
-    Serving --> Draining: SIGINT or SIGTERM
-    Draining --> WorkersStopped: asynq Shutdown for each worker
-    WorkersStopped --> HTTPDrained: Shutdown with 10s timeout
-    HTTPDrained --> Closed: deferred DB, scraping, asynq closes
+    Serving --> Draining: SIGINT or SIGTERM (ctx cancelled)
+    Draining --> ConsumersStopped: each events.Consumer drains in-flight, then nacks the rest after 30s grace
+    Draining --> HTTPDrained: Shutdown with 10s timeout
+    ConsumersStopped --> Closed
+    HTTPDrained --> Closed: deferred DB, scraping, broker connections
     Closed --> [*]
 ```
