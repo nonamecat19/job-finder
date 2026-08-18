@@ -33,8 +33,10 @@ func (f *fakeRepo) UpdateResumeShapeSetting(_ context.Context, arg sqlcgen.Updat
 	f.row = sqlcgen.ResumeShapeSetting{
 		ID:                    "default",
 		SummaryLines:          arg.SummaryLines,
+		SummaryEnabled:        arg.SummaryEnabled,
 		SkillsEnabled:         arg.SkillsEnabled,
 		SkillsMaxGroups:       arg.SkillsMaxGroups,
+		ExperienceEnabled:     arg.ExperienceEnabled,
 		ExperienceBulletsMin:  arg.ExperienceBulletsMin,
 		ExperienceBulletsMax:  arg.ExperienceBulletsMax,
 		TargetPages:           arg.TargetPages,
@@ -45,6 +47,7 @@ func (f *fakeRepo) UpdateResumeShapeSetting(_ context.Context, arg sqlcgen.Updat
 		CertificationsEnabled: arg.CertificationsEnabled,
 		CertificationsMin:     arg.CertificationsMin,
 		CertificationsMax:     arg.CertificationsMax,
+		EducationEnabled:      arg.EducationEnabled,
 		FontSize:              arg.FontSize,
 	}
 	return f.row, nil
@@ -52,11 +55,12 @@ func (f *fakeRepo) UpdateResumeShapeSetting(_ context.Context, arg sqlcgen.Updat
 
 func defaultRow() sqlcgen.ResumeShapeSetting {
 	return sqlcgen.ResumeShapeSetting{
-		ID: "default", SummaryLines: 4, SkillsEnabled: true, SkillsMaxGroups: 0,
-		ExperienceBulletsMin: 8, ExperienceBulletsMax: 10, TargetPages: 2,
+		ID: "default", SummaryLines: 4, SummaryEnabled: true, SkillsEnabled: true, SkillsMaxGroups: 0,
+		ExperienceEnabled: true, ExperienceBulletsMin: 8, ExperienceBulletsMax: 10, TargetPages: 2,
 		ProjectsEnabled: true, ProjectsMin: 0, ProjectsMax: 0, ProjectBulletsMax: 0,
 		CertificationsEnabled: true, CertificationsMin: 0, CertificationsMax: 0,
-		FontSize: 10,
+		EducationEnabled: true,
+		FontSize:         10,
 	}
 }
 
@@ -123,11 +127,12 @@ func TestUpdateRefreshesCache(t *testing.T) {
 	s := newTestService(t, repo)
 
 	want := domain.ShapeConfig{
-		SummaryLines: 2, SkillsEnabled: false, SkillsMaxGroups: 3,
-		ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
+		SummaryLines: 2, SummaryEnabled: true, SkillsEnabled: false, SkillsMaxGroups: 3,
+		ExperienceEnabled: true, ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
 		ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 2, ProjectBulletsMax: 3,
 		CertificationsEnabled: true, CertificationsMin: 1, CertificationsMax: 5,
-		FontSize: 12,
+		EducationEnabled: true,
+		FontSize:         12,
 	}
 	got, err := s.Update(context.Background(), want)
 	if err != nil {

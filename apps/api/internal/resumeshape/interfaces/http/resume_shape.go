@@ -30,8 +30,10 @@ func (h *ResumeShapeHandler) Mount(r chi.Router) {
 func configToDto(c domain.ShapeConfig) dto.ResumeShapeConfigDto {
 	return dto.ResumeShapeConfigDto{
 		SummaryLines:          c.SummaryLines,
+		SummaryEnabled:        c.SummaryEnabled,
 		SkillsEnabled:         c.SkillsEnabled,
 		SkillsMaxGroups:       c.SkillsMaxGroups,
+		ExperienceEnabled:     c.ExperienceEnabled,
 		ExperienceBulletsMin:  c.ExperienceBulletsMin,
 		ExperienceBulletsMax:  c.ExperienceBulletsMax,
 		TargetPages:           c.TargetPages,
@@ -42,6 +44,7 @@ func configToDto(c domain.ShapeConfig) dto.ResumeShapeConfigDto {
 		CertificationsEnabled: c.CertificationsEnabled,
 		CertificationsMin:     c.CertificationsMin,
 		CertificationsMax:     c.CertificationsMax,
+		EducationEnabled:      c.EducationEnabled,
 		FontSize:              c.FontSize,
 	}
 }
@@ -49,8 +52,10 @@ func configToDto(c domain.ShapeConfig) dto.ResumeShapeConfigDto {
 func dtoToConfig(d dto.ResumeShapeConfigDto) domain.ShapeConfig {
 	return domain.ShapeConfig{
 		SummaryLines:          d.SummaryLines,
+		SummaryEnabled:        d.SummaryEnabled,
 		SkillsEnabled:         d.SkillsEnabled,
 		SkillsMaxGroups:       d.SkillsMaxGroups,
+		ExperienceEnabled:     d.ExperienceEnabled,
 		ExperienceBulletsMin:  d.ExperienceBulletsMin,
 		ExperienceBulletsMax:  d.ExperienceBulletsMax,
 		TargetPages:           d.TargetPages,
@@ -61,6 +66,7 @@ func dtoToConfig(d dto.ResumeShapeConfigDto) domain.ShapeConfig {
 		CertificationsEnabled: d.CertificationsEnabled,
 		CertificationsMin:     d.CertificationsMin,
 		CertificationsMax:     d.CertificationsMax,
+		EducationEnabled:      d.EducationEnabled,
 		FontSize:              d.FontSize,
 	}
 }

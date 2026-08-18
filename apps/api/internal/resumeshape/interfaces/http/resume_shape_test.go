@@ -108,15 +108,32 @@ func TestGetReturnsCertificationsFields(t *testing.T) {
 	}
 }
 
+func TestGetReturnsExperienceSummaryEducationFields(t *testing.T) {
+	r, _ := newTestRouter()
+
+	rec := do(t, r, http.MethodGet, "/settings/resume-shape", nil)
+	got := decodeConfig(t, rec)
+	if !got.ExperienceEnabled {
+		t.Errorf("ExperienceEnabled = %v, want true", got.ExperienceEnabled)
+	}
+	if !got.SummaryEnabled {
+		t.Errorf("SummaryEnabled = %v, want true", got.SummaryEnabled)
+	}
+	if !got.EducationEnabled {
+		t.Errorf("EducationEnabled = %v, want true", got.EducationEnabled)
+	}
+}
+
 func TestPutValidConfigRoundTrips(t *testing.T) {
 	r, _ := newTestRouter()
 
 	want := dto.ResumeShapeConfigDto{
-		SummaryLines: 2, SkillsEnabled: true, SkillsMaxGroups: 3,
-		ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
+		SummaryLines: 2, SummaryEnabled: true, SkillsEnabled: true, SkillsMaxGroups: 3,
+		ExperienceEnabled: true, ExperienceBulletsMin: 4, ExperienceBulletsMax: 5, TargetPages: 1,
 		ProjectsEnabled: true, ProjectsMin: 1, ProjectsMax: 2, ProjectBulletsMax: 3,
 		CertificationsEnabled: true, CertificationsMin: 1, CertificationsMax: 5,
-		FontSize: 12,
+		EducationEnabled: true,
+		FontSize:         12,
 	}
 	rec := do(t, r, http.MethodPut, "/settings/resume-shape", want)
 	if rec.Code != http.StatusOK {
@@ -136,11 +153,12 @@ func TestPutFullNonDefaultRoundTrip(t *testing.T) {
 	r, _ := newTestRouter()
 
 	want := dto.ResumeShapeConfigDto{
-		SummaryLines: 12, SkillsEnabled: false, SkillsMaxGroups: 20,
-		ExperienceBulletsMin: 1, ExperienceBulletsMax: 10, TargetPages: 3,
+		SummaryLines: 12, SummaryEnabled: false, SkillsEnabled: false, SkillsMaxGroups: 20,
+		ExperienceEnabled: false, ExperienceBulletsMin: 1, ExperienceBulletsMax: 10, TargetPages: 3,
 		ProjectsEnabled: true, ProjectsMin: 2, ProjectsMax: 4, ProjectBulletsMax: 10,
 		CertificationsEnabled: true, CertificationsMin: 2, CertificationsMax: 20,
-		FontSize: 14,
+		EducationEnabled: false,
+		FontSize:         14,
 	}
 	if rec := do(t, r, http.MethodPut, "/settings/resume-shape", want); rec.Code != http.StatusOK {
 		t.Fatalf("PUT status = %d (%s), want 200", rec.Code, rec.Body.String())

@@ -63,8 +63,10 @@ func (s *Service) Reset(ctx context.Context) (domain.ShapeConfig, error) {
 func rowToConfig(r sqlcgen.ResumeShapeSetting) domain.ShapeConfig {
 	return domain.ShapeConfig{
 		SummaryLines:          int(r.SummaryLines),
+		SummaryEnabled:        r.SummaryEnabled,
 		SkillsEnabled:         r.SkillsEnabled,
 		SkillsMaxGroups:       int(r.SkillsMaxGroups),
+		ExperienceEnabled:     r.ExperienceEnabled,
 		ExperienceBulletsMin:  int(r.ExperienceBulletsMin),
 		ExperienceBulletsMax:  int(r.ExperienceBulletsMax),
 		TargetPages:           int(r.TargetPages),
@@ -75,6 +77,7 @@ func rowToConfig(r sqlcgen.ResumeShapeSetting) domain.ShapeConfig {
 		CertificationsEnabled: r.CertificationsEnabled,
 		CertificationsMin:     int(r.CertificationsMin),
 		CertificationsMax:     int(r.CertificationsMax),
+		EducationEnabled:      r.EducationEnabled,
 		FontSize:              int(r.FontSize),
 	}
 }
@@ -82,8 +85,10 @@ func rowToConfig(r sqlcgen.ResumeShapeSetting) domain.ShapeConfig {
 func configToParams(c domain.ShapeConfig) sqlcgen.UpdateResumeShapeSettingParams {
 	return sqlcgen.UpdateResumeShapeSettingParams{
 		SummaryLines:          int32(c.SummaryLines),
+		SummaryEnabled:        c.SummaryEnabled,
 		SkillsEnabled:         c.SkillsEnabled,
 		SkillsMaxGroups:       int32(c.SkillsMaxGroups),
+		ExperienceEnabled:     c.ExperienceEnabled,
 		ExperienceBulletsMin:  int32(c.ExperienceBulletsMin),
 		ExperienceBulletsMax:  int32(c.ExperienceBulletsMax),
 		TargetPages:           int32(c.TargetPages),
@@ -94,6 +99,7 @@ func configToParams(c domain.ShapeConfig) sqlcgen.UpdateResumeShapeSettingParams
 		CertificationsEnabled: c.CertificationsEnabled,
 		CertificationsMin:     int32(c.CertificationsMin),
 		CertificationsMax:     int32(c.CertificationsMax),
+		EducationEnabled:      c.EducationEnabled,
 		FontSize:              int32(c.FontSize),
 	}
 }
