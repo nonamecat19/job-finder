@@ -40,11 +40,6 @@ func exportSections() []domain.Section {
 
 func intPtr(i int) *int { return &i }
 
-// exportDeps is the injected renderDeps seam for the export path. Its expand
-// and condense fields fail the test rather than being left nil: nil would
-// prove only that the path did not panic, while a failing stub proves the
-// path never reaches for an LLM call (expand) or for TrimHighlights
-// (condense) — the two things resume-generation.md § 7.1 forbids here.
 func exportDeps(t *testing.T, pages []int) (renderDeps, *int) {
 	t.Helper()
 	renders := 0
@@ -71,8 +66,6 @@ func exportDeps(t *testing.T, pages []int) (renderDeps, *int) {
 	}, &renders
 }
 
-// T066: the export path issues zero LLM calls and never trims. It fits on the
-// first render, so nothing beyond assemble/render/count happens at all.
 func TestWorkspaceExport(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.TargetPages = 2
@@ -93,8 +86,6 @@ func TestWorkspaceExport(t *testing.T) {
 	}
 }
 
-// Over the target, the only lever is layout: CompactDesign and one re-render.
-// Still no expand, still no condense.
 func TestWorkspaceExportCompactsLayoutOnceWhenOverTarget(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.TargetPages = 2
@@ -115,8 +106,6 @@ func TestWorkspaceExportCompactsLayoutOnceWhenOverTarget(t *testing.T) {
 	}
 }
 
-// Still over after compacting: blocked, with candidates — and the content is
-// exactly what the user approved, unchanged.
 func TestWorkspaceExportBlocksRatherThanTrimming(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.TargetPages = 2

@@ -39,7 +39,6 @@ var (
 	ParseRendercv           = domain.ParseRendercv
 	PrepareMasterForMarshal = domain.PrepareMasterForMarshal
 
-	// 034 summary-model choice.
 	SummaryOptions       = domain.SummaryOptions
 	DefaultSummaryOption = domain.DefaultSummaryOption
 	LookupSummaryOption  = domain.LookupSummaryOption

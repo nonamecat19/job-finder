@@ -38,7 +38,7 @@ func TestHandleResultDelivery_UnimplementedSchemaVersionDiscardedWithCounter(t *
 
 func TestHandleResultDelivery_UnregisteredCapabilityDiscardedWithCounter(t *testing.T) {
 	before := UnregisteredCapabilityTotal()
-	reg := ResultRegistry{} // no handler for ghost.completed
+	reg := ResultRegistry{}
 	handler := reg.HandleResultDelivery(nil)
 
 	body := []byte(`{"event_type":"ghost.completed","schema_version":1,"status":"succeeded"}`)

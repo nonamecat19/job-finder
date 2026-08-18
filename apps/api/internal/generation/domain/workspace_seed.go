@@ -5,21 +5,6 @@ import (
 	"strings"
 )
 
-// SeedFromMaster builds the workspace's starting sections and items directly
-// from the master resume, with no model call: one summary section (empty —
-// filled by the summary stage), one experience section per master entry
-// keyed by exact company name in master order, and one skills section.
-//
-// Every item is origin='profile', rank and position both equal the source
-// index (master order), and the top min(N, A) items per experience entry are
-// selected — this is not throwaway scaffolding: FR-010 requires master-order
-// seeding as the fallback when a ranking is rejected, so this function is the
-// path both the "no ranking yet" (this phase) and "ranking rejected twice"
-// cases share.
-//
-// An entry with zero master bullets still gets its own section with an empty
-// item list, never skipped — the client renders it as an explicit empty
-// state rather than a missing block.
 func SeedFromMaster(master RendercvMaster, cfg ShapeConfig) []Section {
 	out := make([]Section, 0, 2)
 	position := 0
@@ -87,11 +72,6 @@ func SeedFromMaster(master RendercvMaster, cfg ShapeConfig) []Section {
 		position++
 	}
 
-	// Projects/certifications/education only get a section when the master
-	// has content for it and the account hasn't switched it off. Unlike
-	// experience and skills — which every resume carries — a profile with
-	// none of these should show no block rather than an empty one asking to
-	// be filled.
 	if projects := AsSliceOfMaps(sections["projects"]); cfg.ProjectsEnabled && len(projects) > 0 {
 		out = append(out, Section{
 			Kind:        SectionKindProjects,
@@ -128,18 +108,6 @@ func SeedFromMaster(master RendercvMaster, cfg ShapeConfig) []Section {
 	return out
 }
 
-// SeedProjectItems builds the projects section's items from the master's
-// projects, in the order `order` names (a RankProjects order, or nil for
-// master order). Same two rules as SeedSkillItems:
-//
-//   - the result is a permutation of `projects` — nothing added, reworded or
-//     dropped,
-//   - projectsMax is a *selection* boundary, not a removal: the projects past
-//     it stay in the list as unselected items the user can promote, rather
-//     than disappearing the way ApplyHardLimits' render-time cap makes them.
-//
-// There is no pinned-project concept: unlike "Spoken Languages", no project is
-// a fact the vacancy cannot reorder.
 func SeedProjectItems(projects []map[string]any, order []int, projectsMax int) []Item {
 	seen := make(map[int]bool, len(projects))
 	ranked := make([]int, 0, len(projects))
@@ -177,10 +145,6 @@ func SeedProjectItems(projects []map[string]any, order []int, projectsMax int) [
 	return items
 }
 
-// projectItemText renders a project as the workspace shows it: its name,
-// stripped of the markdown link wrapper the master stores it in, followed by
-// how many bullets it carries — the one number that tells the user what
-// including it costs on the page.
 func projectItemText(p map[string]any) string {
 	name := strings.TrimSpace(StringField(p, "name"))
 	if inner, _, found := strings.Cut(strings.TrimPrefix(name, "["), "]("); found {
@@ -196,25 +160,14 @@ func projectItemText(p map[string]any) string {
 	return name + " · " + strconv.Itoa(n) + " bullets"
 }
 
-// SeedCertificationItems builds the certifications section's items from the
-// master's certifications, in `order` (nil for master order). No ranking
-// model exists for certifications — every item defaults selected, and the
-// whole-section enable/disable switch is the only cap, unlike projects'
-// count-based slots.
 func SeedCertificationItems(certs []map[string]any, order []int) []Item {
 	return seedWholeSectionItems(certs, order, ItemKindCertification, skillGroupText)
 }
 
-// SeedEducationItems builds the education section's items from the master's
-// education entries, in `order` (nil for master order). Same no-ranking,
-// no-cap treatment as certifications.
 func SeedEducationItems(edu []map[string]any, order []int) []Item {
 	return seedWholeSectionItems(edu, order, ItemKindEducation, educationItemText)
 }
 
-// seedWholeSectionItems is SeedProjectItems' shape without the count-based
-// cap: every entry is seeded selected, in `order` (master order for any
-// index `order` doesn't name, exactly like SeedProjectItems' fallback).
 func seedWholeSectionItems(entries []map[string]any, order []int, kind ItemKind, text func(map[string]any) string) []Item {
 	seen := make(map[int]bool, len(entries))
 	ranked := make([]int, 0, len(entries))
@@ -247,9 +200,6 @@ func seedWholeSectionItems(entries []map[string]any, order []int, kind ItemKind,
 	return items
 }
 
-// educationItemText renders an education entry as the workspace shows it:
-// "<degree> — <institution>, <date>", degrading gracefully when a field is
-// missing, mirroring entryLabel's date-range fallback for experience.
 func educationItemText(e map[string]any) string {
 	degree := strings.TrimSpace(StringField(e, "degree"))
 	institution := strings.TrimSpace(StringField(e, "institution"))
@@ -272,8 +222,6 @@ func educationItemText(e map[string]any) string {
 	return head
 }
 
-// educationDate mirrors entryLabel's date-range fallback: a single "date"
-// field wins if present, otherwise start–end (open-ended if no end yet).
 func educationDate(e map[string]any) string {
 	if d := strings.TrimSpace(StringField(e, "date")); d != "" {
 		return d
@@ -289,23 +237,6 @@ func educationDate(e map[string]any) string {
 	return start + "–" + end
 }
 
-// SeedSkillItems builds the skills section's items from the master's skill
-// groups, in the order `groupOrder` names (a verified RankedSkills.GroupOrder,
-// or nil for master order). It is SeedRankedItems' counterpart for skills, and
-// obeys the same two rules:
-//
-//   - The result is always a permutation of `groups`. Nothing is added,
-//     reworded or dropped — the model supplies an order over indices, never
-//     text, so a lost or invented group is not expressible.
-//   - maxGroups is a *selection* boundary, not a removal (FR-011, US4 AS-2):
-//     the groups past it stay in the list as unselected items the user can
-//     promote, rather than disappearing the way ApplyHardLimits' render-time
-//     cap makes them.
-//
-// Pinned groups ("Spoken Languages") keep the position the candidate authored
-// them at and are always selected: they are a fact about the candidate, not a
-// tailoring target, so neither the ranking nor the cap moves them — the same
-// exemption capSkillGroups gives them at render time.
 func SeedSkillItems(groups []map[string]any, groupOrder []int, maxGroups int) []Item {
 	pinned := make([]bool, len(groups))
 	pinnedCount := 0
@@ -362,8 +293,6 @@ func SeedSkillItems(groups []map[string]any, groupOrder []int, maxGroups int) []
 	return items
 }
 
-// entryLabel is the display label copied from master: "Senior Engineer ·
-// 2021–2024", degrading gracefully when either half is missing.
 func entryLabel(e map[string]any) string {
 	position := StringField(e, "position")
 	start := StringField(e, "start_date")
@@ -381,8 +310,6 @@ func entryLabel(e map[string]any) string {
 	return position + " · " + dates
 }
 
-// skillGroupText renders a skill group as "Label: details" for display —
-// data-model.md §3's format for a skills-section item's source_text.
 func skillGroupText(g map[string]any) string {
 	label := strings.TrimSpace(StringField(g, "label"))
 	details := strings.TrimSpace(StringField(g, "details"))

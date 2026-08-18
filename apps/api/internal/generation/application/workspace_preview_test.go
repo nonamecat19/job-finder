@@ -8,10 +8,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// TestPreviewDocument_MatchesExportAssembly is quickstart.md Scenario 1: the
-// preview-document endpoint must be a strict subset of the export pipeline —
-// same domain.Assemble, same domain.PrepareMasterForMarshal + yaml.Marshal —
-// with no drift and no reimplementation (Constitution III).
 func TestPreviewDocument_MatchesExportAssembly(t *testing.T) {
 	master := exportMaster()
 	sections := exportSections()
@@ -42,9 +38,6 @@ func TestPreviewDocument_MatchesExportAssembly(t *testing.T) {
 	}
 }
 
-// TestPreviewDocument_SectionsHashStable asserts the same selection state
-// always hashes identically — the property previewPipeline.ts's coalescing
-// (research.md Decision 5 / spec FR-010) depends on.
 func TestPreviewDocument_SectionsHashStable(t *testing.T) {
 	master := exportMaster()
 	sections := exportSections()

@@ -14,34 +14,17 @@ import (
 	"github.com/job-finder/api/internal/testinfra"
 )
 
-// docker/rabbitmq/init-ai-user.sh gives the AI service its own broker account
-// with permissions restricted to exactly what contracts/messaging.md M7-3
-// allows: read the AI work queues, write results, configure nothing. Until
-// this file that restriction was asserted nowhere — the script ran in compose
-// and its effect was taken on trust, so a regex typo would have handed the AI
-// service the ability to delete the backend's topology and nothing would have
-// noticed.
-//
-// The script itself is what runs here (testinfra.ProvisionRabbitMQAIUser
-// mounts the repository file into the image compose pins), against the real
-// broker, so what is proven is the file that ships.
-
 const (
 	aiUser = "ai_service"
 	aiPass = "testinfra-ai-secret"
 )
 
-// provisionAIUser runs the init script once and returns a connection opened
-// as the AI service account.
 func provisionAIUser(t *testing.T) *amqp.Connection {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	// Topology is the publisher's job (M1-1) and the AI account is not
-	// allowed to declare any of it, so the admin connection must create it
-	// first — exactly the ordering compose enforces with depends_on.
 	admin := dialTestBroker(t)
 	declareTopologyOrFail(t, admin)
 
@@ -61,8 +44,6 @@ func provisionAIUser(t *testing.T) *amqp.Connection {
 	return conn
 }
 
-// TestAIUserCanConsumeItsWorkQueues proves the account the script creates can
-// do the job it exists for: consume the four AI work queues.
 func TestAIUserCanConsumeItsWorkQueues(t *testing.T) {
 	conn := provisionAIUser(t)
 
@@ -81,9 +62,6 @@ func TestAIUserCanConsumeItsWorkQueues(t *testing.T) {
 	}
 }
 
-// TestAIUserCannotConsumeBackendQueues proves the read regex is a whitelist,
-// not a formality: ingest and enrich are the backend's own work types and the
-// AI service must not be able to take messages off them.
 func TestAIUserCannotConsumeBackendQueues(t *testing.T) {
 	conn := provisionAIUser(t)
 
@@ -104,8 +82,6 @@ func TestAIUserCannotConsumeBackendQueues(t *testing.T) {
 	}
 }
 
-// TestAIUserCanPublishResults proves the write regex covers the results
-// exchange — without it every capability would run and then fail to report.
 func TestAIUserCanPublishResults(t *testing.T) {
 	conn := provisionAIUser(t)
 
@@ -133,9 +109,6 @@ func TestAIUserCanPublishResults(t *testing.T) {
 	}
 }
 
-// TestAIUserCannotPublishWork proves the write regex is exactly
-// `^jobfinder\.results$`: the AI service must not be able to inject work for
-// itself or for the backend into the work exchange.
 func TestAIUserCannotPublishWork(t *testing.T) {
 	conn := provisionAIUser(t)
 
@@ -149,8 +122,7 @@ func TestAIUserCannotPublishWork(t *testing.T) {
 		"jobfinder.work", "ghost", false, false,
 		amqp.Publishing{ContentType: "application/json", Body: []byte(`{"probe":true}`)})
 	if err == nil {
-		// A channel-level refusal arrives asynchronously; the publish call
-		// itself can return before the broker closes the channel.
+
 		select {
 		case amqpErr := <-closed:
 			if amqpErr == nil {
@@ -169,10 +141,6 @@ func TestAIUserCannotPublishWork(t *testing.T) {
 	}
 }
 
-// TestAIUserCannotDeclareTopology proves `"configure":"^$"` holds: topology
-// belongs to the publisher (M1-1), and an AI service that could declare could
-// also redeclare a queue with different arguments and silently break
-// durability guarantees for everyone.
 func TestAIUserCannotDeclareTopology(t *testing.T) {
 	conn := provisionAIUser(t)
 
@@ -211,8 +179,6 @@ func TestAIUserCannotDeclareTopology(t *testing.T) {
 		}
 		defer ch.Close()
 
-		// Even a redeclaration of what already exists needs configure
-		// permission, so the whole of events.DeclareTopology is refused.
 		if err := events.DeclareTopology(ch); err == nil {
 			t.Fatal("the AI service redeclared the backend's topology")
 		}

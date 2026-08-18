@@ -33,11 +33,6 @@ func (f *fakeProvider) CompleteJSON(ctx context.Context, prompt string, opts *Co
 	return r, nil
 }
 
-// CompleteChat satisfies the 037 Provider interface. The fake's behaviour lives
-// in CompleteJSON, so this delegates to it with the final turn as the prompt —
-// which is what the real adapters do in reverse. Tool calls are never
-// fabricated here: a fake that invented one would make a tool-loop test pass
-// for the wrong reason.
 func (f *fakeProvider) CompleteChat(ctx context.Context, msgs []Message, opts *CompleteOptions) (ChatResult, error) {
 	prompt := ""
 	if len(msgs) > 0 {
@@ -130,8 +125,6 @@ type strictSample struct {
 	Items []strictItem `json:"items"`
 }
 
-// nodeAt walks doc down a slash-separated path where "[]" descends into an
-// array's item schema and any other segment descends into a named property.
 func nodeAt(t *testing.T, doc map[string]any, path string) map[string]any {
 	t.Helper()
 	node := doc
@@ -267,6 +260,6 @@ func TestUsageCapture(t *testing.T) {
 }
 
 func TestReportUsageWithoutSinkIsNoop(t *testing.T) {
-	// Providers report unconditionally; a caller that never opted in must not panic.
+
 	ReportUsage(context.Background(), Usage{CostUSD: 1})
 }

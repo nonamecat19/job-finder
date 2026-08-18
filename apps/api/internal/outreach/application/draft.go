@@ -9,26 +9,15 @@ import (
 	"github.com/job-finder/api/internal/outreach/domain"
 )
 
-// DraftAttempt is one call's result: the draft text and the specific claims
-// it makes, ungrounded — generateGrounded (generate.go) still runs
-// domain.GroundClaims on the result, retries on violation and falls back to
-// a generic opener; none of that lives in a Drafter (T107 territory).
 type DraftAttempt struct {
 	Text           string
 	SpecificClaims []string
 }
 
-// Drafter runs one outreach-draft attempt for the given tone/contact/
-// company/facts, optionally told about the previous attempt's grounding
-// violation so a retry can address it.
 type Drafter interface {
 	Draft(ctx context.Context, tone domain.Tone, contactName, companyName string, facts []domain.Fact, lastViolation string) (DraftAttempt, error)
 }
 
-// AIDrafter calls the `outreach` capability over aiclient (contracts/http.md
-// H1-1) — the capability builds its own prompt server-side
-// (prompts/outreach.py); this sends the structured fields and parses the
-// result.
 type AIDrafter struct {
 	Client *aiclient.Client
 }

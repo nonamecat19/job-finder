@@ -14,19 +14,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// The evaluation corpus (038).
-//
-// The harness lives in package `application`, in _test.go files, and not in a
-// subpackage — because every stage of the tailoring path is unexported
-// (tailorRendercvResume, selectWithCompleteness, summarize, renderToPageTarget,
-// renderDeps), and the two exported entry points require Postgres and write run
-// rows. A subpackage could reach none of it. Test files keep the harness out of
-// the API binary.
-//
-// Cases are **discovered**, never enumerated: adding a case is adding a
-// directory, so a case cannot be added without the gate running it, and cannot
-// be quietly dropped from a list.
-
 const evalDataDir = "evaldata"
 
 var (
@@ -35,19 +22,8 @@ var (
 	baselinesDir = filepath.Join(evalDataDir, "baselines")
 )
 
-// maxReplayFixtures bounds the committed corpus.
-//
-// Set from the observed count plus headroom, not guessed. One case issues far
-// more than one request once the retry ladders engage — analyze, up to three
-// selection attempts, a summary and its re-prompt, a structure re-tailor, and
-// any page-fit expand/condense rounds.
-//
-// A breach is a signal to shrink the corpus, not to raise this number. Fixtures
-// are the part of a golden-set harness that rots: every one is a response some
-// model gave once, and a corpus nobody can read is a corpus nobody maintains.
 const maxReplayFixtures = 200
 
-// CaseSpec is the on-disk case.yaml.
 type CaseSpec struct {
 	Name           string `yaml:"name"`
 	Why            string `yaml:"why"`
@@ -61,7 +37,6 @@ type CaseSpec struct {
 	PageCounts []int `yaml:"page_counts"`
 }
 
-// EvalCase is a loaded case.
 type EvalCase struct {
 	Name    string
 	Dir     string
@@ -72,8 +47,6 @@ type EvalCase struct {
 	Cfg     domain.ShapeConfig
 }
 
-// discoverCases walks the corpus directory. No case name appears in any Go file
-// (FR-020, C5-1).
 func discoverCases(t *testing.T, dir string) []EvalCase {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
@@ -140,33 +113,15 @@ func loadCase(t *testing.T, dir string) EvalCase {
 	return c
 }
 
-// realIdentityMarkers are patterns whose presence in a fixture suggests a real
-// person's data was committed. Every fixture must be synthetic (FR-019,
-// SC-011): the convenient fixture is the developer's own résumé, and committing
-// a real employment history and contact details to test a grounding checker is
-// not a trade worth making — the checks are structural, so real data buys
-// nothing.
 var realIdentityMarkers = []*regexp.Regexp{
-	// Contact details that would identify someone. The demo document's
-	// rendercv.com addresses are explicitly allowed by the exceptions below.
+
 	regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@(?:gmail|outlook|hotmail|yahoo|proton|icloud)\.[a-z]{2,}\b`),
 	regexp.MustCompile(`\+\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3}[\s-]?\d{2,4}`),
 	regexp.MustCompile(`(?i)\blinkedin\.com/in/[a-z0-9-]{4,}`),
 }
 
-// openEndedDate is the pattern FR-030 forbids.
-//
-// DeriveTotalExperienceYears resolves `present` against time.Now().Year(), and
-// production calls it at four sites in the tailoring path. An open-ended role
-// therefore changes the derived experience figure — and so the summary prompt,
-// and so the request hash — on 1 January, which would expire every replay
-// fixture in the corpus overnight for no reason anybody would connect to the
-// date.
 var openEndedDate = regexp.MustCompile(`(?m)^\s*(?:end_date|date)\s*:\s*['"]?present['"]?\s*$`)
 
-// TestCorpusDiscipline is the rule set every case must satisfy. It runs in the
-// ordinary suite, so a malformed, non-synthetic or open-endedly dated case
-// fails the build rather than being discovered when somebody next reads it.
 func TestCorpusDiscipline(t *testing.T) {
 	cases := discoverCases(t, casesDir)
 	if len(cases) == 0 {
@@ -218,9 +173,6 @@ func TestCorpusDiscipline(t *testing.T) {
 	}
 }
 
-// TestCaseWhyNamesAConcreteFailure guards against the `why` field decaying into
-// a description of the case's contents. "A vacancy and a profile" is not a
-// reason; "the silent selection truncation 035 found" is.
 func TestCaseWhyNamesAConcreteFailure(t *testing.T) {
 	for _, c := range discoverCases(t, casesDir) {
 		t.Run(c.Name, func(t *testing.T) {
@@ -228,8 +180,7 @@ func TestCaseWhyNamesAConcreteFailure(t *testing.T) {
 			if len(why) < 60 {
 				t.Errorf("`why` is %d characters; it must name a concrete failure mode, not describe the fixture", len(why))
 			}
-			// A concrete failure mode says what goes wrong. These are the verbs
-			// and nouns that distinguish "this catches X" from "this is a case".
+
 			concrete := []string{"fail", "wrong", "missing", "truncat", "fabricat", "drift", "silent",
 				"contradict", "shortfall", "regress", "expire", "invalid", "empty", "break", "catch", "must not"}
 			found := false
@@ -246,8 +197,6 @@ func TestCaseWhyNamesAConcreteFailure(t *testing.T) {
 	}
 }
 
-// TestReplayFixtureCountIsBounded keeps the corpus readable. See
-// maxReplayFixtures for why a breach means shrinking the corpus.
 func TestReplayFixtureCountIsBounded(t *testing.T) {
 	count := 0
 	err := filepath.WalkDir(replaysDir, func(path string, d os.DirEntry, err error) error {

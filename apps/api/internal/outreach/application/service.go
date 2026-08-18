@@ -61,10 +61,6 @@ type Service struct {
 	drafter  Drafter
 }
 
-// NewService's drafter is always AIDrafter now: outreach's Go LLM path was
-// deleted (T113) once live parity evidence confirmed the python path
-// (AI_CAPABILITY_ROUTING=outreach=python, the only mode left) matches it
-// (t113-parity-samples.md).
 func NewService(contacts ContactsProvider, intel IntelProvider, drafter Drafter) *Service {
 	return &Service{contacts: contacts, intel: intel, drafter: drafter}
 }

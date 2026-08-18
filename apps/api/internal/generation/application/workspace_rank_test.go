@@ -7,9 +7,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// rankMaster is a small master with two experience entries, sized so the
-// tests below can distinguish "ranking accepted" from "fell back to master
-// order" by inspecting the returned indices.
 func rankMaster() domain.RendercvMaster {
 	return domain.RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"experience": []any{
@@ -25,8 +22,6 @@ func rankAnalysis() domain.VacancyAnalysis {
 	return domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
 }
 
-// A valid ranking reply for rankMaster's single "Acme" entry. cfg.ExperienceBulletsMin
-// is set to 2 in these tests, so K = min(2*2, 4) = 4 — every index, in some order.
 func validRankReply(t *testing.T) func(string) string {
 	return func(string) string {
 		return mustJSON(t, domain.RankedSelection{
@@ -35,8 +30,6 @@ func validRankReply(t *testing.T) func(string) string {
 	}
 }
 
-// An invalid ranking reply: too short (K=4, only 1 returned) — VerifyRanking
-// rejects it on every attempt.
 func invalidRankReply(t *testing.T) func(string) string {
 	return func(string) string {
 		return mustJSON(t, domain.RankedSelection{
@@ -45,8 +38,6 @@ func invalidRankReply(t *testing.T) func(string) string {
 	}
 }
 
-// rankMasterWithSkills adds three skill groups to rankMaster, so the skills
-// half of the same response has something to order.
 func rankMasterWithSkills() domain.RendercvMaster {
 	m := rankMaster()
 	domain.CvSections(m)["skills"] = []any{
@@ -57,9 +48,6 @@ func rankMasterWithSkills() domain.RendercvMaster {
 	return m
 }
 
-// T059/T060: a verified groupOrder comes back from the same call that ranked
-// the achievements, and an unverifiable one is retried once and then dropped
-// so the caller keeps the master-order seed.
 func TestSkillGroupOrderIsVerifiedLikeAnAchievementRanking(t *testing.T) {
 	reply := func(order []int) func(string) string {
 		return func(string) string {
@@ -99,9 +87,6 @@ func TestSkillGroupOrderIsVerifiedLikeAnAchievementRanking(t *testing.T) {
 	})
 }
 
-// T038: a ranking rejected on both attempts falls back to master order
-// (fallbackUsed = true, no items to persist — the caller leaves the
-// StartGenerationRun seed exactly as it is) rather than failing the run.
 func TestTwiceRejectedRankingFallsBackToMasterOrder(t *testing.T) {
 	provider := &stageProvider{name: "generation-select", reply: invalidRankReply(t)}
 	cfg := domain.DefaultShapeConfig()
@@ -122,15 +107,12 @@ func TestTwiceRejectedRankingFallsBackToMasterOrder(t *testing.T) {
 	if r.items != nil {
 		t.Errorf("items = %+v, want nil (fallback leaves the master-order seed untouched)", r.items)
 	}
-	// The stage must have been given exactly two chances, matching the
-	// existing groundingAttempts idiom used elsewhere in this pipeline.
+
 	if provider.calls != 2 {
 		t.Errorf("provider called %d times, want 2 (one attempt, one retry)", provider.calls)
 	}
 }
 
-// A ranking that verifies on the first attempt is used as-is, with no retry
-// and fallbackUsed left false.
 func TestValidRankingOnFirstAttemptNeedsNoRetry(t *testing.T) {
 	provider := &stageProvider{name: "generation-select", reply: validRankReply(t)}
 	cfg := domain.DefaultShapeConfig()
@@ -154,7 +136,7 @@ func TestValidRankingOnFirstAttemptNeedsNoRetry(t *testing.T) {
 	if provider.calls != 1 {
 		t.Errorf("provider called %d times, want 1 (no retry needed)", provider.calls)
 	}
-	// Ranked order 2,0,3,1 with N=2 selected: first two selected.
+
 	wantOrder := []int{2, 0, 3, 1}
 	for i, it := range r.items {
 		if it.SourceIndex == nil || *it.SourceIndex != wantOrder[i] {
@@ -169,8 +151,6 @@ func TestValidRankingOnFirstAttemptNeedsNoRetry(t *testing.T) {
 	}
 }
 
-// A ranking invalid on the first attempt but valid on the retry is used —
-// the retry response, not a fallback.
 func TestRankingValidOnRetryIsUsed(t *testing.T) {
 	attempt := 0
 	provider := &stageProvider{name: "generation-select", reply: func(string) string {

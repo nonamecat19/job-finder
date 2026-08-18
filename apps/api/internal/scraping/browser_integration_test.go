@@ -20,25 +20,9 @@ import (
 	"github.com/job-finder/api/internal/testinfra"
 )
 
-// The browser half of this package had no test at all: BrowserContext
-// launches Chrome from a local binary, which a CI runner does not have, so
-// everything downstream of it — the job sources that need a rendered page,
-// company intel, and the PDF renderer — was covered only by whatever a
-// developer ran by hand. These tests drive a headless Chrome container
-// instead (testinfra.ChromeWebSocketURL), which is why the seam
-// NewWithRemoteBrowser exists.
-//
-// The page under test is served from this process; the browser reaches it
-// over testcontainers' host-port access, so nothing here touches the
-// internet.
-
-// The site is one server for the whole package, started in TestMain: the
-// browser container is process-wide and is granted access to exactly the host
-// ports it was created with, so a per-test server on a fresh port would be
-// unreachable from the browser started by whichever test ran first.
 var (
 	site     *httptest.Server
-	siteBase string // the address the BROWSER uses — the host, seen from a container
+	siteBase string
 )
 
 func startSite() (*httptest.Server, int, error) {
@@ -54,10 +38,7 @@ func startSite() (*httptest.Server, int, error) {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				switch r.URL.Path {
 				case "/rendered":
-					// The whole reason a browser exists in this codebase:
-					// the interesting content is not in the served HTML.
-					// The text is assembled from fragments so it appears
-					// nowhere in the bytes a plain fetch receives.
+
 					_, _ = w.Write([]byte(`<!doctype html><html><body>
 						<div id="listing">loading…</div>
 						<script>
@@ -98,9 +79,6 @@ func remoteScraper(t *testing.T) *scraping.HTTPScraper {
 	return scraper
 }
 
-// TestBrowserContextRendersJavaScript is the property the browser rung of the
-// retrieval ladder is for: content a plain fetch never sees, because it is
-// written by script after load.
 func TestBrowserContextRendersJavaScript(t *testing.T) {
 	scraper := remoteScraper(t)
 
@@ -128,8 +106,6 @@ func TestBrowserContextRendersJavaScript(t *testing.T) {
 		t.Fatalf("rendered text = %q, want the script-written content: the page was read without executing its script", text)
 	}
 
-	// The plain fetch, for contrast: it sees the placeholder, which is
-	// exactly why the browser rung exists.
 	raw, err := scraper.FetchHTML(ctx, site.URL+"/rendered", nil)
 	if err != nil {
 		t.Fatalf("FetchHTML: %v", err)
@@ -139,10 +115,6 @@ func TestBrowserContextRendersJavaScript(t *testing.T) {
 	}
 }
 
-// TestBrowserContextIsReusedAcrossCalls proves the caching in BrowserContext:
-// one browser is shared by the job sources, company intel and the PDF
-// renderer (that sharing is why this package exists rather than the
-// library's own scraper), so a second call must not launch a second browser.
 func TestBrowserContextIsReusedAcrossCalls(t *testing.T) {
 	scraper := remoteScraper(t)
 
@@ -162,10 +134,6 @@ func TestBrowserContextIsReusedAcrossCalls(t *testing.T) {
 	}
 }
 
-// TestCloseReleasesTheBrowser proves Close is honest — the context it
-// cancelled cannot be driven afterwards — and that a scraper can be revived
-// by asking for a context again, which is what the reconnect path in
-// BrowserContext is written for.
 func TestCloseReleasesTheBrowser(t *testing.T) {
 	scraper := remoteScraper(t)
 
@@ -200,9 +168,6 @@ func TestCloseReleasesTheBrowser(t *testing.T) {
 	}
 }
 
-// TestFetchHTMLSendsTheDeclaredUserAgent covers the plain path's one
-// non-obvious behaviour: hosts that check the User-Agent are meant to see a
-// browser-shaped one, and a caller's own headers are merged on top.
 func TestFetchHTMLSendsTheDeclaredUserAgent(t *testing.T) {
 	scraper := scraping.New()
 	t.Cleanup(scraper.Close)
@@ -232,9 +197,6 @@ var (
 	chromeErr error
 )
 
-// TestMain starts the one site server and the one browser, in that order:
-// the browser container has to be told at creation time which host port it
-// may reach.
 func TestMain(m *testing.M) {
 	srv, port, err := startSite()
 	if err != nil {

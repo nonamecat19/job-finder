@@ -8,8 +8,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// parityMaster carries every section kind the render path knows about, in a
-// deliberate order, so a change in section set or ordering shows up.
 func parityMaster() domain.RendercvMaster {
 	return domain.RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"_order":  []any{"summary", "skills", "experience", "projects", "education", "certifications"},
@@ -30,10 +28,6 @@ func parityMaster() domain.RendercvMaster {
 	}}}
 }
 
-// 035 FR-018 / SC-006: splitting the pipeline must not change the document.
-// Section set and ordering after a full staged run must match the master's
-// exactly — this is the guarantee that makes the split a refactor of how the
-// resume is produced rather than a change to what it is.
 func TestSplitPipelineLeavesSectionSetAndOrderUnchanged(t *testing.T) {
 	master := parityMaster()
 
@@ -68,8 +62,6 @@ func TestSplitPipelineLeavesSectionSetAndOrderUnchanged(t *testing.T) {
 		t.Errorf("section set changed:\n got %v\nwant %v", gotKeys, wantKeys)
 	}
 
-	// The pinned group is a fact about the candidate, not a tailoring target,
-	// and the split must not have quietly made it one.
 	skills := domain.AsSliceOfMaps(domain.CvSections(merged)["skills"])
 	if got := domain.StringField(skills[1], "details"); got != "English, Ukrainian" {
 		t.Errorf("pinned skill group details = %q, want them untouched", got)

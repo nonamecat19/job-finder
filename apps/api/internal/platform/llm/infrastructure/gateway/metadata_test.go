@@ -9,9 +9,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/domain"
 )
 
-// captureBody runs one call against a stub gateway and returns the raw request
-// body it sent, so assertions can be made on the wire form rather than on Go
-// values. 036's metadata is only observable there.
 func captureBody(t *testing.T, call func(p *Provider) error) map[string]any {
 	t.Helper()
 	var raw []byte
@@ -32,10 +29,6 @@ func captureBody(t *testing.T, call func(p *Provider) error) map[string]any {
 	return body
 }
 
-// FR-003/C4-1: the zero value of the 036 fields must leave the wire body
-// exactly as it was before 036. "metadata" must be ABSENT — not null, not {} —
-// because a proxy that receives an empty metadata object is not receiving the
-// same request it received yesterday.
 func TestMetadataAbsentWhenUnset(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -57,12 +50,6 @@ func TestMetadataAbsentWhenUnset(t *testing.T) {
 	}
 }
 
-// C4-4: the correlation key must be existing_trace_id, never trace_id.
-//
-// This is asserted on the KEY NAME rather than on grouping behaviour, because
-// both keys group. The difference only shows up in the trace's name, input,
-// output and tags, which trace_id rewrites on every call — so a test that
-// merely checked "calls ended up together" would pass against the wrong key.
 func TestMetadataUsesExistingTraceID(t *testing.T) {
 	body := captureBody(t, func(p *Provider) error {
 		_, err := p.Complete(context.Background(), "hi", &domain.CompleteOptions{
@@ -83,9 +70,6 @@ func TestMetadataUsesExistingTraceID(t *testing.T) {
 	}
 }
 
-// FR-012: the task key must travel as generation_name, because the collector
-// records `model` as the served deployment. Without this, two task keys served
-// by the same model are indistinguishable in reporting.
 func TestMetadataCarriesTaskKeyAsGenerationName(t *testing.T) {
 	body := captureBody(t, func(p *Provider) error {
 		_, err := p.CompleteJSON(context.Background(), "hi", &domain.CompleteOptions{
@@ -107,8 +91,6 @@ func TestMetadataCarriesTaskKeyAsGenerationName(t *testing.T) {
 	}
 }
 
-// C4-6: metadata carries the correlation id, the generation name and the tag —
-// and nothing else. No profile field, no job id, no user id may leak into it.
 func TestMetadataCarriesNothingElse(t *testing.T) {
 	body := captureBody(t, func(p *Provider) error {
 		_, err := p.Complete(context.Background(), "hi", &domain.CompleteOptions{
@@ -127,8 +109,6 @@ func TestMetadataCarriesNothingElse(t *testing.T) {
 	}
 }
 
-// C4-3: neither value may reach the model. They are transport metadata; a run
-// id appearing in a prompt would be a change to the grounding surface.
 func TestTraceAndTaskNeverReachTheMessages(t *testing.T) {
 	body := captureBody(t, func(p *Provider) error {
 		_, err := p.Complete(context.Background(), "summarise this", &domain.CompleteOptions{
@@ -160,8 +140,6 @@ func stringIndex(haystack, needle string) int {
 	return -1
 }
 
-// Nil-receiver safety, matching the existing ModelOr/Temp/SystemPrompt
-// discipline. Complete(ctx, prompt, nil) is a live call shape in cmd/llmsmoke.
 func TestTraceAndTaskAccessorsAreNilSafe(t *testing.T) {
 	var opts *domain.CompleteOptions
 	if got := opts.Trace(); got != "" {
@@ -179,9 +157,6 @@ func TestTraceAndTaskAccessorsAreNilSafe(t *testing.T) {
 	}
 }
 
-// FR-009/FR-011: the trace id normally arrives on the context, stamped once per
-// run. This is what makes retries, re-prompts and escalations carry the same id
-// without each of them having to remember — they inherit the context.
 func TestTraceIDFromContext(t *testing.T) {
 	ctx := domain.WithTraceID(context.Background(), "run-from-ctx")
 	var raw []byte
@@ -207,15 +182,12 @@ func TestTraceIDFromContext(t *testing.T) {
 	}
 }
 
-// An uncorrelated context must still produce no metadata at all, so the
-// byte-identical guarantee holds for every caller that never opts in.
 func TestNoTraceIDOnPlainContext(t *testing.T) {
 	if got := domain.TraceIDFrom(context.Background()); got != "" {
 		t.Errorf("TraceIDFrom(plain ctx) = %q, want empty", got)
 	}
 }
 
-// An explicit per-call TraceID wins over the context's.
 func TestExplicitTraceIDOverridesContext(t *testing.T) {
 	ctx := domain.WithTraceID(context.Background(), "ctx-run")
 	body := captureBodyCtx(t, ctx, func(p *Provider) error {

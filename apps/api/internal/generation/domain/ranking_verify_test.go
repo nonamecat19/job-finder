@@ -11,10 +11,8 @@ func hasViolation(vs []RankingViolation, kind RankingViolationKind) bool {
 	return false
 }
 
-// T037: out_of_range, duplicate and short are each detected, len(ranking) >
-// K is accepted, and K is computed as min(2*target, available).
 func TestVerifyRanking(t *testing.T) {
-	// available=10, target=4 -> K = min(8,10) = 8.
+
 	full := []int{0, 1, 2, 3, 4, 5, 6, 7}
 
 	t.Run("valid ranking of exactly K has no violations", func(t *testing.T) {
@@ -56,7 +54,7 @@ func TestVerifyRanking(t *testing.T) {
 	})
 
 	t.Run("len(ranking) > K is accepted, not a violation", func(t *testing.T) {
-		ranking := append(append([]int{}, full...), 8, 9) // K=8, len=10
+		ranking := append(append([]int{}, full...), 8, 9)
 		got := VerifyRanking(10, 4, ranking)
 		if len(got) != 0 {
 			t.Errorf("VerifyRanking() = %+v, want none (extra ranked indices are accepted)", got)
@@ -64,7 +62,7 @@ func TestVerifyRanking(t *testing.T) {
 	})
 
 	t.Run("K = min(2*target, available)", func(t *testing.T) {
-		// available=3, target=4 -> K = min(8,3) = 3.
+
 		if got := VerifyRanking(3, 4, []int{0, 1, 2}); len(got) != 0 {
 			t.Errorf("VerifyRanking() = %+v, want none when K is capped by availability", got)
 		}
@@ -77,7 +75,7 @@ func TestVerifyRanking(t *testing.T) {
 	})
 
 	t.Run("short still fires when available caps K below the naive count", func(t *testing.T) {
-		// available=3, target=4 -> K=3; returning only 2 is short.
+
 		got := VerifyRanking(3, 4, []int{0, 1})
 		if !hasViolation(got, RankingShort) {
 			t.Errorf("VerifyRanking() = %+v, want short", got)
@@ -86,7 +84,7 @@ func TestVerifyRanking(t *testing.T) {
 }
 
 func TestMasterOrderRanking(t *testing.T) {
-	got := MasterOrderRanking(10, 4) // K = 8
+	got := MasterOrderRanking(10, 4)
 	if len(got) != 8 {
 		t.Fatalf("MasterOrderRanking() has %d entries, want 8", len(got))
 	}
@@ -108,7 +106,7 @@ func TestSeedRankedItems(t *testing.T) {
 		if len(items) != 5 {
 			t.Fatalf("len(items) = %d, want 5 (the unranked tail must still appear)", len(items))
 		}
-		wantOrder := []int{3, 1, 0, 4, 2} // 2 is the unranked tail, appended in master order
+		wantOrder := []int{3, 1, 0, 4, 2}
 		wantSelected := []bool{true, true, false, false, false}
 		for i, it := range items {
 			if it.SourceIndex == nil || *it.SourceIndex != wantOrder[i] {

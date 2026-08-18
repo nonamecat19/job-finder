@@ -1,7 +1,3 @@
-// Topology declares every exchange, queue and binding on the broker
-// (data-model.md § 4, contracts/messaging.md M1). It is declared once, at
-// startup, by the publisher; a consumer never declares topology of its own
-// (M1-1) except to re-declare it after a reconnect (M3-4).
 package events
 
 import (
@@ -19,12 +15,9 @@ const (
 	ResultQueue = "results.backend"
 )
 
-// RetryRungs is the fixed backoff ladder every work type shares
-// (data-model.md § 6): 1s → 10s → 1m → 10m. An attempt beyond the ladder's
-// length reuses its longest rung (M4-2).
 var RetryRungs = []struct {
 	Name string
-	TTL  int64 // milliseconds
+	TTL  int64
 }{
 	{Name: "1s", TTL: 1000},
 	{Name: "10s", TTL: 10_000},
@@ -32,8 +25,6 @@ var RetryRungs = []struct {
 	{Name: "10m", TTL: 600_000},
 }
 
-// WorkTypes is the closed set of work types with a declared queue
-// (data-model.md § 6).
 var WorkTypes = []string{"ingest", "enrich", "match", "generate", "salary", "ghost"}
 
 func workQueueName(workType string) string { return "work." + workType }
@@ -42,10 +33,6 @@ func delayQueueName(workType, rung string) string {
 	return "delay." + workType + "." + rung
 }
 
-// DeclareTopology declares every exchange, queue and binding in
-// data-model.md § 4 idempotently (M1-1). A conflicting declaration (e.g. an
-// existing classic or non-durable queue) fails loudly, naming the object
-// (M1-3), rather than silently falling back to the existing definition.
 func DeclareTopology(ch *amqp.Channel) error {
 	if err := ch.ExchangeDeclare(WorkExchange, "direct", true, false, false, false, nil); err != nil {
 		return fmt.Errorf("events: declare exchange %s: %w", WorkExchange, err)
@@ -112,8 +99,6 @@ func DeclareTopology(ch *amqp.Channel) error {
 	return nil
 }
 
-// DelayRoutingKey returns the routing key for republishing to DelayExchange
-// at the given rung, matching the binding declared in DeclareTopology.
 func DelayRoutingKey(workType, rung string) string {
 	return workType + "." + rung
 }

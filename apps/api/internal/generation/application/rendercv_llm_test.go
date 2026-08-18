@@ -101,7 +101,6 @@ func TestBuildSelectPrompt_IncludesPreviousViolations(t *testing.T) {
 	}
 }
 
-// The prompts must carry the run's configured numbers, not literals.
 func TestBuildSelectPromptUsesConfiguredTargets(t *testing.T) {
 	master := loadSampleMaster(t)
 	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
@@ -121,8 +120,6 @@ func TestBuildSelectPromptUsesConfiguredTargets(t *testing.T) {
 		}
 	}
 
-	// The summary target moved with the summary: it belongs to the stage that
-	// writes it, and the select prompt must no longer ask for one at all.
 	if strings.Contains(prompt, "sentences") {
 		t.Errorf("select prompt still asks for a summary:\n%s", prompt)
 	}
@@ -141,8 +138,6 @@ func TestBuildSelectPromptUsesConfiguredTargets(t *testing.T) {
 	}
 }
 
-// FR-003 regression guard: with the default config every prompt must read
-// exactly as it did before the config existed.
 func TestPromptsWithDefaultConfigReproduceOriginalWording(t *testing.T) {
 	master := loadSampleMaster(t)
 	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
@@ -151,15 +146,12 @@ func TestPromptsWithDefaultConfigReproduceOriginalWording(t *testing.T) {
 	selectPrompt := buildSelectPrompt(master, analysis, domain.GroundingModerate, nil, cfg)
 	if !containsAll(selectPrompt,
 		"select the TOP 8-10 most relevant bullets",
-		// Skill ordering left this prompt for RankSkills: the shape config
-		// still drives the bullet targets, but no wording here asks the model
-		// to touch a skill.
+
 		"Do NOT return skills",
 	) {
 		t.Errorf("default select prompt drifted from the original wording:\n%s", selectPrompt)
 	}
 
-	// The summary instruction left this prompt with the summary stage (035).
 	summaryPrompt := buildSummaryPrompt(domain.SummaryBrief{Analysis: analysis, TotalYears: 7, SentenceMin: 3, SentenceMax: 4})
 	if !containsAll(summaryPrompt, "Write 3-4 sentences", "years of experience") {
 		t.Errorf("default summary prompt drifted from the original wording:\n%s", summaryPrompt)
@@ -174,9 +166,6 @@ func TestPromptsWithDefaultConfigReproduceOriginalWording(t *testing.T) {
 		t.Errorf("default expand prompt drifted from the original wording:\n%s", expandPrompt)
 	}
 
-	// There is no condense prompt any more: condensing is domain.TrimHighlights,
-	// which drops the least relevant bullets rather than asking a model to
-	// rewrite the surviving ones.
 }
 
 func TestExpandPromptDerivesFromConfig(t *testing.T) {
@@ -189,21 +178,16 @@ func TestExpandPromptDerivesFromConfig(t *testing.T) {
 	cfg.TargetPages = 1
 
 	expandPrompt := buildExpandPrompt(master, analysis, cfg)
-	// One step above the configured targets, aimed at the configured pages.
+
 	if !containsAll(expandPrompt, "fill ONE page", "aim for 6-8 per job") {
 		t.Errorf("expand prompt does not derive from the config:\n%s", expandPrompt)
 	}
 
-	// The condense side of this is bulletsCondenseRange feeding
-	// domain.TrimHighlights: the page target still outranks the configured
-	// section lengths (FR-016), it just no longer costs a model call.
 	if _, max := bulletsCondenseRange(cfg); max != 4 {
 		t.Errorf("condense ceiling = %d, want 4 — 60%% of the configured maximum", max)
 	}
 }
 
-// Feature 028 (T016): the prompt must no longer instruct the LLM to reorder
-// experience, drop jobs, or drop/rename/reorder sections.
 func TestBuildSelectPromptNoReorderOrDrop(t *testing.T) {
 	master := loadSampleMaster(t)
 	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
@@ -225,8 +209,6 @@ func TestBuildSelectPromptNoReorderOrDrop(t *testing.T) {
 	}
 }
 
-// 033 FR-004: the prompt must not reference struct fields that were removed
-// from TailoredSections (sectionsToDrop, ExperienceOrder, Drop).
 func TestBuildSelectPromptNoRemovedFieldReferences(t *testing.T) {
 	master := loadSampleMaster(t)
 	analysis := domain.VacancyAnalysis{RequiredSkills: []string{"Go"}, ExperienceLevel: "senior"}
@@ -239,8 +221,6 @@ func TestBuildSelectPromptNoRemovedFieldReferences(t *testing.T) {
 	}
 }
 
-// R7: with no project limit configured the projects block must not reach the
-// prompt at all, so the default path costs exactly the tokens it always did.
 func TestBuildSelectPromptProjectsBlockOnlyWhenLimited(t *testing.T) {
 	master := loadSampleMaster(t)
 	domain.CvSections(master)["projects"] = []any{

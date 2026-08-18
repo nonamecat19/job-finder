@@ -22,16 +22,10 @@ import (
 	"github.com/nonamecat19/job-scraper/ports"
 )
 
-// AddTimeout is the whole budget for one manual add: resolution, per-host
-// pacing, fetch, parse and persist. One number, because that is the only one
-// the operator cares about (FR-003b, D6).
 const AddTimeout = 30 * time.Second
 
-// manualTrigger marks the SourceRun a manual add writes. Runs carrying it are
-// excluded from source-health accounting (FR-017g).
 const manualTrigger = "manual"
 
-// ManualSourceKey backs hand-entered vacancies on hosts no adapter reads.
 const ManualSourceKey = "manual"
 
 type Service struct {
@@ -43,15 +37,11 @@ type Service struct {
 	jobs     domain.JobReader
 	client   domain.Enqueuer
 
-	// fillInEnabled switches no_reader and incomplete from plain failures to
-	// 200 responses carrying a draft. It is on once User Story 3's form exists;
-	// until then the operator gets a reason and stops (contracts/manual-add.md).
 	fillInEnabled bool
 }
 
 type Option func(*Service)
 
-// WithFillIn turns on the draft-carrying outcomes (User Story 3).
 func WithFillIn() Option {
 	return func(s *Service) { s.fillInEnabled = true }
 }
@@ -76,18 +66,12 @@ func NewService(
 	return s
 }
 
-// resolution is what walking the registry produced: either a reader that
-// claimed the URL, or the reason nobody did.
 type resolution struct {
 	adapter   ports.JobSource
 	reader    ports.PostingReader
 	sourceKey string
 }
 
-// resolve validates the URL before any network call (FR-002), then asks each
-// registered PostingReader whether it claims it. A host that is known but whose
-// URL is the wrong shape is not_a_posting; a host nobody knows is no_reader —
-// two different problems with two different recoveries (D2).
 func (s *Service) resolve(rawURL string) (resolution, *domain.Failure) {
 	trimmed := strings.TrimSpace(rawURL)
 	parsed, failure := parseURL(rawURL)
@@ -115,8 +99,6 @@ func (s *Service) resolve(rawURL string) (resolution, *domain.Failure) {
 	return resolution{}, domain.NoReader(parsed.Host)
 }
 
-// parseURL enforces FR-002: a URL is validated before any network request, and
-// only http and https are ever fetched.
 func parseURL(rawURL string) (*url.URL, *domain.Failure) {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
@@ -125,16 +107,10 @@ func parseURL(rawURL string) (*url.URL, *domain.Failure) {
 	return parsed, nil
 }
 
-// hostClaimer lets an adapter say "this host is mine even though this URL is
-// not a posting", which is what separates not_a_posting from no_reader. An
-// adapter without it can still serve manual add; its non-posting URLs simply
-// report no_reader.
 type hostClaimer interface {
 	ClaimsHost(host string) bool
 }
 
-// Add is the whole flow: resolve, read, persist, record. Every terminal state
-// writes exactly one SourceRun, and every failure leaves no vacancy behind.
 func (s *Service) Add(ctx context.Context, rawURL string) (domain.Result, error) {
 	started := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, AddTimeout)
@@ -142,9 +118,7 @@ func (s *Service) Add(ctx context.Context, rawURL string) (domain.Result, error)
 
 	resolved, failure := s.resolve(rawURL)
 	if failure != nil {
-		// Nothing was resolved, so there is no source to write a run against.
-		// The attempt never reached a host; FR-017e's "one run per attempt"
-		// starts at the point an attempt has a source.
+
 		return s.logged(rawURL, "", s.failureResult(rawURL, failure, nil), started), nil
 	}
 
@@ -192,9 +166,6 @@ func (s *Service) Add(ctx context.Context, rawURL string) (domain.Result, error)
 	return s.logged(rawURL, resolved.sourceKey, result, started), nil
 }
 
-// persist runs the shared ingest path and turns its outcome into a Result.
-// A posting whose dedupe key already exists is a duplicate, not an error
-// (FR-007b) — including when a concurrent add won the race (FR-008).
 func (s *Service) persist(ctx context.Context, posting dto.NormalizedJob, subscriptionID, runID pgtype.UUID, needsDetail bool) (domain.Result, error) {
 	batch := ingest.NewPostingBatch([]dto.NormalizedJob{posting}, subscriptionID, runID, needsDetail)
 
@@ -226,9 +197,6 @@ func (s *Service) persist(ctx context.Context, posting dto.NormalizedJob, subscr
 		return domain.Result{}, err
 	}
 
-	// Post-ingest work rides a background context on purpose: matching is an
-	// LLM call that can take minutes, and the vacancy is useful before it
-	// finishes (FR-003d).
 	s.enqueueInserted(context.WithoutCancel(ctx), inserted, needsDetail)
 
 	return domain.Result{Outcome: domain.OutcomeCreated, Job: &job}, nil
@@ -250,8 +218,6 @@ func (s *Service) runPersist(ctx context.Context, batch ingest.PostingBatch) (in
 	return result, nil
 }
 
-// enqueueInserted mirrors the crawl path's routing: enrich when the adapter
-// needs a detail pass, otherwise match and ghost-score.
 func (s *Service) enqueueInserted(ctx context.Context, ins ingest.InsertedJob, needsDetail bool) {
 	if s.client == nil {
 		return
@@ -292,14 +258,10 @@ func (s *Service) finishRunError(ctx context.Context, runID pgtype.UUID, failure
 	if len(msg) > 1000 {
 		msg = msg[:1000]
 	}
-	// The deadline that produced a timed_out failure has also cancelled ctx, so
-	// the run is closed on a context that outlives it.
+
 	_ = s.q.FinishSourceRunError(context.WithoutCancel(ctx), sqlcgen.FinishSourceRunErrorParams{ID: runID, Error: &msg})
 }
 
-// failureResult decides whether a failure dead-ends or offers the fill-in form.
-// no_reader and incomplete are recoverable states carrying a draft — but only
-// once the form exists to receive it.
 func (s *Service) failureResult(rawURL string, failure *domain.Failure, draft *domain.Draft) domain.Result {
 	result := domain.Result{
 		Outcome: domain.OutcomeFailed,
@@ -338,9 +300,6 @@ func (s *Service) logged(rawURL, sourceKey string, result domain.Result, started
 	return result
 }
 
-// missingRequiredFields names what the operator would have to supply. A vacancy
-// with no title, company or description is not something downstream matching or
-// tailoring can work with.
 func missingRequiredFields(j dto.NormalizedJob) []string {
 	var missing []string
 	if strings.TrimSpace(j.Title) == "" {
@@ -355,9 +314,6 @@ func missingRequiredFields(j dto.NormalizedJob) []string {
 	return missing
 }
 
-// classifyReadError maps whatever the retrieval ladder returned onto the FR-018
-// taxonomy. The deadline is checked first because a cancelled fetch surfaces as
-// a transport error that would otherwise read as unreachable.
 func classifyReadError(ctx context.Context, host string, err error) *domain.Failure {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return domain.TimedOut(host, err)

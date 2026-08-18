@@ -19,8 +19,6 @@ import (
 
 const postingURL = "https://djinni.co/jobs/123456-senior-go-engineer/"
 
-// --- fakes ---
-
 type fakeRepo struct {
 	domain.Repository
 
@@ -126,7 +124,6 @@ func (f *fakeEnqueuer) EnqueueContext(_ context.Context, workType string, _ []by
 	return nil
 }
 
-// stubAdapter is a PostingReader whose behaviour each test dictates.
 type stubAdapter struct {
 	key      string
 	matches  func(string) bool
@@ -167,8 +164,6 @@ func (a *stubAdapter) ReadPosting(context.Context, string, map[string]any) (dto.
 	return a.posting, nil
 }
 
-// blindAdapter implements no PostingReader, standing in for the 20-odd adapters
-// that cannot serve manual add.
 type blindAdapter struct{ key string }
 
 func (a blindAdapter) Key() string          { return a.key }
@@ -228,8 +223,6 @@ func djinniStub() *stubAdapter {
 	}
 }
 
-// --- outcomes ---
-
 func TestAdd_CreatesVacancy(t *testing.T) {
 	h := newHarness(t, djinniStub())
 
@@ -276,7 +269,7 @@ func TestAdd_CreatedEnqueuesMatchAndGhostScore(t *testing.T) {
 
 func TestAdd_DuplicateReturnsExistingVacancyAndIsNotAnError(t *testing.T) {
 	h := newHarness(t, djinniStub())
-	// Pre-seed the dedupe key the posting will produce.
+
 	posting := completePosting()
 	h.repo.knownKeys[dedupeKeyFor(posting)] = uuidOf(50)
 

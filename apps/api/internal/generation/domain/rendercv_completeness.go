@@ -19,9 +19,6 @@ type CompletenessReport struct {
 
 const niceToHaveRetentionFloor = 0.80
 
-// VerifyCompleteness is a pure function of (master, merged, analysis, cfg): it
-// answers whether the selection stage kept the material the vacancy actually
-// wants, which is what decides retry/escalation (FR-006, FR-007).
 func VerifyCompleteness(master, merged RendercvMaster, analysis VacancyAnalysis, cfg ShapeConfig) CompletenessReport {
 	report := CompletenessReport{NiceToHaveRetained: 1}
 
@@ -29,9 +26,7 @@ func VerifyCompleteness(master, merged RendercvMaster, analysis VacancyAnalysis,
 	mergedTokens := orderedSkillTokens(merged)
 
 	if len(analysis.RequiredSkills) == 0 {
-		// A thin analysis makes "every required skill retained" vacuously true,
-		// which would silently disable the whole gate (research R7). Fall back
-		// to a structural floor and record that it happened.
+
 		report.StructuralFallback = true
 		masterGroups := len(AsSliceOfMaps(CvSections(master)["skills"]))
 		mergedGroups := len(AsSliceOfMaps(CvSections(merged)["skills"]))
@@ -54,8 +49,7 @@ func VerifyCompleteness(master, merged RendercvMaster, analysis VacancyAnalysis,
 				}
 			}
 		}
-		// A master with no nice-to-have matches has nothing to lose, so it stays
-		// fully retained rather than dropping to zero.
+
 		if niceTotal > 0 {
 			report.NiceToHaveRetained = float64(niceTotal-len(report.NiceToHaveMissing)) / float64(niceTotal)
 		}
@@ -101,10 +95,6 @@ func (r CompletenessReport) Reason() string {
 	return reason
 }
 
-// bulletShortfalls reports only shortfalls the model could have avoided. A
-// company whose master entry holds fewer highlights than the minimum can never
-// meet it, so flagging it would blame the model for a master gap — the same
-// distinction ApplyHardLimits draws before recording a Shortfall.
 func bulletShortfalls(master, merged RendercvMaster, cfg ShapeConfig) map[string]int {
 	if cfg.ExperienceBulletsMin <= 0 {
 		return nil
@@ -154,9 +144,6 @@ func tokenRetained(masterToken string, mergedTokens []string) bool {
 	return false
 }
 
-// matchesAnySkill compares tokenized phrases on both sides: vacancy skills are
-// free text ("React Native", "Docker/Kubernetes") and must be split the same
-// way master skill details are before anything can be said to match.
 func matchesAnySkill(masterToken string, vacancySkills []string) bool {
 	for _, s := range vacancySkills {
 		for _, v := range tokens(s) {
@@ -168,9 +155,6 @@ func matchesAnySkill(masterToken string, vacancySkills []string) bool {
 	return false
 }
 
-// phrasesMatch treats two skill phrases as the same skill when one's words are
-// a subset of the other's — "react native" matches "react native (expo)" while
-// substring comparison would also match "go" against "django".
 func phrasesMatch(a, b string) bool {
 	aw, bw := phraseWords(a), phraseWords(b)
 	if len(aw) == 0 || len(bw) == 0 {

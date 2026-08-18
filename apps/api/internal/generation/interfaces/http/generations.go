@@ -11,34 +11,24 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// WorkspaceGenerator is the 042 resume generation workspace's application
-// surface (resume-generation.md § 4.1). Phase 2 (Foundational) wires start / get /
-// list / delete; item/section mutation, rerun and export are later phases.
 type WorkspaceGenerator interface {
 	StartGenerationRun(ctx context.Context, req dto.StartGenerationRequestDto) (runID, activityID string, err error)
 	GetGenerationWorkspace(ctx context.Context, runID string) (dto.GenerationRunDto, error)
 	ListGenerationRuns(ctx context.Context, profileID string, jobID *string, limit int) ([]dto.GenerationRunDto, error)
 	DeleteGenerationRun(ctx context.Context, runID string) error
-	// PatchGenerationItem and ReorderSection are Phase 3 (US1): item
-	// toggle/edit/reorder and whole-section reorder (resume-generation.md § 4.1).
+
 	PatchGenerationItem(ctx context.Context, runID, itemID string, req dto.PatchGenerationItemRequestDto) (dto.GenerationItemDto, error)
 	ReorderSection(ctx context.Context, runID, sectionID string, itemIDs []string) (dto.GenerationSectionDto, error)
-	// SetSectionEnabled is the per-run "disable this section" switch.
+
 	SetSectionEnabled(ctx context.Context, runID, sectionID string, enabled bool) (dto.GenerationSectionDto, error)
-	// ExportGenerationRun and GetGenerationExport are Phase 7 (US5): the
-	// render-once export and its idempotent short-poll.
+
 	ExportGenerationRun(ctx context.Context, runID string) (dto.GenerationExportDto, error)
 	GetGenerationExport(ctx context.Context, runID string) (dto.GenerationExportDto, error)
-	// RerunGenerationRun is Phase 8 (T076): whole-run or named-section rerun,
-	// in place on the same run id.
+
 	RerunGenerationRun(ctx context.Context, runID string, req dto.RerunGenerationRequestDto) (runID2, activityID string, err error)
-	// RewriteGenerationItem returns grounded alternate phrasings of one
-	// AI-suggested achievement bullet. Never persists anything — applying a
-	// variant goes through PatchGenerationItem.
+
 	RewriteGenerationItem(ctx context.Context, runID, itemID string) (dto.GenerationRewriteResponseDto, error)
-	// PreviewDocument is 046: the run's current selection assembled into
-	// RenderCV YAML, without rendering it — the source the dashboard's
-	// in-browser WASM pipeline turns into a live PDF preview.
+
 	PreviewDocument(ctx context.Context, runID string) (dto.PreviewDocumentDto, error)
 }
 
@@ -141,10 +131,6 @@ func (h *GenerationsHandler) rewriteItem(w http.ResponseWriter, r *http.Request)
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
-// export is `POST /v1/generations/{runId}/export` (rest-api.md): `200` with
-// the overflow report when the selection does not fit the page budget, `202`
-// otherwise — the client polls `GET …/export` for the document id either way.
-// A `409` comes from the service: the run is running, or nothing is selected.
 func (h *GenerationsHandler) export(w http.ResponseWriter, r *http.Request) {
 	runID := chi.URLParam(r, "runId")
 	out, err := h.Workspace.ExportGenerationRun(r.Context(), runID)
@@ -159,10 +145,6 @@ func (h *GenerationsHandler) export(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusAccepted, out)
 }
 
-// previewDocument is `GET /v1/generations/{runId}/preview-document` (046): a
-// pure read, no export-status transition, no `409` for an empty selection —
-// see PreviewDocument's doc comment for why an in-progress edit is not a
-// refusal the way an export attempt is.
 func (h *GenerationsHandler) previewDocument(w http.ResponseWriter, r *http.Request) {
 	runID := chi.URLParam(r, "runId")
 	out, err := h.Workspace.PreviewDocument(r.Context(), runID)
@@ -183,9 +165,6 @@ func (h *GenerationsHandler) exportStatus(w http.ResponseWriter, r *http.Request
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
-// rerun is `POST /v1/generations/{runId}/rerun` (rest-api.md): `202` with
-// the same run id. The body is optional — an empty or absent body reruns the
-// whole run, matching RerunGenerationRequestDto's `omitempty` Sections field.
 func (h *GenerationsHandler) rerun(w http.ResponseWriter, r *http.Request) {
 	runID := chi.URLParam(r, "runId")
 	var body dto.RerunGenerationRequestDto

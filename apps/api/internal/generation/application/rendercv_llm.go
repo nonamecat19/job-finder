@@ -11,13 +11,6 @@ import (
 	"github.com/job-finder/api/internal/strutil"
 )
 
-// ---------------------------------------------------------------------------
-// Step 1: Vacancy Analysis
-// ---------------------------------------------------------------------------
-
-// buildAnalyzePrompt constructs the prompt for Step 1. When VacancyHints are
-// provided, they are included so the LLM can validate/refine them rather than
-// starting from scratch.
 func buildAnalyzePrompt(vacancy string, hints *domain.VacancyHints) string {
 	vac := strutil.Truncate(vacancy, 6000)
 
@@ -58,8 +51,6 @@ func buildAnalyzePrompt(vacancy string, hints *domain.VacancyHints) string {
 	return b.String()
 }
 
-// analyzeVacancy calls the LLM to produce a VacancyAnalysis from the raw
-// vacancy text (optionally enriched with caller-provided hints).
 func analyzeVacancy(ctx context.Context, lc llm.Provider, model, vacancy string, hints *domain.VacancyHints) (domain.VacancyAnalysis, error) {
 	ctx, cancel := context.WithTimeout(ctx, analyzeStageTimeout)
 	defer cancel()
@@ -72,24 +63,10 @@ func analyzeVacancy(ctx context.Context, lc llm.Provider, model, vacancy string,
 	})
 }
 
-// ---------------------------------------------------------------------------
-// Shape targets
-//
-// The prompts state approximate targets — sentence counts, bullets per job —
-// derived from the run's ShapeConfig instead of the literals this pipeline
-// used to hardcode. The default config reproduces those literals exactly, so
-// a user who changes nothing gets the prompts (and the output) they had
-// before the config existed.
-// ---------------------------------------------------------------------------
-
-// summarySelectRange is the tailoring target, e.g. "3-4 sentences" for the
-// default SummaryLines of 4: the configured length is the ceiling.
 func summarySelectRange(cfg domain.ShapeConfig) (int, int) {
 	return atLeastOne(cfg.SummaryLines - 1), atLeastOne(cfg.SummaryLines)
 }
 
-// bulletsExpandRange asks for the configured cap plus a couple, matching the
-// old "aim for 10-12 per job" against a default max of 10.
 func bulletsExpandRange(cfg domain.ShapeConfig) (int, int) {
 	base := cfg.ExperienceBulletsMax
 	if base == 0 {
@@ -98,8 +75,6 @@ func bulletsExpandRange(cfg domain.ShapeConfig) (int, int) {
 	return atLeastOne(base), atLeastOne(base + 2)
 }
 
-// bulletsCondenseRange is ~60% of the configured range, reproducing the old
-// "TOP 5-6" against the default 8-10 while scaling with any other setting.
 func bulletsCondenseRange(cfg domain.ShapeConfig) (int, int) {
 	max := cfg.ExperienceBulletsMax
 	if max == 0 {
@@ -108,7 +83,6 @@ func bulletsCondenseRange(cfg domain.ShapeConfig) (int, int) {
 	return atLeastOne(scaleDown(cfg.ExperienceBulletsMin)), atLeastOne(scaleDown(max))
 }
 
-// scaleDown returns 60% of n, rounded to nearest.
 func scaleDown(n int) int { return (n*6 + 5) / 10 }
 
 func atLeastOne(n int) int {
@@ -118,9 +92,6 @@ func atLeastOne(n int) int {
 	return n
 }
 
-// pageTargetPhrase renders the configured page target the way the prompts
-// have always phrased it ("TWO pages"), so a default config leaves the
-// wording byte-identical.
 func pageTargetPhrase(cfg domain.ShapeConfig) string {
 	switch cfg.TargetPages {
 	case 1:
@@ -132,46 +103,22 @@ func pageTargetPhrase(cfg domain.ShapeConfig) string {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Step 2: Content Selection & Tailoring
-// ---------------------------------------------------------------------------
-
-// Output caps, one per stage (035 FR-014). Each covers the stage's own payload
-// plus the reasoning tokens a thinking model spends before it emits anything —
-// those count against max_completion_tokens, and a cap that ignores them
-// produces empty content with finish_reason=length, which every
-// structured-output retry then fails on identically.
 const (
-	// selectMaxTokens covers ~10 skill groups + ~10 experience entries with up
-	// to 10 highlights each + projects.
 	selectMaxTokens = 16384
-	// analysisMaxTokens covers required skills, nice-to-haves,
-	// responsibilities and keywords.
+
 	analysisMaxTokens = 8192
-	// summaryMaxTokens covers 2-4 sentences. A model needing more than this is
-	// deliberating, and its deployment must bound that in gateway/config.yaml
-	// rather than being given a bigger budget here.
+
 	summaryMaxTokens = 2048
 )
 
-// generationMaxTokens is the cap for the page-fitting passes, which return the
-// same selection payload the select stage does.
 const generationMaxTokens = selectMaxTokens
 
-// Per-stage deadlines (035 FR-015). The proxy's own request_timeout was
-// measured not to be enforced — a single call hung 830s while the fallback
-// chain never advanced — so the application's deadline is the only real bound.
-// Together these stay well inside the handler's 14-minute timeout with room
-// for the retry ladder.
 const (
 	analyzeStageTimeout = 90 * time.Second
 	selectStageTimeout  = 240 * time.Second
 	summaryStageTimeout = 120 * time.Second
 )
 
-// renderAnalysisLines formats a VacancyAnalysis the way every selection-style
-// prompt (select, rank) presents it. Extracted so both share the exact same
-// rendering rather than keeping two texts in sync by hand.
 func renderAnalysisLines(analysis domain.VacancyAnalysis) []string {
 	var lines []string
 	lines = append(lines, "REQUIRED SKILLS: "+strings.Join(analysis.RequiredSkills, ", "))
@@ -194,10 +141,6 @@ func renderAnalysisLines(analysis domain.VacancyAnalysis) []string {
 	return lines
 }
 
-// renderSkillGroupLines renders the master's skill groups as "[index] label:
-// details" — the one index space every prompt that references a skill group
-// addresses. Reused verbatim by buildRankPrompt (T041) so ranking's group
-// indices are the same numbering the select prompt already shows.
 func renderSkillGroupLines(skills []map[string]any) []string {
 	var lines []string
 	for i, s := range skills {
@@ -206,12 +149,6 @@ func renderSkillGroupLines(skills []map[string]any) []string {
 	return lines
 }
 
-// renderExperienceEntryLines renders one master experience entry as its
-// "- company: ..." header line followed by its numbered bullet list — the
-// index space HighlightRef.SourceIndex addresses today and
-// RankedExperience.Ranking addresses in the ranking stage. Reused verbatim by
-// buildRankPrompt (T041, resume-generation.md § 2b) so there is exactly one numbering to
-// keep in sync.
 func renderExperienceEntryLines(e map[string]any) []string {
 	var lines []string
 	line := "  - company: " + domain.StringField(e, "company")
@@ -228,9 +165,6 @@ func renderExperienceEntryLines(e map[string]any) []string {
 	return lines
 }
 
-// buildSelectPrompt constructs the prompt for Step 2. It receives the vacancy
-// analysis from Step 1 and the full master resume content, and asks the LLM
-// to select, reorder, rephrase and optionally drop content.
 func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, prevViolations []string, cfg domain.ShapeConfig) string {
 	sections := domain.CvSections(master)
 	skills := domain.AsSliceOfMaps(sections["skills"])
@@ -262,10 +196,7 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	b.WriteString("- Keep highlights concise, one achievement each.\n")
 	b.WriteString("- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given.\n")
 	b.WriteString("- Do NOT write a summary. A separate step writes it.\n\n")
-	// A disabled skills section is removed from the document after the merge,
-	// so there is no reason to spend tokens on it. When enabled it is still
-	// shown, as reference for wording the highlights and for the skill
-	// proposals the user reviews — but not as something to return applied.
+
 	if cfg.SkillsEnabled {
 		b.WriteString("SKILL GROUPS (master, reference only):\n")
 		b.WriteString(strings.Join(skillLines, "\n"))
@@ -274,9 +205,6 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	b.WriteString("\nEXPERIENCE (master):\n")
 	b.WriteString(strings.Join(expLines, "\n"))
 
-	// Projects only enter the prompt when a project limit is configured. With
-	// the default (unlimited) config this block is absent entirely, so the
-	// default path costs exactly the tokens it always did.
 	if cfg.ProjectsLimited() {
 		projects := domain.AsSliceOfMaps(sections["projects"])
 		if len(projects) > 0 {
@@ -309,9 +237,6 @@ func buildSelectPrompt(master domain.RendercvMaster, analysis domain.VacancyAnal
 	return b.String()
 }
 
-// selectContent calls the LLM to produce a TailoredSelection from the master
-// resume content and the vacancy analysis. It does not produce a summary —
-// TailoredSelection has no field for one (035 FR-005).
 func selectContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, prevViolations []string, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
 	ctx, cancel := context.WithTimeout(ctx, selectStageTimeout)
 	defer cancel()
@@ -325,10 +250,6 @@ func selectContent(ctx context.Context, lc llm.Provider, model string, master do
 	})
 }
 
-// buildSummaryPrompt renders the premium stage's entire input. The master
-// profile is deliberately absent: the brief carries the handful of facts a
-// summary can legitimately reference, which is what keeps the one call priced
-// at premium rates small (035 FR-004).
 func buildSummaryPrompt(brief domain.SummaryBrief) string {
 	var b strings.Builder
 	b.WriteString("Write a professional summary about the candidate.\n\n")
@@ -354,7 +275,6 @@ func buildSummaryPrompt(brief domain.SummaryBrief) string {
 	return b.String()
 }
 
-// writeSummary is the one premium call in a generation run.
 func writeSummary(ctx context.Context, lc llm.Provider, model string, brief domain.SummaryBrief) (domain.TailoredSummary, error) {
 	ctx, cancel := context.WithTimeout(ctx, summaryStageTimeout)
 	defer cancel()
@@ -367,10 +287,6 @@ func writeSummary(ctx context.Context, lc llm.Provider, model string, brief doma
 	})
 }
 
-// retailorForStructure is the single targeted re-prompt for feature 028's
-// text-asserted-years invariant: the initial generation asserted a numeric
-// total years figure that contradicts the master's derivable total, so the
-// violation is fed back and the LLM asked to regenerate without it.
 func retailorForStructure(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, violations []domain.StructureViolation, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
 	var b strings.Builder
 	b.WriteString(buildSelectPrompt(master, analysis, level, nil, cfg))
@@ -387,10 +303,6 @@ func retailorForStructure(ctx context.Context, lc llm.Provider, model string, ma
 	})
 }
 
-// expandContent asks the LLM to add more detail to the already-tailored
-// content so the resume fills two pages instead of one. It takes the current
-// merged master and returns a new TailoredSelection with
-// more highlights per job, and richer skill details.
 func expandContent(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error) {
 	maxT := generationMaxTokens
 	return llm.CompleteStructured[domain.TailoredSelection](ctx, lc, buildExpandPrompt(master, analysis, cfg), &llm.CompleteOptions{
@@ -401,10 +313,6 @@ func expandContent(ctx context.Context, lc llm.Provider, model string, master do
 	})
 }
 
-// skillGroupLines renders the current skill groups the way the select prompt
-// does — "[index] label: details" — so the expand/condense passes, which are
-// asked to return one entry per group by index, can see what each group
-// actually holds instead of guessing from the summary and the bullets.
 func skillGroupLines(sections map[string]any) []string {
 	groups := domain.AsSliceOfMaps(sections["skills"])
 	lines := make([]string, 0, len(groups))
@@ -414,10 +322,6 @@ func skillGroupLines(sections map[string]any) []string {
 	return lines
 }
 
-// writeSkillGroups appends the current skill groups plus the rules that keep a
-// group's contents matching its label. Without them the model returns details
-// by index that have nothing to do with the group's category — a "Languages"
-// group coming back full of tools and frameworks.
 func writeSkillGroups(b *strings.Builder, sections map[string]any) {
 	lines := skillGroupLines(sections)
 	if len(lines) == 0 {

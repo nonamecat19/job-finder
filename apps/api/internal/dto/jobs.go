@@ -76,25 +76,20 @@ type SubscriptionDto struct {
 	Enabled   bool    `json:"enabled"`
 	Cron      string  `json:"cron"`
 	LastRunAt *string `json:"lastRunAt"`
-	// Kind is "crawl" or "manual". Manual rows have no URL, are never
-	// scheduled, and carry the two counters below.
+
 	Kind        string  `json:"kind"`
 	ManualCount *int    `json:"manualCount,omitempty"`
 	LastAddedAt *string `json:"lastAddedAt,omitempty"`
 }
 
-// ManualAddResultDto is the envelope every non-5xx manual-add response uses,
-// discriminated by Outcome.
 type ManualAddResultDto struct {
-	Outcome string                 `json:"outcome"` // created | duplicate | needs_fill_in | failed
+	Outcome string                 `json:"outcome"`
 	Job     *JobDto                `json:"job,omitempty"`
 	Reason  *string                `json:"reason,omitempty"`
 	Kind    *string                `json:"kind,omitempty"`
 	Draft   *ManualVacancyDraftDto `json:"draft,omitempty"`
 }
 
-// ManualVacancyDraftDto carries whatever was extracted before the attempt
-// stalled, so the operator completes the vacancy rather than retyping it.
 type ManualVacancyDraftDto struct {
 	URL         string  `json:"url"`
 	SourceKey   *string `json:"sourceKey,omitempty"`

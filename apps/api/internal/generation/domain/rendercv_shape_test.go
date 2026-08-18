@@ -757,8 +757,6 @@ func TestTrimHighlightsDropsTheLeastRelevantBullets(t *testing.T) {
 	}
 }
 
-// The page-fit loop uses the return value to stop: nothing left to trim means
-// another render would produce the same document.
 func TestTrimHighlightsReportsNoChangeAtTheFloor(t *testing.T) {
 	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"experience": []any{map[string]any{"company": "Acme", "highlights": []any{"only"}}},

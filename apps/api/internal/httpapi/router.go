@@ -16,7 +16,7 @@ var startTime = time.Now()
 func NewRouter(acquireTimeout time.Duration, mounts ...func(chi.Router)) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP) //nolint:staticcheck // SA1019: see rationale above
+	r.Use(middleware.RealIP) //nolint:staticcheck
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	if acquireTimeout > 0 {

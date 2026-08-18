@@ -16,13 +16,6 @@ import (
 	"github.com/job-finder/api/internal/events"
 )
 
-// TestIdempotency_Integration_RedeliveryProducesExactlyOneAccept proves the
-// core guarantee T032 asks for: a redelivered work event's result is
-// admitted once. The first Admit, run in its own transaction exactly as a
-// consumer would run it, is the one that gets to persist a result
-// (Accepted). A redelivery — same idempotency_key, same run_id, a fresh
-// transaction because it is a separate consumer invocation — is recognised
-// as a Duplicate and MUST NOT persist a second result (FR-030).
 func TestIdempotency_Integration_RedeliveryProducesExactlyOneAccept(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -32,8 +25,6 @@ func TestIdempotency_Integration_RedeliveryProducesExactlyOneAccept(t *testing.T
 	key := "ghost:job-1:" + uuid.NewString()
 	runID := uuid.NewString()
 
-	// Three redeliveries of the identical work event, each its own
-	// transaction (a separate consumer invocation per delivery).
 	dispositions := make([]events.Disposition, 0, 3)
 	for i := 0; i < 3; i++ {
 		var got events.Disposition
@@ -70,10 +61,6 @@ func TestIdempotency_Integration_RedeliveryProducesExactlyOneAccept(t *testing.T
 	}
 }
 
-// TestIdempotency_Integration_SupersededRunDiscarded proves FR-037: a result
-// from an earlier attempt (a different run_id under the same idempotency
-// key) arriving after a later attempt already won is discarded and counted,
-// never overwriting the accepted row.
 func TestIdempotency_Integration_SupersededRunDiscarded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -124,12 +111,6 @@ func TestIdempotency_Integration_SupersededRunDiscarded(t *testing.T) {
 	}
 }
 
-// TestIdempotency_Integration_RollbackAllowsReadmission proves the
-// transactional requirement in data-model.md § 7: the ledger write lands in
-// the same transaction as the result it admits. If that transaction rolls
-// back (the "persist the result" half of the work fails), the ledger row
-// never commits either, and the next delivery is Accepted again rather than
-// wrongly deduped.
 func TestIdempotency_Integration_RollbackAllowsReadmission(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

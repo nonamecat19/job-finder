@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// requiredEnvelopeFields lists every envelope field except activity_id and
-// trace_id, which E1-1 marks optional.
 var requiredEnvelopeFields = []string{
 	"event_id",
 	"event_type",
@@ -79,8 +77,6 @@ func TestEnvelope_ActivityAndTraceIDAreOptional(t *testing.T) {
 	}
 }
 
-// TestEnvelope_CorrelationIDEchoedOnResult exercises E1-3: a result event's
-// correlation_id MUST equal that of the work event that caused it.
 func TestEnvelope_CorrelationIDEchoedOnResult(t *testing.T) {
 	workCorrelationID := "018f0000-0000-7000-8000-00000000000a"
 
@@ -111,11 +107,6 @@ func TestEnvelope_CorrelationIDEchoedOnResult(t *testing.T) {
 	}
 }
 
-// TestEnvelope_NoProfileContentField asserts, structurally, that the
-// envelope carries only routing/identity fields and nothing shaped like
-// profile or posting content (E1-4). This is a static shape check: the
-// envelope's field set is exactly the ten fields data-model.md § 1
-// declares, none of which is a content field.
 func TestEnvelope_NoProfileContentField(t *testing.T) {
 	allowed := map[string]bool{
 		"EventID": true, "EventType": true, "SchemaVersion": true,

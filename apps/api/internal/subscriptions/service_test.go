@@ -348,8 +348,6 @@ func TestValidateDjinniSubscriptionURL(t *testing.T) {
 	}
 }
 
-// --- 041 manual-kind guards ---
-
 type manualRepo struct {
 	subscriptions.Repository
 	rows       map[string]sqlcgen.Subscription

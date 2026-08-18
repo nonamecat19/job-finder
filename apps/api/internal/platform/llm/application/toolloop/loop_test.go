@@ -11,8 +11,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/domain"
 )
 
-// band is the typed answer these tests ask for. It implements Validator so the
-// terminal step's semantic check is exercised, not just its JSON parse.
 type band struct {
 	Min int `json:"min"`
 	Max int `json:"max"`
@@ -25,7 +23,6 @@ func (b *band) Validate() error {
 	return nil
 }
 
-// turn is one scripted provider response.
 type turn struct {
 	content   string
 	toolCalls []domain.ToolCall
@@ -35,7 +32,6 @@ type turn struct {
 	delay     time.Duration
 }
 
-// scriptedProvider plays a fixed list of turns and records what it was asked.
 type scriptedProvider struct {
 	turns   []turn
 	calls   int
@@ -58,8 +54,7 @@ func (s *scriptedProvider) CompleteChat(ctx context.Context, msgs []domain.Messa
 	i := s.calls
 	s.calls++
 	if i >= len(s.turns) {
-		// Running off the end means the loop asked for more rounds than the
-		// test scripted, which is itself the assertion in the bounds tests.
+
 		return domain.ChatResult{}, errors.New("scriptedProvider: no turn scripted for this call")
 	}
 	tn := s.turns[i]
@@ -97,7 +92,6 @@ type lookupArgs struct {
 	Bucket string `json:"bucket"`
 }
 
-// testToolset builds a one-tool set whose handler records its invocations.
 func testToolset(t *testing.T, reply func(args lookupArgs) (string, error)) (*Toolset, *[]lookupArgs) {
 	t.Helper()
 	var seen []lookupArgs
@@ -129,9 +123,6 @@ func userTurn(text string) []domain.Message {
 	return []domain.Message{{Role: string(domain.RoleUser), Content: text}}
 }
 
-// 037 FR-006/FR-023: a declared lookup runs, its result comes back as a tool
-// message carrying the request id, and the exchange ends in a typed, validated
-// value — Value, not a content string.
 func TestDeclaredLookupProducesATypedAnswer(t *testing.T) {
 	ts, seen := testToolset(t, func(args lookupArgs) (string, error) {
 		return `{"p50": 120000}`, nil
@@ -156,8 +147,6 @@ func TestDeclaredLookupProducesATypedAnswer(t *testing.T) {
 		t.Errorf("handler saw %+v, want one call with bucket berlin", *seen)
 	}
 
-	// The tool result must reach the model as a tool message quoting the id of
-	// the request it answers, or the model cannot match them up.
 	second := p.seen[1]
 	last := second[len(second)-1]
 	if last.Role != string(domain.RoleTool) {
@@ -171,8 +160,6 @@ func TestDeclaredLookupProducesATypedAnswer(t *testing.T) {
 	}
 }
 
-// C4-10: content and tool calls together is not final. Honour the calls and
-// continue — a model that narrates while looking something up has not answered.
 func TestContentWithToolCallsIsNotFinal(t *testing.T) {
 	ts, seen := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{
@@ -196,7 +183,6 @@ func TestContentWithToolCallsIsNotFinal(t *testing.T) {
 	}
 }
 
-// C4-14 / research R12: round one is "required", every later round "auto".
 func TestFirstRoundRequiresAToolCallAndLaterRoundsDoNot(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{
@@ -222,9 +208,6 @@ func TestFirstRoundRequiresAToolCallAndLaterRoundsDoNot(t *testing.T) {
 	}
 }
 
-// FR-017 / SC-007 / C6-4: prose on the required first round means the serving
-// tier cannot call tools. That is an explicit failure with no value — never a
-// confident answer built without the lookups it was supposed to make.
 func TestProseOnTheRequiredFirstRoundIsNotToolCapable(t *testing.T) {
 	ts, seen := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{
@@ -244,9 +227,7 @@ func TestProseOnTheRequiredFirstRoundIsNotToolCapable(t *testing.T) {
 	if !strings.Contains(err.Error(), "default") {
 		t.Errorf("error %q does not name the task key", err)
 	}
-	// C6-4, corrected: it must NOT name the serving model. The application
-	// never learns which upstream served a request, and reintroducing that to
-	// improve an error message would undo 030's routing model.
+
 	if strings.Contains(err.Error(), "scripted") {
 		t.Errorf("error %q names the serving model; the application does not know it and must not claim to", err)
 	}
@@ -258,9 +239,6 @@ func TestProseOnTheRequiredFirstRoundIsNotToolCapable(t *testing.T) {
 	}
 }
 
-// C4-8 / FR-016 / SC-010: each round records its served model and cost, and the
-// total accumulates. Without this a multi-round exchange is invisible to 035's
-// per-tier accounting and 036's tracing.
 func TestRoundsRecordServedModelAndCost(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{
@@ -295,15 +273,12 @@ func TestRoundsRecordServedModelAndCost(t *testing.T) {
 	}
 }
 
-// C4-18 / FR-023b: there is no prose fallback. A terminal step that cannot
-// produce a valid value fails the exchange rather than returning what the model
-// said.
 func TestTerminalFailureFailsTheExchange(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{
 		{toolCalls: []domain.ToolCall{call("c1", "lookup_comparable_bands", lookupArgs{Bucket: "a"})}},
 		{content: "done"},
-		// Three terminal attempts, all invalid: max below min fails Validate.
+
 		{content: `{"min":100,"max":1}`},
 		{content: `{"min":100,"max":1}`},
 		{content: `{"min":100,"max":1}`},

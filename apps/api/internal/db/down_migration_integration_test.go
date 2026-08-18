@@ -19,18 +19,6 @@ import (
 	"github.com/job-finder/api/internal/testinfra"
 )
 
-// Every migration in internal/db/migrations declares a `-- +goose Down`
-// block, and until this file nothing ever ran one: `goose up` is the only
-// path exercised by the application, by CI and by dbtest's template. A Down
-// that drops the wrong table, forgets a column it added, or is simply invalid
-// SQL therefore only fails when someone is rolling back a bad deploy, which
-// is the worst possible moment to discover it.
-//
-// These tests run against a database of their own on the shared Postgres
-// container, created and dropped here rather than through internal/dbtest:
-// dbtest hands out clones of an already-migrated template, and what is under
-// test is migration itself.
-
 func migrationScratchDB(t *testing.T) string {
 	t.Helper()
 
@@ -101,8 +89,7 @@ func tableNames(t *testing.T, dsn string) []string {
 		if err := rows.Scan(&name); err != nil {
 			t.Fatalf("scan table name: %v", err)
 		}
-		// goose's own bookkeeping table is not part of the schema under
-		// test and legitimately survives a full rollback.
+
 		if name == "goose_db_version" {
 			continue
 		}
@@ -150,10 +137,6 @@ func columnSignature(t *testing.T, dsn string) []string {
 	return signature
 }
 
-// TestMigrationsRollBackCompletely proves every Down block runs, in order,
-// against the schema its Up produced, and that the result is an empty schema
-// — no table, view or column left behind by a Down that forgot half of what
-// its Up created.
 func TestMigrationsRollBackCompletely(t *testing.T) {
 	dsn := migrationScratchDB(t)
 
@@ -168,10 +151,6 @@ func TestMigrationsRollBackCompletely(t *testing.T) {
 		t.Fatalf("migrate down to 0: %v", err)
 	}
 
-	// 00027_drop_djinni_dashboard_subs.sql keeps "DjinniLegacySubAudit" on
-	// purpose: its Up deletes rows irreversibly and the audit table is the
-	// only record of what went, so its Down says so and drops nothing. That
-	// is the one artifact a full rollback may leave.
 	retained := map[string]bool{"DjinniLegacySubAudit": true}
 	var unexpected []string
 	for _, name := range tableNames(t, dsn) {
@@ -184,10 +163,6 @@ func TestMigrationsRollBackCompletely(t *testing.T) {
 	}
 }
 
-// TestMigrationsAreReapplicableAfterRollback proves a rollback leaves the
-// database in a state the same migrations can be applied to again, and that
-// what comes back is the identical schema — the property an operator relies
-// on when rolling back a bad deploy and rolling forward again after the fix.
 func TestMigrationsAreReapplicableAfterRollback(t *testing.T) {
 	dsn := migrationScratchDB(t)
 
@@ -214,9 +189,6 @@ func TestMigrationsAreReapplicableAfterRollback(t *testing.T) {
 	}
 }
 
-// TestMigrateIsIdempotent proves running the migrator against an
-// already-current database is a no-op rather than an error — what happens on
-// every API container start, and on every dbtest template reuse.
 func TestMigrateIsIdempotent(t *testing.T) {
 	dsn := migrationScratchDB(t)
 

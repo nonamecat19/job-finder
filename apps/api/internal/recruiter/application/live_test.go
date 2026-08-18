@@ -12,9 +12,6 @@ import (
 	"github.com/job-finder/api/internal/scraping"
 )
 
-// liveExtractor builds the same AIContactExtractor compose.go wires up now
-// that recruiter's Go LLM path is deleted (T113) — these tests hit the real
-// AI service over HTTP instead of the gateway directly.
 func liveExtractor(t *testing.T, cfg *config.Config) *AIContactExtractor {
 	t.Helper()
 	if cfg.AIServiceURL == "" {

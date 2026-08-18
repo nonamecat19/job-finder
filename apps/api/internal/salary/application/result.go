@@ -11,17 +11,10 @@ import (
 	"github.com/job-finder/api/internal/events"
 )
 
-// TxRunner is the subset of *db.DB a ResultHandler needs: run fn inside one
-// transaction so the idempotency ledger write and the persisted result
-// commit atomically, mirroring ghostjob.TxRunner.
 type TxRunner interface {
 	WithinTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error
 }
 
-// SalaryCompletedResult is the capability-specific shape salary.completed
-// carries in Result.Result: the same fields domain.SalaryBand validates in
-// the Go path (min/max/currency/confidence/source), so a python-inferred
-// band lands in the same shape a Go-inferred one does.
 type SalaryCompletedResult struct {
 	Min        int     `json:"min"`
 	Max        int     `json:"max"`
@@ -30,13 +23,6 @@ type SalaryCompletedResult struct {
 	Source     string  `json:"source"`
 }
 
-// NewResultHandler builds the events.ResultHandler for salary.completed,
-// persisting a python-produced band through the same UpdateJobSalary write
-// the LLM branch of Infer uses today — no cache write, matching Infer's LLM
-// path (only the salaryRaw-parse branch upserts salary_cache). It admits the
-// result into the idempotency ledger and persists in the same transaction: a
-// duplicate or superseded result is a no-op, never a second write or an
-// overwrite of a later attempt's result.
 func NewResultHandler(tx TxRunner) events.ResultHandler {
 	return func(ctx context.Context, envelope events.Envelope, result events.Result) error {
 		return tx.WithinTx(ctx, func(q *sqlcgen.Queries) error {

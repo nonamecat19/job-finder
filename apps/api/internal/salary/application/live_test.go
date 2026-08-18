@@ -49,9 +49,6 @@ func TestLive_InferOneJob(t *testing.T) {
 	jobID := dbutil.UUIDString(jobs[0].ID)
 	t.Logf("inferring salary for job %s: %s at %s", jobID, jobs[0].Title, jobs[0].Company)
 
-	// Infer only resolves salaryRaw/cache/levels.fyi hits now — the LLM
-	// fallback is apps/ai's job (T103, T113). No hit for this job is an
-	// expected outcome here, not a test failure.
 	if err := svc.Infer(ctx, jobID); err != nil {
 		t.Skipf("no cache/levels.fyi/salaryRaw band for job %s (expected once the LLM fallback is python-only): %v", jobID, err)
 	}

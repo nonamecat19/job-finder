@@ -39,9 +39,6 @@ func idx(i int) *int { return &i }
 
 func str(s string) *string { return &s }
 
-// assembleSections mirrors what the workspace holds after the user has made a
-// few toggles: one deselected bullet, one unavailable-but-selected bullet, a
-// reordered entry, and a skills group switched off.
 func assembleSections() []Section {
 	return []Section{
 		{
@@ -84,7 +81,6 @@ func assembledHighlights(t *testing.T, doc RendercvMaster, company string) []str
 	return nil
 }
 
-// T065: the export document is exactly the selected items, in position order.
 func TestAssembleEmitsSelectedItemsInPositionOrder(t *testing.T) {
 	doc, err := Assemble(assembleMaster(), assembleSections())
 	if err != nil {
@@ -98,9 +94,6 @@ func TestAssembleEmitsSelectedItemsInPositionOrder(t *testing.T) {
 	}
 }
 
-// An unselected item and a selected-but-unavailable item are both absent: the
-// first because the user said no, the second because the master no longer has
-// it to say yes to (FR-022).
 func TestAssembleOmitsUnselectedAndUnavailableItems(t *testing.T) {
 	doc, err := Assemble(assembleMaster(), assembleSections())
 	if err != nil {
@@ -126,11 +119,6 @@ func TestAssembleOmitsUnselectedAndUnavailableItems(t *testing.T) {
 	}
 }
 
-// A disabled section is removed from the document outright, regardless of
-// Kind — the per-run "disable this section" switch means "excluded from
-// export", not "print the heading over nothing" and not "leave the master's
-// raw, uncurated content in place" either (which would surface every
-// unfiltered highlight and every certification the user never reviewed).
 func TestAssembleRemovesDisabledSectionsRegardlessOfKind(t *testing.T) {
 	sections := assembleSections()
 	for i := range sections {
@@ -148,15 +136,12 @@ func TestAssembleRemovesDisabledSectionsRegardlessOfKind(t *testing.T) {
 	if _, ok := cv["skills"]; ok {
 		t.Errorf("skills = %v, want the key removed", cv["skills"])
 	}
-	// Both experience entries in assembleSections are disabled, so nothing
-	// is left in the array at all — the "experience" key goes too.
+
 	if _, ok := cv["experience"]; ok {
 		t.Errorf("experience = %v, want the key removed once every entry is disabled", cv["experience"])
 	}
 }
 
-// Disabling one experience entry removes just that company, leaving any
-// other (enabled) entry and the "experience" key itself in place.
 func TestAssembleRemovesOneDisabledExperienceEntry(t *testing.T) {
 	sections := assembleSections()
 	for i := range sections {
@@ -178,12 +163,9 @@ func TestAssembleRemovesOneDisabledExperienceEntry(t *testing.T) {
 	}
 }
 
-// Master experience order is the document's order, whatever the sections say —
-// 028-FR-003, and the reason Assemble writes into the cloned entries rather
-// than rebuilding the list.
 func TestAssemblePreservesMasterExperienceOrder(t *testing.T) {
 	sections := assembleSections()
-	// Sections handed over in reverse order: the document must not follow.
+
 	reversed := []Section{sections[3], sections[2], sections[1], sections[0]}
 
 	doc, err := Assemble(assembleMaster(), reversed)
@@ -200,8 +182,6 @@ func TestAssemblePreservesMasterExperienceOrder(t *testing.T) {
 	}
 }
 
-// Everything the workspace does not model — company, dates, location,
-// education, the top-level name — reaches the export verbatim.
 func TestAssemblePreservesOutOfScopeFieldsVerbatim(t *testing.T) {
 	master := assembleMaster()
 	doc, err := Assemble(master, assembleSections())
@@ -228,14 +208,11 @@ func TestAssemblePreservesOutOfScopeFieldsVerbatim(t *testing.T) {
 		}
 	}
 
-	// The master itself is untouched: Assemble deep-clones first.
 	if got := assembledHighlights(t, master, "Acme Inc."); len(got) != 3 {
 		t.Errorf("master highlights = %v, want the snapshot left alone", got)
 	}
 }
 
-// The summary section is a section key like any other: written when the master
-// has one, never invented when it does not.
 func TestAssembleWritesTheSelectedSummaryOnly(t *testing.T) {
 	doc, err := Assemble(assembleMaster(), assembleSections())
 	if err != nil {
@@ -257,15 +234,12 @@ func TestAssembleWritesTheSelectedSummaryOnly(t *testing.T) {
 	}
 }
 
-// T068: worst-ranked first, selected only, bounded by how far over the budget
-// the render came out.
 func TestOverflowCandidatesAreWorstRankedSelectedItemsFirst(t *testing.T) {
 	got := OverflowCandidates(assembleSections(), 1)
 	if len(got) == 0 {
 		t.Fatal("no candidates for a one-page overflow")
 	}
-	// Ranks among the selected, available items: summary 0, a-0 0, a-2 2,
-	// g-1 1, s-0 0 — the worst is a-2.
+
 	if got[0].ItemID != "a-2" {
 		t.Errorf("first candidate = %+v, want item a-2 (rank 2)", got[0])
 	}
@@ -288,8 +262,6 @@ func TestOverflowCandidatesAreWorstRankedSelectedItemsFirst(t *testing.T) {
 	}
 }
 
-// assembledSkillDetails returns the assembled details string for one group label, or
-// "" when the group is not in the document at all.
 func assembledSkillDetails(doc RendercvMaster, label string) string {
 	for _, g := range AsSliceOfMaps(CvSections(doc)["skills"]) {
 		if StringField(g, "label") == label {
@@ -299,8 +271,6 @@ func assembledSkillDetails(doc RendercvMaster, label string) string {
 	return ""
 }
 
-// Per-skill drops: a group stays in the resume, minus the individual skills
-// the user switched off. Everything left is still the master's own text.
 func TestAssembleDropsIndividualSkillEntries(t *testing.T) {
 	sections := assembleSections()
 	sections[3].Items[0].DroppedEntries = []string{"TypeScript"}
@@ -315,8 +285,6 @@ func TestAssembleDropsIndividualSkillEntries(t *testing.T) {
 	}
 }
 
-// Dropping every entry of a group leaves nothing to say, so the group goes
-// with them rather than rendering a bare label.
 func TestAssembleDropsAnEmptiedSkillGroupEntirely(t *testing.T) {
 	sections := assembleSections()
 	sections[3].Items[0].DroppedEntries = []string{"Go", "TypeScript"}
@@ -331,8 +299,6 @@ func TestAssembleDropsAnEmptiedSkillGroupEntirely(t *testing.T) {
 	}
 }
 
-// The drop is applied to a copy: the master snapshot every other export path
-// reads must come back out of Assemble untouched.
 func TestAssembleDoesNotMutateTheMasterSkillGroup(t *testing.T) {
 	master := assembleMaster()
 	sections := assembleSections()
@@ -347,8 +313,6 @@ func TestAssembleDoesNotMutateTheMasterSkillGroup(t *testing.T) {
 	}
 }
 
-// SkillEntries is what the client renders a per-skill toggle from: every
-// entry of the group, each carrying its own inclusion state.
 func TestSkillEntriesReportsPerEntrySelection(t *testing.T) {
 	it := Item{
 		Origin: OriginProfile, Kind: ItemKindSkillGroup,

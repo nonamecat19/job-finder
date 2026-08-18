@@ -5,20 +5,6 @@ import (
 	"testing"
 )
 
-// These tests guard a property the eval harness (038) depends on and that
-// nothing else in the suite covers: VerifyRendercvGrounding's output must be
-// byte-identical across runs on identical input.
-//
-// It is not an aesthetic concern. Violations returned here are carried back
-// into the next attempt's prompt (application/service.go tailorRendercvResume
-// -> prevViolations -> buildSelectPrompt), so map-iteration order in the
-// verifier makes the *retry request text* differ between runs. Replay fixtures
-// keyed by a hash of the request would then miss at random.
-//
-// Both loops below previously ranged directly over a map. A single offending
-// item cannot expose the bug — Go randomises map order per iteration, so the
-// cases need several items each to fail reliably.
-
 func multiSectionMaster() RendercvMaster {
 	return RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"experience": []any{},
@@ -79,11 +65,6 @@ func TestVerifyRendercvGroundingIsDeterministic_StrictProjectTokens(t *testing.T
 	}
 }
 
-// DeriveTotalExperienceYears resolves "present" against the wall clock, so a
-// profile with an ongoing role yields a different figure on either side of
-// 1 January. That value reaches the summary prompt via SummaryBrief.TotalYears.
-// The AsOf variant exists so a recorded request stays reproducible; this test
-// pins the relationship between the two.
 func TestDeriveTotalExperienceYearsAsOfIsPinned(t *testing.T) {
 	master := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"experience": []any{
@@ -94,8 +75,7 @@ func TestDeriveTotalExperienceYearsAsOfIsPinned(t *testing.T) {
 	if got := DeriveTotalExperienceYearsAsOf(master, 2030); got != 15 {
 		t.Fatalf("as-of 2030: got %d years, want 15", got)
 	}
-	// The same input a year later must move — proving the figure really is
-	// clock-dependent, which is why the AsOf variant is required for replay.
+
 	if got := DeriveTotalExperienceYearsAsOf(master, 2031); got != 16 {
 		t.Fatalf("as-of 2031: got %d years, want 16", got)
 	}

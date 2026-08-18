@@ -8,9 +8,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// escalationMaster has two bullets under its one job, so a selection that
-// returns fewer than the configured minimum is detectable as a shortfall
-// rather than a stylistic difference.
 func escalationMaster() domain.RendercvMaster {
 	return domain.RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"summary": []any{"A summary."},
@@ -28,11 +25,7 @@ func escalationMaster() domain.RendercvMaster {
 }
 
 func truncatedSelection(t *testing.T) func(string) string {
-	// Returns the job with one bullet where the configured minimum is two —
-	// well-formed output with content quietly missing, which is what the cheap
-	// models were measured doing. Skills cannot be truncated this way any more:
-	// they are never carried in a selection response, so the only shortfall a
-	// model can still cause is in the material it does return.
+
 	return func(string) string {
 		return mustJSON(t, domain.TailoredSelection{
 			Experience: []domain.TailoredExperience{
@@ -81,8 +74,6 @@ func itoaYears(y int) string {
 	return string(digits)
 }
 
-// 035 FR-007 / US2: two consecutive shortfalls escalate to the premium model,
-// the run completes, and the escalation is recorded.
 func TestSelectionEscalatesAfterRepeatedShortfall(t *testing.T) {
 	svc, sel, prem := escalationService(t, truncatedSelection(t), completeSelection(t))
 	prov := &runProvenance{}
@@ -105,8 +96,6 @@ func TestSelectionEscalatesAfterRepeatedShortfall(t *testing.T) {
 	}
 }
 
-// A healthy economy response must not retry and must never reach the premium
-// model — the escalation ladder is for repeated shortfalls only.
 func TestHealthySelectionNeverEscalates(t *testing.T) {
 	svc, sel, prem := escalationService(t, completeSelection(t), completeSelection(t))
 	prov := &runProvenance{}
@@ -128,8 +117,6 @@ func TestHealthySelectionNeverEscalates(t *testing.T) {
 	}
 }
 
-// When even the premium model returns incomplete output, the run fails rather
-// than rendering a hollowed-out resume — that is the whole point of US2.
 func TestPersistentShortfallFailsRatherThanRendering(t *testing.T) {
 	svc, _, _ := escalationService(t, truncatedSelection(t), truncatedSelection(t))
 	cfg := domain.DefaultShapeConfig()

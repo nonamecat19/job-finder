@@ -64,7 +64,7 @@ func (s *Service) companyWebsite(ctx context.Context, job sqlcgen.Job) (string, 
 	}
 	company, err := s.q.GetCompanyByNormalizedName(ctx, normalized)
 	if err != nil {
-		return "", nil //nolint:nilerr // "company never probed" is not a source failure
+		return "", nil //nolint:nilerr
 	}
 	if company.Website == nil {
 		return "", nil

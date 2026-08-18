@@ -14,8 +14,6 @@ import (
 	"github.com/job-finder/api/internal/manualadd/domain"
 )
 
-// AddService is the synchronous manual-add flow. The response is the outcome —
-// there is no task to poll (FR-003a).
 type AddService interface {
 	Add(ctx context.Context, rawURL string) (domain.Result, error)
 	SaveFillIn(ctx context.Context, in application.FillIn) (domain.Result, error)
@@ -95,10 +93,6 @@ func (h *ManualAddHandler) fillIn(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, statusFor(result), ResultDto(result))
 }
 
-// statusFor maps an outcome onto HTTP. invalid_url is 400 because the request
-// itself was wrong; the other failures are 422 because the request was fine and
-// the world did not cooperate. The two recoverable states are 200 — they carry
-// a draft, so they are not failures of the request.
 func statusFor(result domain.Result) int {
 	switch result.Outcome {
 	case domain.OutcomeCreated:
@@ -113,7 +107,6 @@ func statusFor(result domain.Result) int {
 	}
 }
 
-// ResultDto renders a service result into the wire envelope.
 func ResultDto(result domain.Result) dto.ManualAddResultDto {
 	out := dto.ManualAddResultDto{Outcome: string(result.Outcome), Job: result.Job}
 	if result.Reason != "" {

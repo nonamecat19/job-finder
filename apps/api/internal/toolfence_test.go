@@ -12,81 +12,10 @@ import (
 	"testing"
 )
 
-// The read-only fence (037 FR-008, SC-005, contracts §5).
-//
-// A tool loop hands a model the ability to choose what runs next. Constitution
-// Principle I says the platform does not act on the user's behalf without them,
-// and a lookup that can send an email, post an application or reach the open
-// internet turns "the model decided to look something up" into "the model did
-// something". The fence is what makes that structural rather than a review
-// habit.
-//
-// It works in three parts, and the third is the one the cited precedents in
-// this repository do not do:
-//
-//  1. **Discovery** — walk internal/ for packages that directly import the
-//     toolloop package. A package that registers tools must import it, so this
-//     finds all of them.
-//  2. **Declaration** — an explicit list below. The two sets must be equal, so a
-//     new tool package cannot appear without a decision, and a listed one that
-//     stops registering tools cannot linger as a stale exemption.
-//  3. **Transitive closure** — `go list -deps` on each discovered package, so a
-//     lookup cannot reach a forbidden capability through a harmless-looking
-//     helper. Direct-import scanning would miss exactly that.
-//
-// # What this cannot catch — all three, stated because a fence whose limits are
-// undocumented gets trusted for things it does not do
-//
-//  1. **A hand-built outbound request.** A lookup that imports `net/http` and
-//     constructs its own request reaches the internet without importing any
-//     forbidden package. `net/http` cannot be forbidden — the whole platform
-//     uses it.
-//  2. **A closure over an already-injected capability.** This is the largest
-//     hole. Handlers are closures; one defined inside a service that already
-//     holds an outreach client can call it while the lookup's own package
-//     imports nothing at all. No import-graph analysis can see that. It is why
-//     a small, enumerated, reviewed toolset is a *required complementary
-//     control* and not a reassurance.
-//  3. **Packages, not call paths.** A package that imports a forbidden one for
-//     an unrelated reason fails this test even if no lookup can reach it. That
-//     direction is deliberate — it fails closed — but it means a failure here
-//     is not automatically a live vulnerability.
-//
-// Enforcement: this runs in the `go-test` job of .github/workflows/api-ci.yml.
-
 const toolloopPkg = "github.com/job-finder/api/internal/platform/llm/application/toolloop"
 
-// declaredToolPackages is the explicit list of packages allowed to register
-// tools, in the style of gateway_config_test.go's requestedGenerationGroups.
-// Adding one here is the decision point; discovery below makes it impossible to
-// skip.
-// Empty since 047 T103: salary's Go tool loop is deleted — apps/ai's
-// LangGraph loop is the only tool-calling exchange left, and it holds no
-// database credentials at all (FR-008), so this fence has nothing left to
-// police. Left as a declared, empty map rather than deleting the test, so a
-// future tool-calling package re-triggers this file's whole point instead of
-// silently having nothing to add itself to.
 var declaredToolPackages = map[string]bool{}
 
-// forbiddenPrefixes are capabilities no lookup may reach, directly or through
-// any dependency.
-//
-// internal/retrieval and internal/jobsources are on this list for a specific
-// reason: retrieval performs outbound HTTP, drives a headless browser and calls
-// FlareSolverr. A lookup importing it would have reached the open internet from
-// inside a model's decision loop while passing a fence that only checked for
-// the obvious write paths (FR-008b).
-//
-// The engine and the site sources now live in the job-scraper library (043).
-// The app packages of the same name are thin wrappers over them, so listing
-// only the app paths would leave the fence bypassable by importing the library
-// directly — the library paths carry the same capability and belong here for
-// the same reason. The scraper moved back into the app when the library made
-// its own internal, so internal/scraping is listed too.
-//
-// job-scraper/adapter, job-scraper/ports and job-scraper/model are deliberately
-// absent: they are interface and struct declarations with no I/O, the same way
-// internal/dto is not forbidden.
 var forbiddenPrefixes = []string{
 	"github.com/job-finder/api/internal/notifier",
 	"github.com/job-finder/api/internal/outreach",
@@ -103,7 +32,6 @@ var forbiddenPrefixes = []string{
 func TestToolPackagesAreReadOnly(t *testing.T) {
 	discovered := discoverToolPackages(t)
 
-	// Part 2: the two sets must be equal, in both directions.
 	for pkg := range discovered {
 		if !declaredToolPackages[pkg] {
 			t.Errorf("package %s imports the tool loop but is not in declaredToolPackages; "+
@@ -117,7 +45,6 @@ func TestToolPackagesAreReadOnly(t *testing.T) {
 		}
 	}
 
-	// Part 3: transitive closure of every discovered package.
 	for pkg := range discovered {
 		deps := transitiveDeps(t, pkg)
 		for _, dep := range deps {
@@ -133,8 +60,6 @@ func TestToolPackagesAreReadOnly(t *testing.T) {
 	}
 }
 
-// discoverToolPackages walks internal/ and returns every package with a direct
-// import of the toolloop package.
 func discoverToolPackages(t *testing.T) map[string]bool {
 	t.Helper()
 	root, err := filepath.Abs(".")
@@ -177,15 +102,6 @@ func discoverToolPackages(t *testing.T) map[string]bool {
 	return found
 }
 
-// transitiveDeps resolves a package's full dependency closure with `go list`.
-//
-// `go list` through os/exec rather than golang.org/x/tools/go/packages: that
-// module is not in go.mod, and adding a dependency to build the control that
-// protects a constitutional principle would break the no-new-dependency rule
-// with the control itself (SC-009, C5-1).
-//
-// A failure to invoke it **fails the test** (C5-1a). A fence that switches
-// itself off in an unusual environment is a fence that is off.
 func transitiveDeps(t *testing.T, pkg string) []string {
 	t.Helper()
 	out, err := exec.Command("go", "list", "-deps", pkg).Output()

@@ -15,12 +15,6 @@ import (
 	"github.com/job-finder/api/internal/testinfra"
 )
 
-// testBrokerURL is the URL of the RabbitMQ container this test binary owns
-// (internal/testinfra), started on first use and removed when the binary
-// exits. These are integration tests against real broker behaviour
-// (durability, redelivery, dead-lettering) that no fake can stand in for, and
-// a container makes that broker unconditionally present rather than something
-// the run may skip over.
 func testBrokerURL(t *testing.T) string {
 	t.Helper()
 	url, err := testinfra.RabbitMQURL(context.Background())
@@ -30,7 +24,6 @@ func testBrokerURL(t *testing.T) string {
 	return url
 }
 
-// dialTestBroker opens a connection to the container broker.
 func dialTestBroker(t *testing.T) *amqp.Connection {
 	t.Helper()
 	url := testBrokerURL(t)
@@ -42,9 +35,6 @@ func dialTestBroker(t *testing.T) *amqp.Connection {
 	return conn
 }
 
-// declareTopologyOrFail declares the full topology on a fresh channel taken
-// from conn, matching what a consumer does on every (re)connect (M1-1,
-// M3-4).
 func declareTopologyOrFail(t *testing.T, conn *amqp.Connection) {
 	t.Helper()
 	ch, err := conn.Channel()
@@ -57,8 +47,6 @@ func declareTopologyOrFail(t *testing.T, conn *amqp.Connection) {
 	}
 }
 
-// newTestPublisher opens a fresh channel on conn and wraps it in a
-// events.Publisher with confirms enabled.
 func newTestPublisher(t *testing.T, conn *amqp.Connection) (*events.Publisher, *amqp.Channel) {
 	t.Helper()
 	ch, err := conn.Channel()
@@ -72,9 +60,6 @@ func newTestPublisher(t *testing.T, conn *amqp.Connection) (*events.Publisher, *
 	return pub, ch
 }
 
-// purgeQueue empties a queue before a test runs, so tests sharing the fixed
-// per-work-type queues (topology.go's WorkTypes is a closed set) don't see
-// leftovers from a previous run.
 func purgeQueue(t *testing.T, conn *amqp.Connection, queue string) {
 	t.Helper()
 	ch, err := conn.Channel()
@@ -87,11 +72,6 @@ func purgeQueue(t *testing.T, conn *amqp.Connection, queue string) {
 	}
 }
 
-// testEnvelope is a minimal stand-in wire body: envelope fields plus a
-// trivial payload marker. It is not events.Envelope itself because these
-// tests exercise broker mechanics (delivery, redelivery, retry, dead-letter
-// routing), not envelope (de)serialisation, which envelope_test.go already
-// covers.
 type testEnvelope struct {
 	EventID        string `json:"event_id"`
 	EventType      string `json:"event_type"`
@@ -125,9 +105,6 @@ func mustMarshal(t *testing.T, v any) []byte {
 	return body
 }
 
-// publishWork publishes body to the work exchange under workType's routing
-// key, with x-attempt=0 and x-work-type set, waiting for the broker's
-// publish confirm (M2-1).
 func publishWork(t *testing.T, pub *events.Publisher, workType string, body []byte) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

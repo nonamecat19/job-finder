@@ -34,8 +34,6 @@ func TestRankSkillsPutsRequiredSkillsFirst(t *testing.T) {
 	}
 }
 
-// The whole point of moving this off the model: an ordering pass cannot lose a
-// skill, because its output is a permutation of its input.
 func TestRankSkillsDropsNothing(t *testing.T) {
 	doc := rankingMaster()
 	before := MasterSkillTokens(doc)
@@ -61,7 +59,6 @@ func TestRankSkillsLeavesPinnedGroupVerbatim(t *testing.T) {
 	}
 }
 
-// Group order is the master's authored order unless a cap forces a choice.
 func TestRankSkillsKeepsGroupOrderWithoutACap(t *testing.T) {
 	doc := rankingMaster()
 	RankSkills(doc, VacancyAnalysis{RequiredSkills: []string{"React"}}, DefaultShapeConfig())
@@ -82,15 +79,12 @@ func TestRankSkillsOrdersGroupsByRelevanceUnderACap(t *testing.T) {
 	if got := StringField(groups[0], "label"); got != "Frontend" {
 		t.Errorf("first group = %q, want the group the vacancy actually asks for", got)
 	}
-	// The cap that follows keeps pinned groups regardless of position, so
-	// ranking must not spend a slot on them.
+
 	if got := StringField(groups[len(groups)-1], "label"); got != "Spoken Languages" {
 		t.Errorf("last group = %q, want the pinned group sorted out of the contested slots", got)
 	}
 }
 
-// Same inputs, same output — the property that made this worth taking off a
-// sampling model in the first place.
 func TestRankSkillsIsDeterministic(t *testing.T) {
 	first, second := rankingMaster(), rankingMaster()
 	RankSkills(first, rankingAnalysis(), DefaultShapeConfig())
@@ -104,9 +98,6 @@ func TestRankSkillsIsDeterministic(t *testing.T) {
 	}
 }
 
-// Vacancy relevance is coarse — required, nice-to-have, or nothing — so most
-// entries in a group tie. The profile breaks those ties: a skill the candidate
-// actually wrote about outranks one that only appears in the skills list.
 func TestRankSkillsBreaksTiesOnProfileEvidence(t *testing.T) {
 	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"skills": []any{
@@ -127,9 +118,6 @@ func TestRankSkillsBreaksTiesOnProfileEvidence(t *testing.T) {
 	}
 }
 
-// Evidence is a tiebreaker, never an override: a required skill the rest of
-// the profile never mentions still outranks a well-evidenced skill the vacancy
-// did not ask for.
 func TestRankSkillsEvidenceNeverOutranksTheVacancy(t *testing.T) {
 	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"skills": []any{
@@ -150,8 +138,6 @@ func TestRankSkillsEvidenceNeverOutranksTheVacancy(t *testing.T) {
 	}
 }
 
-// Summing relevance lets two nice-to-haves outweigh one hard requirement, and
-// under a group cap that costs a required skill its place on the page.
 func TestRankGroupsPrefersRequiredCoverageOverSummedScore(t *testing.T) {
 	doc := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"skills": []any{

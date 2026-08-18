@@ -40,8 +40,6 @@ func TestNewServiceLoadsTheStoredChoice(t *testing.T) {
 	}
 }
 
-// Refusing to start the API because a preferences table is unreadable would be
-// a poor trade. The catalogue default is a complete answer.
 func TestNewServiceFallsBackToTheDefaultWhenTheRowIsUnreadable(t *testing.T) {
 	repo := &fakeRepo{getErr: errors.New("no such table")}
 	svc, err := NewService(context.Background(), repo)
@@ -53,9 +51,6 @@ func TestNewServiceFallsBackToTheDefaultWhenTheRowIsUnreadable(t *testing.T) {
 	}
 }
 
-// An option removed between releases leaves a stored id nothing answers to.
-// The read path resolves it to the default rather than propagating a value the
-// router cannot use.
 func TestNewServiceResolvesAStaleStoredOptionToTheDefault(t *testing.T) {
 	repo := &fakeRepo{row: sqlcgen.SummaryModelSetting{ID: "default", OptionId: "retired-option"}}
 	svc, _ := NewService(context.Background(), repo)
@@ -83,9 +78,6 @@ func TestUpdateStoresAndCaches(t *testing.T) {
 	}
 }
 
-// Unlike the read path, a write is the user asserting something. Storing the
-// default in place of what they asked for would make the selector lie back to
-// them, so an unknown id is rejected and nothing is written.
 func TestUpdateRejectsAnUnknownOption(t *testing.T) {
 	repo := &fakeRepo{row: sqlcgen.SummaryModelSetting{ID: "default", OptionId: "standard"}}
 	svc, _ := NewService(context.Background(), repo)
@@ -114,8 +106,6 @@ func TestResetReturnsToTheCatalogueDefault(t *testing.T) {
 	}
 }
 
-// The port the generation package declares must be satisfied structurally,
-// exactly as *resumeshape.Service satisfies ShapeProvider.
 func TestServiceSatisfiesTheGenerationPort(t *testing.T) {
 	var _ interface {
 		SummaryOption(ctx context.Context) domain.SummaryOption

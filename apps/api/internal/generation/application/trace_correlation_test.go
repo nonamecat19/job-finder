@@ -10,11 +10,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// traceSpy wraps a stage provider and records the trace id each call saw on its
-// context. The trace never travels on CompleteOptions — it is stamped once at
-// the top of a run and read back out by the gateway adapter — so a call site
-// that "forgets" to pass it cannot exist, and what this spy is really checking
-// is that no intermediate frame drops or replaces the context.
 type traceSpy struct {
 	inner  *stageProvider
 	mu     sync.Mutex
@@ -56,11 +51,6 @@ func (s *traceSpy) seen() []string {
 	return append([]string(nil), s.traces...)
 }
 
-// ungroundedThenGrounded answers the summary stage with a claim the master
-// cannot support on the first call and a safe one afterwards, which is what
-// forces the FR-008 re-prompt. The retry is the interesting call here: it is
-// emitted from inside summarize(), several frames below where the trace was
-// stamped, so it is exactly the call a threading-based design would drop.
 func ungroundedThenGrounded(t *testing.T) func(string) string {
 	t.Helper()
 	var mu sync.Mutex
@@ -77,10 +67,6 @@ func ungroundedThenGrounded(t *testing.T) func(string) string {
 	}
 }
 
-// tracedService builds the escalating pipeline of escalation_test.go with every
-// stage wrapped in a spy, so one run exercises the analyze stage, two economy
-// selections, one premium escalation, and a summary that re-prompts — eleven
-// call sites' worth of behaviour in one pass.
 func tracedService(t *testing.T) (*Service, []*traceSpy) {
 	t.Helper()
 	analyze := spyOn(&stageProvider{name: "generation-analyze", reply: func(string) string {
@@ -106,9 +92,6 @@ func traceTestConfig() domain.ShapeConfig {
 	return cfg
 }
 
-// recorderWithID returns a recorder carrying the given run id and no store, so
-// its Step calls are inert while ID() still answers. That is the shape the
-// trace stamp actually depends on.
 func recorderWithID(t *testing.T, id string) *activity.Recorder {
 	t.Helper()
 	rec := activity.FromID(nil, id)
@@ -118,8 +101,6 @@ func recorderWithID(t *testing.T, id string) *activity.Recorder {
 	return rec
 }
 
-// runTraced runs one tailoring pass under the given run id and returns every
-// trace id observed across every stage, in call order per stage.
 func runTraced(t *testing.T, runID string) ([]string, error) {
 	t.Helper()
 	svc, spies := tracedService(t)
@@ -132,9 +113,6 @@ func runTraced(t *testing.T, runID string) ([]string, error) {
 	return all, err
 }
 
-// 036 FR-009: every call of one run carries the same trace id — including the
-// selection retries, the premium escalation and the summary re-prompt, none of
-// which are visible from the call site that stamped it.
 func TestEveryStageOfARunSharesOneTrace(t *testing.T) {
 	const runID = "11111111-2222-3333-4444-555555555555"
 
@@ -153,9 +131,6 @@ func TestEveryStageOfARunSharesOneTrace(t *testing.T) {
 	}
 }
 
-// The re-prompted summary is called out on its own because it is the call most
-// easily lost: it is emitted from inside summarize() after a grounding failure,
-// which no call site knows about in advance.
 func TestSummaryRepromptKeepsTheRunTrace(t *testing.T) {
 	const runID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
@@ -178,8 +153,6 @@ func TestSummaryRepromptKeepsTheRunTrace(t *testing.T) {
 	}
 }
 
-// 036 FR-011: concurrent runs must not cross-attribute. Ten at once, each with
-// its own id, and no call may see an id belonging to another run.
 func TestConcurrentRunsCarryDistinctTraces(t *testing.T) {
 	ids := []string{
 		"00000000-0000-0000-0000-00000000000a",

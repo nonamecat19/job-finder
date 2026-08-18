@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-
 	jsadapter "github.com/nonamecat19/job-scraper/adapter"
 
 	"github.com/job-finder/api/internal/activity"
@@ -19,8 +18,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// subscriptionKindManual is the one kind this service refuses to run. Manual
-// rows exist to own hand-added vacancies, not to be crawled (041 FR-014).
 const subscriptionKindManual = "manual"
 
 const (

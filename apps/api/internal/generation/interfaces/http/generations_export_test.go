@@ -16,8 +16,6 @@ import (
 	"github.com/job-finder/api/internal/testutil"
 )
 
-// runItems flattens the run's items in section-then-position order, so a
-// before/after comparison can assert that an export changed nothing.
 func runItems(t *testing.T, r chi.Router, runID string) []dto.GenerationItemDto {
 	t.Helper()
 	w := testutil.DoRequest(r, "GET", "/api/generations/"+runID, nil, map[string]string{"runId": runID})
@@ -33,10 +31,6 @@ func runItems(t *testing.T, r chi.Router, runID string) []dto.GenerationItemDto 
 	return out
 }
 
-// T074: an export that cannot fit the page budget is reported, never
-// resolved. Nothing is deselected, no wording changes, and the report names
-// the lowest-ranked selected items worst-first for the user to act on
-// (FR-019).
 func TestGenerationExportBlockedMutatesNothing(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -48,8 +42,6 @@ func TestGenerationExportBlockedMutatesNothing(t *testing.T) {
 	prof := insertTestProfile(ctx, t, testDB, config)
 	h, svc := newWorkspaceHandler(t, testDB)
 
-	// A renderer that always comes out three pages over a two-page target:
-	// the compact re-render cannot save it, so the export blocks.
 	svc.SetExportRenderer(
 		func(context.Context, domain.RendercvMaster, string) (string, error) { return "/tmp/export.pdf", nil },
 		func(string) (int, error) { return 5, nil },
@@ -111,7 +103,6 @@ func TestGenerationExportBlockedMutatesNothing(t *testing.T) {
 		}
 	}
 
-	// The poll is idempotent and reports the same thing.
 	pollW := testutil.DoRequest(r, "GET", "/api/generations/"+started.RunID+"/export", nil,
 		map[string]string{"runId": started.RunID})
 	if pollW.Code != 200 {
@@ -125,8 +116,6 @@ func TestGenerationExportBlockedMutatesNothing(t *testing.T) {
 	}
 }
 
-// The export that fits produces an ordinary GeneratedDocument row, so the
-// existing documents list and PDF download serve it unchanged (T070).
 func TestGenerationExportWritesADocument(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

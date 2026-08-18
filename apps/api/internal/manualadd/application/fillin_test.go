@@ -44,8 +44,6 @@ func TestSaveFillIn_CreatesAVacancyIndistinguishableFromAnExtractedOne(t *testin
 	}
 }
 
-// FR-012a: a host with no reader has no source of its own, so its vacancies
-// hang off the manual source.
 func TestSaveFillIn_DefaultsSourceKeyToManual(t *testing.T) {
 	h := newHarness(t, djinniStub())
 
@@ -128,8 +126,6 @@ func TestSaveFillIn_RejectsAnInvalidURL(t *testing.T) {
 	}
 }
 
-// FR-017a: an unknown posting date stays unknown. Defaulting it to now would
-// make the vacancy look fresh to ghost-job scoring and post-age signals.
 func TestSaveFillIn_NeverDefaultsPostedAtToNow(t *testing.T) {
 	h := newHarness(t, djinniStub())
 
@@ -183,8 +179,6 @@ func TestSaveFillIn_ExistingDedupeKeyIsADuplicate(t *testing.T) {
 	}
 }
 
-// A hand-filled vacancy must dedupe against the same posting crawled, because
-// both go through the same key.
 func TestSaveFillIn_SharesTheDedupeRuleWithExtraction(t *testing.T) {
 	in := completeFillIn()
 	extracted := dto.NormalizedJob{Company: in.Company, Title: in.Title, URL: in.URL}

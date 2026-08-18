@@ -14,19 +14,6 @@ import (
 	"github.com/job-finder/api/internal/testinfra"
 )
 
-// TestPrune_BlanksOldPayloadKeepsRest is the genuine, live-ClickHouse
-// verification T119 asks for: create the `traces` table with Langfuse
-// 4.6.0's real DDL (packages/shared/clickhouse/migrations/unclustered/
-// 0001_traces.up.sql), insert one row older than the retention window and
-// one row inside it, run Prune, and assert:
-//   - the old row's input/output are NULL
-//   - the old row's every other column (metadata, timestamps, tags, ids) is
-//     untouched
-//   - the recent row is untouched entirely
-//
-// Runs against a ClickHouse container started by internal/testinfra, so the
-// real DDL/DML this exercises — nothing about it is mockable — always runs
-// rather than being skipped when no server happens to be configured.
 func TestPrune_BlanksOldPayloadKeepsRest(t *testing.T) {
 	ctx := context.Background()
 
@@ -48,8 +35,6 @@ func TestPrune_BlanksOldPayloadKeepsRest(t *testing.T) {
 		_, _ = db.ExecContext(context.Background(), "DROP TABLE IF EXISTS traces")
 	})
 
-	// Verbatim from langfuse/langfuse:4.6.0's
-	// packages/shared/clickhouse/migrations/unclustered/0001_traces.up.sql.
 	const createTraces = `
 CREATE TABLE traces (
     id String,
@@ -107,9 +92,6 @@ ORDER BY (project_id, toDate(timestamp), id)`
 		t.Fatalf("expected exactly 1 row purged in traces, got %d", report.TablesPurged["traces"])
 	}
 
-	// ReplacingMergeTree needs FINAL to see the post-mutation state
-	// deterministically in a test that just wrote and mutated in the same
-	// second.
 	var oldInput, oldOutput, oldName sql.NullString
 	var oldTimestamp time.Time
 	if err := db.QueryRowContext(ctx,
@@ -140,7 +122,6 @@ ORDER BY (project_id, toDate(timestamp), id)`
 		t.Fatalf("recent row payload wrongly touched: output=%v", recentOutput)
 	}
 
-	// A second run must be a no-op: nothing left to purge.
 	report2, err := pruner.Prune(ctx)
 	if err != nil {
 		t.Fatalf("second prune: %v", err)

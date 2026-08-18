@@ -174,8 +174,6 @@ func TestServiceList_MarksBelowFloor(t *testing.T) {
 	}
 }
 
-// --- 041 Manual filter ---
-
 func TestList_OnlyManualIsThreadedToBothQueries(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := jobs.NewService(repo, &fakeEnqueuer{}, 0)
@@ -204,8 +202,6 @@ func TestList_OnlyManualDefaultsOffSoTheFeedIsUnfiltered(t *testing.T) {
 		t.Error("expected onlyManual to default to false")
 	}
 }
-
-// --- URL filter (browser extension resolves the tab it sits on) ---
 
 func TestList_URLIsThreadedToBothQueries(t *testing.T) {
 	repo := &fakeRepo{}
@@ -237,8 +233,6 @@ func TestList_URLDefaultsToNilSoTheFeedIsUnfiltered(t *testing.T) {
 	}
 }
 
-// The URL filter is exact, unlike Q which wraps its value in ILIKE wildcards.
-// A vacancy URL is a key, not a search term.
 func TestList_URLIsNotWrappedInWildcardsUnlikeQ(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := jobs.NewService(repo, &fakeEnqueuer{}, 0)

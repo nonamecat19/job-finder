@@ -5,11 +5,6 @@ import (
 	"testing"
 )
 
-// T058 (US4): the skills surface's whole contract is that it reorders and
-// deselects, never rewrites. These tests pin both halves — the item list is a
-// permutation of the master's groups whatever order the ranking stage asked
-// for, and a skillsMaxGroups cap changes `selected`, not membership.
-
 func skillsMaster(groups ...[2]string) RendercvMaster {
 	raw := make([]any, 0, len(groups))
 	for _, g := range groups {
@@ -33,9 +28,6 @@ func masterGroups(m RendercvMaster) []map[string]any {
 	return AsSliceOfMaps(CvSections(m)["skills"])
 }
 
-// assertPermutation is the invariant behind "ranked, not rewritten": every
-// master group's rendered text appears exactly once, and nothing else appears
-// at all.
 func assertPermutation(t *testing.T, groups []map[string]any, items []Item) {
 	t.Helper()
 	if len(items) != len(groups) {
@@ -115,9 +107,6 @@ func TestSeedSkillItems_PartialOrderKeepsOmittedGroupsInMasterOrder(t *testing.T
 	)
 	groups := masterGroups(m)
 
-	// A short/garbled order is a rejected response in production, but the
-	// seeder must fail safe on its own: unknown indices are ignored and the
-	// groups the order never named are appended in master order.
 	items := SeedSkillItems(groups, []int{2, 9, -1, 2}, 0)
 
 	assertPermutation(t, groups, items)
@@ -190,7 +179,7 @@ func TestSeedSkillItems_PinnedGroupStaysWhereAuthoredAndSelected(t *testing.T) {
 	if !items[1].Selected {
 		t.Error("pinned group was deselected by the cap, want it kept regardless")
 	}
-	// One slot is left for the ranked groups once the pinned one is paid for.
+
 	wantSelected := []bool{true, true, false, false}
 	for i, w := range wantSelected {
 		if items[i].Selected != w {

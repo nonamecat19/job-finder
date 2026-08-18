@@ -12,13 +12,6 @@ import (
 	"github.com/job-finder/api/internal/jobsources/roster"
 )
 
-// The board adapters moved into the job-scraper library and now reach the
-// database only through ports.Roster. The library's own tests drive
-// that port with an in-memory fake, which cannot catch a mistake in the one
-// thing the app still owns: translating sqlcgen rows and pgtype UUIDs to and
-// from the port's plain-string, library-struct shapes. These tests exercise
-// roster.Service — the real implementation — against a real database.
-
 func newPortService(t *testing.T) (ports.Roster, context.Context) {
 	t.Helper()
 	database := dbtest.New(t)
@@ -89,14 +82,12 @@ func TestPortListForRunReturnsInsertedBoard(t *testing.T) {
 	if found.EmployerIdentifier != "globex" {
 		t.Errorf("EmployerIdentifier = %q, want globex", found.EmployerIdentifier)
 	}
-	// A board that has never run must not claim a success timestamp.
+
 	if found.LastSuccessAt != nil {
 		t.Errorf("LastSuccessAt = %v on a board that never ran, want nil", found.LastSuccessAt)
 	}
 }
 
-// RecordRunOutcome is the write the board adapters make on every run, and the
-// only port method that parses a string ID back into a UUID.
 func TestPortRecordRunOutcomeUpdatesCountAndTimestamp(t *testing.T) {
 	port, ctx := newPortService(t)
 

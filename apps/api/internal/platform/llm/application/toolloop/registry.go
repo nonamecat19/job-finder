@@ -8,22 +8,11 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/domain"
 )
 
-// Toolset is the fixed set of lookups an exchange may use.
-//
-// It is immutable after construction, deliberately (FR-026, C4-20). Nothing in
-// a conversation — not a model turn, not a tool result — can add, remove or
-// alter a tool. A registry that could be extended mid-exchange would make the
-// read-only fence meaningless, since the fence reasons about a package's
-// imports at build time and cannot see a handler that appeared at runtime.
 type Toolset struct {
 	order []string
 	tools map[string]domain.ToolDef
 }
 
-// NewToolset builds a toolset, rejecting duplicate names at construction rather
-// than at call time. A duplicate discovered at call time is discovered during a
-// model exchange, in production, on whichever of the two the map happened to
-// keep.
 func NewToolset(tools ...domain.ToolDef) (*Toolset, error) {
 	ts := &Toolset{tools: make(map[string]domain.ToolDef, len(tools))}
 	for _, t := range tools {
@@ -42,9 +31,6 @@ func NewToolset(tools ...domain.ToolDef) (*Toolset, error) {
 	return ts, nil
 }
 
-// Declarations renders the toolset for a provider call, in registration order.
-// The slice is freshly built each time so a caller cannot reach back through it
-// into the toolset.
 func (ts *Toolset) Declarations() []domain.ToolDef {
 	if ts == nil {
 		return nil
@@ -56,7 +42,6 @@ func (ts *Toolset) Declarations() []domain.ToolDef {
 	return out
 }
 
-// Names returns the declared tool names, for error messages.
 func (ts *Toolset) Names() []string {
 	if ts == nil {
 		return nil
@@ -64,25 +49,10 @@ func (ts *Toolset) Names() []string {
 	return append([]string(nil), ts.order...)
 }
 
-// refusal is a call that was rejected before dispatch. It is not an error: it
-// is a result the model gets to react to, which is what keeps a hallucinated
-// tool name from ending an exchange.
 type refusal struct{ reason string }
 
 func (r refusal) Error() string { return r.reason }
 
-// Dispatch validates and runs one call.
-//
-// Refusals — an unknown name, arguments that are not a JSON object, arguments
-// the handler cannot decode — happen **without dispatch** and come back as a
-// refusal rather than an error, so the exchange continues.
-//
-// The validation is deliberately done against the *decoded* argument object.
-// The gateway wire format encodes arguments as a JSON string containing JSON;
-// validating that quoted string against an object schema would refuse every
-// well-formed call while looking exactly like this function working correctly.
-// The adapter unquotes before we ever see it (C2-12), and this is the code that
-// would otherwise mask the bug.
 func (ts *Toolset) Dispatch(ctx context.Context, call domain.ToolCall) (string, error) {
 	tool, ok := ts.tools[call.Name]
 	if !ok {
@@ -93,8 +63,7 @@ func (ts *Toolset) Dispatch(ctx context.Context, call domain.ToolCall) (string, 
 	}
 	out, err := tool.Handler(ctx, call.Arguments)
 	if err != nil {
-		// A decode failure inside the handler is an argument problem, which
-		// the model can fix; anything else is a genuine failure of the lookup.
+
 		var syntax *json.SyntaxError
 		var typeErr *json.UnmarshalTypeError
 		if asJSONError(err, &syntax, &typeErr) {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-
 	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/queue"
 )

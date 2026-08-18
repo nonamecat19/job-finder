@@ -14,8 +14,6 @@ import (
 	"github.com/job-finder/api/internal/salary/domain"
 )
 
-// Kind is salary's work-type/capability name, matching queue.TypeSalaryInfer
-// and the capability name AI_CAPABILITY_ROUTING keys on.
 const Kind = "salary"
 
 type Repository interface {
@@ -77,12 +75,6 @@ func (s *Service) Infer(ctx context.Context, jobID string) error {
 		return s.persistJobSalary(ctx, uid, levelsBand)
 	}
 
-	// The tool-loop LLM path is deleted (FR-023, C8-4, T103): once neither
-	// the raw-salary parse nor either cache lookup produces a band, salary
-	// estimation is apps/ai's job now. AI_CAPABILITY_ROUTING has no "go"
-	// fallback left for salary to revert to — the reversibility FR-020
-	// promised ended the moment this path was removed, which is the whole
-	// point of only removing it after cutover was confirmed.
 	return fmt.Errorf("salary: no cache or levels.fyi band for job %s; route `salary` to the AI service (AI_CAPABILITY_ROUTING) to estimate one", jobID)
 }
 

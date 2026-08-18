@@ -230,10 +230,6 @@ func TestTick_LostSubscriptionClaimSkipsRun(t *testing.T) {
 	}
 }
 
-// manualSubRepo answers the two reads the run paths make, so a manual row can
-// be offered to them directly. The production due-query filters manual rows out
-// in SQL (ListEnabledSubscriptions); these tests cover the service-level refusal
-// that has to hold even when a caller reaches past the scheduler (041 FR-014).
 type manualSubRepo struct {
 	domain.SearchRepository
 	subs []sqlcgen.Subscription

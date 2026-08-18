@@ -11,13 +11,10 @@ import (
 	"time"
 )
 
-// fakeCollector is a stand-in for the collector's public API holding records
-// with timestamps, so retention is proven by deletion rather than by reading
-// configuration (036 C7-4).
 type fakeCollector struct {
 	records map[string]time.Time
-	listErr int // when non-zero, the listing endpoint returns this status
-	delErr  int // when non-zero, the delete endpoint returns this status
+	listErr int
+	delErr  int
 	deletes int
 }
 
@@ -104,8 +101,6 @@ func newTestPruner(t *testing.T, f *fakeCollector, retentionDays int) *Pruner {
 	}, srv.Client())
 }
 
-// 036 SC-008 / C7-4: the window is enforced by deletion. A backdated record is
-// gone after a run; a recent one is untouched.
 func TestPruneDeletesOnlyRecordsOlderThanTheWindow(t *testing.T) {
 	now := time.Now().UTC()
 	f := newFakeCollector(map[string]time.Time{
@@ -138,8 +133,6 @@ func TestPruneDeletesOnlyRecordsOlderThanTheWindow(t *testing.T) {
 	}
 }
 
-// The window is configurable, and the configured value is the one that decides
-// what goes — not the default.
 func TestPruneHonoursTheConfiguredWindow(t *testing.T) {
 	now := time.Now().UTC()
 	f := newFakeCollector(map[string]time.Time{
@@ -163,8 +156,6 @@ func TestPruneHonoursTheConfiguredWindow(t *testing.T) {
 	}
 }
 
-// An unset window is 30 days, so a deployment that configures nothing still
-// gets the guarantee the documentation states (FR-008).
 func TestPruneDefaultsToThirtyDays(t *testing.T) {
 	now := time.Now().UTC()
 	f := newFakeCollector(map[string]time.Time{
@@ -185,8 +176,6 @@ func TestPruneDefaultsToThirtyDays(t *testing.T) {
 	}
 }
 
-// 036 FR-008a: a failure must be visible. A pruning job that returns nil on a
-// broken collector leaves the documented window in place while data piles up.
 func TestPruneSurfacesAListingFailure(t *testing.T) {
 	f := newFakeCollector(map[string]time.Time{"old": time.Now().Add(-90 * 24 * time.Hour)})
 	f.listErr = http.StatusInternalServerError
@@ -218,9 +207,6 @@ func TestPruneSurfacesADeleteFailure(t *testing.T) {
 	}
 }
 
-// An unconfigured collector is not an error state. Most deployments never turn
-// collection on, and a scheduled tick must not log a failure every five minutes
-// for a feature nobody enabled (036 C2-3).
 func TestPruneSkipsWhenTheCollectorIsNotConfigured(t *testing.T) {
 	for name, cfg := range map[string]Config{
 		"no url":         {PublicKey: "pk", SecretKey: "sk"},
@@ -243,8 +229,6 @@ func TestPruneSkipsWhenTheCollectorIsNotConfigured(t *testing.T) {
 	}
 }
 
-// A collector holding more than one page of expired records is drained across
-// repeated batches within the run, not left half-pruned.
 func TestPruneDrainsMoreThanOnePage(t *testing.T) {
 	old := time.Now().UTC().Add(-90 * 24 * time.Hour)
 	records := map[string]time.Time{}

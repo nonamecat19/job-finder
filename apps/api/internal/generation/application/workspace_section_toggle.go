@@ -10,11 +10,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// SetSectionEnabled is `PATCH /v1/generations/{runId}/sections/{sectionId}`:
-// the per-run switch that excludes a whole section from export/preview
-// (Assemble skips it) without touching its items, so re-enabling it restores
-// exactly the selection it had. Same row-level run lock and `running` guard
-// as PatchGenerationItem/ReorderSection.
 func (s *Service) SetSectionEnabled(ctx context.Context, runID, sectionID string, enabled bool) (dto.GenerationSectionDto, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {

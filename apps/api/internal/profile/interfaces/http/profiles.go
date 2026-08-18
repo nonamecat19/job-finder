@@ -218,9 +218,6 @@ func (h *ProfilesHandler) updateResume(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, dto.ResumeDto{Resume: resume})
 }
 
-// writeProfileError reports a genuine "not found" as 404 and everything else
-// as a 500 with the real error — so a validation, YAML or database failure is
-// never presented to the caller as a missing profile.
 func writeProfileError(w http.ResponseWriter, id string, err error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "profile not found: "+id)

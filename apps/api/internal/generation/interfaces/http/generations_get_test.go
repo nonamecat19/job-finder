@@ -13,10 +13,6 @@ import (
 	"github.com/job-finder/api/internal/testutil"
 )
 
-// TestGetGenerationWorkspace_ItemsInPositionOrderAndByteIdenticalText is
-// SC-001's measurement (rest-api.md's three response rules): items are
-// returned in `position` order, and every `origin: "profile"` item's `text`
-// is byte-identical to the master bullet at its `sourceIndex`.
 func TestGetGenerationWorkspace_ItemsInPositionOrderAndByteIdenticalText(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -64,15 +60,12 @@ func TestGetGenerationWorkspace_ItemsInPositionOrderAndByteIdenticalText(t *test
 		t.Fatalf("expected %d items (every master bullet), got %d", len(bullets), len(expSection.Items))
 	}
 
-	// Items are returned in `position` order.
 	for i := 1; i < len(expSection.Items); i++ {
 		if expSection.Items[i-1].Position > expSection.Items[i].Position {
 			t.Fatalf("items not in position order: %+v", expSection.Items)
 		}
 	}
 
-	// Every profile-origin item's text is byte-identical to the master
-	// bullet at its sourceIndex.
 	for _, it := range expSection.Items {
 		if it.Origin != "profile" {
 			t.Errorf("item %+v origin = %q, want profile (Phase 3 has no AI ranking yet)", it, it.Origin)

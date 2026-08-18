@@ -2,28 +2,24 @@ package domain
 
 import "fmt"
 
-// FailureKind is the FR-018 taxonomy. The client switches on the kind, never
-// on the prose, so the set is closed and each member has one meaning.
 type FailureKind string
 
 const (
-	// KindInvalidURL — unparseable, or not http/https. No network request made.
 	KindInvalidURL FailureKind = "invalid_url"
-	// KindNotAPosting — a reader claims the host but the URL is a search or listing page.
+
 	KindNotAPosting FailureKind = "not_a_posting"
-	// KindNoReader — no adapter reads this host.
+
 	KindNoReader FailureKind = "no_reader"
-	// KindUnreachable — DNS failure, connection refused, 404, 410.
+
 	KindUnreachable FailureKind = "unreachable"
-	// KindBlocked — bot challenge, login wall, 403/429 after the ladder exhausted its rungs.
+
 	KindBlocked FailureKind = "blocked"
-	// KindTimedOut — the 30 s budget elapsed, including any pacing wait.
+
 	KindTimedOut FailureKind = "timed_out"
-	// KindIncomplete — the page was read but is missing title, company or description.
+
 	KindIncomplete FailureKind = "incomplete"
 )
 
-// Failure carries an operator-facing reason alongside the machine-readable kind.
 type Failure struct {
 	Kind   FailureKind
 	Reason string

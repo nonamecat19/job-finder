@@ -9,9 +9,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// experienceCompanies lists the master's experience company names in master
-// order — the suggestion stage's entry identities (specs/domains/resume-generation.md
-// § 4.3), never its bullet text.
 func experienceCompanies(master domain.RendercvMaster) []string {
 	entries := domain.AsSliceOfMaps(domain.CvSections(master)["experience"])
 	out := make([]string, 0, len(entries))
@@ -21,18 +18,6 @@ func experienceCompanies(master domain.RendercvMaster) []string {
 	return out
 }
 
-// buildSuggestionItems turns a raw SuggestionSet into the AI-origin items
-// each section will receive (T054): entries whose company does not match a
-// master company are dropped first (a suggestion the model attached to an
-// employer the candidate never had is not a suggestion for THIS profile),
-// then domain.SuppressDuplicateSuggestions removes anything that duplicates
-// a master bullet or skill (T052, FR-017).
-//
-// Rank/Position are 0-based WITHIN the AI group here; persistSuggestions
-// offsets them past each section's existing item count so every AI item is
-// ranked after every profile item in its section, per contracts §2 rule 4.
-// Every returned item has Selected = false (FR-013/SC-004, T050) — there is
-// no path in this function that sets it any other way.
 func buildSuggestionItems(suggestions domain.SuggestionSet, master domain.RendercvMaster) (experience map[string][]domain.Item, skills []domain.Item) {
 	companyByKey := map[string]string{}
 	for _, company := range experienceCompanies(master) {
@@ -74,9 +59,6 @@ func buildSuggestionItems(suggestions domain.SuggestionSet, master domain.Render
 	return experience, skills
 }
 
-// offsetSuggestionItems shifts a 0-based AI-group item list past a section's
-// existing item count, so persisted AI items always sort after every
-// profile item already in that section.
 func offsetSuggestionItems(items []domain.Item, offset int) []domain.Item {
 	out := make([]domain.Item, len(items))
 	for i, it := range items {
@@ -87,21 +69,6 @@ func offsetSuggestionItems(items []domain.Item, offset int) []domain.Item {
 	return out
 }
 
-// persistSuggestions writes buildSuggestionItems' output: each matched
-// experience section gets its suggested bullets appended after its existing
-// items, and the skills section gets its suggested skills appended the same
-// way. A section with no survivors for it is left untouched — the client
-// renders that as the suggestion group's empty state (T055), not an error.
-//
-// target restricts which sections get new suggestions at all — nil means
-// every section (a plain run); a rerun passes the set of sections it named,
-// so a suggestion for a section the user did not ask to rerun is never
-// appended (rest-api.md: "replaces the named sections' items", nothing
-// else). oldBySection is the same rerun-preservation input
-// applyRankedSections takes (T077): a matched AI item (by
-// domain.NormalizeText(SourceText)) keeps its Selected/Position/EditedText
-// rather than reverting to the freshly-suggested default. Both are nil for a
-// plain run, making this identical to the pre-rerun behaviour.
 func (s *Service) persistSuggestions(ctx context.Context, runID pgtype.UUID, experience map[string][]domain.Item, skills []domain.Item, target map[pgtype.UUID]bool, oldBySection map[pgtype.UUID][]domain.Item) error {
 	if len(experience) == 0 && len(skills) == 0 {
 		return nil

@@ -7,11 +7,6 @@ import (
 	"github.com/job-finder/api/internal/recruiter/domain"
 )
 
-// fakeExtractor stands in for a ContactExtractor — recruiter's Go LLM path
-// is deleted (T113: AIContactExtractor is the only implementation left,
-// verified live in t113-parity-samples.md), so what these tests exercise is
-// groundContact and the rest of Service's Go-owned grounding logic, fed a
-// canned extraction result exactly as AIContactExtractor would return one.
 type fakeExtractor struct {
 	contacts []ExtractedContact
 	err      error
@@ -24,11 +19,6 @@ func (f *fakeExtractor) Extract(ctx context.Context, source, text string) ([]Ext
 	return f.contacts, nil
 }
 
-// extractPostingContact wires a Service around a fake extractor so existing
-// tests can keep calling a plain function rather than going through the
-// full Service/Resolve path — T107 moved this extraction behind
-// Service.extractor (ContactExtractor) so it can be swapped for the
-// `recruiter` capability.
 func extractPostingContact(c ExtractedContact, description string) (*domain.ResolvedContact, error) {
 	s := &Service{extractor: &fakeExtractor{contacts: []ExtractedContact{c}}}
 	return s.extractPostingContact(context.Background(), description)

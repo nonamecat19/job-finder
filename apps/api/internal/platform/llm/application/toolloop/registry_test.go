@@ -9,9 +9,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/domain"
 )
 
-// C4-13: a duplicate name fails at construction, not at call time. Discovered
-// at call time it is discovered mid-exchange, in production, on whichever of
-// the two the map happened to keep.
 func TestDuplicateToolNameFailsAtConstruction(t *testing.T) {
 	tool := domain.NewTool("lookup", "first", func(ctx context.Context, a lookupArgs) (string, error) { return "1", nil })
 	other := domain.NewTool("lookup", "second", func(ctx context.Context, a lookupArgs) (string, error) { return "2", nil })
@@ -24,8 +21,6 @@ func TestDuplicateToolNameFailsAtConstruction(t *testing.T) {
 	}
 }
 
-// C4-11 / FR-009 / SC-006: an unknown name is refused **without dispatch**, and
-// the refusal comes back as a tool message so the exchange continues.
 func TestUnknownToolNameIsRefusedWithoutDispatch(t *testing.T) {
 	ts, seen := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{
@@ -56,15 +51,13 @@ func TestUnknownToolNameIsRefusedWithoutDispatch(t *testing.T) {
 	}
 }
 
-// C4-12: arguments that do not match the declared schema are refused without
-// dispatch, with the reason in the message.
 func TestSchemaInvalidArgumentsAreRefusedWithoutDispatch(t *testing.T) {
 	ts, seen := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{
 		{toolCalls: []domain.ToolCall{{
 			ID:        "c1",
 			Name:      "lookup_comparable_bands",
-			Arguments: json.RawMessage(`"berlin"`), // a bare string, not an object
+			Arguments: json.RawMessage(`"berlin"`),
 		}}},
 		{content: "retrying without it"},
 		{content: `{"min":1,"max":2}`},
@@ -85,13 +78,6 @@ func TestSchemaInvalidArgumentsAreRefusedWithoutDispatch(t *testing.T) {
 	}
 }
 
-// The decoding trap, stated as its own test (FR-009a, C2-12).
-//
-// This is the case that makes the two above worth having. If arguments are
-// validated against the *wire* encoding — a JSON string containing JSON — then
-// every well-formed call is refused, the exchange fills with refusals, and the
-// refusal path looks like it is working perfectly. A test that only checks that
-// bad input is refused cannot tell the difference.
 func TestWellFormedArgumentsAreNotRefused(t *testing.T) {
 	ts, seen := testToolset(t, func(args lookupArgs) (string, error) {
 		if args.Bucket != "senior-backend|berlin" {

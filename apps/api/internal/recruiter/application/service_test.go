@@ -15,10 +15,6 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 )
 
-// multiSourceFakeExtractor stands in for a ContactExtractor whose result
-// depends on which of the three sources (posting/company_page/linkedin) is
-// asking — recruiter's Go LLM path is deleted (T113), so this only needs to
-// mimic AIContactExtractor's per-source shape, not any prompt text.
 type multiSourceFakeExtractor struct {
 	posting []ExtractedContact
 	page    []ExtractedContact

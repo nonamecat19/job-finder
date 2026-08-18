@@ -169,9 +169,6 @@ func highlightText(company string, i int) string {
 	return fmt.Sprintf("%s bullet %d", company, i)
 }
 
-// Every section SeedFromMaster produces must come out Enabled — the zero
-// value is false, and a seeder that forgets to set it would silently ship a
-// resume export missing whatever section it skipped.
 func TestSeedFromMaster_EverySectionComesOutEnabled(t *testing.T) {
 	m := masterWithCertifications("AWS Certified Solutions Architect")
 	cvSections := CvSections(m)
@@ -191,10 +188,6 @@ func TestSeedFromMaster_EverySectionComesOutEnabled(t *testing.T) {
 	}
 }
 
-// Summary/experience/skills/projects/certifications/education are each
-// omitted entirely when their settings flag is off — not seeded-but-disabled,
-// genuinely absent, mirroring the existing "projects only get a section when
-// the master has one" rule.
 func TestSeedFromMaster_DisabledSectionsAreNotSeeded(t *testing.T) {
 	m := masterWithCertifications("AWS Certified Solutions Architect")
 	cvSections := CvSections(m)

@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// recordingProvider captures the conversation each call received, so ordering
-// and mutation can be asserted on what actually reached the provider rather
-// than on what the caller believes it sent.
 type recordingProvider struct {
 	seen  [][]Message
 	reply func(msgs []Message) ChatResult
@@ -37,13 +34,9 @@ func (r *recordingProvider) CompleteJSON(ctx context.Context, prompt string, opt
 
 func (r *recordingProvider) Embed(context.Context, string) ([]float32, error) { return nil, nil }
 
-// 037 FR-001/FR-005, SC-002: a three-turn exchange arrives as four messages in
-// order with roles intact. Nothing merges adjacent turns, drops one, or
-// rewrites a role — the failure mode this guards against is a stack that
-// "helpfully" collapses history and produces an answer that ignores turn one.
 func TestThreeTurnConversationArrivesIntactAndInOrder(t *testing.T) {
 	p := &recordingProvider{reply: func(msgs []Message) ChatResult {
-		// The answer depends on turn one, so a dropped first turn cannot pass.
+
 		for _, m := range msgs {
 			if m.Role == string(RoleUser) && m.Content == "my name is Ada" {
 				return ChatResult{Content: "Ada"}
@@ -80,16 +73,12 @@ func TestThreeTurnConversationArrivesIntactAndInOrder(t *testing.T) {
 	}
 }
 
-// C1-6: the caller's slice is the caller's. A provider that appends to it in
-// place corrupts any retry that reuses the same conversation — and the loop
-// reuses it on every round.
 func TestCompleteChatDoesNotMutateTheCallersMessages(t *testing.T) {
 	convo := []Message{
 		{Role: string(RoleUser), Content: "one"},
 		{Role: string(RoleUser), Content: "two"},
 	}
-	// Spare capacity is what makes an in-place append silently succeed; without
-	// it, an append would reallocate and the bug would hide.
+
 	convo = append(make([]Message, 0, 8), convo...)
 	before := make([]Message, len(convo))
 	copy(before, convo)
@@ -110,9 +99,6 @@ func TestCompleteChatDoesNotMutateTheCallersMessages(t *testing.T) {
 	}
 }
 
-// C1-3: no system prompt means no system message — not an empty one. An empty
-// system turn is a real instruction to some models and a wasted token to all of
-// them.
 func TestPromptMessagesOmitsAnEmptySystemTurn(t *testing.T) {
 	msgs := PromptMessages("", "hello")
 	if len(msgs) != 1 {
@@ -128,9 +114,6 @@ func TestPromptMessagesOmitsAnEmptySystemTurn(t *testing.T) {
 	}
 }
 
-// C1-8: an assistant turn whose content is empty because it only requested
-// tools must survive. It looks like nothing and dropping it strands the tool
-// results that answer it.
 func TestEmptyAssistantTurnWithToolCallsIsPreserved(t *testing.T) {
 	convo := []Message{
 		{Role: string(RoleUser), Content: "look it up"},

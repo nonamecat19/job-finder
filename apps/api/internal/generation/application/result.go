@@ -16,16 +16,10 @@ import (
 	"github.com/job-finder/api/internal/generation/infrastructure"
 )
 
-// TxRunner is the subset of *db.DB a ResultHandler needs: run fn inside one
-// transaction so the idempotency ledger write and the persisted document
-// commit atomically, mirroring ghostjob.TxRunner.
 type TxRunner interface {
 	WithinTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error
 }
 
-// VacancyAnalysisResult mirrors domain.VacancyAnalysis / VacancyAnalysisOut
-// (generation.py) — the analyze stage's output, echoed back on the result so
-// the persisted document's provenance matches what the model actually saw.
 type VacancyAnalysisResult struct {
 	RequiredSkills      []string `json:"requiredSkills"`
 	NiceToHaveSkills    []string `json:"niceToHaveSkills"`
@@ -35,11 +29,6 @@ type VacancyAnalysisResult struct {
 	SeniorityKeywords   []string `json:"seniorityKeywords"`
 }
 
-// GenerationCompletedResult is the capability-specific shape generate.completed
-// carries in Result.Result for the resume branch — mirrors GenerationResult
-// (generation.py): the assembled sections, already merged with the master's
-// unlisted content (node_assemble's simplified port of domain.MergeTailored's
-// highlight resolution).
 type GenerationCompletedResult struct {
 	Analysis           VacancyAnalysisResult `json:"analysis"`
 	Summary            string                `json:"summary"`
@@ -50,17 +39,10 @@ type GenerationCompletedResult struct {
 	SummaryOption      string                `json:"summaryOption"`
 }
 
-// CoverLetterCompletedResult mirrors CoverLetterResult (generation.py) /
-// coverLetterResult (service.go) — the cover-letter branch's terminal output.
 type CoverLetterCompletedResult struct {
 	Letter string `json:"letter"`
 }
 
-// parseIdempotencyKey recovers the docType and profileID SnapshotEnqueuer
-// encoded into the idempotency key at publish time (publish.go): the
-// envelope carries no capability-specific fields (E1-4), and generate.completed
-// echoes nothing from the request but the envelope, so this is the only
-// place that information survives the round trip.
 func parseIdempotencyKey(key string) (docType, profileID string, ok bool) {
 	parts := strings.SplitN(key, ":", 5)
 	if len(parts) != 5 || parts[0] != Kind {
@@ -69,20 +51,6 @@ func parseIdempotencyKey(key string) (docType, profileID string, ok bool) {
 	return parts[2], parts[3], true
 }
 
-// NewResultHandler builds the events.ResultHandler for generate.completed,
-// covering both branches Generate() (service.go) does: the resume pipeline's
-// deterministic post-processing (section toggles, skill/project ranking and
-// trimming, hard limits, ungrounded-skill-token drop) plus PDF rendering, and
-// the cover-letter branch's PDF rendering, then the same InsertGeneratedDocument
-// / job-status write Generate() does today.
-//
-// Scoping note (out of scope for this pass, see the feature's plan): the
-// grounding-violation retry loop, fixStructureIntegrity's re-prompt loop and
-// renderResume's page-target expand/condense loop all cost additional LLM
-// calls the python graph_state capability does not make today. This handler
-// renders once, at whatever page count that produces, and does not verify
-// grounding — the python side's own grounded-selection stage is what stands
-// in for that here.
 func NewResultHandler(tx TxRunner, profiles domain.ProfileStore, shape ShapeProvider, rendercv *infrastructure.RenderCvRenderer, htmlRenderer *infrastructure.HtmlPdfRenderer, model string) events.ResultHandler {
 	return func(ctx context.Context, envelope events.Envelope, result events.Result) error {
 		return tx.WithinTx(ctx, func(q *sqlcgen.Queries) error {

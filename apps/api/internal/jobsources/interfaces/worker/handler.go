@@ -25,8 +25,6 @@ import (
 
 const unhealthyAfterConsecutiveFailures = 3
 
-// triggerScheduled marks a SourceRun written by this worker. Manual adds write
-// "manual" instead, which keeps them out of the health accounting above.
 const triggerScheduled = "scheduled"
 
 func permanent(err error) error {
@@ -92,9 +90,6 @@ func (h *Handler) ProcessTask(ctx context.Context, t *queue.Task) (err error) {
 		return permanent(err)
 	}
 
-	// Parsed before the run is inserted so the run carries its subscription
-	// link from the start (041 D7). The subscription row itself is still
-	// fetched below, where its URL is needed.
 	var subscriptionID pgtype.UUID
 	if payload.SubscriptionID != nil {
 		uid, parseErr := dbutil.ParseUUID(*payload.SubscriptionID)

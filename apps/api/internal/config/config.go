@@ -21,10 +21,6 @@ type Config struct {
 	AIServiceURL   string `mapstructure:"AI_SERVICE_URL"`
 	AIServiceToken string `mapstructure:"AI_SERVICE_TOKEN"`
 
-	// AICapabilityRoutingRaw is the unparsed AI_CAPABILITY_ROUTING value
-	// (contracts/configuration.md K1, FR-020): comma-separated
-	// "capability=mode" pairs, mode one of "python" or "go". load() parses
-	// it into aiCapabilityRouting; use CapabilityRouting to read it.
 	AICapabilityRoutingRaw string `mapstructure:"AI_CAPABILITY_ROUTING"`
 	aiCapabilityRouting    map[string]string
 
@@ -98,28 +94,11 @@ type Config struct {
 
 	LLMMaxIdleConnsPerHost int `mapstructure:"LLM_MAX_IDLE_CONNS_PER_HOST"`
 
-	// LLM observability retention (036 FR-008, contracts C7-1). The platform
-	// prunes the collector itself because automated retention is not an OSS
-	// feature there.
-	//
-	// These are named EVAL_PRUNE_* rather than LANGFUSE_* deliberately: C2-2
-	// forbids granting the application container a LANGFUSE_* variable, and
-	// this is a different grant for a different reason — a collector API key
-	// so the platform can delete, never a provider credential — so it is
-	// separately named and separately revocable.
 	EvalPruneCollectorURL string `mapstructure:"EVAL_PRUNE_COLLECTOR_URL"`
 	EvalPrunePublicKey    string `mapstructure:"EVAL_PRUNE_PUBLIC_KEY"`
 	EvalPruneSecretKey    string `mapstructure:"EVAL_PRUNE_SECRET_KEY"`
 	EvalPruneRetentionDay int    `mapstructure:"EVAL_PRUNE_RETENTION_DAYS"`
 
-	// Langfuse trace payload retention (047 FR-018/FR-018a, contracts K5).
-	// RetentionClickhouse{URL,User,Password} reach Langfuse's own ClickHouse
-	// store directly to blank input/output payload columns — see
-	// internal/platform/langfuseretention for why. Named RETENTION_CLICKHOUSE_*
-	// rather than LANGFUSE_CLICKHOUSE_* for the same reason EVAL_PRUNE_* above
-	// is not named LANGFUSE_*: 036 contracts C2-2 forbids granting this
-	// container a LANGFUSE_*-named variable, and this credential reaches
-	// ClickHouse only, not Langfuse's own API.
 	RetentionClickhouseURL       string `mapstructure:"RETENTION_CLICKHOUSE_URL"`
 	RetentionClickhouseUser      string `mapstructure:"RETENTION_CLICKHOUSE_USER"`
 	RetentionClickhousePassword  string `mapstructure:"RETENTION_CLICKHOUSE_PASSWORD"`
@@ -134,10 +113,6 @@ type Config struct {
 	DBInteractiveReserve int           `mapstructure:"DB_INTERACTIVE_RESERVE"`
 }
 
-// Load reads configuration for binaries that do AI/inference work. It applies
-// every validation LoadNonAI does, plus the AI surface requirement (K1):
-// GATEWAY_URL and LITELLM_MASTER_KEY must be configured. It never checks that
-// the gateway is reachable — only that it is configured (K1-2, K1-3).
 func Load() (*Config, error) {
 	cfg, err := load()
 	if err != nil {
@@ -149,8 +124,6 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// LoadNonAI reads configuration for binaries and tests that do no inference
-// work, so must not be required to configure a gateway (K1-4).
 func LoadNonAI() (*Config, error) {
 	return load()
 }
@@ -183,11 +156,6 @@ func load() (*Config, error) {
 	return cfg, nil
 }
 
-// parseCapabilityRouting parses AI_CAPABILITY_ROUTING (K1, FR-020):
-// comma-separated "capability=mode" pairs, mode one of "python" or "go". An
-// empty value parses to no overrides (every capability absent, meaning
-// "go"). A malformed entry is a startup error naming that entry, rather
-// than being silently ignored.
 func parseCapabilityRouting(raw string) (map[string]string, error) {
 	routing := make(map[string]string)
 	raw = strings.TrimSpace(raw)
@@ -216,9 +184,6 @@ func parseCapabilityRouting(raw string) (map[string]string, error) {
 	return routing, nil
 }
 
-// CapabilityRouting reports the configured transport for capability:
-// "python" or "go". Absent means "go" until that capability is cut over
-// (FR-020, K1).
 func (c *Config) CapabilityRouting(capability string) string {
 	if mode, ok := c.aiCapabilityRouting[capability]; ok {
 		return mode
@@ -226,9 +191,6 @@ func (c *Config) CapabilityRouting(capability string) string {
 	return "go"
 }
 
-// validateAISurface enforces K1: the gateway must be configured before any
-// AI-doing binary boots. This checks presence only, never reachability — an
-// unreachable gateway fails tasks, not boots (K1-2, K1-3).
 func validateAISurface(cfg *Config) error {
 	if cfg.GatewayURL == "" {
 		return fmt.Errorf("config: GATEWAY_URL is required")
@@ -239,12 +201,7 @@ func validateAISurface(cfg *Config) error {
 	if cfg.RabbitMQURL == "" {
 		return fmt.Errorf("config: RABBITMQ_URL is required")
 	}
-	// recruiter/outreach/rephrase/salary had their Go LLM path deleted once
-	// cutover was confirmed (T113): they no longer read AI_CAPABILITY_ROUTING
-	// at all, so AI_SERVICE_URL/TOKEN are required unconditionally now, not
-	// only when hasPythonRouting() finds an explicit "python" entry for one
-	// of the capabilities that still has a "go" fallback (match, embed,
-	// generation, ghost).
+
 	if cfg.AIServiceURL == "" {
 		return fmt.Errorf("config: AI_SERVICE_URL is required")
 	}

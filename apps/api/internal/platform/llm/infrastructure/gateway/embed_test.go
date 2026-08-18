@@ -11,24 +11,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/infrastructure/shared"
 )
 
-// This file is written against the TARGET embedding contract
-// (specs/044-litellm-only-routing/contracts/embeddings.md E1-E3, E6 / tasks.md
-// T015), before the real implementation (T019) lands. Today `Provider.Embed`
-// still delegates to an injected `ollama domain.Provider` (gateway.go:466-468,
-// E5-1 "not a delegation" — the thing this feature removes). These tests are
-// expected to FAIL against that code, not to compile-fail and not to panic:
-// every assertion below is reached through a normal error/value comparison,
-// never through a nil-interface call, so a still-delegating Embed produces a
-// clean t.Errorf/t.Fatalf rather than a crash of the whole test binary.
-//
-// Do not "fix" these tests by loosening them to pass today. They pin the
-// contract T019 must satisfy.
-
-// wantEmbedDims is the target EMBED_DIMS default once T025 lands
-// (contracts/configuration.md K3: 768, read by nothing -> 1024, asserted
-// against every returned vector). It is hardcoded here — rather than read
-// from internal/config — because gateway.New has no embedDims parameter yet;
-// wiring that is part of the implementation task, not this test-only one.
 const wantEmbedDims = 1024
 
 func newEmbedTestGateway(t *testing.T, handler http.HandlerFunc) *Provider {
@@ -42,8 +24,6 @@ func newEmbedTestGateway(t *testing.T, handler http.HandlerFunc) *Provider {
 	return p
 }
 
-// TestEmbedHappyPath — E2-1: a valid response's data[0].embedding becomes the
-// returned []float32.
 func TestEmbedHappyPath(t *testing.T) {
 	want := make([]float32, wantEmbedDims)
 	for i := range want {
@@ -74,9 +54,6 @@ func TestEmbedHappyPath(t *testing.T) {
 	}
 }
 
-// TestEmbedEmptyDataIsInvalidResponse — E2-1: an empty data array is
-// ErrInvalidResponse, the same sentinel the chat path returns for zero choices
-// (gateway.go send(): "no choices returned").
 func TestEmbedEmptyDataIsInvalidResponse(t *testing.T) {
 	p := newEmbedTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -89,9 +66,6 @@ func TestEmbedEmptyDataIsInvalidResponse(t *testing.T) {
 	}
 }
 
-// TestEmbedWrongLengthVectorIsError — E2-2, the load-bearing check: the
-// returned vector's length MUST equal the configured EMBED_DIMS, or it is an
-// error, never a stored value.
 func TestEmbedWrongLengthVectorIsError(t *testing.T) {
 	wrong := make([]float32, wantEmbedDims-1)
 	p := newEmbedTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
@@ -109,8 +83,6 @@ func TestEmbedWrongLengthVectorIsError(t *testing.T) {
 	}
 }
 
-// TestEmbedErrorClassification — E3: each proxy status maps to the same
-// sentinel the chat path uses, through shared.ClassifyProviderError.
 func TestEmbedErrorClassification(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -143,9 +115,6 @@ func TestEmbedErrorClassification(t *testing.T) {
 	}
 }
 
-// TestEmbedTransportFailureIsProviderUnavailable — E3: a transport failure
-// (connection refused) classifies as ErrProviderUnavailable, same as chat's
-// TestGatewayConnectionRefused.
 func TestEmbedTransportFailureIsProviderUnavailable(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	url := srv.URL

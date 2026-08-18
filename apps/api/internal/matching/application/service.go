@@ -25,18 +25,11 @@ import (
 
 var ErrNoProfileConfig = errors.New("no profile config")
 
-// contentHash identifies the exact text an embedding was produced from, so a
-// later match on unchanged content can skip the call (019 R5, E4-3).
 func contentHash(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:])
 }
 
-// reusableJobEmbedding returns the stored vector only when the row was embedded
-// by embedModel over text with this hash. Anything else — different model,
-// absent provenance, changed content, missing vector — is treated as
-// unembedded and re-embedded rather than compared across vector spaces
-// (FR-020, contracts/embeddings.md E4-2).
 func reusableJobEmbedding(job sqlcgen.Job, hash, embedModel string) ([]float32, bool) {
 	if embedModel == "" || job.EmbedModel == nil || *job.EmbedModel != embedModel {
 		return nil, false
@@ -69,10 +62,6 @@ func NewService(q domain.Repository, profiles *profile.Service, llmc llm.Provide
 	return &Service{q: q, profiles: profiles, llmc: llmc, threshold: threshold, matchModel: matchModel}
 }
 
-// SetAIRouting wires MatchJob's LLM fit-analysis step to publish
-// match.requested instead of calling llmc directly, once AI_CAPABILITY_ROUTING
-// routes "match" to python (C8-3: reversible by configuration alone — a nil
-// or "go"-returning routes leaves MatchJob's behaviour unchanged).
 func (s *Service) SetAIRouting(pub *Publisher, routes func(capability string) string) {
 	s.aiPub, s.aiRoutes = pub, routes
 }
@@ -93,11 +82,7 @@ func (s *Service) fitModel() string {
 }
 
 func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Recorder) (dto.MatchResultDto, error) {
-	// Correlate this match's LLM call with the platform's own run history
-	// (036 FR-009/FR-010). The task key rides along separately — the router
-	// stamps it on every call it makes — so this is the only half the call
-	// site has to supply. An absent recorder leaves the call uncorrelated,
-	// which is the pre-036 behaviour and valid.
+
 	var activityID *string
 	if rec != nil {
 		if runID := dbutil.UUIDString(rec.ID()); runID != "" {
@@ -135,18 +120,14 @@ func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Reco
 
 	jobText := strutil.Truncate(fmt.Sprintf("%s at %s\n%s", job.Title, job.Company, job.Description), 8000)
 	hash := contentHash(jobText)
-	// The profile's own provenance is the current served value this job has to
-	// match: a similarity is only meaningful when both sides came out of the
-	// same model (contracts/embeddings.md E4-2, FR-020).
+
 	var embedModel string
 	if prof.EmbedModel != nil {
 		embedModel = *prof.EmbedModel
 	}
 	jobEmbedding, reused := reusableJobEmbedding(job, hash, embedModel)
 	if !reused {
-		// The served model is read off the gateway's response rather than a
-		// Go-side config mirror, so a model swap in gateway/config.yaml stays a
-		// config-only change (E4-1).
+
 		embedCtx, servedModel := llm.WithServedModelCapture(ctx)
 		jobEmbedding, err = s.llmc.Embed(embedCtx, jobText)
 		if err != nil {
@@ -211,11 +192,7 @@ func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Reco
 		if err := s.aiPub.PublishRequested(ctx, jobID, activityID, snapshot); err != nil {
 			return dto.MatchResultDto{}, err
 		}
-		// The fit score lands later, off match.completed (result.go) — this
-		// leaves score unset, the same shape a below-threshold result has,
-		// which is exactly right: no score yet is indistinguishable from no
-		// score, and result.go's UpsertMatchResult fills it in once the
-		// python run completes.
+
 		res, err := s.saveResult(ctx, uid, similarity, nil, nil, nil, nil, nil, "")
 		if err == nil && rec != nil {
 			rec.Ok(ctx, "", map[string]any{"similarity": similarity, "delegated": true})

@@ -44,18 +44,11 @@ func (s *Service) ListBySource(ctx context.Context, sourceKey string) ([]dto.Sub
 
 const DefaultCron = "0 */6 * * *"
 
-// A subscription is either a saved search the scheduler crawls, or the single
-// per-source row manual adds hang off. Manual rows have no URL and are never
-// scheduled (041 D3).
 const (
 	KindCrawl  = "crawl"
 	KindManual = "manual"
 )
 
-// EnsureManualSubscription returns the single manual subscription for a source,
-// creating it on first use. Manual rows are never created through Create — this
-// is the only path that makes one (FR-015). validateSubscriptionURL is skipped
-// because a manual row has no URL to validate.
 func (s *Service) EnsureManualSubscription(ctx context.Context, sourceKey string) (sqlcgen.Subscription, error) {
 	if sourceKey == "" {
 		return sqlcgen.Subscription{}, apperr.Validation("sourceKey is required")
@@ -128,9 +121,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*dto.S
 		return nil, err
 	}
 	if current.Kind == KindManual {
-		// A manual row has nothing to crawl and no schedule to keep, so its URL
-		// and cron are meaningless to change (FR-015). Disabling it is refused
-		// on the same terms as deleting it — both would strand its vacancies.
+
 		if in.URL != nil {
 			return nil, apperr.Validation("a manual subscription has no url to change")
 		}
@@ -174,9 +165,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.q.DeleteSubscription(ctx, uid)
 }
 
-// refuseWhileVacanciesAttached is the FR-016 guard. Hand-entered vacancies have
-// no crawl that would recreate them, so removing the row they hang off destroys
-// work the operator did by hand.
 func (s *Service) refuseWhileVacanciesAttached(ctx context.Context, id pgtype.UUID, verb string) error {
 	count, err := s.q.CountJobsForSubscription(ctx, id)
 	if err != nil {
@@ -352,9 +340,6 @@ func (s *Service) mapSubscriptions(ctx context.Context, rows []sqlcgen.Subscript
 	return out
 }
 
-// attachManualStats fills FR-013's two counters from the run records. A stats
-// read that fails leaves the counters absent rather than failing the list —
-// the subscription itself is still worth showing.
 func (s *Service) attachManualStats(ctx context.Context, id pgtype.UUID, item *dto.SubscriptionDto) {
 	stats, err := s.q.ManualSubscriptionStats(ctx, id)
 	if err != nil {

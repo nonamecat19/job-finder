@@ -14,9 +14,6 @@ import (
 	"github.com/job-finder/api/internal/events"
 )
 
-// TestDurability_Integration_PublishedWhileConsumerStoppedIsProcessedOnRestart
-// proves US5 scenario 1 / FR-033: work published to a durable queue while no
-// consumer is running is not lost — it is processed once a consumer starts.
 func TestDurability_Integration_PublishedWhileConsumerStoppedIsProcessedOnRestart(t *testing.T) {
 	conn := dialTestBroker(t)
 	declareTopologyOrFail(t, conn)
@@ -35,7 +32,6 @@ func TestDurability_Integration_PublishedWhileConsumerStoppedIsProcessedOnRestar
 		publishWork(t, pub, workType, mustMarshal(t, env))
 	}
 
-	// No consumer is running yet: the queue durably holds all n messages.
 	depCh, err := conn.Channel()
 	if err != nil {
 		t.Fatalf("open inspect channel: %v", err)
@@ -49,8 +45,6 @@ func TestDurability_Integration_PublishedWhileConsumerStoppedIsProcessedOnRestar
 		t.Fatalf("queue depth = %d before any consumer ran, want %d (no loss while stopped)", q.Messages, n)
 	}
 
-	// Now start a consumer and confirm every published message is
-	// processed exactly once, with none lost.
 	var mu sync.Mutex
 	received := make(map[string]int)
 
@@ -99,18 +93,6 @@ func TestDurability_Integration_PublishedWhileConsumerStoppedIsProcessedOnRestar
 	}
 }
 
-// TestDurability_Integration_ReconnectAfterConnectionLossLosesNoAcceptedWork
-// approximates US5 scenario 5 / SC-011 (broker restart under continuous
-// load loses zero accepted units of work). Actually killing and restarting
-// the RabbitMQ container isn't feasible from this test process, so this
-// exercises the strongest available proxy: the consumer's connection drops
-// mid-stream while the publisher keeps accepting and confirming publishes,
-// and the consumer's built-in reconnect logic (M3-4) resumes and drains
-// everything with zero loss. A true broker-process restart would also need
-// to prove the publisher side reconnects and messages published during the
-// outage are not silently dropped by the publisher (M2-3 covers that
-// failure mode directly in publish_failure_test.go); this test only proves
-// the consumer side of durability across a connection loss.
 func TestDurability_Integration_ReconnectAfterConnectionLossLosesNoAcceptedWork(t *testing.T) {
 	conn := dialTestBroker(t)
 	declareTopologyOrFail(t, conn)
@@ -146,7 +128,7 @@ func TestDurability_Integration_ReconnectAfterConnectionLossLosesNoAcceptedWork(
 			return c, err
 		},
 		Queue:       "work." + workType,
-		Concurrency: 1, // serialize so dropAfter is deterministic
+		Concurrency: 1,
 		MinBackoff:  100 * time.Millisecond,
 		MaxBackoff:  500 * time.Millisecond,
 		HandlerFunc: func(_ context.Context, d amqp.Delivery) error {
@@ -166,7 +148,7 @@ func TestDurability_Integration_ReconnectAfterConnectionLossLosesNoAcceptedWork(
 					c := currentConn
 					consumerConnMu.Unlock()
 					if c != nil {
-						_ = c.Close() // simulate an abrupt connection loss mid-stream
+						_ = c.Close()
 					}
 				})
 			}
@@ -184,7 +166,6 @@ func TestDurability_Integration_ReconnectAfterConnectionLossLosesNoAcceptedWork(
 	runErr := make(chan error, 1)
 	go func() { runErr <- consumer.Run(ctx) }()
 
-	// Publish continuously, independent of the consumer's connection state.
 	for i := 0; i < total; i++ {
 		env := newTestEnvelope(workType+".requested", "job_"+uuid.NewString(), "reconnect:"+uuid.NewString(), uuid.NewString())
 		publishWork(t, pub, workType, mustMarshal(t, env))

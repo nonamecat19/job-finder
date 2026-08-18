@@ -8,27 +8,19 @@ import (
 	"time"
 )
 
-// QueueInfo is the subset of RabbitMQ's management API queue detail this
-// package exposes to operator surfaces (health, activity backlog).
 type QueueInfo struct {
-	Messages       int
-	MessagesReady  int
+	Messages        int
+	MessagesReady   int
 	MessagesUnacked int
 }
 
-// Admin queries RabbitMQ's management HTTP API (mgmt UI, loopback-only in
-// dev per K4-1) for queue depth — the RabbitMQ replacement for asynq's
-// Redis-backed Inspector, which had no broker-native equivalent to query.
 type Admin struct {
-	baseURL  string // e.g. http://localhost:15672
+	baseURL  string
 	user     string
 	password string
 	client   *http.Client
 }
 
-// NewAdmin builds an Admin from the same amqp:// URL the publisher/consumer
-// dial, assuming the management plugin listens on 15672 on the same host
-// (true for both compose files, T001/T002).
 func NewAdmin(amqpURL string) (*Admin, error) {
 	u, err := url.Parse(amqpURL)
 	if err != nil {
@@ -43,8 +35,6 @@ func NewAdmin(amqpURL string) (*Admin, error) {
 	}, nil
 }
 
-// QueueDepth returns the message counts for one queue, by name, in the
-// default vhost.
 func (a *Admin) QueueDepth(queueName string) (QueueInfo, error) {
 	endpoint := fmt.Sprintf("%s/api/queues/%%2F/%s", a.baseURL, url.PathEscape(queueName))
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)

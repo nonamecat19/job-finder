@@ -10,9 +10,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// vectorLiteral builds a pgvector text literal of n components, so a test can
-// offer the server a vector of a specific width without depending on the Go
-// binding's own width handling.
 func vectorLiteral(n int) string {
 	var b strings.Builder
 	b.WriteByte('[')
@@ -40,11 +37,6 @@ func columnType(t *testing.T, table, column string) string {
 	return typ
 }
 
-// Migration 00044 retypes both embedding columns to the width the gateway's
-// embed deployment produces. The width is declared on the column rather than
-// trusted at the call site, so a vector from a differently configured
-// deployment is rejected by Postgres instead of landing beside vectors from
-// another space (contracts/embeddings.md E2-2).
 func TestIntegration_Migration00044_EmbeddingColumnsAre1024(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -86,12 +78,6 @@ func TestIntegration_Migration00044_EmbeddingColumnsAre1024(t *testing.T) {
 	}
 }
 
-// The migration discards rather than converts: 768-dimension vectors have no
-// meaning in the new space, and a preserved "embeddingHash" would suppress the
-// lazy re-embed that repopulates the column (data-model.md §1, E4-3). This
-// replays the migration's body over populated rows inside a transaction that
-// is rolled back, since the shared test database is already migrated and so
-// has no pre-migration rows of its own.
 func TestIntegration_Migration00044_DiscardsPreMigrationEmbeddings(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -120,8 +106,6 @@ func TestIntegration_Migration00044_DiscardsPreMigrationEmbeddings(t *testing.T)
 		t.Fatalf("populate legacy profile embedding: %v", err)
 	}
 
-	// The body of 00044's Up, minus the ADD COLUMN the shared database has
-	// already taken.
 	for _, stmt := range []string{
 		`ALTER TABLE "Job"     ALTER COLUMN "embedding" TYPE vector(1024) USING NULL`,
 		`ALTER TABLE "Profile" ALTER COLUMN "embedding" TYPE vector(1024) USING NULL`,

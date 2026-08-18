@@ -11,8 +11,6 @@ import (
 	"github.com/job-finder/api/internal/httpx"
 )
 
-// SummaryModelProvider is the settings surface this handler renders.
-// *summarymodel.Service satisfies it.
 type SummaryModelProvider interface {
 	Get() domain.SummaryOption
 	Options() []domain.SummaryOption
@@ -30,10 +28,6 @@ func (h *SummaryModelHandler) Mount(r chi.Router) {
 	r.Delete("/settings/summary-model", h.reset)
 }
 
-// settingToDto returns the whole menu with the current entry marked, rather
-// than a bare id. The dashboard needs the labels and cost indicators to render
-// the selector at all, and serving them together means the menu and the
-// selection can never disagree about which options exist.
 func settingToDto(options []domain.SummaryOption, current domain.SummaryOption) dto.SummaryModelSettingDto {
 	out := dto.SummaryModelSettingDto{
 		Options:  make([]dto.SummaryModelOptionDto, 0, len(options)),
@@ -63,8 +57,7 @@ func (h *SummaryModelHandler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	stored, err := h.Settings.Update(r.Context(), body.OptionID)
 	if err != nil {
-		// An id the catalogue does not know is the client's mistake, not the
-		// server's: the menu it picked from came from this same endpoint.
+
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}

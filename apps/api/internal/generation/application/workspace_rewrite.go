@@ -9,16 +9,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// RewriteItem is `POST /v1/generations/{runId}/items/{itemId}/rewrite`: 2-3
-// grounded alternate phrasings of one AI-suggested achievement bullet. It
-// never writes to the database — applying a variant goes through the
-// existing PatchGenerationItem text path, which already carries the
-// profile-origin 403 guard and the edited flag.
-//
-// Scoped to origin="ai" kind="achievement" items only: PatchGenerationItem
-// already refuses a text write on a profile-origin item (FR-009), so
-// rewriting one would produce a result the user could never apply, and
-// achievement is the one kind ItemRow already wires an edit affordance for.
 func (s *Service) RewriteGenerationItem(ctx context.Context, runID, itemID string) (dto.GenerationRewriteResponseDto, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -39,7 +29,7 @@ func (s *Service) RewriteGenerationItem(ctx context.Context, runID, itemID strin
 	}
 	kind, ok := sectionKindOf(sections, item.SectionID)
 	if !ok {
-		// The item exists but not under this run.
+
 		return dto.GenerationRewriteResponseDto{}, apperr.NotFound("generation item", itemID)
 	}
 

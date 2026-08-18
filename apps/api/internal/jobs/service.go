@@ -38,9 +38,7 @@ type ListParams struct {
 	IncludeApplied bool
 	Remote         *bool
 	Q              *string
-	// URL matches a single vacancy by its exact stored URL. The browser
-	// extension resolves the tab it is sitting on with it, so it needs an
-	// exact hit rather than the ILIKE sweep Q performs.
+
 	URL            *string
 	Page           int
 	PageSize       int

@@ -139,8 +139,6 @@ func TestJobsDocuments(t *testing.T) {
 	}
 }
 
-// The browser extension resolves the vacancy it is sitting on with ?url=, so
-// the query parameter has to survive the handler untouched.
 func TestJobsListPassesURLFilter(t *testing.T) {
 	fake := &fakeJobsProvider{}
 	h := &jobshttp.JobsHandler{Jobs: fake, Generation: &fakeDocLister{}}

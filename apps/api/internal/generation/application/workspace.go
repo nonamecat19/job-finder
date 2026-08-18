@@ -20,28 +20,10 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// defaultRunListLimit bounds `GET /v1/generations` when the caller sends no
-// limit, matching the "recent runs" framing of the contract rather than
-// returning the whole history.
 const defaultRunListLimit = 20
 
-// SetEnqueuer installs the queue client the workspace uses to enqueue a
-// run's background processing (StartRun, below). A setter rather than a
-// NewService parameter for the same reason SetSummaryModelProvider is: it
-// keeps every existing call to NewService, and every test that constructs a
-// Service without exercising this feature, unchanged.
 func (s *Service) SetEnqueuer(e queue.Enqueuer) { s.enqueuer = e }
 
-// StartGenerationRun is the synchronous half of `POST /v1/generations`
-// (rest-api.md): it resolves the profile and vacancy, resolves ShapeConfig /
-// grounding level / summary option once (resume-generation.md § 4.2), snapshots the
-// master and its content hash, persists the run row and its master-order
-// seeded sections/items (SeedFromMaster, T009 — no LLM call), then enqueues
-// the background half (StartRun) on the existing `generate` queue.
-//
-// The row must exist before this returns: the client is handed a runId it
-// immediately polls with GET /v1/generations/{runId}, so seeding happens here
-// rather than in the worker.
 func (s *Service) StartGenerationRun(ctx context.Context, req dto.StartGenerationRequestDto) (runID, activityID string, err error) {
 	if strings.TrimSpace(req.ProfileID) == "" {
 		return "", "", apperr.Validation("profileId is required")
@@ -99,10 +81,6 @@ func (s *Service) StartGenerationRun(ctx context.Context, req dto.StartGeneratio
 		}
 	}
 
-	// Resolved once, at the top of the run: shapeConfig/summaryOption already
-	// follow this discipline (service.go:120/:177); the workspace run
-	// snapshots the result so a later settings change cannot alter a run the
-	// user has already started reviewing (resume-generation.md § 4.2).
 	cfg := s.shapeConfig(ctx)
 	level := s.defaultLevel
 	if req.GroundingLevel != nil {
@@ -196,11 +174,6 @@ func derefOrEmpty(s *string) string {
 	return *s
 }
 
-// persistWorkspaceSections writes SeedFromMaster's output: one CreateSections
-// batch call for every section, then one CreateItems call per section that
-// has items (summary starts empty — it is filled by StartRun below). Sections
-// are matched back to their domain.Section by position, since a batch INSERT
-// ... SELECT unnest(...) RETURNING gives no order guarantee.
 func (s *Service) persistWorkspaceSections(ctx context.Context, runID pgtype.UUID, secs []domain.Section) error {
 	n := len(secs)
 	kinds := make([]string, n)
@@ -253,8 +226,6 @@ func (s *Service) persistWorkspaceSections(ctx context.Context, runID pgtype.UUI
 	return nil
 }
 
-// persistWorkspaceItems is the same zipped-array batch insert pattern as
-// persistWorkspaceSections, for one section's items.
 func (s *Service) persistWorkspaceItems(ctx context.Context, sectionID pgtype.UUID, items []domain.Item) error {
 	n := len(items)
 	origins := make([]string, n)
@@ -289,12 +260,6 @@ func (s *Service) persistWorkspaceItems(ctx context.Context, sectionID pgtype.UU
 	return s.persistDroppedEntries(ctx, created, items)
 }
 
-// persistDroppedEntries writes back the per-skill drop sets a rerun carried
-// forward. Kept out of CreateItems' zipped-array insert because the column is
-// an array per row, which that unnest pattern cannot express; a rerun touches
-// one section and only its skill groups can carry drops, so this is a handful
-// of updates at most, and none at all for the overwhelmingly common case of a
-// section with nothing dropped.
 func (s *Service) persistDroppedEntries(ctx context.Context, created []sqlcgen.GenerationItem, items []domain.Item) error {
 	bySource := make(map[int][]string)
 	for _, it := range items {
@@ -323,35 +288,12 @@ func (s *Service) persistDroppedEntries(ctx context.Context, created []sqlcgen.G
 	return nil
 }
 
-// rankedSectionResult is one experience section's outcome from the ranking
-// stage (T043): either a verified ranking ready to replace the master-order
-// seed, or a signal to leave the section exactly as StartGenerationRun's
-// SeedFromMaster already left it — master order, top min(N, A) selected —
-// and record that the FR-010 fallback fired. That seed IS the fallback
-// (resume-generation.md § 2b: "ranking = [0,1,…,K-1]" is master order), so a fallback
-// entry has no items to persist.
 type rankedSectionResult struct {
 	entryKey     string
-	items        []domain.Item // nil when falling back to the existing master-order seed
+	items        []domain.Item
 	fallbackUsed bool
 }
 
-// rankExperienceSections runs the ranking stage once for every master
-// experience entry in a single call (mirroring buildSelectPrompt/selectContent,
-// which also rank/select every entry together), verifies each entry's
-// ranking independently, retries the whole call once when any entry is
-// invalid (the existing groundingAttempts idiom — service.go's retry ladders
-// all cap at 2 attempts), and falls back to master order per entry rather
-// than failing the run (FR-010).
-//
-// No I/O beyond the two LLM calls: it takes the master and analysis already
-// resolved by the caller and returns a decision per entry, so it can be
-// tested without a database (T038).
-// It also returns the verified skill-group order from the same response
-// (T060) — one call ranks both surfaces, so pulling the skills order out here
-// costs nothing and keeps the two decisions on the same attempt. A nil order
-// means no attempt verified, and the caller leaves the master-order skills
-// seed in place, exactly as it does for a fallback experience entry.
 func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig) ([]rankedSectionResult, []int) {
 	sections := domain.CvSections(master)
 	experience := domain.AsSliceOfMaps(sections["experience"])
@@ -372,12 +314,6 @@ func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, 
 		}
 	}
 
-	// findRanking matches by containment, not just equality: the prompt asks
-	// for the EXACT company name, but a model that echoes the whole "company
-	// (position) | location" header line back (observed with the entry-line
-	// rendering renderExperienceEntryLines produces, shared with the select
-	// prompt) still names the right entry — a stricter match would turn a
-	// cosmetic prompt-following slip into an unnecessary FR-010 fallback.
 	findRanking := func(sel domain.RankedSelection, company string) []int {
 		target := strings.ToLower(strings.TrimSpace(company))
 		for _, re := range sel.Experience {
@@ -400,10 +336,6 @@ func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, 
 		return attempt{ranking: ranking, valid: len(domain.VerifyRanking(len(e.highlights), cfg.ExperienceBulletsMin, ranking)) == 0}
 	}
 
-	// A skill-group order is verified on the same footing as an achievement
-	// ranking (T059): every group index exactly once, or the attempt is
-	// rejected and retried like any other. A master with no skill groups has
-	// nothing to order, so it is trivially valid.
 	skillOrderOf := func(sel domain.RankedSelection, callErr error) []int {
 		if callErr != nil || skillGroupCount == 0 {
 			return nil
@@ -459,28 +391,6 @@ func rankExperienceSections(ctx context.Context, lc llm.Provider, model string, 
 	return results, skillOrder
 }
 
-// applyRankedSections persists rankExperienceSections' decisions: a section
-// with a verified ranking has its master-order seed replaced (delete then
-// recreate, the same pattern a section rerun uses); a fallback section is
-// left untouched and only has fallback_used recorded, per data-model.md §4's
-// state transition ("rejected twice -> ready (fallback_used = true)").
-//
-// oldBySection carries a section's pre-replacement items, keyed by section
-// id, so preserveMatchedSelections (T077) can carry a matched item's
-// selected/position/edited_text into its replacement. A plain run (not a
-// rerun) has nothing to preserve and passes nil — every lookup on a nil map
-// returns the zero value, so preserveMatchedSelections is a no-op identity
-// in that case.
-//
-// A section whose replacement items fail to persist is marked `failed` with
-// the error, rather than left silently emptied or silently stale (T081): the
-// delete already committed, so the old items are gone either way, and
-// `failed` is what tells the client the section needs the per-section retry
-// rather than showing an inexplicably-empty block. The caller folds the
-// returned anyFailed into the run's final state (`partial`, not `ready`).
-// A DeleteSectionItems failure, by contrast, leaves the section's existing
-// items completely untouched — nothing was lost, so the section keeps
-// whatever state it already had and is not counted as a failure.
 func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, results []rankedSectionResult, oldBySection map[pgtype.UUID][]domain.Item) (anyFailed bool) {
 	if len(results) == 0 {
 		return false
@@ -504,8 +414,7 @@ func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, re
 		if r.items != nil {
 			items := preserveMatchedSelections(oldBySection[sec.ID], r.items)
 			if err := s.q.DeleteSectionItems(ctx, sec.ID); err != nil {
-				// Nothing lost: the section's prior items are exactly as
-				// they were before this attempt. Leave its state alone.
+
 				continue
 			}
 			if err := s.persistWorkspaceItems(ctx, sec.ID, items); err != nil {
@@ -524,17 +433,6 @@ func (s *Service) applyRankedSections(ctx context.Context, runID pgtype.UUID, re
 	return anyFailed
 }
 
-// preserveMatchedSelections is data-model.md §4's rerun rule: a profile item
-// is matched to its replacement by SourceIndex, an AI item by
-// domain.NormalizeText(SourceText); a matched item's Selected/Position and
-// (for an AI item) EditedText survive into the replacement. An old item with
-// no match in the new set is simply not carried forward — that is what
-// "re-running replaces the AI's ordering for this section" means (FR-021). A
-// new item with no match keeps the default state its seeder gave it.
-//
-// oldItems empty (nil, for a plain run with nothing to preserve, or a
-// section whose old items don't exist yet) makes this the identity function
-// on newItems.
 func preserveMatchedSelections(oldItems, newItems []domain.Item) []domain.Item {
 	if len(oldItems) == 0 {
 		return newItems
@@ -572,10 +470,7 @@ func preserveMatchedSelections(oldItems, newItems []domain.Item) []domain.Item {
 			if it.Origin == domain.OriginAI {
 				it.EditedText = match.EditedText
 			} else {
-				// A per-skill drop set is part of the same selection the
-				// Selected flag carries, so it survives a rerun the same way.
-				// Entries the master no longer has simply stop matching
-				// anything when the group is next assembled.
+
 				it.DroppedEntries = match.DroppedEntries
 			}
 		}
@@ -584,10 +479,6 @@ func preserveMatchedSelections(oldItems, newItems []domain.Item) []domain.Item {
 	return out
 }
 
-// sqlcItemToDomain converts one persisted row into the domain.Item shape
-// preserveMatchedSelections matches against — the same conversion itemToDto
-// does, minus the DTO-only Edited/effective-text fields this caller doesn't
-// need.
 func sqlcItemToDomain(it sqlcgen.GenerationItem) domain.Item {
 	var sourceIndex *int
 	if it.SourceIndex != nil {
@@ -609,17 +500,6 @@ func sqlcItemToDomain(it sqlcgen.GenerationItem) domain.Item {
 	}
 }
 
-// applyRankedSkills replaces the skills section's master-order seed with the
-// ranking stage's group order (T060/T061). A nil or empty order leaves the
-// seed exactly as StartGenerationRun wrote it — the FR-010 fallback shape,
-// identical to what applyRankedSections does for an experience entry.
-//
-// Group *contents* never come from the model: they are read back from the
-// master and ordered within each group by the deterministic domain.RankSkills,
-// so the model's only influence on this section is which group comes first
-// and — through cfg.SkillsMaxGroups — which are pre-selected.
-// oldBySection is the same rerun-preservation input applyRankedSections
-// takes (T077); nil for a plain run.
 func (s *Service) applyRankedSkills(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, groupOrder []int, oldBySection map[pgtype.UUID][]domain.Item) error {
 	if len(groupOrder) == 0 {
 		return nil
@@ -645,10 +525,6 @@ func (s *Service) applyRankedSkills(ctx context.Context, runID pgtype.UUID, mast
 	return nil
 }
 
-// backfillProjectsSection creates the projects section for a run that predates
-// it, returning the created row (nil when the run already has one, or when the
-// master has no projects to show). Items are left to applyRankedProjects, the
-// same split StartRun uses.
 func (s *Service) backfillProjectsSection(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, cfg domain.ShapeConfig, sections []sqlcgen.GenerationSection) (*sqlcgen.GenerationSection, error) {
 	if !cfg.ProjectsEnabled || len(domain.AsSliceOfMaps(domain.CvSections(master)["projects"])) == 0 {
 		return nil, nil
@@ -656,13 +532,6 @@ func (s *Service) backfillProjectsSection(ctx context.Context, runID pgtype.UUID
 	return s.backfillSection(ctx, runID, domain.SectionKindProjects, cfg.ProjectsMax, sections)
 }
 
-// backfillCertificationsSection/backfillEducationSection are
-// backfillProjectsSection's counterparts for the two sections added
-// alongside the per-section enable toggle: a run started before either
-// existed (or while the account had it switched off) has no row for it, and
-// a rerun can only replace sections it finds. Items are left to the reseed
-// pass in reseedTargetedSections — neither section has a ranking stage of
-// its own to defer to.
 func (s *Service) backfillCertificationsSection(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, cfg domain.ShapeConfig, sections []sqlcgen.GenerationSection) (*sqlcgen.GenerationSection, error) {
 	if !cfg.CertificationsEnabled || len(domain.AsSliceOfMaps(domain.CvSections(master)["certifications"])) == 0 {
 		return nil, nil
@@ -677,12 +546,6 @@ func (s *Service) backfillEducationSection(ctx context.Context, runID pgtype.UUI
 	return s.backfillSection(ctx, runID, domain.SectionKindEducation, 0, sections)
 }
 
-// backfillSection creates an empty row for `kind` at the end of `sections`'
-// positions, when the run doesn't already have one — the shared shape
-// backfillProjectsSection/backfillCertificationsSection/
-// backfillEducationSection each call with their own presence/enabled check.
-// The created row's `enabled` comes from the table's DEFAULT true, matching
-// what a fresh SeedFromMaster would have set.
 func (s *Service) backfillSection(ctx context.Context, runID pgtype.UUID, kind domain.SectionKind, targetCount int, sections []sqlcgen.GenerationSection) (*sqlcgen.GenerationSection, error) {
 	position := 0
 	for _, sec := range sections {
@@ -712,16 +575,6 @@ func (s *Service) backfillSection(ctx context.Context, runID pgtype.UUID, kind d
 	return &created[0], nil
 }
 
-// applyRankedProjects replaces the projects section's master-order seed with
-// the relevance order, the same way applyRankedSkills does for skill groups.
-//
-// No model call is involved: `domain.RankedProjectOrder` is arithmetic over
-// the vacancy analysis and the profile's own evidence, so there is nothing to
-// verify or fall back from. A run whose master has no projects has no projects
-// section, and this is a no-op.
-//
-// oldBySection is the rerun-preservation input: a project the user had
-// promoted or dropped keeps that choice when it still exists (T077).
 func (s *Service) applyRankedProjects(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, analysis domain.VacancyAnalysis, cfg domain.ShapeConfig, oldBySection map[pgtype.UUID][]domain.Item) error {
 	projects := domain.AsSliceOfMaps(domain.CvSections(master)["projects"])
 	if len(projects) == 0 {
@@ -745,12 +598,6 @@ func (s *Service) applyRankedProjects(ctx context.Context, runID pgtype.UUID, ma
 	return nil
 }
 
-// withinGroupRankedSkills returns the master's skill groups with each group's
-// entries ordered by vacancy relevance. RankSkills mutates in place and the
-// run's master snapshot must stay byte-identical to what was persisted, so it
-// runs on a JSON round-trip copy; SkillsMaxGroups is deliberately zeroed on
-// that copy, because the between-group order is the ranking stage's GroupOrder
-// now and RankSkills' own group reordering would fight it for the same slots.
 func withinGroupRankedSkills(master domain.RendercvMaster, analysis domain.VacancyAnalysis) []map[string]any {
 	raw, err := json.Marshal(map[string]any(master))
 	if err != nil {
@@ -764,13 +611,6 @@ func withinGroupRankedSkills(master domain.RendercvMaster, analysis domain.Vacan
 	return domain.AsSliceOfMaps(domain.CvSections(clone)["skills"])
 }
 
-// StartRun is the background half of a workspace run, dispatched by
-// worker.Handler on payload.GenerationRunID (T012). Ranking runs here, after
-// analysis and before the summary highlights are read (T044): the experience
-// sections start `ready` in master order from StartGenerationRun's seeding
-// (FR-010's own fallback shape), and this stage upgrades them to a real
-// ranking where one verifies, leaving the fallback in place — and recording
-// it — where it does not.
 func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Recorder) error {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -818,13 +658,7 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 			rec.Step(ctx, "projects ranking persistence failed", map[string]any{"error": err.Error()})
 		}
 	}
-	// A ranking persistence failure does not fail the whole run on its own
-	// (T081): a DeleteSectionItems failure leaves the master-order seed
-	// StartGenerationRun already wrote in place (FR-010's fallback shape),
-	// and a persistWorkspaceItems failure after a successful delete marks
-	// just that section `failed` — applyRankedSections's own doing — so the
-	// run reaches `partial` with every other section intact rather than
-	// discarding the whole thing.
+
 	if s.applyRankedSections(ctx, rid, rankResults, nil) {
 		anyRankingFailed = true
 		if rec != nil {
@@ -832,12 +666,6 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		}
 	}
 
-	// The suggestion stage (T053/T054) runs concurrently with the summary
-	// stage below — a separate LLM call, through the same generation-select
-	// provider, taking the analysis plus company names and skill-group
-	// labels but never the master's bullet text (resume-generation.md § 4.3). It is
-	// joined just before the run's final state is set, so it never delays
-	// the summary and never fails the run on its own.
 	if rec != nil {
 		rec.Step(ctx, "suggesting additional content", nil)
 	}
@@ -852,10 +680,6 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		suggestSet, suggestErr = suggestContent(ctx, s.llm.Select, s.genModel, experienceCompanies(master), domain.SkillGroupLabels(master), analysis)
 	}()
 
-	// selectedProfileHighlights reads the run's currently-selected profile
-	// items, so it picks up whatever rankExperienceSections/applyRankedSections
-	// just wrote — real ranking where it verified, the master-order fallback
-	// where it did not (T044, resume-generation.md § 0).
 	highlights, err := s.selectedProfileHighlights(ctx, rid)
 	if err != nil {
 		highlights = nil
@@ -922,10 +746,6 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		}
 	}
 
-	// Join the suggestion stage (spawned above, alongside ranking). Its
-	// content is unverified by definition (FR-016 — no grounding check runs
-	// on a SuggestionSet) and off by default, so a failure here is logged
-	// and otherwise ignored: it never downgrades finalState or fails the run.
 	suggestWG.Wait()
 	if suggestErr == nil {
 		expItems, skillItems := buildSuggestionItems(suggestSet, master)
@@ -943,13 +763,6 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 	return nil
 }
 
-// selectedProfileHighlights gathers the selected experience achievements
-// currently persisted for the run, in section-then-item position order — the
-// summary brief's input. By the time StartRun calls this, rankExperienceSections
-// / applyRankedSections have already run, so this reads real ranking where it
-// verified and the master-order fallback where it did not (T044,
-// resume-generation.md § 0): the same data SelectedHighlights(TailoredSelection)
-// used to supply, read over the run's items instead of a TailoredSelection.
 func (s *Service) selectedProfileHighlights(ctx context.Context, runID pgtype.UUID) ([]string, error) {
 	sections, err := s.q.ListSectionsByRun(ctx, runID)
 	if err != nil {
@@ -991,8 +804,6 @@ func (s *Service) summarySectionID(ctx context.Context, runID pgtype.UUID) (pgty
 	return pgtype.UUID{}, false
 }
 
-// GetGenerationWorkspace is `GET /v1/generations/{runId}`: the whole run,
-// its sections and their items, in position order (resume-generation.md § 4.1).
 func (s *Service) GetGenerationWorkspace(ctx context.Context, runID string) (dto.GenerationRunDto, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -1014,9 +825,6 @@ func (s *Service) GetGenerationWorkspace(ctx context.Context, runID string) (dto
 	return s.runToDto(run, sections, items, changed), nil
 }
 
-// ListGenerationRuns is `GET /v1/generations?jobId=&limit=`: recent runs for
-// a profile, newest first. profileID empty resolves to the default profile,
-// matching every other profile-scoped endpoint in this codebase.
 func (s *Service) ListGenerationRuns(ctx context.Context, profileID string, jobID *string, limit int) ([]dto.GenerationRunDto, error) {
 	var pid pgtype.UUID
 	if profileID != "" {
@@ -1065,8 +873,6 @@ func (s *Service) ListGenerationRuns(ctx context.Context, profileID string, jobI
 	return out, nil
 }
 
-// DeleteGenerationRun is `DELETE /v1/generations/{runId}`. Cascades to
-// sections and items via the migration's ON DELETE CASCADE.
 func (s *Service) DeleteGenerationRun(ctx context.Context, runID string) error {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -1114,18 +920,6 @@ func (s *Service) runToDto(run sqlcgen.GenerationRun, sections []sqlcgen.Generat
 	}
 }
 
-// syncMasterStaleness is FR-022: the run's snapshot hash compared against the
-// profile's current master content hash. Best-effort — a profile that no
-// longer resolves (deleted, config cleared) reports unchanged rather than
-// failing the whole workspace response over a staleness check.
-//
-// When the master has changed, it also marks unavailable (MarkItemsUnavailable)
-// every profile-origin item whose source_index no longer resolves against the
-// current master — a shrunk highlight list, a renamed or removed experience
-// entry, a shrunk skills group list — and updates `items` in place so the
-// caller's response reflects the mark without a second round trip. An item is
-// never deleted for this: data-model.md §4 requires it stay visible, badged
-// unavailable, not silently dropped.
 func (s *Service) syncMasterStaleness(ctx context.Context, run sqlcgen.GenerationRun, sections []sqlcgen.GenerationSection, items []sqlcgen.GenerationItem) bool {
 	prof, err := s.profiles.Get(ctx, dbutil.UUIDString(run.ProfileID))
 	if err != nil || prof.RendercvConfig == nil {
@@ -1206,10 +1000,6 @@ func itemToDto(sectionKind string, it sqlcgen.GenerationItem) dto.GenerationItem
 	}
 }
 
-// skillEntriesToDto exposes a skill group's individual entries and their
-// inclusion state, and nothing at all for any other item — the per-skill
-// toggle exists only where a group's `details` is a comma-separated list the
-// master itself authored.
 func skillEntriesToDto(sectionKind string, it sqlcgen.GenerationItem) []dto.GenerationSkillEntryDto {
 	if !hasSkillEntries(sectionKind, it.Origin) {
 		return nil
@@ -1222,8 +1012,6 @@ func skillEntriesToDto(sectionKind string, it sqlcgen.GenerationItem) []dto.Gene
 	return out
 }
 
-// hasSkillEntries is the one predicate the read and write paths share: only a
-// profile-origin item in a skills section has per-skill entries.
 func hasSkillEntries(sectionKind, origin string) bool {
 	return domain.SectionKind(sectionKind) == domain.SectionKindSkills && domain.ItemOrigin(origin) == domain.OriginProfile
 }
@@ -1245,10 +1033,6 @@ func itemKindFor(sectionKind string) string {
 	}
 }
 
-// shapeConfigToDto mirrors resumeshape/interfaces/http.configToDto — kept as
-// a separate copy here rather than an import because that package's
-// converter is unexported and this feature module does not otherwise depend
-// on resumeshape's HTTP layer.
 func shapeConfigToDto(c domain.ShapeConfig) dto.ResumeShapeConfigDto {
 	return dto.ResumeShapeConfigDto{
 		SummaryLines:          c.SummaryLines,

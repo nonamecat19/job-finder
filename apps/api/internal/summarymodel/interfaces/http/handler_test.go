@@ -53,8 +53,6 @@ func decode(t *testing.T, rr *httptest.ResponseRecorder) dto.SummaryModelSetting
 	return body
 }
 
-// The dashboard renders the selector from this one response, so it has to carry
-// the menu and the selection together and exactly one entry may be current.
 func TestGetReturnsTheMenuWithExactlyOneCurrentOption(t *testing.T) {
 	f := &fakeSettings{current: domain.DefaultSummaryOption()}
 	rr := httptest.NewRecorder()
@@ -103,8 +101,6 @@ func TestUpdateRoundTripsAValidChoice(t *testing.T) {
 	}
 }
 
-// The menu the client picked from came from this same endpoint, so an id it
-// does not contain is the client's mistake — 400, not 500.
 func TestUpdateRejectsAnUnknownOptionWith400(t *testing.T) {
 	f := &fakeSettings{current: domain.DefaultSummaryOption()}
 	body, _ := json.Marshal(dto.UpdateSummaryModelRequestDto{OptionID: "gpt-9-ultra"})

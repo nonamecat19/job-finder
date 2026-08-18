@@ -31,15 +31,6 @@ type ActivityEnqueuer interface {
 	EnqueueContext(ctx context.Context, workType string, payload []byte) error
 }
 
-// ActivityInspector reports queue depth via RabbitMQ's management API
-// (events.Admin). Unlike asynq's Redis-backed Inspector, RabbitMQ has no
-// per-message cancel/delete-by-id — a queued unit of work can no longer be
-// surgically pulled off the broker, so cancellation is DB-state-only now
-// (cancelOne, below): the activity row is marked cancelled, but its message
-// may still be delivered and run to completion by a domain handler, which
-// does not currently check for a cancelled activity before starting work.
-// This is an accepted regression from asynq's behavior, not a deliberate
-// design choice — flagged for a follow-up rather than silently narrowed.
 type ActivityInspector interface {
 	QueueDepth(queueName string) (events.QueueInfo, error)
 }
@@ -48,7 +39,6 @@ var queueOrder = []string{
 	queue.QueueIngest, queue.QueueMatch, queue.QueueGenerate,
 	queue.QueueEnrich, queue.QueueSalaryInfer, queue.QueueGhostScore,
 }
-
 
 type ActivityHandler struct {
 	q         ActivityProvider
@@ -171,10 +161,6 @@ func (h *ActivityHandler) queueBacklog(qname string) dto.QueueBacklogDto {
 		}
 	}
 
-	// RabbitMQ's management API gives point-in-time counts, not asynq's
-	// richer per-state breakdown (active/scheduled/archived) or a processed
-	// rate — Pending is the one figure with a direct equivalent (T048/M8-1
-	// carry the fuller per-work-type metrics in internal/events/metrics.go).
 	info, err := h.inspector.QueueDepth(qname)
 	if err != nil {
 		msg := err.Error()
@@ -200,10 +186,6 @@ func (h *ActivityHandler) effectiveConcurrency(qname string, policy queue.TaskPo
 	return policy.Concurrency
 }
 
-// providerClass reports the backlog's providerClass field. Since 044 there is
-// only one inference path, so this is always "hosted" for any queue with an
-// LLM task key — it is kept for the DTO's shape rather than its variability
-// (contracts/configuration.md, Complexity Tracking).
 func (h *ActivityHandler) providerClass(qname string) *string {
 	resolver := h.resolvers[qname]
 	if resolver == nil {

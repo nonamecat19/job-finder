@@ -27,18 +27,12 @@ import (
 
 const (
 	groundingAttempts = 2
-	// selectionAttempts bounds the completeness ladder: two tries on the
-	// economy model, then one on the premium model. The last attempt is the
-	// escalation, so raising this raises economy retries, not premium ones.
+
 	selectionAttempts = 3
-	// shapeAttempts bounds the page-fit adjust cycle so an unreachable page
-	// target cannot spin: compact design, then condense, then accept whatever
-	// was reached.
+
 	shapeAttempts = 2
 )
 
-// coverLetterMaxTokens bounds the cover-letter LLM output (033 FR-012).
-// A 150-word letter is well under 1024 tokens; this leaves headroom.
 var coverLetterMaxTokens = 1024
 
 var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9]+`)
@@ -47,43 +41,22 @@ type coverLetterResult struct {
 	Letter string `json:"letter"`
 }
 
-// ShapeProvider hands the generation pipeline the user-configured resume
-// shape. It is a narrow port so this package never imports the settings
-// package; *resumeshape.Service satisfies it structurally.
 type ShapeProvider interface {
 	Shape(ctx context.Context) domain.ShapeConfig
 }
 
-// SummaryModelProvider hands the pipeline the summary option the user picked
-// (034). Declared here for the same reason ShapeProvider is: so this package
-// never imports the settings package. *summarymodel.Service satisfies it
-// structurally.
 type SummaryModelProvider interface {
 	SummaryOption(ctx context.Context) domain.SummaryOption
 }
 
-// GenerationRouters is one LLM provider per generation stage. Each is a router
-// over the same gateway, differing only in the task key it asks for, so which
-// model serves a stage stays a deployment decision (035 FR-002/FR-003). Any of
-// them may be the same provider — with no gateway configured they all route to
-// the local model, which is exactly the pre-split behaviour.
 type GenerationRouters struct {
 	Analyze llm.Provider
 	Select  llm.Provider
-	// Premium serves the selection stage only after the economy model has
-	// returned incomplete output twice (035 FR-007).
+
 	Premium llm.Provider
-	// Summary serves the default (`standard`) option, and is the fallback for
-	// any option SummaryByOption does not carry. Keeping it a plain field
-	// rather than folding it into the map is what makes a caller that knows
-	// nothing about 034 — the eval harness, every existing test — behave
-	// exactly as it did before the feature existed.
+
 	Summary llm.Provider
-	// SummaryByOption routes the non-default summary options a user can pick
-	// (034). One entry per hosted catalogue option; the self-hosted option
-	// resolves to a router with no gateway, which is the pre-split behaviour.
-	// A missing entry is not an error: an option is a routing preference, and a
-	// preference that can fail a resume run is a liability.
+
 	SummaryByOption map[string]llm.Provider
 	Cover           llm.Provider
 }
@@ -99,39 +72,18 @@ type Service struct {
 	defaultLevel domain.GroundingLevel
 	shape        ShapeProvider
 	summaryModel SummaryModelProvider
-	// enqueuer publishes a workspace run's background half (StartRun) as
-	// `generate` work. Installed via SetEnqueuer for the same reason
-	// SetSummaryModelProvider is a setter: NewService already has nine
-	// parameters and most callers — every test that doesn't exercise the 042
-	// workspace — have no reason to grow one more.
+
 	enqueuer queue.Enqueuer
-	// tx runs the row-locked, multi-statement item/section mutations
-	// (PatchGenerationItem, ReorderSection) inside one transaction. Installed
-	// via SetTxRunner, same setter discipline as enqueuer.
+
 	tx domain.TxRunner
-	// exportRender overrides the 042 export path's render collaborators when
-	// set (SetExportRenderer); zero value means the real RenderCv renderer.
+
 	exportRender renderDeps
 }
 
-// SetSummaryModelProvider installs the 034 port. It is a setter rather than a
-// NewService parameter because NewService already takes nine arguments and is
-// called from a dozen tests, every one of which would have to grow a nil for a
-// feature it does not exercise.
 func (s *Service) SetSummaryModelProvider(p SummaryModelProvider) { s.summaryModel = p }
 
-// summaryOption resolves the user's choice once, at the top of a run. Every
-// step downstream takes the resolved value, so a settings change mid-run cannot
-// alter the document being generated — the in-flight run finishes with the
-// option it started with, by construction. This is the discipline shapeConfig
-// established and it matters more here: swapping the model writing the summary
-// halfway through a run would produce a document nobody chose.
 func (s *Service) summaryOption(ctx context.Context) domain.SummaryOption {
-	// A per-run choice wins over the stored default. It rides on the context
-	// for the same reason the run trace does (withRunTrace, just below): the
-	// tailoring path is eight frames deep and threading one more argument
-	// through every one of them, plus every test that calls them, would buy
-	// nothing this does not.
+
 	if opt, ok := summaryOptionFromContext(ctx); ok {
 		return opt
 	}
@@ -143,10 +95,6 @@ func (s *Service) summaryOption(ctx context.Context) domain.SummaryOption {
 
 type summaryOptionCtxKey struct{}
 
-// WithSummaryOption carries a single run's chosen summary option. Callers that
-// accept a choice on the request — the tailoring handler — set it here; a
-// caller that sets nothing gets the user's stored default, and a deployment
-// with no settings service at all gets the catalogue default.
 func WithSummaryOption(ctx context.Context, opt domain.SummaryOption) context.Context {
 	return context.WithValue(ctx, summaryOptionCtxKey{}, opt)
 }
@@ -156,10 +104,6 @@ func summaryOptionFromContext(ctx context.Context) (domain.SummaryOption, bool) 
 	return opt, ok && opt.ID != ""
 }
 
-// summaryProviderFor picks the provider serving a chosen option, falling back
-// to the stage default when the option has no router wired — an option added to
-// the catalogue before its deployment exists, or a gateway-less install where
-// every router is the local model anyway.
 func (s *Service) summaryProviderFor(opt domain.SummaryOption) llm.Provider {
 	if p, ok := s.llm.SummaryByOption[opt.ID]; ok && p != nil {
 		return p
@@ -177,10 +121,6 @@ func NewService(q domain.Repository, profiles domain.ProfileStore, htmlRenderer 
 	}
 }
 
-// shapeConfig resolves the shape once at the top of a generation run. Every
-// step downstream takes the resolved value, so a settings change mid-run
-// cannot alter the document being generated — the in-flight run finishes with
-// the config it started with, by construction.
 func (s *Service) shapeConfig(ctx context.Context) domain.ShapeConfig {
 	if s.shape == nil {
 		return domain.DefaultShapeConfig()
@@ -188,13 +128,6 @@ func (s *Service) shapeConfig(ctx context.Context) domain.ShapeConfig {
 	return s.shape.Shape(ctx)
 }
 
-// docModel returns the model recorded on generated documents, falling back to
-// the provider default when no task-specific generation model is configured.
-// docModel resolves the model label stored on a generated document. served
-// is what the provider actually used to fulfil the call (captured via
-// llm.WithServedModelCapture) — preferred because with gateway routing,
-// llmc.ModelName() only knows the task-routing key (e.g. "generation"), not
-// which upstream model the LiteLLM fallback chain actually served.
 func (s *Service) docModel(served string) string {
 	if served != "" {
 		return served
@@ -214,12 +147,6 @@ func sanitize(s string) string {
 	return out
 }
 
-// selectWithCompleteness runs the economy selection stage and gates its output
-// on completeness. A cheap model's characteristic failure is not malformed
-// output — it is well-formed output with content quietly missing, which
-// nothing downstream would notice. One retry on the economy model, then the
-// stage escalates to the premium one rather than rendering a hollowed-out
-// resume (035 FR-006/FR-007).
 func (s *Service) selectWithCompleteness(ctx context.Context, master domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, prevViolations []string, cfg domain.ShapeConfig, rec *activity.Recorder, prov *runProvenance) (domain.TailoredSelection, error) {
 	var last domain.CompletenessReport
 	for attempt := 0; attempt < selectionAttempts; attempt++ {
@@ -261,11 +188,6 @@ func (s *Service) selectWithCompleteness(ctx context.Context, master domain.Rend
 	return domain.TailoredSelection{}, fmt.Errorf("selection incomplete after %d attempts: %s", selectionAttempts, last.Reason())
 }
 
-// summarize runs the one premium call in a generation run. Its brief carries
-// the selected achievements and the derived years figure, not the master —
-// that is what keeps the expensive stage small (035 FR-004).
-// summaryLC is the provider serving this run's chosen option (034), resolved
-// once at the top of the run and passed down rather than re-read here.
 func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, payload domain.TailoredSelection, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, rec *activity.Recorder, prov *runProvenance, summaryLC llm.Provider) (*domain.TailoredSummary, error) {
 	if summaryLC == nil {
 		summaryLC = s.llm.Summary
@@ -289,9 +211,6 @@ func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, p
 		return nil, fmt.Errorf("summary: %w", err)
 	}
 
-	// The summary is the one part of the document that is written rather than
-	// selected, so it is verified on its own terms: one re-prompt, then strip
-	// the offending claim rather than fail the run or ship it (035 FR-008/FR-009).
 	violations := domain.VerifySummaryGrounding(master, summary, brief)
 	if len(violations) == 0 {
 		return &summary, nil
@@ -321,17 +240,9 @@ func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, p
 }
 
 func (s *Service) tailorRendercvResume(ctx context.Context, master domain.RendercvMaster, vacancy string, level domain.GroundingLevel, cfg domain.ShapeConfig, hints *domain.VacancyHints, rec *activity.Recorder, prov *runProvenance) (domain.RendercvMaster, domain.VacancyAnalysis, error) {
-	// Stamp the run id once, here, so every LLM call below inherits it and the
-	// whole tailoring pass lands in one observability trace (036 FR-009).
-	// Retries, re-prompts and escalations are emitted from helpers several
-	// frames down; stamping the context is what makes them correlate without
-	// each of those call sites having to remember to.
+
 	ctx = withRunTrace(ctx, rec)
 
-	// 034: resolve the summary option once, here, at the top of the run. Every
-	// call below takes the resolved provider, so a settings change while this
-	// run is in flight cannot swap the model writing the summary halfway
-	// through and produce a document nobody chose.
 	summaryOpt := s.summaryOption(ctx)
 	summaryLC := s.summaryProviderFor(summaryOpt)
 	if prov != nil {
@@ -371,31 +282,18 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		if err != nil {
 			return nil, domain.VacancyAnalysis{}, err
 		}
-		// Toggles then hard limits, both on the merged document and before
-		// verification, so grounding and structure checks see exactly what
-		// will be rendered.
+
 		domain.ApplySectionToggles(merged, cfg)
-		// Skills survive the merge exactly as the master wrote them; their
-		// order is decided here, from the analysis, before the group cap in
-		// ApplyHardLimits picks which ones make the page.
+
 		domain.RankSkills(merged, analysis, cfg)
-		// Each group's authored density level ("relevant"/"top5"/"top10"/
-		// "top15"/"top20"/"all", defaulting to "relevant") trims the details
-		// RankSkills just ordered, before the group cap in ApplyHardLimits
-		// picks which groups make the page.
+
 		domain.TrimSkillGroups(merged, analysis)
-		// Projects get the same two passes for the same reason: relevance
-		// decides which ones survive the cap in ApplyHardLimits, and each
-		// project's authored density decides how many bullets it renders.
+
 		domain.RankProjects(merged, analysis, cfg)
 		domain.TrimProjectHighlights(merged, analysis)
 		report := domain.ApplyHardLimits(master, merged, cfg)
 		recordShortfalls(ctx, rec, report)
-		// 033 FR-001: drop ungrounded skill tokens on the primary pass, not
-		// only after expand/condense. Capture the removed tokens for logging.
-		// FR-010: DropUngroundedSkillTokens mutates in place and reports
-		// nothing, so the before/after diff is the only record of what it took
-		// out.
+
 		skillsBefore := skillDetailEntries(merged)
 		domain.DropUngroundedSkillTokens(master, merged)
 		if rec != nil {
@@ -407,18 +305,12 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 			rec.Step(ctx, fmt.Sprintf("grounding check (attempt %d/%d)", attempt+1, groundingAttempts), nil)
 		}
 		lastViolations = domain.VerifyRendercvGrounding(master, merged, level, analysis)
-		// One master bullet, one line on the page. ResolveHighlights drops a
-		// repeated sourceIndex, so this only fires when two references to
-		// *different* bullets were reworded into the same accomplishment —
-		// which no earlier check can see, because both halves are grounded in
-		// the bullet they were spun from.
+
 		lastViolations = append(lastViolations, domain.VerifyHighlightProvenance(master, merged)...)
 		if len(lastViolations) == 0 {
 			fixed, err := s.fixStructureIntegrity(ctx, master, merged, analysis, level, cfg, rec)
 			if rec != nil && prov != nil {
-				// FR-017: what each stage cost and who served it, on the run
-				// itself, so the pipeline's economics are observed rather than
-				// estimated after the fact.
+
 				rec.Step(ctx, "generation stages", prov.meta())
 			}
 			return fixed, analysis, err
@@ -427,8 +319,6 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 	return nil, domain.VacancyAnalysis{}, fmt.Errorf("tailored rendercv resume failed grounding check: %s", strings.Join(lastViolations, "; "))
 }
 
-// shapeConfigMeta is the resolved config as activity metadata, so a past
-// document can be explained by the settings the run actually used (FR-006).
 func shapeConfigMeta(cfg domain.ShapeConfig) map[string]any {
 	return map[string]any{
 		"summaryLines":          cfg.SummaryLines,
@@ -447,9 +337,6 @@ func shapeConfigMeta(cfg domain.ShapeConfig) map[string]any {
 	}
 }
 
-// recordShortfalls reports each configured minimum the master could not meet.
-// The document keeps what actually exists — nothing is invented to close the
-// gap (FR-017) — so the run says so instead.
 func recordShortfalls(ctx context.Context, rec *activity.Recorder, report domain.ShapeReport) {
 	if rec == nil {
 		return
@@ -463,10 +350,6 @@ func recordShortfalls(ctx context.Context, rec *activity.Recorder, report domain
 	}
 }
 
-// skillDetailEntries flattens every comma-separated skill entry across the
-// document's skills groups, trimmed and in document order. It reads the same
-// shape domain.DropUngroundedSkillTokens writes, so a before/after pair of
-// these is exactly what that function removed.
 func skillDetailEntries(doc domain.RendercvMaster) []string {
 	var out []string
 	for _, g := range domain.AsSliceOfMaps(domain.CvSections(doc)["skills"]) {
@@ -479,10 +362,6 @@ func skillDetailEntries(doc domain.RendercvMaster) []string {
 	return out
 }
 
-// droppedSkillEntries returns the entries present in before but not after, as a
-// multiset difference so a token repeated across two groups and removed from
-// only one is still reported once. Sorted, because the result is logged and an
-// activity trail that reorders itself run to run is not comparable (033 FR-010).
 func droppedSkillEntries(before, after []string) []string {
 	remaining := make(map[string]int, len(after))
 	for _, e := range after {
@@ -500,16 +379,11 @@ func droppedSkillEntries(before, after []string) []string {
 	return dropped
 }
 
-// renderDeps are the render-loop's collaborators, injected so the page-target
-// loop can be tested without a Typst toolchain or a live LLM. The production
-// values come from defaultRenderDeps.
 type renderDeps struct {
 	render     func(ctx context.Context, merged domain.RendercvMaster, name string) (string, error)
 	countPages func(pdfPath string) (int, error)
 	expand     func(ctx context.Context, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig) (domain.TailoredSelection, error)
-	// condense is not an LLM call: page fitting is a layout problem, and the
-	// selection stage already ranked these bullets. It returns the shortened
-	// document and whether there was anything left to shorten.
+
 	condense func(doc domain.RendercvMaster, cfg domain.ShapeConfig) (domain.RendercvMaster, bool, error)
 }
 
@@ -534,24 +408,14 @@ func (s *Service) defaultRenderDeps() renderDeps {
 	}
 }
 
-// renderOutcome is what the page-target loop reached: the PDF it settled on,
-// the page count it achieved (0 when the count could not be taken) and
-// whether the page target forced the section lengths down on the way (FR-016).
 type renderOutcome struct {
 	pdfPath  string
 	pages    int
 	conflict bool
 }
 
-// renderResume renders the merged master to PDF and drives it toward the
-// configured page target: too short and it asks the LLM to expand, too long
-// and it applies the compact design then condenses. Every failure along the
-// way degrades gracefully — the best result reached is returned rather than
-// erroring, so an unreachable target never fails a generation (FR-021).
 func (s *Service) renderResume(ctx context.Context, master, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, baseName string, rec *activity.Recorder) (string, error) {
-	// Set once, on merged, before any render in this run: every reMerged
-	// variant below is deep-cloned from merged (via MergeTailored), so this
-	// carries through expand/condense/compact without being reapplied.
+
 	domain.ApplyFontSize(merged, cfg)
 	outcome, err := s.renderToPageTarget(ctx, s.defaultRenderDeps(), master, merged, analysis, level, cfg, baseName, rec)
 	if err != nil {
@@ -598,14 +462,14 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 			slog.Warn("LLM expand failed, returning short version", "err", err)
 			return renderOutcome{pdfPath: pdfPath, pages: pages}, nil
 		}
-		reMerged, err := domain.MergeTailored(merged, expanded, nil, level) // summary carried by merged
+		reMerged, err := domain.MergeTailored(merged, expanded, nil, level)
 		if err != nil {
 			slog.Warn("merge after expand failed, returning short version", "err", err)
 			return renderOutcome{pdfPath: pdfPath, pages: pages}, nil
 		}
 		domain.DropUngroundedSkillTokens(merged, reMerged)
 		domain.ApplyHardLimits(master, reMerged, cfg)
-		// 033 FR-009: apply the same highlight-drift cleanup as the primary pass.
+
 		domain.StripUngroundedHighlights(merged, reMerged)
 		expandedPath, err := deps.render(ctx, reMerged, baseName+"-expanded")
 		if err != nil {
@@ -619,10 +483,6 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 		return renderOutcome{pdfPath: expandedPath, pages: expandedPages}, nil
 	}
 
-	// Over target. Two bounded adjust attempts, matching the groundingAttempts
-	// idiom: compact the design first (no LLM call), then condense the content.
-	// Whatever the last attempt reached is what we return — an unreachable
-	// target is reported, never an error.
 	out := renderOutcome{pdfPath: pdfPath, pages: pages}
 	for attempt := 0; attempt < shapeAttempts && out.pages > cfg.TargetPages; attempt++ {
 		var candidate domain.RendercvMaster
@@ -644,13 +504,11 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 				break
 			}
 			if !trimmed {
-				// Already at the condense floor: another render would produce
-				// the same document, so the compact version is the answer.
+
 				break
 			}
 			domain.CompactDesign(shorter)
-			// Section lengths went below what the config asked for, to reach
-			// the page target (FR-016).
+
 			out.conflict = true
 			candidate, suffix = shorter, "-condensed"
 		}
@@ -669,18 +527,8 @@ func (s *Service) renderToPageTarget(ctx context.Context, deps renderDeps, maste
 	return out, nil
 }
 
-// fixStructureIntegrity runs the structural-integrity verifier (feature 028)
-// and the highlight-drift verifier (feature 033) on an already-grounded merge.
-// Block sequence, experience order and job drops are enforced deterministically
-// by MergeTailored and never reach here; the two violation kinds are:
-//   - a text-asserted years figure contradicting the master's derivable total (028)
-//   - an experience highlight that drifted too far from the master's bullet (033)
-//
-// On first detection each runs a single targeted re-prompt feeding the violation
-// back; if the claim recurs, it strips the offending content and logs the
-// intervention on the activity row.
 func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged domain.RendercvMaster, analysis domain.VacancyAnalysis, level domain.GroundingLevel, cfg domain.ShapeConfig, rec *activity.Recorder) (domain.RendercvMaster, error) {
-	// 1. Years-assertion check (028)
+
 	structViolations := domain.VerifyStructureIntegrity(master, merged)
 	if len(structViolations) > 0 {
 		if rec != nil {
@@ -711,7 +559,6 @@ func (s *Service) fixStructureIntegrity(ctx context.Context, master, merged doma
 		}
 	}
 
-	// 2. Highlight-drift check (033 FR-002, FR-003)
 	driftViolations := domain.VerifyHighlightGrounding(master, merged)
 	if len(driftViolations) == 0 {
 		return merged, nil
@@ -785,15 +632,12 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 	var content []byte
 	var pdfPath string
 	genCtx, served := llm.WithServedModelCapture(ctx)
-	// The cover-letter branch below is a single LLM call that never enters
-	// tailorRendercvResume, so it would be the one call of this run with no
-	// trace on it (036 C4-10). Stamping genCtx covers both branches: the resume
-	// path re-stamps the same run id, which is idempotent.
+
 	genCtx = withRunTrace(genCtx, rec)
 	prov := &runProvenance{}
 
 	if docType == string(dto.DocumentTypeResume) {
-		// Resolved once per run and threaded as a value (see shapeConfig).
+
 		cfg := s.shapeConfig(ctx)
 		if rec != nil {
 			rec.Step(ctx, "resume shape config", shapeConfigMeta(cfg))
@@ -950,8 +794,6 @@ func (s *Service) GetDocumentDto(ctx context.Context, id string) (dto.GeneratedD
 	return toDocumentDto(row), nil
 }
 
-// GetDocumentPdfPath returns a document's rendered PDF path, or nil if it
-// hasn't been rendered yet.
 func (s *Service) GetDocumentPdfPath(ctx context.Context, id string) (*string, error) {
 	row, err := s.GetDocument(ctx, id)
 	if err != nil {
@@ -960,14 +802,6 @@ func (s *Service) GetDocumentPdfPath(ctx context.Context, id string) (*string, e
 	return row.PdfPath, nil
 }
 
-// GetDocumentDownload returns a document's rendered PDF path along with the
-// name it should be offered under. On-disk names encode company, title,
-// version and a timestamp because the render loop needs them unique across
-// candidate renders; the download name is the one a human files away, so a
-// résumé is served as CV_Name_Surname.pdf from the profile's own name.
-//
-// The name is cosmetic: any failure to resolve it falls back to the on-disk
-// base name rather than failing the download.
 func (s *Service) GetDocumentDownload(ctx context.Context, id string) (path *string, filename string, err error) {
 	row, err := s.GetDocument(ctx, id)
 	if err != nil {
@@ -986,9 +820,6 @@ func (s *Service) GetDocumentDownload(ctx context.Context, id string) (path *str
 	return row.PdfPath, filename, nil
 }
 
-// resumeDownloadName builds "CV_Name_Surname.pdf" from the default profile's
-// cv.name. It returns "" when the profile, its config or the name is missing —
-// every one of those is a fall-back-to-disk-name case, not an error.
 func (s *Service) resumeDownloadName(ctx context.Context) string {
 	prof, err := s.profiles.GetDefault(ctx)
 	if err != nil || prof.RendercvConfig == nil {
@@ -1010,15 +841,6 @@ func (s *Service) resumeDownloadName(ctx context.Context) string {
 	return "CV_" + slug + ".pdf"
 }
 
-// downloadNameSlug turns a person's name into a filename-safe fragment,
-// preserving case (unlike sanitize, which is for on-disk base names): runs of
-// anything that isn't a letter or digit collapse to a single underscore, and
-// leading/trailing underscores are trimmed. "Ada  Lovelace-King" becomes
-// "Ada_Lovelace_King".
-//
-// Letters are judged by Unicode class, not ASCII: a Cyrillic or accented name
-// must keep its own spelling here. The header writer is what deals with
-// non-ASCII bytes (see downloadDisposition).
 func downloadNameSlug(name string) string {
 	var b strings.Builder
 	pendingSep := false
@@ -1117,9 +939,6 @@ func toDocumentDto(r sqlcgen.GeneratedDocument) dto.GeneratedDocumentDto {
 	}
 }
 
-// numericToFloatPtr renders a nullable numeric column as a float pointer, so a
-// run with no measured cost stays absent from the payload rather than
-// reporting zero — an unmeasured run and a free one are different facts.
 func numericToFloatPtr(n pgtype.Numeric) *float64 {
 	if !n.Valid {
 		return nil
@@ -1132,13 +951,6 @@ func numericToFloatPtr(n pgtype.Numeric) *float64 {
 	return &v
 }
 
-// withRunTrace stamps the activity-run id onto the context as the observability
-// correlation id (036 FR-010). Reusing the run id rather than minting a new one
-// is what lets an operator move between a trace and the platform's own run
-// history in either direction with no lookup table.
-//
-// A nil or invalid recorder leaves the context untouched, so an uncorrelated
-// run behaves exactly as it did before 036.
 func withRunTrace(ctx context.Context, rec *activity.Recorder) context.Context {
 	if rec == nil {
 		return ctx

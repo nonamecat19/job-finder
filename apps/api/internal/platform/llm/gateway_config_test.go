@@ -14,21 +14,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// The routing contract Constitution V depends on lives in a file the Go build
-// never touches, so nothing but this test stands between a forgotten fallback
-// chain and a scenario that has no working tier at all.
-// specs/044-litellm-only-routing/contracts/gateway-config.md.
-//
-// Each invariant is a pure func returning its violations, so the checks
-// themselves are tested against inline fixtures below — a guardrail that can
-// only ever pass guards nothing.
-//
-// TestGatewayConfigHonoursRoutingContract runs these invariants against the
-// real gateway/config.yaml on disk; TestGatewayInvariantsAcceptValidConfig
-// and TestGatewayInvariantsRejectBrokenConfig below exercise the same
-// invariants against the inline validFixture instead, so a check's own logic
-// can be tested without touching the real file.
-
 type gatewayConfig struct {
 	ModelList []struct {
 		ModelName string         `yaml:"model_name"`
@@ -46,11 +31,6 @@ type gatewayConfig struct {
 	} `yaml:"litellm_settings"`
 }
 
-// requestedScenarioGroups are the keys the application sends as the `model`
-// field (cmd/server/compose.go), plus the `embed` group requested by
-// Router.Embed. Listed explicitly so deleting a chain AND its group still
-// fails rather than quietly satisfying a derived check.
-// specs/044-litellm-only-routing/contracts/gateway-config.md C1-2.
 var requestedScenarioGroups = []string{
 	"match",
 	"ghost",
@@ -68,19 +48,8 @@ var requestedScenarioGroups = []string{
 	"embed",
 }
 
-// toolCapableTaskKeys are the task keys an application tool loop runs on.
-// Narrowed from `default` (037 FR-018) to `salary`, the only scenario left
-// after `default` is removed that requires tool capability on every tier
-// (contracts/gateway-config.md C3-2).
 var toolCapableTaskKeys = []string{"salary"}
 
-// singleProviderScenarios lists scenario groups that are not required to
-// declare a litellm_settings.fallbacks chain — they resolve on their single
-// model_list entry alone. `embed` has no fallback because it is the one
-// chain left off OpenRouter (see its own block in gateway/config.yaml);
-// generation-analyze and generation-select have no fallback because 038's
-// measurement found nothing worth falling back to for those two stages.
-// These groups must still declare a model_list entry.
 var singleProviderScenarios = map[string]bool{
 	"embed":              true,
 	"generation-analyze": true,
@@ -108,7 +77,7 @@ func loadGatewayConfig(t *testing.T) *gatewayConfig {
 	if !ok {
 		t.Fatal("cannot resolve test file path")
 	}
-	// .../apps/api/internal/platform/llm -> repo root
+
 	root := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..", ".."))
 	path := filepath.Join(root, "gateway", "config.yaml")
 
@@ -127,25 +96,18 @@ func loadGatewayConfig(t *testing.T) *gatewayConfig {
 	return cfg
 }
 
-// appConfigDefaultsSource returns the raw text of internal/config/defaults.go,
-// the single source of the application's default EMBED_DIMS value. Read as
-// text rather than imported: the value lives in an unexported map, and
-// duplicating it as a hardcoded literal here would let the two drift exactly
-// the way this file exists to prevent (contracts/gateway-config.md C5-1).
 func appConfigDefaultsSource() ([]byte, error) {
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		return nil, fmt.Errorf("cannot resolve test file path")
 	}
-	// .../internal/platform/llm -> .../internal/config/defaults.go
+
 	path := filepath.Join(filepath.Dir(thisFile), "..", "..", "config", "defaults.go")
 	return os.ReadFile(path)
 }
 
 var embedDimsPattern = regexp.MustCompile(`"EMBED_DIMS":\s*(\d+)`)
 
-// appEmbedDims returns the application's default EMBED_DIMS value, as
-// declared in internal/config/defaults.go.
 func appEmbedDims() (int, error) {
 	src, err := appConfigDefaultsSource()
 	if err != nil {
@@ -185,8 +147,6 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// providerOf returns the string before the first "/" in a tier's `model`
-// field, e.g. "openrouter/anthropic/claude-sonnet-5" -> "openrouter".
 func providerOf(params map[string]any) (string, bool) {
 	model, _ := params["model"].(string)
 	provider, _, found := strings.Cut(model, "/")
@@ -196,7 +156,6 @@ func providerOf(params map[string]any) (string, bool) {
 	return provider, true
 }
 
-// Invariant: every group the application requests has a chain.
 func checkRequestedGroupsHaveChains(c *gatewayConfig) []string {
 	var violations []string
 	chains := c.chains()
@@ -216,10 +175,6 @@ func checkRequestedGroupsHaveChains(c *gatewayConfig) []string {
 		}
 	}
 
-	// Derived check: a chain key that is neither a requested group nor a
-	// fallback tier of some other chain is unreachable by the application,
-	// which means it is either a requested key missing from
-	// requestedScenarioGroups, or dead configuration.
 	inSomeChain := map[string]bool{}
 	for _, chain := range chains {
 		for _, tier := range chain {
@@ -237,16 +192,6 @@ func checkRequestedGroupsHaveChains(c *gatewayConfig) []string {
 	return violations
 }
 
-// Invariant: every chain with a fallback list resolves to at least two
-// tiers. Replaces "every chain terminates at local" (contracts/gateway-
-// config.md C2-1, data-model.md §2 "Chain invariant, restated").
-//
-// 2026-08-17: the ">=2 distinct providers" half of C2-1 is retired along
-// with Cerebras — every tier in this file is OpenRouter now (except embed's
-// OpenAI tier), by explicit choice, so "distinct providers" is no longer a
-// meaningful signal. A chain still gets multiple tiers where one is useful
-// (retries against a second model if the first errors or rate-limits), just
-// not from a second provider.
 func checkChainArityAndProviders(c *gatewayConfig) []string {
 	var violations []string
 	chains := c.chains()
@@ -262,7 +207,6 @@ func checkChainArityAndProviders(c *gatewayConfig) []string {
 	return violations
 }
 
-// Invariant: no chain names a tier that does not exist.
 func checkChainTiersAreDeclared(c *gatewayConfig) []string {
 	var violations []string
 	deployments := c.deployments()
@@ -279,10 +223,6 @@ func checkChainTiersAreDeclared(c *gatewayConfig) []string {
 	return violations
 }
 
-// Invariant: no group is named `default` and no tier is named `local` (or
-// routes to a self-hosted runtime). The default/local escape hatch this
-// feature removes must not reappear under either name
-// (contracts/gateway-config.md C1-2, C2-1).
 func checkNoDefaultOrLocalNaming(c *gatewayConfig) []string {
 	var violations []string
 
@@ -309,13 +249,6 @@ func checkNoDefaultOrLocalNaming(c *gatewayConfig) []string {
 	return violations
 }
 
-// Invariant: a thinking model with no reasoning bound spends its whole
-// output budget deliberating and returns empty content. That is what broke
-// every resume run before 2026-08-07 (FR-014, research.md R2). Widened from
-// the generation-* stage deployments to every openrouter/* tier anywhere in
-// the file: this feature adds OpenRouter tiers to outreach, salary and
-// recruiter, which the narrower check would not see
-// (contracts/gateway-config.md C6).
 func checkOpenRouterReasoningBounds(c *gatewayConfig) []string {
 	var violations []string
 	for _, d := range c.ModelList {
@@ -335,7 +268,6 @@ func checkOpenRouterReasoningBounds(c *gatewayConfig) []string {
 	return violations
 }
 
-// Invariant: credentials are environment references, never literals (030-C4).
 func checkNoLiteralAPIKeys(c *gatewayConfig) []string {
 	var violations []string
 	for _, d := range c.ModelList {
@@ -353,22 +285,15 @@ func checkNoLiteralAPIKeys(c *gatewayConfig) []string {
 	return violations
 }
 
-// embedTiers returns the full chain for the `embed` group: its head
-// deployment followed by its declared fallbacks.
 func embedTiers(c *gatewayConfig) []string {
 	chain, ok := c.chains()["embed"]
 	if !ok {
-		// Temporary single-provider embed (contracts/gateway-config.md C2-5):
-		// the embed group has no fallback chain, so the chain is the head
-		// deployment alone.
+
 		return []string{"embed"}
 	}
 	return append([]string{"embed"}, chain...)
 }
 
-// Invariant: every tier of `embed` declares output_dimension, all tiers
-// agree on the value, and all declare input_type: search_document
-// (contracts/gateway-config.md C3-4).
 func checkEmbedChainDeclarations(c *gatewayConfig) []string {
 	tiers := embedTiers(c)
 	if len(tiers) == 0 {
@@ -381,7 +306,7 @@ func checkEmbedChainDeclarations(c *gatewayConfig) []string {
 	for _, tier := range tiers {
 		params, ok := deployments[tier]
 		if !ok {
-			continue // reported by checkChainTiersAreDeclared
+			continue
 		}
 		if dim, has := params["output_dimension"]; !has {
 			violations = append(violations, fmt.Sprintf(
@@ -408,12 +333,6 @@ func checkEmbedChainDeclarations(c *gatewayConfig) []string {
 	return violations
 }
 
-// checkEmbedWidthMatchesAppDefault asserts every declared embed tier width
-// equals wantDims — the application's EMBED_DIMS default. Parameterized
-// rather than reading internal/config/defaults.go itself, so the fixture
-// tests below can exercise it against an explicit expectation independent of
-// whatever internal/config/defaults.go currently says
-// (contracts/gateway-config.md C5-1).
 func checkEmbedWidthMatchesAppDefault(c *gatewayConfig, wantDims int) []string {
 	deployments := c.deployments()
 	for _, tier := range embedTiers(c) {
@@ -423,7 +342,7 @@ func checkEmbedWidthMatchesAppDefault(c *gatewayConfig, wantDims int) []string {
 		}
 		dim, isInt := params["output_dimension"].(int)
 		if !isInt {
-			continue // reported by checkEmbedChainDeclarations
+			continue
 		}
 		if dim != wantDims {
 			return []string{fmt.Sprintf(
@@ -450,11 +369,6 @@ var gatewayInvariants = []struct {
 	{"the embed chain declares consistent output_dimension and input_type", checkEmbedChainDeclarations},
 }
 
-// Invariant: both callbacks declared, and declared globally (036-C1-1/C1-2).
-//
-// Success-only would hide the failures FR-002 requires, and a call that
-// exhausts every tier is exactly the one worth a record — a failure that
-// produces nothing is indistinguishable from a call that never happened.
 func checkObservabilityCallbacks(c *gatewayConfig) []string {
 	var violations []string
 	has := func(list []string) bool {
@@ -471,8 +385,7 @@ func checkObservabilityCallbacks(c *gatewayConfig) []string {
 	if !has(c.LiteLLMSettings.FailureCallback) {
 		violations = append(violations, "litellm_settings.failure_callback does not list langfuse; failures must be recorded too (036-C1-1)")
 	}
-	// Per-deployment callbacks would make coverage depend on which tier
-	// answered, which is the opposite of what an observability layer is for.
+
 	for _, d := range c.ModelList {
 		for _, k := range []string{"success_callback", "failure_callback", "callbacks"} {
 			if _, present := d.Params[k]; present {
@@ -484,12 +397,6 @@ func checkObservabilityCallbacks(c *gatewayConfig) []string {
 	return violations
 }
 
-// Invariant: the worst-case failover arithmetic is unchanged (036-C1-4).
-//
-// tiers x (1 + num_retries) x request_timeout must stay under the Go adapter's
-// 15-minute safety net so the proxy is always what times out first. Adding
-// observability must not perturb any term. These literals are pinned
-// deliberately: a silent change here is how the 830-second hang came back.
 func checkTimingArithmeticUnchanged(c *gatewayConfig) []string {
 	var violations []string
 	for _, want := range []struct {
@@ -511,21 +418,6 @@ func checkTimingArithmeticUnchanged(c *gatewayConfig) []string {
 	return violations
 }
 
-// Invariant: every tier of the salary chain says whether it can call tools
-// (contracts/gateway-config.md C3-2, narrowed from the removed `default`
-// chain; 037 FR-018, C6-1/C6-2/C6-5).
-//
-// What this asserts is that somebody *considered* the question when adding a
-// tier — not that the proxy will act on the answer. It will not: LiteLLM reads
-// model_info for its model-info endpoint and cost bookkeeping, and
-// `drop_params: true` silently drops a `tools` array an upstream will not
-// accept, so the request succeeds without tools and the fallback chain never
-// engages. That is the same capability trap this repository already documents
-// for response_format.
-//
-// The runtime backstop is elsewhere: the loop's first round is sent with
-// tool_choice "required", and prose in reply to it returns not_tool_capable
-// rather than an answer.
 func checkToolChainsDeclareCapability(c *gatewayConfig) []string {
 	declared := map[string]bool{}
 	for _, d := range c.ModelList {
@@ -551,7 +443,6 @@ func checkToolChainsDeclareCapability(c *gatewayConfig) []string {
 	return violations
 }
 
-// chainFor returns the declared fallback chain for a task key, or nil.
 func chainFor(c *gatewayConfig, key string) []string {
 	for _, entry := range c.LiteLLMSettings.Fallbacks {
 		if chain, ok := entry[key]; ok {
@@ -571,9 +462,6 @@ func TestGatewayConfigHonoursRoutingContract(t *testing.T) {
 		})
 	}
 
-	// This mirrors the embed chain width against the application's own
-	// default rather than a value pinned in this file, so it runs outside the
-	// fixture-shared gatewayInvariants list (contracts/gateway-config.md C5-1).
 	t.Run("embed chain width matches the application's EMBED_DIMS default", func(t *testing.T) {
 		dims, err := appEmbedDims()
 		if err != nil {
@@ -584,8 +472,6 @@ func TestGatewayConfigHonoursRoutingContract(t *testing.T) {
 		}
 	})
 }
-
-// --- the guardrails' own guardrails -----------------------------------------
 
 const validFixture = `
 model_list:
@@ -679,10 +565,6 @@ func TestGatewayInvariantsAcceptValidConfig(t *testing.T) {
 		}
 	}
 
-	// The app-default width mirror is exercised directly with the value the
-	// fixture was built to satisfy, independent of whatever
-	// internal/config/defaults.go currently says (see
-	// TestGatewayConfigHonoursRoutingContract for the dynamic read).
 	if v := checkEmbedWidthMatchesAppDefault(cfg, 1024); len(v) > 0 {
 		t.Errorf("embed width matches app default: valid fixture rejected: %v", v)
 	}
@@ -765,7 +647,7 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			wantSub: "success_callback does not list langfuse",
 		},
 		{
-			// Recording only successes hides the calls most worth a record.
+
 			name:    "failure callback dropped",
 			check:   checkObservabilityCallbacks,
 			mutate:  func(s string) string { return strings.Replace(s, "  failure_callback: [\"langfuse\"]\n", "", 1) },
@@ -782,19 +664,14 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			wantSub: "callbacks are global only",
 		},
 		{
-			// The failure mode this pins: raising a timeout silently pushes the
-			// worst case past the Go adapter's safety net, which is how a call
-			// once hung for 830 seconds.
+
 			name:    "request_timeout quietly raised",
 			check:   checkTimingArithmeticUnchanged,
 			mutate:  func(s string) string { return strings.Replace(s, "request_timeout: 60", "request_timeout: 300", 1) },
 			wantSub: "request_timeout is 300, want 60",
 		},
 		{
-			// The case C6-5 names: a tier added to a tool chain without a
-			// capability decision. It answers the loop's required first round
-			// with prose, which reads as a model problem rather than a config
-			// one unless something says otherwise here.
+
 			name:  "a tool-chain tier is added without a capability declaration",
 			check: checkToolChainsDeclareCapability,
 			mutate: func(s string) string {

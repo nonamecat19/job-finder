@@ -161,10 +161,6 @@ func TestInfer_BlendCacheAndLevels(t *testing.T) {
 	}
 }
 
-// TestInfer_NoLLMFallback guards T103: once neither salaryRaw, cache, nor
-// levels.fyi produces a band, Infer errors and persists nothing rather than
-// falling back to a Go tool loop — that loop is deleted, and estimating from
-// scratch is apps/ai's job now (AI_CAPABILITY_ROUTING).
 func TestInfer_NoLLMFallback(t *testing.T) {
 	repo := &fakeRepo{
 		job:       makeJob("Backend Engineer", "Acme", "US", ""),
@@ -200,4 +196,3 @@ func strPtr(v string) *string { return &v }
 
 //nolint:unused
 func float64Ptr(v float64) *float64 { return &v }
-

@@ -20,9 +20,6 @@ import (
 	"github.com/job-finder/api/internal/testutil"
 )
 
-// stubProvider is a minimal llm.Provider that replies with a canned JSON
-// payload — enough to exercise analyzeVacancy and writeSummary (the only two
-// LLM calls Phase 2's StartRun makes) with no gateway or Ollama running.
 type stubProvider struct {
 	reply func(prompt string) string
 }
@@ -86,18 +83,11 @@ func newWorkspaceHandler(t *testing.T, testDB *db.DB) (*generationhttp.Generatio
 			b, _ := json.Marshal(map[string]string{"summary": "Senior engineer with a track record of shipping."})
 			return string(b)
 		}},
-		// Select serves both the ranking stage (rankExperienceSections) and
-		// the suggestion stage (suggestContent) — both introduced in Phase 4/5
-		// (US2/US3), after this helper was first written. An empty reply is
-		// invalid input for VerifyRanking, so ranking falls back to master
-		// order after its one retry (FR-010) — the same shape these tests
-		// already assert on — rather than a nil-provider panic.
+
 		Select: &stubProvider{reply: func(string) string { return `{}` }},
 	}
 	svc := generationapp.NewService(testDB.Queries, profileSvc, nil, nil, routers, "", "", "moderate", nil)
-	// T025/T026: item/section mutation needs the row-locked transaction
-	// runner; every test in this package shares this helper, so wiring it
-	// here (rather than per test) is what SetTxRunner is for.
+
 	svc.SetTxRunner(testDB)
 	return &generationhttp.GenerationsHandler{Workspace: svc}, svc
 }
@@ -141,8 +131,6 @@ func TestGenerationsStartPollFetch(t *testing.T) {
 		t.Fatal("expected a non-empty runId")
 	}
 
-	// Poll: the row exists immediately and every master bullet is present, in
-	// master order, before the background half has run.
 	pollW := testutil.DoRequest(r, "GET", "/api/generations/"+started.RunID, nil, map[string]string{"runId": started.RunID})
 	if pollW.Code != 200 {
 		t.Fatalf("expected 200, got %d: %s", pollW.Code, pollW.Body.String())
@@ -177,9 +165,6 @@ func TestGenerationsStartPollFetch(t *testing.T) {
 		}
 	}
 
-	// Fetch: run the background half directly (no asynq client is wired in
-	// this test, matching how the worker would invoke it) and confirm the run
-	// reaches ready with a written summary.
 	if err := svc.StartRun(ctx, started.RunID, nil); err != nil {
 		t.Fatalf("StartRun: %v", err)
 	}

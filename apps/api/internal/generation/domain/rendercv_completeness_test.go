@@ -24,7 +24,6 @@ func completenessMaster(groups map[string]string, order []string, bullets map[st
 	}}}
 }
 
-// completenessFixture: two skill groups, one company with plenty of bullets.
 func completenessFixture() RendercvMaster {
 	return completenessMaster(
 		map[string]string{
@@ -70,7 +69,7 @@ func TestVerifyCompletenessFlagsMissingRequiredSkill(t *testing.T) {
 }
 
 func TestVerifyCompletenessFlagsNiceToHaveBelowFloor(t *testing.T) {
-	// Five nice-to-have matches, one dropped: 80% exactly. Drop a second for 60%.
+
 	master := completenessFixture()
 	merged := completenessMaster(
 		map[string]string{
@@ -152,8 +151,7 @@ func TestVerifyCompletenessFlagsCompanyBelowBulletMinimum(t *testing.T) {
 }
 
 func TestVerifyCompletenessIgnoresMasterLimitedCompany(t *testing.T) {
-	// The master itself only has two bullets for Acme, so no selection could
-	// reach the minimum — that is a master gap, not a model shortfall.
+
 	master := completenessMaster(
 		map[string]string{"Languages": "Go"},
 		[]string{"Languages"},
@@ -253,8 +251,7 @@ func TestVerifyCompletenessAcceptsCompleteOutput(t *testing.T) {
 }
 
 func TestVerifyCompletenessRetainsSkillWithExtraQualifier(t *testing.T) {
-	// "react native (expo)" is still React Native — phrase matching is on word
-	// subsets, so the qualifier must not read as a dropped skill.
+
 	master := completenessMaster(
 		map[string]string{"Frontend": "React Native, Redux"},
 		[]string{"Frontend"},

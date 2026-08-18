@@ -17,7 +17,6 @@ import (
 	"github.com/job-finder/api/internal/generation/infrastructure"
 )
 
-// Export statuses, as served in GenerationExportDto.Status.
 const (
 	exportRendering = "rendering"
 	exportExported  = "exported"
@@ -25,13 +24,8 @@ const (
 	exportFailed    = "error"
 )
 
-// exportModel is what the GeneratedDocument row records as its model. A
-// workspace export is assembled from the user's selection and rendered — no
-// model writes it, and naming one would be a false provenance claim.
 const exportModel = "workspace-export"
 
-// exportOutcome is what one render-once export reached: the PDF and its page
-// count, or a blocked result carrying the drop candidates FR-019 requires.
 type exportOutcome struct {
 	doc        domain.RendercvMaster
 	pdfPath    string
@@ -40,15 +34,6 @@ type exportOutcome struct {
 	candidates []domain.OverflowCandidate
 }
 
-// renderExport is the whole export path (resume-generation.md § 7.1): assemble, apply the
-// font size, render, count pages; over the target, apply the compact design —
-// typography only, never content — and render once more; still over, report.
-//
-// `expandContent`, `TrimHighlights`, `padHighlights` and the `ApplyHardLimits`
-// truncation are deliberately absent: FR-018 forbids post-selection
-// rewording, condensing and re-ranking, so the only lever left is layout. That
-// also makes this path free of LLM calls by construction — it takes no
-// provider, only the two render collaborators.
 func renderExport(ctx context.Context, deps renderDeps, master domain.RendercvMaster, sections []domain.Section, cfg domain.ShapeConfig, baseName string) (exportOutcome, error) {
 	doc, err := domain.Assemble(master, sections)
 	if err != nil {
@@ -62,9 +47,7 @@ func renderExport(ctx context.Context, deps renderDeps, master domain.RendercvMa
 	}
 	pages, err := deps.countPages(pdfPath)
 	if err != nil {
-		// The document is rendered and correct; only the measurement failed.
-		// Blocking an export the user approved over an unreadable page count
-		// would be the wrong trade.
+
 		slog.Warn("could not count exported PDF pages, accepting the render", "path", pdfPath, "err", err)
 		return exportOutcome{doc: doc, pdfPath: pdfPath}, nil
 	}
@@ -95,10 +78,6 @@ func renderExport(ctx context.Context, deps renderDeps, master domain.RendercvMa
 	}, nil
 }
 
-// exportRenderDeps is the production seam for renderExport: the two
-// collaborators it actually uses. The expand/condense fields of renderDeps
-// stay nil here, and that is the point — a nil field cannot be called, so the
-// forbidden stages of the legacy page-fit loop are unreachable from this path.
 func (s *Service) exportRenderDeps() renderDeps {
 	if s.exportRender.render != nil {
 		return s.exportRender
@@ -112,10 +91,6 @@ func (s *Service) exportRenderDeps() renderDeps {
 	}
 }
 
-// SetExportRenderer replaces the two render collaborators of the export path.
-// It exists so a caller outside this package — the HTTP contract tests — can
-// drive the 200-blocked branch without a Typst toolchain on the box; the
-// render loop's own tests use the in-package renderDeps parameter directly.
 func (s *Service) SetExportRenderer(
 	render func(ctx context.Context, doc domain.RendercvMaster, name string) (string, error),
 	countPages func(pdfPath string) (int, error),
@@ -123,9 +98,6 @@ func (s *Service) SetExportRenderer(
 	s.exportRender = renderDeps{render: render, countPages: countPages}
 }
 
-// ExportGenerationRun is `POST /v1/generations/{runId}/export`: assemble from
-// the current selection and render once. A blocked result mutates nothing —
-// no item is deselected, no wording changes — it only reports.
 func (s *Service) ExportGenerationRun(ctx context.Context, runID string) (dto.GenerationExportDto, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -139,10 +111,7 @@ func (s *Service) ExportGenerationRun(ctx context.Context, runID string) (dto.Ge
 		run      sqlcgen.GenerationRun
 		sections []domain.Section
 	)
-	// The guard and the "rendering" mark share one short transaction, holding
-	// the run's row lock for exactly as long as it takes to read the selection
-	// — the render itself runs outside it, where a lock would serialise every
-	// export on the box for the length of a Typst run.
+
 	err = s.tx.WithinTx(ctx, func(q *sqlcgen.Queries) error {
 		fresh, gErr := q.GetRunForUpdate(ctx, rid)
 		if gErr != nil {
@@ -191,8 +160,6 @@ func (s *Service) ExportGenerationRun(ctx context.Context, runID string) (dto.Ge
 	return s.persistExportedDocument(ctx, rid, run, outcome)
 }
 
-// GetGenerationExport is `GET /v1/generations/{runId}/export` — the idempotent
-// short-poll, reading the columns ExportGenerationRun wrote.
 func (s *Service) GetGenerationExport(ctx context.Context, runID string) (dto.GenerationExportDto, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -205,9 +172,6 @@ func (s *Service) GetGenerationExport(ctx context.Context, runID string) (dto.Ge
 	return exportDtoFromRun(run), nil
 }
 
-// persistBlockedExport records the overflow report against the run. It writes
-// no document and touches no item: FR-019's candidates are named for the user
-// to act on, and the server acting on them is exactly what the rule forbids.
 func (s *Service) persistBlockedExport(ctx context.Context, rid pgtype.UUID, outcome exportOutcome, cfg domain.ShapeConfig) (dto.GenerationExportDto, error) {
 	report := dto.OverflowReportDto{
 		PagesRendered: outcome.pages,
@@ -230,9 +194,6 @@ func (s *Service) persistBlockedExport(ctx context.Context, rid pgtype.UUID, out
 	return dto.GenerationExportDto{Status: exportBlocked, Report: &report}, nil
 }
 
-// persistExportedDocument inserts an ordinary GeneratedDocument row, so
-// `GET /api/documents` and the existing PDF download serve a workspace export
-// with no knowledge that it came from one, and points the run at it.
 func (s *Service) persistExportedDocument(ctx context.Context, rid pgtype.UUID, run sqlcgen.GenerationRun, outcome exportOutcome) (dto.GenerationExportDto, error) {
 	content, err := json.Marshal(outcome.doc)
 	if err != nil {
@@ -278,8 +239,6 @@ func (s *Service) markExportFailed(ctx context.Context, rid pgtype.UUID) {
 	_ = s.q.SetRunExport(ctx, sqlcgen.SetRunExportParams{ID: rid, ExportStatus: &status})
 }
 
-// exportDtoFromRun reads the run's three export columns into the wire shape —
-// the one place that mapping lives, shared by the run response and the poll.
 func exportDtoFromRun(run sqlcgen.GenerationRun) dto.GenerationExportDto {
 	status := ""
 	if run.ExportStatus != nil {
@@ -299,9 +258,6 @@ func exportDtoFromRun(run sqlcgen.GenerationRun) dto.GenerationExportDto {
 	}
 }
 
-// sectionsFromRows rebuilds the domain view of a run from its persisted rows,
-// so the assembler and the overflow report work on the same value types the
-// seeder produces and can be tested without a database.
 func sectionsFromRows(secRows []sqlcgen.GenerationSection, itemRows []sqlcgen.GenerationItem) []domain.Section {
 	itemsBySection := make(map[pgtype.UUID][]domain.Item, len(secRows))
 	for _, it := range itemRows {
@@ -343,10 +299,6 @@ func sectionsFromRows(secRows []sqlcgen.GenerationSection, itemRows []sqlcgen.Ge
 	return out
 }
 
-// hasAnySelection is the server's only refusal on content grounds: a wholly
-// empty document. A resume missing just its summary or just its skills is a
-// client-side warning (FR-019, rest-api.md) — the user is allowed to export a
-// shape the server would not have chosen.
 func hasAnySelection(sections []domain.Section) bool {
 	for _, sec := range sections {
 		for _, it := range sec.Items {

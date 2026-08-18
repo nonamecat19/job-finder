@@ -32,10 +32,6 @@ type ScrapingService interface {
 	FetchHTML(ctx context.Context, url string, headers map[string]string) (string, error)
 }
 
-// NewService's extractor is always AIContactExtractor now: recruiter's Go
-// LLM path was deleted (T113) once live parity evidence confirmed the
-// python path (AI_CAPABILITY_ROUTING=recruiter=python, the only mode left)
-// matches it (5/5 identical samples, t113-parity-samples.md).
 func NewService(q Repository, extractor ContactExtractor, scraping ScrapingService, linkedInEnabled bool) *Service {
 	return &Service{q: q, scraping: scraping, linkedInEnabled: linkedInEnabled, extractor: extractor}
 }

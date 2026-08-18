@@ -1,15 +1,3 @@
-// Package observability owns the platform's half of the LLM observability
-// arrangement introduced by feature 036: the retention guarantee.
-//
-// Collection itself needs no Go code — the routing service's success and
-// failure callbacks record every routed call, which is what makes 036's US1
-// config-only. What the routing service does *not* do is forget. Automated
-// retention is an enterprise feature of the collector (research R7), so an
-// OSS self-host that promises a 30-day window has to enforce it itself.
-//
-// That is what this package is. It is deliberately small and deliberately
-// separate from the LLM path: nothing here runs on a request, and a failure
-// here must never affect inference.
 package observability
 
 import (
@@ -23,37 +11,18 @@ import (
 	"time"
 )
 
-// DefaultRetentionDays is the window the platform promises when nothing is
-// configured (036 FR-008).
 const DefaultRetentionDays = 30
 
-// maxPagesPerRun bounds one pruning pass. A run that hits the bound deletes
-// what it found and says so; the next tick continues. This exists so a
-// long-neglected collector cannot turn one scheduled tick into an unbounded
-// loop against its API.
 const maxPagesPerRun = 50
 
-// pageSize is the collector's list page size. Its API caps this well below
-// what a batch delete accepts, so the two are separate numbers.
 const pageSize = 100
 
-// Config is what the pruner needs to reach the collector.
-//
-// The credentials here are the collector's own API keys, not provider
-// credentials — the application still holds no OPENROUTER/OPENAI key, which
-// is the clause Constitution Principle V actually protects. They are
-// named EVAL_PRUNE_* rather than LANGFUSE_* on purpose: 036 C2-2 forbids
-// granting the application container a LANGFUSE_* variable, and the pruning job
-// is a different grant with a different reason, so it reads different names and
-// can be revoked on its own.
 type Config struct {
-	// BaseURL is the collector's API root. Empty disables pruning entirely.
 	BaseURL string
-	// PublicKey and SecretKey authenticate against the collector's API. Either
-	// one empty disables pruning entirely.
+
 	PublicKey string
 	SecretKey string
-	// RetentionDays is the window. Zero or negative means DefaultRetentionDays.
+
 	RetentionDays int
 }
 
@@ -69,34 +38,22 @@ func (c Config) window() time.Duration {
 	return time.Duration(days) * 24 * time.Hour
 }
 
-// Report is what one pruning run did. It exists because FR-008a asks for the
-// guarantee to be observable: "records older than 30 days are deleted" is a
-// claim, and a claim nobody can check is how a retention window quietly stops
-// being enforced.
 type Report struct {
-	// Skipped is true when the collector is not configured. Not an error: a
-	// deployment that never turned collection on has nothing to prune.
 	Skipped bool
-	// Cutoff is the boundary this run used. Anything recorded before it was
-	// eligible for deletion.
+
 	Cutoff time.Time
-	// Deleted counts records this run removed.
+
 	Deleted int
-	// Truncated is true when the run hit its page bound with more to do, so a
-	// zero-deleted next run is not mistaken for "nothing left".
+
 	Truncated bool
 }
 
-// Pruner deletes collector records older than the retention window.
 type Pruner struct {
 	cfg    Config
 	client *http.Client
 	now    func() time.Time
 }
 
-// New builds a pruner. A nil client gets a bounded default: the collector is a
-// peer service on the same host, and a pruning run that hangs is a scheduled
-// tick that never finishes.
 func New(cfg Config, client *http.Client) *Pruner {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
@@ -104,11 +61,6 @@ func New(cfg Config, client *http.Client) *Pruner {
 	return &Pruner{cfg: cfg, client: client, now: time.Now}
 }
 
-// Prune deletes every record older than the window and reports what it removed.
-//
-// Errors are returned, never swallowed (FR-008a). A retention job that fails
-// silently is worse than none: the window still appears in the documentation
-// while the data accumulates.
 func (p *Pruner) Prune(ctx context.Context) (Report, error) {
 	if !p.cfg.enabled() {
 		return Report{Skipped: true}, nil
@@ -129,9 +81,7 @@ func (p *Pruner) Prune(ctx context.Context) (Report, error) {
 			return report, fmt.Errorf("delete %d records: %w", len(ids), err)
 		}
 		report.Deleted += len(ids)
-		// Always re-list from the first page rather than paginating forward:
-		// the rows just deleted are gone, so page 1 is the next batch. Walking
-		// page numbers over a shrinking result set skips records.
+
 		if len(ids) < pageSize {
 			return report, nil
 		}
@@ -205,9 +155,6 @@ func (p *Pruner) deleteBatch(ctx context.Context, ids []string) error {
 	return nil
 }
 
-// statusError turns a non-success response into an error carrying enough of the
-// body to diagnose it — an auth failure and a missing endpoint are both 4xx and
-// need very different fixes.
 func statusError(resp *http.Response) error {
 	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 	return fmt.Errorf("collector returned %s: %s", resp.Status, strings.TrimSpace(string(snippet)))

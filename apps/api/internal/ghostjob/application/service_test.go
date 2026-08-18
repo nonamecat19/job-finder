@@ -94,11 +94,6 @@ func (f *fakeLLM) CompleteJSON(ctx context.Context, prompt string, opts *llm.Com
 	return r, nil
 }
 
-// CompleteChat satisfies the 037 Provider interface. The fake's behaviour lives
-// in CompleteJSON, so this delegates to it with the final turn as the prompt —
-// which is what the real adapters do in reverse. Tool calls are never
-// fabricated here: a fake that invented one would make a tool-loop test pass
-// for the wrong reason.
 func (f *fakeLLM) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
 	prompt := ""
 	if len(msgs) > 0 {

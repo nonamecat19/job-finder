@@ -2,10 +2,6 @@ package domain
 
 import "testing"
 
-// The catalogue is a menu a user reads, so its invariants are about the menu
-// being usable, not about Go compiling. Spec AC1 asks for 3-5 options with
-// exactly one preselected. 044 dropped the self-hosted entry that used to sit
-// alongside them: there is no local runtime left for it to run on.
 func TestSummaryCatalogueIsAUsableMenu(t *testing.T) {
 	opts := SummaryOptions()
 
@@ -35,9 +31,6 @@ func TestSummaryCatalogueIsAUsableMenu(t *testing.T) {
 	}
 }
 
-// The default must stay on the task key the pipeline used before this feature,
-// which is what makes spec AC3 — a user who never opens the selector sees
-// today's behaviour — true by construction rather than by vigilance.
 func TestDefaultSummaryOptionKeepsThePreFeatureTaskKey(t *testing.T) {
 	d := DefaultSummaryOption()
 	if d.ID != SummaryOptionStandard {
@@ -56,8 +49,6 @@ func TestLookupSummaryOptionFallsBackToTheDefault(t *testing.T) {
 		t.Fatalf("lookup(premium) = %v, %v", got.ID, ok)
 	}
 
-	// A stale dashboard, a hand-edited setting, or an option removed between
-	// releases. The run must carry on.
 	got, ok = LookupSummaryOption("no-such-option")
 	if ok {
 		t.Fatal("lookup of an unknown id reported success")
@@ -67,10 +58,6 @@ func TestLookupSummaryOptionFallsBackToTheDefault(t *testing.T) {
 	}
 }
 
-// 044 deleted the self-hosted option, and with it the only reason an option
-// could carry an empty task key. summaryOptionRouters now builds a router for
-// every entry unconditionally, so an option without a key would produce one
-// that sends an empty model name to the gateway.
 func TestEverySummaryOptionHasATaskKey(t *testing.T) {
 	for _, o := range SummaryOptions() {
 		if o.TaskKey == "" {

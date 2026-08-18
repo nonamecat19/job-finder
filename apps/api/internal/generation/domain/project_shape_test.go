@@ -5,10 +5,6 @@ import (
 	"testing"
 )
 
-// RankProjects and TrimProjectHighlights are the projects-section counterparts
-// of RankSkills and TrimSkillGroups: relevance decides which projects survive
-// the cap, the authored level decides how many bullets each one renders.
-
 func projectsDoc(projects ...map[string]any) RendercvMaster {
 	raw := make([]any, 0, len(projects))
 	for _, p := range projects {
@@ -44,8 +40,6 @@ func TestRankProjects_MostRelevantFirstWhenCapped(t *testing.T) {
 	}
 }
 
-// Without a cap every project renders, so the master's order is the user's own
-// choice of what to lead with and nothing reorders it.
 func TestRankProjects_UncappedKeepsAuthoredOrder(t *testing.T) {
 	doc := projectsDoc(
 		project("Recipe blog", "", "Built with Jekyll"),
@@ -60,8 +54,6 @@ func TestRankProjects_UncappedKeepsAuthoredOrder(t *testing.T) {
 	}
 }
 
-// Ranking is a permutation: no project is added, dropped or reworded. Dropping
-// is the cap's job, in ApplyHardLimits.
 func TestRankProjects_IsAPermutation(t *testing.T) {
 	doc := projectsDoc(
 		project("A", "", "Go"),
@@ -98,7 +90,7 @@ func TestTrimProjectHighlights_Levels(t *testing.T) {
 		{ProjectLevelAll, 8},
 		{ProjectLevelTop3, 3},
 		{ProjectLevelTop5, 5},
-		{"", 4}, // auto: half of eight
+		{"", 4},
 	}
 	for _, c := range cases {
 		t.Run("level="+c.level, func(t *testing.T) {
@@ -129,9 +121,6 @@ func TestTrimProjectHighlights_RelevantKeepsWhatTheVacancyAsked(t *testing.T) {
 	}
 }
 
-// A project with nothing the vacancy asked about keeps its leading bullet: a
-// name with no bullets under it reads as an omission, and dropping the whole
-// project is the cap's decision, not this pass's.
 func TestTrimProjectHighlights_RelevantNeverLeavesABareTitle(t *testing.T) {
 	doc := projectsDoc(project("P", ProjectLevelRelevant, "Styled the marketing page", "Wrote the changelog"))
 
@@ -143,8 +132,6 @@ func TestTrimProjectHighlights_RelevantNeverLeavesABareTitle(t *testing.T) {
 	}
 }
 
-// Auto never trims away a bullet the vacancy asked about, the same guarantee
-// the skills side makes.
 func TestTrimProjectHighlights_AutoKeepsEveryVacancyMatch(t *testing.T) {
 	doc := projectsDoc(project("P", "",
 		"Go service", "Kafka pipeline", "Redis cache", "Postgres schema",
@@ -160,9 +147,6 @@ func TestTrimProjectHighlights_AutoKeepsEveryVacancyMatch(t *testing.T) {
 	}
 }
 
-// The workspace shows projects as a ranked list where the cap is a selection
-// boundary, not a removal: everything stays, the top projectsMax arrive
-// selected.
 func TestSeedProjectItems_CapSelectsRatherThanDrops(t *testing.T) {
 	projects := []map[string]any{
 		{"name": "A", "highlights": []any{"x", "y"}},
@@ -189,8 +173,6 @@ func TestSeedProjectItems_CapSelectsRatherThanDrops(t *testing.T) {
 	}
 }
 
-// A master project name is stored as a markdown link; the workspace shows the
-// human half, not the URL.
 func TestSeedProjectItems_StripsTheLinkWrapper(t *testing.T) {
 	projects := []map[string]any{
 		{"name": "[job-finder — AI job search](https://example.com/x)", "highlights": []any{"one"}},
@@ -229,8 +211,6 @@ func TestAssemble_KeepsOnlySelectedProjectsInOrder(t *testing.T) {
 	}
 }
 
-// A run whose master has no projects gets no projects section: an empty block
-// asking to be filled is worse than no block.
 func TestSeedFromMaster_NoProjectsSectionWithoutProjects(t *testing.T) {
 	master := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"experience": []any{},

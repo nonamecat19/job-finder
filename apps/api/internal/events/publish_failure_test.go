@@ -13,13 +13,6 @@ import (
 	"github.com/job-finder/api/internal/events"
 )
 
-// TestPublish_Integration_BrokerUnreachableReturnsError proves US5 scenario
-// 5 / M2-3: a publish that cannot reach the broker returns an error to its
-// caller rather than being enqueued-and-forgotten. This simulates "the
-// broker is down" by pointing the publisher at a channel whose underlying
-// connection has already been closed — the strongest available proxy
-// without stopping a shared broker instance other tests in this package
-// depend on (as the task instructions for T056 suggest).
 func TestPublish_Integration_BrokerUnreachableReturnsError(t *testing.T) {
 	conn := dialTestBroker(t)
 	declareTopologyOrFail(t, conn)
@@ -31,7 +24,6 @@ func TestPublish_Integration_BrokerUnreachableReturnsError(t *testing.T) {
 	pub, ch := newTestPublisher(t, deadConn)
 	defer ch.Close()
 
-	// Simulate the broker being down from this publisher's point of view.
 	if err := deadConn.Close(); err != nil {
 		t.Fatalf("close connection: %v", err)
 	}
@@ -46,11 +38,8 @@ func TestPublish_Integration_BrokerUnreachableReturnsError(t *testing.T) {
 	}
 }
 
-// TestPublish_Integration_InvalidBrokerAddressReturnsError proves the dial
-// side of the same guarantee: connecting to an address nothing is
-// listening on fails rather than hanging or silently succeeding.
 func TestPublish_Integration_InvalidBrokerAddressReturnsError(t *testing.T) {
-	_ = dialTestBroker(t) // only to skip cleanly when there is no broker infra at all in this environment
+	_ = dialTestBroker(t)
 
 	_, err := amqp.DialConfig("amqp://jobfinder:change-me@127.0.0.1:1/", amqp.Config{
 		Dial: amqp.DefaultDial(2 * time.Second),

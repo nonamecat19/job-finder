@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-// TestPublishWork_OversizedMessageFailsExplicitly guards E3-5: an oversized
-// snapshot is a publish error naming the work id and the size, never a
-// silently truncated message, and it never reaches the channel.
 func TestPublishWork_OversizedMessageFailsExplicitly(t *testing.T) {
 	fc := newFakeChannel()
 	pub, err := NewPublisher(fc, time.Second)
@@ -33,8 +30,6 @@ func TestPublishWork_OversizedMessageFailsExplicitly(t *testing.T) {
 	}
 }
 
-// TestPublishWork_WithinLimitPublishes guards the happy path: a body at or
-// under MaxMessageSize is published unchanged.
 func TestPublishWork_WithinLimitPublishes(t *testing.T) {
 	fc := newFakeChannel()
 	pub, err := NewPublisher(fc, time.Second)

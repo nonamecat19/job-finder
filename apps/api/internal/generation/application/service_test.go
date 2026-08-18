@@ -203,10 +203,6 @@ func equalStrings(got, want []string) bool {
 	return true
 }
 
-// 033 FR-010: the run must record which skill tokens grounding removed.
-// DropUngroundedSkillTokens mutates in place and reports nothing, so the
-// before/after diff is the only record — and if it stops being taken, this
-// test fails rather than the trail silently going quiet.
 func TestDroppedSkillEntriesReportsTheDiff(t *testing.T) {
 	master := domain.RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"skills": []any{map[string]any{"label": "Languages", "details": "Go, Python"}},
@@ -219,7 +215,7 @@ func TestDroppedSkillEntriesReportsTheDiff(t *testing.T) {
 	domain.DropUngroundedSkillTokens(master, doc)
 	got := droppedSkillEntries(before, skillDetailEntries(doc))
 
-	want := []string{"Kubernetes", "Rust"} // sorted, not document order
+	want := []string{"Kubernetes", "Rust"}
 	if len(got) != len(want) {
 		t.Fatalf("dropped = %v, want %v", got, want)
 	}
@@ -245,8 +241,6 @@ func TestDroppedSkillEntriesIsEmptyWhenNothingIsDropped(t *testing.T) {
 	}
 }
 
-// A token appearing in two groups and removed from only one is one drop, not
-// two — the diff is a multiset difference, not a set difference.
 func TestDroppedSkillEntriesCountsRepeatsOnce(t *testing.T) {
 	before := []string{"Go", "Rust", "Go"}
 	after := []string{"Go", "Rust"}

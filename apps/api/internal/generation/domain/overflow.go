@@ -6,14 +6,8 @@ import (
 	"strings"
 )
 
-// candidatesPerPageOver is how many drop candidates a report names per page
-// of overflow. The user acts on these, so the list has to be short enough to
-// read and long enough to actually recover a page.
 const candidatesPerPageOver = 5
 
-// OverflowCandidate is one named item the user could deselect to fit the page
-// budget. It is a suggestion and nothing else: FR-019 requires the overflow to
-// be reported with candidates, never resolved.
 type OverflowCandidate struct {
 	ItemID    string
 	SectionID string
@@ -21,10 +15,6 @@ type OverflowCandidate struct {
 	Rank      int
 }
 
-// OverflowCandidates returns the lowest-ranked selected items, worst-ranked
-// first — the answer FR-019 asks for, which `rank` already holds, so this is a
-// sort rather than a heuristic. `over` is how many pages the render came out
-// over target; a non-positive value means there is nothing to report.
 func OverflowCandidates(sections []Section, over int) []OverflowCandidate {
 	if over <= 0 {
 		return nil
@@ -72,8 +62,6 @@ func OverflowCandidates(sections []Section, over int) []OverflowCandidate {
 	return out
 }
 
-// candidateLabel names an item the way the workspace shows it, so the user can
-// find the thing being suggested: "Acme Inc. · bullet 8".
 func candidateLabel(sec Section, it Item) string {
 	switch sec.Kind {
 	case SectionKindSummary:

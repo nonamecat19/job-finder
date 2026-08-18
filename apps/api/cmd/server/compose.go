@@ -72,8 +72,8 @@ import (
 	notifierhttp "github.com/job-finder/api/internal/notifier/interfaces/http"
 	"github.com/job-finder/api/internal/outreach"
 	outreachhttp "github.com/job-finder/api/internal/outreach/interfaces/http"
-	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/platform/langfuseretention"
+	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/platform/observability"
 	"github.com/job-finder/api/internal/platform/storage"
 	"github.com/job-finder/api/internal/postage"
@@ -126,17 +126,9 @@ type App struct {
 	Enrichment *enrichment.Handler
 	Ghost      *ghostjob.Handler
 
-	// GenerationHtmlRenderer/GenerationRendercvRenderer are generation's PDF
-	// renderers, exposed here so servers.go's generate.completed result
-	// handler can render a python-produced document the same way the Go
-	// legacy path does.
 	GenerationHtmlRenderer     *generation.HtmlPdfRenderer
 	GenerationRendercvRenderer *generation.RenderCvRenderer
 
-	// MatchNotifier/MatchAutoGenerate/MatchGenerator are match's post-score
-	// side effects, exposed here so servers.go's match.completed result
-	// handler can run them the same way worker.Handler.ProcessTask does for
-	// a go-routed MatchJob.
 	MatchNotifier     *notifier.Service
 	MatchAutoGenerate matching.AutoGenerateGate
 	MatchGenerator    matching.Generator
@@ -158,18 +150,11 @@ type sourcesHandles struct {
 	Roster   *roster.Service
 }
 
-// composeJobSources builds the crawled sources by hand rather than through the
-// library's catalogue: the app runs a deliberate subset (the detail-only
-// sources below are reached through enrichment, not a search fan-out) and it
-// keeps the concrete source values, which is what lets enrichment call their
-// FetchDetail.
 func composeJobSources(p *Platform) (*sourcesHandles, error) {
 	djinniSrc := djinni.Source{Scraping: p.Scraping, Session: p.DjinniSession}
 	douSrc := dou.Source{Scraping: p.Scraping}
 	workuaSrc := workua.Source{Scraping: p.Scraping}
 
-	// The board probes are built straight from the vendor Fetchers, so the
-	// roster can validate a board before any source exists to crawl it.
 	checkers := map[string]ports.EmployerHealthChecker{
 		greenhouse.Key:      greenhouse.HealthChecker(),
 		lever.Key:           lever.HealthChecker(),
@@ -222,9 +207,7 @@ func composeJobSources(p *Platform) (*sourcesHandles, error) {
 	}
 
 	sourcesSvc := application.NewService(p.DB.Queries, registry, p.Config.ConfigEncryptionKey)
-	// The session was built before the store existed — the store needs the
-	// registry, and the registry needs the session — so it is handed its store
-	// here, once the cycle is closed.
+
 	p.SourceConfig.Bind(sourcesSvc)
 
 	return &sourcesHandles{
@@ -251,19 +234,14 @@ func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
 		worker.WithTxRunner(p.DB),
 		worker.WithChunkSize(p.Config.IngestPersistChunkSize),
 	)
-	// The retention job for the LLM observability collector (036 FR-008) rides
-	// on the ingestion scheduler's tick, which is the platform's existing
-	// periodic-maintenance loop. It no-ops when the collector is unconfigured,
-	// which is the default.
+
 	pruner := observability.New(observability.Config{
 		BaseURL:       p.Config.EvalPruneCollectorURL,
 		PublicKey:     p.Config.EvalPrunePublicKey,
 		SecretKey:     p.Config.EvalPruneSecretKey,
 		RetentionDays: p.Config.EvalPruneRetentionDay,
 	}, nil)
-	// The Langfuse trace payload retention job (047 FR-018/FR-018a, K5) rides
-	// on the same tick. It no-ops when no ClickHouse URL is configured, which
-	// is the default (Langfuse itself is dev-only self-hosted).
+
 	payloadPruner := langfuseretention.New(langfuseretention.Config{
 		URL:           p.Config.RetentionClickhouseURL,
 		User:          p.Config.RetentionClickhouseUser,
@@ -282,32 +260,19 @@ func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
 
 type llmHandles struct {
 	MatchRouter *llm.Router
-	// GenerationRouter serves the cover letter, which is still a single call
-	// against the `generation` task key. Resume generation itself is split
-	// across the stage routers below (035).
+
 	GenerationRouter        *llm.Router
 	GenerationAnalyzeRouter *llm.Router
 	GenerationSelectRouter  *llm.Router
 	GenerationPremiumRouter *llm.Router
 	GenerationSummaryRouter *llm.Router
-	// SummaryOptionRouters is one router per 034 summary option, keyed by
-	// option id. Built from the catalogue so adding an option is a one-line
-	// change there rather than a wiring change here.
+
 	SummaryOptionRouters map[string]llm.Provider
 	RephraseRouter       *llm.Router
 	GhostRouter          *llm.Router
-	// SalaryRouter is queueClassResolvers' last reader of this group — 044
-	// data-model.md §4's OutreachRouter/RecruiterRouter siblings are gone:
-	// both capabilities had their Go LLM path deleted (T113) and never fed
-	// queueClassResolvers (neither is a queue-consuming capability), so
-	// nothing was left reading them once composeOutreach/composeRecruiter
-	// stopped taking a Router.
+
 	SalaryRouter *llm.Router
-	// EmbedRouter is handed to any consumer whose only use of a Router is
-	// Embed (contracts/embeddings.md E5: Router.Embed always routes to the
-	// gateway under the "embed" key regardless of the router it is called
-	// through, but naming this one "embed" keeps the observability metadata
-	// honest for callers that use only this router).
+
 	EmbedRouter *llm.Router
 }
 
@@ -317,11 +282,7 @@ func composeLLM(p *Platform) (*llmHandles, error) {
 		return nil, err
 	}
 	var gatewayIface llm.Provider = gatewayProvider
-	// Wrapping here, before any Router is built, means every Router's
-	// Embed() call — not just EmbedRouter's — is diverted to the AI
-	// service's `embed` capability once AI_CAPABILITY_ROUTING routes it to
-	// python (matching's llmc, for instance, calls both Complete and Embed
-	// through MatchRouter).
+
 	if p.AIClient != nil {
 		gatewayIface = &aiclient.EmbedRoutedProvider{Provider: gatewayIface, Client: p.AIClient, Routing: p.Config.CapabilityRouting}
 	}
@@ -360,9 +321,6 @@ type matchingHandles struct {
 	AiFeatureHandler *aifeaturehttp.AiFeatureHandler
 	Handler          *matching.Handler
 
-	// AutoGenerate/Generator are exposed so servers.go's match.completed
-	// result handler can run the same post-match auto-generate decision
-	// worker.Handler.ProcessTask runs after a go-routed MatchJob returns.
 	AutoGenerate matching.AutoGenerateGate
 	Generator    matching.Generator
 }
@@ -450,26 +408,18 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	if err != nil {
 		return nil, err
 	}
-	// 034: which option writes the summary. Like the shape service, a failure
-	// to load it is not fatal — the catalogue default is a complete answer, and
-	// refusing to start the API over a preferences row would be a poor trade.
+
 	summarySvc, err := summarymodel.NewService(ctx, p.DB.Queries)
 	if err != nil {
 		return nil, err
 	}
 	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, routers, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl, shapeSvc)
 	generationSvc.SetSummaryModelProvider(summarySvc)
-	// generation.SnapshotEnqueuer (platform.go's lateGenerationSnapshot) needs
-	// the same profile/shape/summary services legacy Generate() reads from —
-	// not ready until here, so binding happens as soon as they exist.
+
 	p.GenLate.Bind(profileSvc, shapeSvc, summarySvc)
-	// 042: the workspace run's background half (StartRun) is dispatched the
-	// same way every other async pipeline in this codebase is — enqueued on
-	// the existing `generate` queue and picked up by generation.Handler.
+
 	generationSvc.SetEnqueuer(p.Enqueuer)
-	// 042 T025/T026: item/section mutations take a row-level lock on the run
-	// and write in the same transaction (rest-api.md) — *db.DB.WithinTx is
-	// the TxRunner.
+
 	generationSvc.SetTxRunner(p.DB)
 	return &generationHandles{
 		Generation:       generationSvc,
@@ -493,17 +443,12 @@ func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestio
 	return &subscriptionshttp.SubscriptionsHandler{Subs: subsSvc, Ingestion: ingestionSvc}
 }
 
-// composeManualAdd wires the synchronous add path. It shares the subscription
-// service with the CRUD endpoints so "at most one manual row per source" is one
-// rule in one place, and the ingest package with the crawl worker so a manual
-// vacancy is byte-for-byte what a crawl produces.
 func composeManualAdd(p *Platform, sources *sourcesHandles, jobsSvc *jobs.Service) *manualaddhttp.ManualAddHandler {
 	subsSvc := subscriptions.NewService(p.DB.Queries, sources.Sources)
 	manualSvc := manualadd.NewService(
 		p.DB.Queries, sources.Sources, subsSvc, sources.Registry, jobsSvc, p.Enqueuer,
 		manualadd.WithTxRunner(p.DB),
-		// User Story 3 has shipped, so no_reader and incomplete answer with a
-		// draft rather than dead-ending (FR-019, FR-023).
+
 		manualadd.WithFillIn(),
 	)
 	return &manualaddhttp.ManualAddHandler{Manual: manualSvc}
@@ -525,11 +470,6 @@ func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc ports.
 		p.Enqueuer, enrichDelay, enrichDelays)
 }
 
-// composeSalary no longer takes a Router or returns a worker handle: salary's
-// Go LLM path was cut over and deleted (T113) once live parity evidence
-// confirmed the python path (AI_CAPABILITY_ROUTING=salary=python, the only
-// mode left) matches it, and with it the last consumer of the levels.fyi
-// loader beyond the CSV warm at startup — it stays only for that side effect.
 func composeSalary(ctx context.Context, p *Platform) {
 	cfg := p.Config
 	levelsFyiLoader := salary.NewLevelsFyiLoader(p.DB.Queries)
@@ -673,9 +613,6 @@ func (p redisPinger) Ping(ctx context.Context) error {
 	return p.client.Ping(ctx).Err()
 }
 
-// brokerPinger reports RabbitMQ connectivity as its own health signal,
-// distinct from Postgres/Redis/Minio (M8-3): a broker-only outage should
-// read differently from a database outage.
 type brokerPinger struct{ conn *amqp.Connection }
 
 func (b brokerPinger) Ping(ctx context.Context) error {
@@ -689,9 +626,6 @@ func (b brokerPinger) Ping(ctx context.Context) error {
 	return ch.Close()
 }
 
-// dlqDepther backs health.DLQDepther with a fresh inspection channel per
-// call (M8-2) — readiness checks are infrequent enough that a dedicated
-// long-lived channel isn't worth the added state.
 type dlqDepther struct {
 	conn    *amqp.Connection
 	metrics *events.Metrics
@@ -755,9 +689,6 @@ func (a hostRetrievalAdapter) OverrideCoolingOff(ctx context.Context, host strin
 	return a.svc.OverrideCoolingOff(ctx, host)
 }
 
-// rateOverrides builds the operator-override half of the pacing precedence
-// (017 § 3.1 case 1). Without it a host falls through to its advertised crawl
-// delay, and then to the default rate.
 func rateOverrides(cfg *config.Config) map[string]float64 {
 	overrides := map[string]float64{}
 	if cfg.DjinniRateOverrideRPS > 0 {
@@ -821,11 +752,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Select:  llmH.GenerationSelectRouter,
 		Premium: llmH.GenerationPremiumRouter,
 		Summary: llmH.GenerationSummaryRouter,
-		// 034: one router per hosted summary option. The `standard` option is
-		// served by Summary above — it is the same task key the pipeline used
-		// before the feature existed, which is what makes an untouched selector
-		// byte-identical to today. The self-hosted option is a router with no
-		// gateway, which is the pre-split behaviour.
+
 		SummaryByOption: llmH.SummaryOptionRouters,
 		Cover:           llmH.GenerationRouter,
 	})
@@ -899,19 +826,6 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 	}, nil
 }
 
-// summaryOptionRouters builds one provider per 034 summary option, from the
-// catalogue rather than from a list repeated here — an option added in
-// internal/generation/domain wires itself.
-//
-// 044 removes Ollama entirely, so the self-hosted option's TaskKey=="" can no
-// longer construct a working provider — there is no local tier left to route
-// to. Rather than build a Router that would send an empty model name to the
-// gateway, the option is simply skipped: a lookup for "local" then falls
-// through LookupSummaryOption's existing miss path to the default, which is
-// exactly the degrade-correctly behaviour tasks.md's Phase C section
-// describes and T040 (US2) pins with a test. Deleting the "local" catalogue
-// entry and its SelfHosted() method outright is T037/T038 (US2), out of this
-// wave's scope.
 func summaryOptionRouters(gateway llm.Provider) map[string]llm.Provider {
 	out := map[string]llm.Provider{}
 	for _, o := range generation.SummaryOptions() {

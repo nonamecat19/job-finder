@@ -64,10 +64,6 @@ func taskWithActivityID(id string) *Task {
 	return NewTask("match", payload)
 }
 
-// Gate has a single concurrency pool since 044 (T027): ClassResolver is no
-// longer consulted for admission, so these tests exercise TaskPolicy.Concurrency
-// directly rather than a hosted/local split that no longer exists.
-
 func TestGate_AdmitsConcurrentlyAndBlocksNext(t *testing.T) {
 	policy := TaskPolicy{Concurrency: 2}
 	g := NewGate(policy)

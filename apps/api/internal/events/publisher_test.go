@@ -8,14 +8,9 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// fakeChannel is a minimal amqpChannel double: PublishWithContext records
-// the call and, unless publishErr is set, arranges for a confirmation (and
-// optionally a return) to be delivered on the notify channels, mimicking
-// how the real broker orders basic.return before basic.ack for an
-// unroutable mandatory message.
 type fakeChannel struct {
 	publishErr   error
-	confirmAck   bool // ignored if sendConfirm is false
+	confirmAck   bool
 	sendConfirm  bool
 	sendReturn   bool
 	confirmDelay time.Duration
@@ -99,7 +94,7 @@ func TestPublish_NackedReturnsError(t *testing.T) {
 func TestPublish_UnroutableReturnsError(t *testing.T) {
 	fc := newFakeChannel()
 	fc.sendReturn = true
-	fc.confirmAck = true // broker still acks; the return is what marks it unroutable
+	fc.confirmAck = true
 	pub, err := NewPublisher(fc, time.Second)
 	if err != nil {
 		t.Fatalf("NewPublisher: %v", err)

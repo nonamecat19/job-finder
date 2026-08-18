@@ -10,25 +10,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// 034 T005: the summary catalogue is Go, the routing it names is YAML, and
-// nothing in the compiler connects them.
-//
-// This test is the connection. An option whose task key the gateway has never
-// heard of does not fail loudly — LiteLLM has no such group, the call falls
-// through, and the user who paid attention and picked "Premium" silently gets
-// whatever the terminal tier is. That is the worst failure mode available here:
-// the feature appears to work and quietly does nothing.
-//
-// It lives in package internal_test rather than in the llm package because it
-// spans two layers — the generation domain's catalogue and the platform's
-// deployment artifact — and the platform layer must not import generation. The
-// existing arch_test.go and toolfence_test.go are here for the same reason.
-//
-// The parse below is deliberately minimal: only the two things this test
-// asserts about. The full config contract is checked by
-// internal/platform/llm/gateway_config_test.go, which is also where each of
-// these keys is asserted to have a fallback chain across real providers.
-
 type catalogueGatewayConfig struct {
 	ModelList []struct {
 		ModelName string `yaml:"model_name"`
@@ -39,7 +20,7 @@ type catalogueGatewayConfig struct {
 }
 
 func TestEverySummaryOptionRoutesSomewhereReal(t *testing.T) {
-	// internal/ -> apps/api -> repo root
+
 	path := filepath.Join("..", "..", "..", "gateway", "config.yaml")
 	raw, err := os.ReadFile(path)
 	if err != nil {

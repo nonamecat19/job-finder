@@ -9,16 +9,12 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// Migration 00041 is additive with defaults, so every row that existed before
-// it must keep its meaning: a subscription is a crawl, a run is scheduled.
 func TestIntegration_Migration00041_ExistingRowsDefaultToCrawlAndScheduled(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
 	source := mustInsertJobSource(t, "js-041-defaults", "api")
 
-	// Inserted without naming the new columns, the way a pre-migration write
-	// would have.
 	var subID string
 	if err := testDB.Pool.QueryRow(ctx,
 		`INSERT INTO "Subscription" ("sourceKey", "name", "url", "enabled") VALUES ($1, 'Legacy', 'https://example.com/jobs', true) RETURNING "id"`,
@@ -54,8 +50,6 @@ func TestIntegration_Migration00041_ExistingRowsDefaultToCrawlAndScheduled(t *te
 	}
 }
 
-// The 'manual' JobSource is inserted ON CONFLICT DO NOTHING, so re-running the
-// migration cannot fail or duplicate it.
 func TestIntegration_Migration00041_ManualJobSourceIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 
@@ -76,9 +70,6 @@ func TestIntegration_Migration00041_ManualJobSourceIsIdempotent(t *testing.T) {
 	}
 }
 
-// The partial unique index is the whole enforcement of "one manual
-// subscription per source" — EnsureManualSubscription leans on it, so two
-// concurrent first-time adds settle on one row.
 func TestIntegration_Migration00041_OneManualSubscriptionPerSource(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -101,7 +92,6 @@ func TestIntegration_Migration00041_OneManualSubscriptionPerSource(t *testing.T)
 		t.Fatalf("expected one manual row per source, got %v and %v", first.ID, second.ID)
 	}
 
-	// A crawl row on the same source is unaffected by the partial index.
 	if _, err := testDB.Queries.CreateSubscription(ctx, sqlcgen.CreateSubscriptionParams{
 		SourceKey: source.Key, Name: strPtr("Saved search"), Url: "https://example.com/jobs",
 		Enabled: true, Cron: "0 */6 * * *", Kind: "crawl",
@@ -110,8 +100,6 @@ func TestIntegration_Migration00041_OneManualSubscriptionPerSource(t *testing.T)
 	}
 }
 
-// The scheduler's due-query and the health query are the two places a manual
-// row or a manual run must never appear.
 func TestIntegration_Migration00041_ManualRowsAreInvisibleToSchedulerAndHealth(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -135,7 +123,6 @@ func TestIntegration_Migration00041_ManualRowsAreInvisibleToSchedulerAndHealth(t
 		}
 	}
 
-	// Three failed manual runs must leave the source health accounting empty.
 	for range 3 {
 		run, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
 			SourceId: source.ID, SubscriptionId: manual.ID, Trigger: "manual",
@@ -160,8 +147,6 @@ func TestIntegration_Migration00041_ManualRowsAreInvisibleToSchedulerAndHealth(t
 	}
 }
 
-// Down keeps the 'manual' JobSource row and everything hanging off it, because
-// dropping it would cascade-delete vacancies the operator entered by hand.
 func TestIntegration_Migration00041_DownKeepsManualSourceAndItsVacancies(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
@@ -173,8 +158,6 @@ func TestIntegration_Migration00041_DownKeepsManualSourceAndItsVacancies(t *test
 	}
 	job := mustInsertJob(t, "manual", "manual-dedupe-041", "Hand-entered role")
 
-	// Everything the Down block does, in the same order. The manual JobSource
-	// insert is deliberately not reversed.
 	downStatements := []string{
 		`DROP INDEX IF EXISTS "SourceRun_subscriptionId_idx"`,
 		`ALTER TABLE "SourceRun" DROP CONSTRAINT IF EXISTS "SourceRun_trigger_check"`,

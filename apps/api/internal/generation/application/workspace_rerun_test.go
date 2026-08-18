@@ -7,20 +7,11 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// T082: a rerun preserves a matched item's selected/position/edited_text and
-// discards only the items that don't match anything in the freshly generated
-// set — data-model.md §4's rule, exercised here as the pure function the
-// service applies before every delete-and-recreate on a rerun
-// (preserveMatchedSelections), with no database involved.
 func TestPreserveMatchedSelectionsKeepsMatchedProfileItemState(t *testing.T) {
 	old := []domain.Item{
-		// The user toggled this bullet off and moved it — a decision that
-		// must survive the rerun because the bullet (source_index 0) still
-		// exists in the fresh set.
+
 		{Origin: domain.OriginProfile, SourceIndex: intPtr(0), SourceText: "Shipped the payments service", Selected: false, Position: 5},
-		// This bullet no longer appears in the fresh set (its entry shrank,
-		// or the rerun simply re-ranked it out) — it must not leak into the
-		// result at all.
+
 		{Origin: domain.OriginProfile, SourceIndex: intPtr(9), SourceText: "A bullet that no longer exists", Selected: true, Position: 0},
 	}
 	fresh := []domain.Item{
@@ -46,8 +37,7 @@ func TestPreserveMatchedSelectionsKeepsMatchedAIItemStateAndEdit(t *testing.T) {
 		{Origin: domain.OriginAI, SourceText: "Led the Kubernetes migration", Selected: true, Position: 4, EditedText: strPtr("Led the Kubernetes migration end to end")},
 		{Origin: domain.OriginAI, SourceText: "A suggestion the model won't repeat this time", Selected: true, Position: 0},
 	}
-	// The regenerated suggestion differs only in case/whitespace — still the
-	// "same" suggestion under normalised-text matching (data-model.md §4).
+
 	fresh := []domain.Item{
 		{Origin: domain.OriginAI, SourceText: "  Led the Kubernetes migration  ", Selected: false, Position: 0},
 		{Origin: domain.OriginAI, SourceText: "A brand new suggestion", Selected: false, Position: 1},
@@ -72,9 +62,6 @@ func TestPreserveMatchedSelectionsKeepsMatchedAIItemStateAndEdit(t *testing.T) {
 	}
 }
 
-// A plain run has nothing to preserve: nil oldItems must leave newItems
-// exactly as given, so applyRankedSections/applyRankedSkills passing nil for
-// a first-time run is a true no-op rather than a special case.
 func TestPreserveMatchedSelectionsIsIdentityWithNoOldItems(t *testing.T) {
 	fresh := []domain.Item{
 		{Origin: domain.OriginProfile, SourceIndex: intPtr(0), SourceText: "Shipped the payments service", Selected: true, Position: 0},

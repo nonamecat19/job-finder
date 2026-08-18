@@ -33,11 +33,6 @@ func (f *fakeIntel) GetIntel(ctx context.Context, jobID string) (*dto.CompanyInt
 	return f.intel, nil
 }
 
-// fakeLLM stands in for a Drafter — outreach's Go LLM path is deleted
-// (T113: AIDrafter is the only implementation left, verified live in
-// t113-parity-samples.md), so what these tests exercise is generateGrounded/
-// GroundClaims and the rest of Service's Go-owned grounding logic, fed
-// scripted draft attempts exactly as AIDrafter would return one.
 type fakeLLM struct {
 	responses []DraftAttempt
 	errs      []error

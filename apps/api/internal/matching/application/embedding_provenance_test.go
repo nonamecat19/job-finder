@@ -105,11 +105,6 @@ func TestReusableJobEmbedding(t *testing.T) {
 	}
 }
 
-// TestMatchJob_StaleEmbedModelIsReEmbedded is the end of the FR-020 rule that
-// matters: not that the predicate returns false, but that the vector reaching
-// the similarity comparison is the freshly embedded one. A stale row compares
-// against a current-model profile vector without erroring, so nothing but this
-// assertion separates a correct score from a plausible wrong one.
 func TestMatchJob_StaleEmbedModelIsReEmbedded(t *testing.T) {
 	staleVector := []float32{1, 0, 0}
 	freshVector := []float32{0, 1, 0}

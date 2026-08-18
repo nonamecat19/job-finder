@@ -15,13 +15,8 @@ import (
 
 const StaleAfterConsecutiveEmptyRuns = 5
 
-// MaxEmployersPerRun caps how many boards one vendor run walks. The companion
-// cap on postings per employer lives library-side as adapters.MaxPostingsPerEmployer,
-// where the board adapters that enforce it now are.
 const MaxEmployersPerRun = 200
 
-// EmployerHealthChecker is the library's checker signature; the app aliases it
-// so wiring can pass the map adapters.NewBoardAdapters returns straight through.
 type EmployerHealthChecker = ports.EmployerHealthChecker
 
 type UnsupportedVendorError struct{ URL string }
@@ -40,9 +35,6 @@ func (e *UnreadableError) Error() string {
 }
 func (e *UnreadableError) Unwrap() error { return e.Cause }
 
-// Service is the app-side implementation of the library's RosterPort: it owns
-// the sqlcgen row shapes and the UUID conversions, so the board adapters only
-// ever see plain-string IDs and library structs.
 var _ ports.Roster = (*Service)(nil)
 
 type Service struct {
@@ -125,11 +117,6 @@ func (s *Service) getByVendorAndEmployer(ctx context.Context, vendor, employerId
 	}
 	return board, err
 }
-
-// --- ports.Roster ---
-//
-// The port speaks plain strings and library structs; these wrappers are the
-// only place UUIDs and sqlcgen rows cross the boundary.
 
 func toPortEmployerBoard(e sqlcgen.EmployerBoard) ports.EmployerBoard {
 	out := ports.EmployerBoard{

@@ -12,9 +12,7 @@ import (
 
 func defaultConfig(t *testing.T) *config.Config {
 	t.Helper()
-	// LoadNonAI, not Load: this package computes DB connection budgets and
-	// does no inference, so it must not be required to configure a gateway
-	// (contracts/configuration.md K1-4).
+
 	cfg, err := config.LoadNonAI()
 	if err != nil {
 		t.Fatalf("config.LoadNonAI: %v", err)

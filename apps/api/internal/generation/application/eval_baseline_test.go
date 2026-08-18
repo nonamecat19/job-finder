@@ -12,25 +12,12 @@ import (
 	"time"
 )
 
-// Baselines and the comparator (038 FR-006 to FR-011, FR-027).
-//
-// A baseline is what the corpus scored when somebody last looked at it and
-// agreed. The comparator's job is to make every way that agreement can stop
-// holding visible — including the two that are easy to treat as fine:
-// improvement (which means the baseline has quietly stopped describing
-// reality) and a missing baseline (which is not a pass, it is an unmeasured
-// case).
-
-// Baseline is one case's recorded scores.
 type Baseline struct {
 	Case string `json:"case"`
-	// ScorerSetVersion is the instrument this was measured with. A delta across
-	// two instruments is not a quality signal, so the comparator refuses rather
-	// than subtracting (FR-009).
+
 	ScorerSetVersion int    `json:"scorer_set_version"`
 	RecordedAt       string `json:"recorded_at"`
-	// Reason is required on every write. A baseline that moved for a reason
-	// nobody wrote down is a baseline nobody can review.
+
 	Reason string             `json:"reason"`
 	Scores map[string]float64 `json:"scores"`
 }
@@ -50,8 +37,6 @@ func loadBaseline(name string) (Baseline, bool, error) {
 	return b, true, nil
 }
 
-// saveBaseline writes one case's baseline. A reason is mandatory: FR-007's
-// whole point is that a baseline moves deliberately and reviewably.
 func saveBaseline(b Baseline) error {
 	if strings.TrimSpace(b.Reason) == "" {
 		return fmt.Errorf("baseline for %q has no reason; a baseline that moved for a reason nobody wrote down is one nobody can review (FR-007)", b.Case)
@@ -72,41 +57,29 @@ func saveBaseline(b Baseline) error {
 	return os.WriteFile(caseBaselinePath(b.Case), append(raw, '\n'), 0o644)
 }
 
-// Outcome is how one case compared.
 type Outcome string
 
 const (
-	// OutcomeMatch: every scorer equal to baseline.
 	OutcomeMatch Outcome = "match"
-	// OutcomeWorse: at least one scorer moved in its worse direction. Fails.
+
 	OutcomeWorse Outcome = "worse"
-	// OutcomeBetter: an improvement. Also fails, with "baseline needs
-	// updating" — silent acceptance of improvement is how a baseline quietly
-	// stops describing reality.
+
 	OutcomeBetter Outcome = "better"
-	// OutcomeVersionMismatch: the baseline was measured with a different
-	// instrument. Refuses to compare, reports no delta.
+
 	OutcomeVersionMismatch Outcome = "version_mismatch"
-	// OutcomeUnbaselined: no baseline file. Reported, and NOT a pass.
+
 	OutcomeUnbaselined Outcome = "unbaselined"
 )
 
-// Comparison is the result of comparing one case against its baseline.
 type Comparison struct {
 	Case    Outcome
 	Outcome Outcome
-	// Messages are human-readable lines, each naming case, scorer, baseline
-	// value, actual value and direction.
+
 	Messages []string
-	// CoMoving names pairs of scorers that moved together on a declared
-	// overlap. Reported as one defect seen twice, never as two regressions and
-	// never summed.
+
 	CoMoving []string
 }
 
-// compareToBaseline is the comparator. Every branch here is one of FR-006 to
-// FR-011, and each returns an outcome rather than a boolean so the caller
-// cannot flatten "unbaselined" into "passed".
 func compareToBaseline(caseName string, scores map[string]Score, b Baseline, hasBaseline bool) Comparison {
 	if !hasBaseline {
 		return Comparison{
@@ -117,8 +90,7 @@ func compareToBaseline(caseName string, scores map[string]Score, b Baseline, has
 		}
 	}
 	if b.ScorerSetVersion != ScorerSetVersion {
-		// Deliberately no delta in this message. Reporting one would invite
-		// reading it as a quality change when it is an instrument change.
+
 		return Comparison{
 			Outcome: OutcomeVersionMismatch,
 			Messages: []string{fmt.Sprintf(
@@ -185,19 +157,12 @@ func compareToBaseline(caseName string, scores map[string]Score, b Baseline, has
 	}
 }
 
-// --- the deliberate baseline update -----------------------------------------
-//
-// Flags on the test binary rather than a cmd/ program: a `main` package cannot
-// import test files, and the harness is test files.
-
 var (
 	flagUpdateBaseline = flag.Bool("eval.update-baseline", false, "rewrite one case's baseline from this run")
 	flagCase           = flag.String("eval.case", "", "which case to act on")
 	flagReason         = flag.String("eval.reason", "", "why the baseline is moving; required with -eval.update-baseline")
 )
 
-// updateRequested reports whether this invocation is a deliberate baseline
-// update, and validates that it named a case and a reason.
 func updateRequested(t *testing.T) (caseName string, reason string, ok bool) {
 	t.Helper()
 	if !*flagUpdateBaseline {
@@ -226,8 +191,6 @@ func newBaseline(caseName, reason string, scores map[string]Score) Baseline {
 	return b
 }
 
-// --- tests ------------------------------------------------------------------
-
 func fixedScores(values map[string]float64) map[string]Score {
 	out := map[string]Score{}
 	for _, s := range scorers {
@@ -244,12 +207,6 @@ func baselineFrom(version int, values map[string]float64) Baseline {
 	return Baseline{Case: "t", ScorerSetVersion: version, Reason: "test", Scores: values}
 }
 
-// TestVersionMismatchRefuses is a tripwire (FR-009, C2-1).
-//
-// A baseline recorded under a different scorer set was measured with a
-// different instrument. The refusal must carry **no delta**: a number here
-// would be read as a quality change when it is an instrument change, which is
-// the specific confusion this rule exists to prevent.
 func TestVersionMismatchRefuses(t *testing.T) {
 	values := map[string]float64{"grounding_violations": 0, "nice_to_have_retention": 1}
 	cmp := compareToBaseline("t", fixedScores(values), baselineFrom(ScorerSetVersion-1, values), true)
@@ -261,8 +218,7 @@ func TestVersionMismatchRefuses(t *testing.T) {
 	if !strings.Contains(joined, "Refusing to compare") {
 		t.Errorf("the refusal does not say it is refusing:\n%s", joined)
 	}
-	// No delta: neither a scorer name nor a score value may appear. The prose
-	// may of course use the word "delta" to say it is not reporting one.
+
 	for name := range values {
 		if strings.Contains(joined, name) {
 			t.Errorf("the refusal names scorer %q; reporting a per-scorer figure across two instruments is exactly what this refusal exists to avoid:\n%s", name, joined)
@@ -275,9 +231,6 @@ func TestVersionMismatchRefuses(t *testing.T) {
 	}
 }
 
-// FR-006: a worse score fails, and the message carries case, scorer, baseline
-// value, actual value and direction — everything a reader needs without
-// re-running.
 func TestWorseScoreFailsWithAFullMessage(t *testing.T) {
 	cmp := compareToBaseline("absent-skills",
 		fixedScores(map[string]float64{"grounding_violations": 3}),
@@ -294,9 +247,6 @@ func TestWorseScoreFailsWithAFullMessage(t *testing.T) {
 	}
 }
 
-// A higher-is-better scorer moving down is also worse. Stated separately
-// because getting this backwards is exactly the defect the spec's original
-// `achievements_per_job_min` had: the gate would have failed on improvement.
 func TestHigherIsBetterScorerFailsWhenItDrops(t *testing.T) {
 	cmp := compareToBaseline("t",
 		fixedScores(map[string]float64{"nice_to_have_retention": 0.5}),
@@ -306,8 +256,6 @@ func TestHigherIsBetterScorerFailsWhenItDrops(t *testing.T) {
 	}
 }
 
-// FR-007: improvement fails too, with "needs updating". Silent acceptance is
-// how a baseline stops describing reality while still passing.
 func TestImprovementFailsWithNeedsUpdating(t *testing.T) {
 	cmp := compareToBaseline("t",
 		fixedScores(map[string]float64{"grounding_violations": 0}),
@@ -325,7 +273,6 @@ func TestImprovementFailsWithNeedsUpdating(t *testing.T) {
 	}
 }
 
-// FR-011: a case with no baseline is reported and is NOT a pass.
 func TestMissingBaselineIsNotAPass(t *testing.T) {
 	cmp := compareToBaseline("newcase", fixedScores(map[string]float64{"grounding_violations": 0}), Baseline{}, false)
 	if cmp.Outcome != OutcomeUnbaselined {
@@ -339,9 +286,6 @@ func TestMissingBaselineIsNotAPass(t *testing.T) {
 	}
 }
 
-// FR-027 / C2-8: a declared overlapping pair is reported as one defect seen
-// twice, never summed. Summing would make one ungrounded highlight look like
-// two regressions and inflate every quality report built on it.
 func TestOverlappingScorersReportOneDefectSeenTwice(t *testing.T) {
 	cmp := compareToBaseline("t",
 		fixedScores(map[string]float64{"grounding_violations": 2, "highlight_drift": 2}),
@@ -362,8 +306,6 @@ func TestOverlappingScorersReportOneDefectSeenTwice(t *testing.T) {
 	}
 }
 
-// A pair that did not co-move must not be reported as one — otherwise the note
-// appears on every run and stops carrying information.
 func TestNonCoMovingScorersAreNotPaired(t *testing.T) {
 	cmp := compareToBaseline("t",
 		fixedScores(map[string]float64{"grounding_violations": 2, "highlight_drift": 0}),
@@ -373,8 +315,6 @@ func TestNonCoMovingScorersAreNotPaired(t *testing.T) {
 	}
 }
 
-// C2-6: a baseline update with no reason is rejected at the write, not just at
-// the flag — so no code path can produce a reasonless baseline file.
 func TestBaselineWriteRejectsAMissingReason(t *testing.T) {
 	err := saveBaseline(Baseline{Case: "t", ScorerSetVersion: ScorerSetVersion, Scores: map[string]float64{}})
 	if err == nil {
@@ -385,9 +325,6 @@ func TestBaselineWriteRejectsAMissingReason(t *testing.T) {
 	}
 }
 
-// C2-5: a passing run writes nothing. A gate that rewrites its own baseline on
-// success is not a gate — it records whatever the code currently does and calls
-// it correct.
 func TestPassingRunWritesNoBaseline(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "t.json")
@@ -398,14 +335,12 @@ func TestPassingRunWritesNoBaseline(t *testing.T) {
 	if cmp.Outcome != OutcomeMatch {
 		t.Fatalf("outcome = %q, want match", cmp.Outcome)
 	}
-	// The comparator has no writer: nothing in the match path can create a file.
+
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("a file appeared at %s after a matching comparison", path)
 	}
 }
 
-// A round trip through disk, so the on-disk shape is exercised rather than
-// assumed.
 func TestBaselineRoundTrip(t *testing.T) {
 	orig := baselinesDir
 	tmp := t.TempDir()

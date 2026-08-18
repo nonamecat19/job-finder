@@ -11,7 +11,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// Stage names recorded on a generation run.
 const (
 	stageAnalyze = "analyze"
 	stageSelect  = "select"
@@ -19,9 +18,6 @@ const (
 	stagePageFit = "page-fit"
 )
 
-// StageOutcome is what one stage of a generation run cost and who served it.
-// The served model is an observation, not an input: the application asks for a
-// task key and reads back which upstream the proxy actually used (035 FR-017).
 type StageOutcome struct {
 	Stage            string
 	ServedModel      string
@@ -34,22 +30,12 @@ type StageOutcome struct {
 	CompletionTokens int
 }
 
-// runProvenance accumulates the stage outcomes of a single run so the finished
-// document can say which model wrote which part and what the run cost — from
-// measurement rather than estimate.
 type runProvenance struct {
 	stages []StageOutcome
-	// summaryOption is the id of the 034 catalogue option this run's summary
-	// was written with. The served model is already captured per stage, but a
-	// model name does not say which option the user picked: two options can
-	// resolve to the same upstream after a fallback, and the option is what the
-	// user chose and what the result surface has to show back to them.
+
 	summaryOption string
 }
 
-// observe runs fn with served-model and usage capture attached, then records
-// what came back. The stage's result is returned untouched; provenance is a
-// side-channel so a stage's own signature never grows a reporting parameter.
 func observe[T any](ctx context.Context, prov *runProvenance, stage string, escalated bool, fn func(context.Context) (T, error)) (T, error) {
 	if prov == nil {
 		return fn(ctx)
@@ -89,9 +75,6 @@ func (p *runProvenance) summaryModel() *string {
 	return nil
 }
 
-// summarySubstituted reports whether the premium summary was served by a
-// fallback. This is the one substitution a user is shown, because it is the
-// one that changes what they are reading (FR-012).
 func (p *runProvenance) summarySubstituted() bool {
 	o := p.last(stageSummary)
 	return o != nil && o.Substituted
@@ -122,8 +105,6 @@ func (p *runProvenance) totalCostUSD() float64 {
 	return total
 }
 
-// meta renders the run's stages as activity metadata, so an operator can see
-// per-stage timing, cost and substitution without a database query.
 func (p *runProvenance) meta() map[string]any {
 	stages := make([]map[string]any, 0, len(p.stages))
 	for _, o := range p.stages {
@@ -142,10 +123,6 @@ func (p *runProvenance) meta() map[string]any {
 	return map[string]any{"stages": stages, "totalCostUsd": p.totalCostUSD()}
 }
 
-// withProvenance stamps a run's stage provenance onto the document row. Cost is
-// carried as a string because pgtype.Numeric scans from one; a run with no
-// measured cost (every stage local, or a proxy that reported none) leaves the
-// column null rather than claiming the run was free.
 func withProvenance(params sqlcgen.InsertGeneratedDocumentParams, prov *runProvenance) sqlcgen.InsertGeneratedDocumentParams {
 	if prov == nil {
 		return params

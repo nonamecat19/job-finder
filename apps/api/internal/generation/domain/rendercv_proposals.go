@@ -51,9 +51,7 @@ func PayloadToProposals(baseline RendercvMaster, payload TailoredSections, jobPo
 	for _, pe := range payload.Experience {
 		company := pe.Company
 		baselineHighlights := baselineCompanies[norm(company)]
-		// The proposal's "before" is the bullet the reference names, not the
-		// bullet that happened to sit at the same position — a selection that
-		// reorders is otherwise rendered as a diff against the wrong original.
+
 		for i, ref := range pe.Highlights {
 			before := ""
 			if ref.SourceIndex >= 0 && ref.SourceIndex < len(baselineHighlights) {

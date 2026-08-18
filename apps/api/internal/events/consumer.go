@@ -10,30 +10,17 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// DefaultShutdownGrace bounds how long Run waits for in-flight deliveries
-// to finish after its context is cancelled before nacking them (M3-5).
 const DefaultShutdownGrace = 30 * time.Second
 
-// DefaultMinBackoff and DefaultMaxBackoff bound the reconnect backoff
-// (M3-4, FR-035).
 const (
 	DefaultMinBackoff = 500 * time.Millisecond
 	DefaultMaxBackoff = 30 * time.Second
 )
 
-// Handler processes one delivery. Returning nil acks the delivery — which
-// MUST happen only after the unit of work is durably handled (M3-2), so a
-// Handler that republishes a retry (retry.go) must confirm that publish
-// before returning. Returning an error nacks the delivery with requeue.
 type Handler func(ctx context.Context, d amqp.Delivery) error
 
-// Dialer opens a new broker connection, used both for the initial connect
-// and for every reconnect attempt (M3-4).
 type Dialer func() (*amqp.Connection, error)
 
-// Consumer consumes one work queue with manual ack, prefetch equal to its
-// configured concurrency, and automatic reconnection with bounded
-// exponential backoff (contracts/messaging.md M3).
 type Consumer struct {
 	Dial          Dialer
 	Queue         string
@@ -45,9 +32,6 @@ type Consumer struct {
 	Logger        *slog.Logger
 }
 
-// Run consumes until ctx is cancelled, reconnecting automatically on any
-// connection failure with bounded exponential backoff (M3-4). It returns
-// nil on a clean shutdown triggered by ctx.
 func (c *Consumer) Run(ctx context.Context) error {
 	minBackoff := c.MinBackoff
 	if minBackoff <= 0 {
@@ -83,8 +67,6 @@ func (c *Consumer) Run(ctx context.Context) error {
 	}
 }
 
-// runOnce dials, re-declares topology, re-establishes prefetch (M3-4) and
-// consumes until ctx is cancelled or the connection drops.
 func (c *Consumer) runOnce(ctx context.Context, logger *slog.Logger) error {
 	conn, err := c.Dial()
 	if err != nil {
@@ -160,9 +142,6 @@ func (c *Consumer) runOnce(ctx context.Context, logger *slog.Logger) error {
 	}
 }
 
-// handleDelivery runs the handler and acks (success) or nacks with requeue
-// (failure) — never before the handler returns (M3-2). If shutdown already
-// force-nacked this delivery, its result is discarded.
 func (c *Consumer) handleDelivery(ctx context.Context, d amqp.Delivery, inflight *inflightSet, logger *slog.Logger) {
 	err := c.HandlerFunc(ctx, d)
 
@@ -181,9 +160,6 @@ func (c *Consumer) handleDelivery(ctx context.Context, d amqp.Delivery, inflight
 	}
 }
 
-// inflightSet tracks deliveries currently being handled, so a bounded-grace
-// shutdown can nack with requeue anything still outstanding (M3-5) without
-// racing the handler's own ack/nack.
 type inflightSet struct {
 	mu         sync.Mutex
 	deliveries map[uint64]amqp.Delivery
@@ -195,9 +171,6 @@ func (s *inflightSet) add(d amqp.Delivery) {
 	s.deliveries[d.DeliveryTag] = d
 }
 
-// remove reports whether d was still tracked (true) or was already claimed
-// by nackRemaining (false), so the caller knows whether it may still
-// ack/nack it.
 func (s *inflightSet) remove(tag uint64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

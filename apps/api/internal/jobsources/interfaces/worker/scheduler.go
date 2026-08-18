@@ -20,29 +20,16 @@ import (
 type Scheduler struct {
 	q       domain.SearchRepository
 	service *application.SearchService
-	// pruner enforces the LLM observability retention window (036 FR-008). It
-	// rides on this tick rather than getting a scheduler of its own because
-	// this is already the platform's periodic-maintenance loop — the activity
-	// retention sweep below is its sibling. Nil disables it.
+
 	pruner Pruner
-	// payloadPruner enforces the Langfuse trace payload retention window (047
-	// FR-018/FR-018a, K5). Distinct from pruner above: that one deletes whole
-	// trace rows through Langfuse's public API; this one blanks only the
-	// input/output payload columns directly in ClickHouse, keeping step
-	// sequence, timings, token counts and cost (FR-018). Nil disables it.
+
 	payloadPruner PayloadPruner
 }
 
-// Pruner is the retention job this scheduler drives. It is an interface rather
-// than the concrete type so the scheduler keeps no dependency on the collector,
-// and so a deployment with no collector configured passes nil.
 type Pruner interface {
 	Prune(ctx context.Context) (observability.Report, error)
 }
 
-// PayloadPruner is the Langfuse trace payload retention job (047 K5). See
-// internal/platform/langfuseretention for why it is a separate job from
-// Pruner above.
 type PayloadPruner interface {
 	Prune(ctx context.Context) (langfuseretention.Report, error)
 }
@@ -98,13 +85,6 @@ func (s *Scheduler) Tick(ctx context.Context) {
 	s.tickPayloadRetention(ctx)
 }
 
-// tickObservabilityRetention enforces the collector's retention window.
-//
-// The collector stores prompt bodies — which for this platform means the user's
-// employment history, in plain text, in a service that will not expire it on
-// its own. What each run deleted is logged, and a failure is logged as a
-// failure (036 FR-008a): a retention guarantee nobody can check is how the
-// window quietly stops being enforced while the documentation still claims it.
 func (s *Scheduler) tickObservabilityRetention(ctx context.Context) {
 	if s.pruner == nil {
 		return
@@ -124,10 +104,6 @@ func (s *Scheduler) tickObservabilityRetention(ctx context.Context) {
 		"truncated", report.Truncated)
 }
 
-// tickPayloadRetention enforces FR-018/FR-018a: Langfuse trace step inputs
-// and outputs — profile and resume content — older than
-// LANGFUSE_PAYLOAD_RETENTION_DAYS are blanked, while step sequence, timings,
-// token counts and cost stay in place.
 func (s *Scheduler) tickPayloadRetention(ctx context.Context) {
 	if s.payloadPruner == nil {
 		return

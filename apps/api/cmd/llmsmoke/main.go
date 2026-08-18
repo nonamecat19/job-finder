@@ -1,7 +1,3 @@
-// Command llmsmoke is a manual smoke test for the single inference path
-// (044-litellm-only-routing). It never runs in CI — it exists for quickstart.md
-// steps 4 and 5, exercising one chat scenario and the embedding path against a
-// real gateway.
 package main
 
 import (
@@ -52,8 +48,6 @@ func run(task, embedText string, embedCheck bool) error {
 	return runChat(ctx, gw, task)
 }
 
-// runChat routes one chat request through the given task key
-// (contracts/embeddings.md's chat counterpart, quickstart.md step 4).
 func runChat(ctx context.Context, gw llm.Provider, task string) error {
 	router := llm.NewRouter(task, gw)
 
@@ -74,8 +68,6 @@ func runChat(ctx context.Context, gw llm.Provider, task string) error {
 	return nil
 }
 
-// runEmbed runs one embed request and reports the served model and the
-// vector's length, which quickstart.md step 4 expects to equal EMBED_DIMS.
 func runEmbed(ctx context.Context, gw llm.Provider, text string) error {
 	ctx, served := llm.WithServedModelCapture(ctx)
 
@@ -88,14 +80,6 @@ func runEmbed(ctx context.Context, gw llm.Provider, text string) error {
 	return nil
 }
 
-// runEmbedCheck implements quickstart.md step 5's asymmetry sanity check
-// (research.md R11): the app never varies input_type between what it embeds,
-// so the same call embedding the same text twice must be byte-identical, and
-// a related pair must score clearly above an unrelated one. Both are
-// deployment-level guarantees (gateway/config.yaml's embed group), but a
-// silent misconfiguration there produces merely-worse vectors rather than an
-// error, which is exactly the failure this check is written to catch instead
-// of missing.
 func runEmbedCheck(ctx context.Context, gw llm.Provider) error {
 	const query = "golang backend engineer"
 	const related = "go developer, backend"

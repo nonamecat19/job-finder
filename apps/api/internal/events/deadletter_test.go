@@ -14,14 +14,6 @@ import (
 	"github.com/job-finder/api/internal/events"
 )
 
-// TestDeadLetter_Integration_BudgetExhaustionLandsInDLQWithFirstFailureReason
-// proves US5 scenario 3 / SC-012: a work item that exhausts its retry
-// budget is dead-lettered to dlq.<work_type> with x-first-failure-reason
-// set (M4-4, FR-031). The ladder's own timing (1s/10s/1m/10m) is unit
-// tested in retry_test.go via Decide; this test proves the wiring —
-// HandleFailure's terminal publish actually lands in a live, consumable DLQ
-// with the right routing key and header — without waiting out the real
-// backoff ladder for all five attempts.
 func TestDeadLetter_Integration_BudgetExhaustionLandsInDLQWithFirstFailureReason(t *testing.T) {
 	conn := dialTestBroker(t)
 	declareTopologyOrFail(t, conn)
@@ -41,9 +33,6 @@ func TestDeadLetter_Integration_BudgetExhaustionLandsInDLQWithFirstFailureReason
 		Message:   "provider unavailable after exhausting retry budget",
 	}
 
-	// currentAttempt = the work type's full budget: the next attempt
-	// exceeds it, so Decide (and therefore HandleFailure) must dead-letter
-	// rather than retry (M4-4).
 	currentAttempt := events.MaxAttempts(workType)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -79,9 +68,6 @@ func TestDeadLetter_Integration_BudgetExhaustionLandsInDLQWithFirstFailureReason
 	}
 }
 
-// TestDeadLetter_Integration_NonRetryableGoesStraightToDLQWithoutBudget
-// exercises M4-3: a non-retryable failure (invalid_input) is dead-lettered
-// on the very first attempt, without consuming any retry budget.
 func TestDeadLetter_Integration_NonRetryableGoesStraightToDLQWithoutBudget(t *testing.T) {
 	conn := dialTestBroker(t)
 	declareTopologyOrFail(t, conn)
@@ -117,9 +103,6 @@ func TestDeadLetter_Integration_NonRetryableGoesStraightToDLQWithoutBudget(t *te
 	}
 }
 
-// schemaProbe is the minimal, cheap decode a consumer performs before
-// touching the rest of a message: just enough to route (M6-1, M6-2), never
-// the capability-specific payload.
 type schemaProbe struct {
 	EventType     string `json:"event_type"`
 	SchemaVersion int    `json:"schema_version"`
@@ -127,11 +110,6 @@ type schemaProbe struct {
 
 const implementedSchemaVersion = 1
 
-// rejectUnroutable is the header-inspection-only rejection pattern M6
-// requires: an unimplemented schema_version or an unknown event_type is
-// nacked straight to the DLQ via the work queue's own dead-letter binding
-// (no-requeue triggers x-dead-letter-exchange, set by topology.go),
-// without ever unmarshalling into a capability payload type.
 func rejectUnroutable(d amqp.Delivery) (rejected bool, err error) {
 	var probe schemaProbe
 	if err := json.Unmarshal(d.Body, &probe); err != nil {
@@ -146,11 +124,6 @@ func rejectUnroutable(d amqp.Delivery) (rejected bool, err error) {
 	return false, nil
 }
 
-// TestDeadLetter_Integration_UnknownEventTypeAndUnimplementedSchemaVersionRejected
-// proves FR-029 / M6-1 / M6-2: both an unimplemented schema_version and an
-// unknown event_type are dead-lettered, not best-effort processed, using
-// only the cheap envelope probe above — never deserializing into a
-// capability-specific payload.
 func TestDeadLetter_Integration_UnknownEventTypeAndUnimplementedSchemaVersionRejected(t *testing.T) {
 	conn := dialTestBroker(t)
 	declareTopologyOrFail(t, conn)
@@ -169,9 +142,7 @@ func TestDeadLetter_Integration_UnknownEventTypeAndUnimplementedSchemaVersionRej
 		WorkID         string `json:"work_id"`
 		IdempotencyKey string `json:"idempotency_key"`
 		RunID          string `json:"run_id"`
-		// PayloadThatWouldFailToParse stands in for a capability-specific
-		// payload shape the consumer must never attempt to touch before
-		// rejecting on the header/probe check.
+
 		PayloadThatWouldFailToParse json.RawMessage `json:"payload"`
 	}{
 		EventID:                     uuid.NewString(),

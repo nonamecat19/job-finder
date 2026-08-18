@@ -14,15 +14,6 @@ import (
 	"github.com/job-finder/api/internal/events"
 )
 
-// TestGhostPython_Integration_RequestedWorkSurvivesAiServiceDownAndDrainsOnRestart
-// proves SC-007 / US4 scenario 3: once AI_CAPABILITY_ROUTING routes "ghost"
-// to python (cmd/server/servers.go builds no local Go ghost consumer in that
-// mode — see buildServers), work.ghost is durable and has exactly one
-// consumer, the AI service. While that service is stopped, a published
-// ghost.requested event must just sit in the queue — not be lost, and not
-// picked up by some fallback/substituted-result path, since no such path
-// exists once routing is "python". When a consumer (standing in for the AI
-// service) starts, it must drain the queue with no loss.
 func TestGhostPython_Integration_RequestedWorkSurvivesAiServiceDownAndDrainsOnRestart(t *testing.T) {
 	conn := dialTestBroker(t)
 	declareTopologyOrFail(t, conn)
@@ -33,16 +24,9 @@ func TestGhostPython_Integration_RequestedWorkSurvivesAiServiceDownAndDrainsOnRe
 	pub, pubCh := newTestPublisher(t, conn)
 	defer pubCh.Close()
 
-	// Publish a ghost.requested event while no AI service consumer is
-	// running at all (this test process is the only thing touching the
-	// broker so far).
 	env := newTestEnvelope("ghost.requested", "job_"+uuid.NewString(), "ghost-python:"+uuid.NewString(), uuid.NewString())
 	publishWork(t, pub, workType, mustMarshal(t, env))
 
-	// With the AI service stopped, the message just sits in work.ghost —
-	// durably, with no consumer to lose it and no Go-side fallback consumer
-	// to substitute a result (routing=python means buildServers never
-	// registers a Go ghost consumer).
 	depCh, err := conn.Channel()
 	if err != nil {
 		t.Fatalf("open inspect channel: %v", err)
@@ -56,9 +40,6 @@ func TestGhostPython_Integration_RequestedWorkSurvivesAiServiceDownAndDrainsOnRe
 		t.Fatalf("queue depth = %d while the AI service is stopped, want 1 (work.ghost must hold the event untouched)", q.Messages)
 	}
 
-	// Now start a consumer, standing in for the AI service coming back up,
-	// and confirm the event that waited is delivered exactly once, with no
-	// substitution of its content.
 	var mu sync.Mutex
 	var received []testEnvelope
 

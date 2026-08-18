@@ -15,9 +15,6 @@ import (
 	"github.com/job-finder/api/internal/testutil"
 )
 
-// firstItemID fetches the run and returns the first item id in the named
-// section kind — the contract tests below only need one addressable item, and
-// finding it this way keeps them independent of any particular seeding order.
 func firstItemID(t *testing.T, r chi.Router, runID, kind string) string {
 	t.Helper()
 	w := testutil.DoRequest(r, "GET", "/api/generations/"+runID, nil, map[string]string{"runId": runID})
@@ -57,8 +54,6 @@ func TestPatchGenerationItem_ForbidsTextOnProfileItem(t *testing.T) {
 	}
 	testutil.ParseJSON(w, &started)
 
-	// The item must belong to a `ready` run for the 403 (rather than a 409)
-	// to be the effect under test.
 	if err := svc.StartRun(ctx, started.RunID, nil); err != nil {
 		t.Fatalf("StartRun: %v", err)
 	}
@@ -95,8 +90,6 @@ func TestPatchGenerationItem_ConflictWhenRunning(t *testing.T) {
 	}
 	testutil.ParseJSON(w, &started)
 
-	// The background half (StartRun) has not run yet, so the run is still
-	// `running` — every mutation on it must 409.
 	itemID := firstItemID(t, r, started.RunID, "experience")
 
 	patchW := testutil.DoRequestJSON(r, "PATCH", "/api/generations/"+started.RunID+"/items/"+itemID,
@@ -148,9 +141,6 @@ func TestPatchGenerationItem_IdempotentOnRepeatedBody(t *testing.T) {
 	var secondItem dto.GenerationItemDto
 	testutil.ParseJSON(second, &secondItem)
 
-	// Compared field by field rather than with `==`: GenerationItemDto has a
-	// *int field, and two independently-unmarshaled pointers are never `==`
-	// even when they point at equal values.
 	if firstItem.ID != secondItem.ID || firstItem.Selected != secondItem.Selected ||
 		firstItem.Position != secondItem.Position || firstItem.Text != secondItem.Text {
 		t.Fatalf("expected the repeated PATCH to be a no-op returning the same row, got %+v then %+v", firstItem, secondItem)

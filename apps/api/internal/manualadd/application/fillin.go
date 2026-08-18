@@ -12,7 +12,6 @@ import (
 	"github.com/nonamecat19/job-scraper/ports"
 )
 
-// FillIn is a vacancy the operator completed by hand. Nothing is fetched.
 type FillIn struct {
 	URL         string
 	SourceKey   *string
@@ -25,10 +24,6 @@ type FillIn struct {
 	PostedAt    *string
 }
 
-// SaveFillIn stores a hand-completed vacancy through the same ingest path an
-// extracted one takes, so the two are indistinguishable downstream (FR-009).
-// postedAt is stored exactly as given, including not at all — never defaulted
-// to now, which would make an unknown-age vacancy look fresh (FR-017a).
 func (s *Service) SaveFillIn(ctx context.Context, in FillIn) (domain.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, AddTimeout)
 	defer cancel()
@@ -41,8 +36,6 @@ func (s *Service) SaveFillIn(ctx context.Context, in FillIn) (domain.Result, err
 		return domain.Result{}, &MissingFieldsError{Fields: missing}
 	}
 
-	// A host with no reader has no source of its own, so its vacancies hang off
-	// the manual source (FR-012a).
 	sourceKey := ManualSourceKey
 	if in.SourceKey != nil && strings.TrimSpace(*in.SourceKey) != "" {
 		sourceKey = strings.TrimSpace(*in.SourceKey)
@@ -104,8 +97,6 @@ func (s *Service) adapterFor(sourceKey string) (ports.JobSource, error) {
 	return nil, fmt.Errorf("manualadd: no adapter registered for %s", sourceKey)
 }
 
-// MissingFieldsError names every field the operator still has to supply, rather
-// than stopping at the first (FR-020).
 type MissingFieldsError struct {
 	Fields []string
 }

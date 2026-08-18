@@ -9,14 +9,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// 034 T012: the chosen option decides which provider writes the summary, and
-// decides nothing else.
-//
-// The failure this guards against is the quiet one. An option that routes
-// nowhere does not error — the request simply goes to whatever provider was
-// already there — so a user who deliberately picked "Premium" gets the standard
-// model and no part of the system says otherwise.
-
 type optionFixture struct {
 	svc      *Service
 	standard *stageProvider
@@ -46,9 +38,6 @@ func summaryOptionFixture(t *testing.T) optionFixture {
 	return optionFixture{svc: svc, standard: standard, premium: premium, analyze: analyze, sel: sel}
 }
 
-// A service with no settings provider and no per-run choice must behave exactly
-// as it did before 034 existed. This is spec AC3, and it is the property that
-// lets the whole feature ship without re-baselining the 038 corpus.
 func TestNoChoiceRoutesToTheStandardProvider(t *testing.T) {
 	f := summaryOptionFixture(t)
 
@@ -85,21 +74,17 @@ func TestChosenOptionRoutesTheSummaryStageAndNothingElse(t *testing.T) {
 	if f.standard.calls != 0 {
 		t.Errorf("standard summary provider called %d times after premium was chosen, want 0", f.standard.calls)
 	}
-	// The whole point of exposing only the summary is that nothing else moves.
+
 	if f.analyze.calls != 1 || f.sel.calls != 1 {
 		t.Errorf("choosing a summary option disturbed other stages: analyze=%d select=%d, want 1 each",
 			f.analyze.calls, f.sel.calls)
 	}
 }
 
-// An option in the catalogue with no router wired — added before its deployment
-// exists, or a gateway-less install — must produce a resume, not an error. An
-// option is a routing preference, and a preference that can fail a run is a
-// liability (plan D5).
 func TestAnUnwiredOptionFallsBackRatherThanFailing(t *testing.T) {
 	f := summaryOptionFixture(t)
 
-	opt, ok := domain.LookupSummaryOption("fast") // deliberately absent from SummaryByOption
+	opt, ok := domain.LookupSummaryOption("fast")
 	if !ok {
 		t.Fatal("catalogue lost the fast option")
 	}
@@ -114,13 +99,6 @@ func TestAnUnwiredOptionFallsBackRatherThanFailing(t *testing.T) {
 	}
 }
 
-// 044 deleted the `local` self-hosted option, but the id outlives the release:
-// it sits in Document and GenerationRun rows and in the summary-model setting
-// of every install that ever picked it (data-model.md §5). Those rows are read
-// back on a rerun, so the id has to degrade to the default rather than fail a
-// run. The miss path already does this; this pins it, because the next person
-// to read LookupSummaryOption's second return value could reasonably decide a
-// miss deserves an error.
 func TestAPersistedLocalOptionIDResolvesToTheDefault(t *testing.T) {
 	opt, ok := domain.LookupSummaryOption("local")
 	if ok {
@@ -149,9 +127,6 @@ type stubSummaryModelProvider struct{ opt domain.SummaryOption }
 
 func (s stubSummaryModelProvider) SummaryOption(context.Context) domain.SummaryOption { return s.opt }
 
-// The stored default applies when the request carries no choice; a per-run
-// choice overrides it. Both directions matter: the first is spec AC4, the
-// second is AC2.
 func TestStoredDefaultAppliesAndAPerRunChoiceOverridesIt(t *testing.T) {
 	premiumOpt, _ := domain.LookupSummaryOption("premium")
 	standardOpt, _ := domain.LookupSummaryOption(domain.SummaryOptionStandard)
@@ -185,9 +160,6 @@ func TestStoredDefaultAppliesAndAPerRunChoiceOverridesIt(t *testing.T) {
 	})
 }
 
-// The result surface has to say which option produced the resume (spec AC2),
-// and the served model cannot answer that: two options can land on the same
-// upstream after a fallback.
 func TestTheRunRecordsWhichOptionWroteTheSummary(t *testing.T) {
 	f := summaryOptionFixture(t)
 	opt, _ := domain.LookupSummaryOption("premium")

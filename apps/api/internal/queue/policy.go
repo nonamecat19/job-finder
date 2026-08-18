@@ -15,9 +15,6 @@ type TaskPolicy struct {
 	LLMTaskKey  string
 }
 
-// PoolSize returns the worker concurrency for this policy. Since 044 there is
-// only one concurrency setting — the hosted/local split is gone along with
-// Ollama.
 func (p TaskPolicy) PoolSize() int {
 	return p.Concurrency
 }
@@ -105,7 +102,3 @@ func validateLiveness(cfg *config.Config) error {
 	}
 	return nil
 }
-
-// RateLimitRetryDelay was ported to events.RateLimitRetryDelay (T024,
-// data-model.md § 6) now that retry delay is computed as a delay-queue TTL
-// rather than an asynq RetryDelayFunc.

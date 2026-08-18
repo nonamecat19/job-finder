@@ -34,9 +34,6 @@ type Platform struct {
 	RedisClient redis.UniversalClient
 	Scraping    *scraping.HTTPScraper
 
-	// RabbitConn is the connection topology is declared on and the publisher
-	// publishes over. Consumers (servers.go) dial their own connections —
-	// each Consumer reconnects independently on failure (M3-4).
 	RabbitConn  *amqp.Connection
 	Publisher   *events.Publisher
 	Enqueuer    queue.Enqueuer
@@ -47,35 +44,16 @@ type Platform struct {
 
 	Sweeper *activity.Sweeper
 
-	// SourceConfig is where the credentialed sessions read their credentials
-	// and persist the cookie they obtain. It is bound to the job-sources
-	// service once that exists — see composeJobSources.
 	SourceConfig *lateSourceConfig
 
 	DjinniSession   ports.SessionProvider
 	JobLeadsSession ports.SessionProvider
 
-	// AIClient calls the AI service's interactive HTTP surface (rephrase,
-	// recruiter, outreach, embed — contracts/http.md H1-1). Nil when
-	// AI_SERVICE_URL is unset, which is only valid while every capability
-	// still routes to go (config.go's Validate).
 	AIClient *aiclient.Client
 
-	// GenLate is generation.SnapshotEnqueuer's ProfileStore/ShapeProvider/
-	// SummaryModelProvider, bound once composeGeneration builds the real
-	// profile/shape/summary services — see lateGenerationSnapshot.
 	GenLate *lateGenerationSnapshot
 }
 
-// lateGenerationSnapshot breaks the same construction-order cycle
-// lateSourceConfig breaks for job sources: buildPlatform wraps p.Enqueuer
-// with generation.SnapshotEnqueuer before profileSvc/shapeSvc/summarySvc
-// exist (composeGeneration builds them later), and every composeX call that
-// captures p.Enqueuer by value in between (composeJobSources, composeMatching,
-// ...) must see the final wrapped enqueuer, not a version wrapped again
-// afterward. Binding this pointer's target after the fact reaches every
-// value that already captured it, since the enqueuer field types are
-// interfaces, not values.
 type lateGenerationSnapshot struct {
 	profiles domain.ProfileStore
 	shape    generation.ShapeProvider
@@ -114,14 +92,6 @@ func (l *lateGenerationSnapshot) SummaryOption(ctx context.Context) domain.Summa
 	return l.summary.SummaryOption(ctx)
 }
 
-// lateSourceConfig is a ports.SourceConfigStore that gets its real store after
-// construction, breaking the cycle between the sessions (which the sources
-// need), the sources (which the registry needs) and the job-sources service
-// (which needs the registry and *is* the store).
-//
-// Calls before binding fail rather than silently reading nothing: nothing
-// should reach a session that early, and a clear error beats a mystery
-// logged-out crawl.
 type lateSourceConfig struct{ inner ports.SourceConfigStore }
 
 var _ ports.SourceConfigStore = (*lateSourceConfig)(nil)
@@ -194,33 +164,21 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 		return nil, err
 	}
 	baseEnqueuer := &events.PublishEnqueuer{Publisher: publisher}
-	// SnapshotEnqueuer intercepts only the "ghost" work type, and only when
-	// AI_CAPABILITY_ROUTING routes it to python (C8-3): every other
-	// dispatch — including ghost itself when routed to go — passes through
-	// to baseEnqueuer unchanged, so this substitution is safe everywhere
-	// p.Enqueuer is already injected (jobsources, manualadd, activity http,
-	// jobs, generation).
+
 	var enqueuer queue.Enqueuer = &ghostjob.SnapshotEnqueuer{
 		Base:    baseEnqueuer,
 		Repo:    database.Queries,
 		Pub:     publisher,
 		Routing: cfg.CapabilityRouting,
 	}
-	// salary.SnapshotEnqueuer intercepts only the "salary" work type, on the
-	// same routing condition, chained the same way.
+
 	enqueuer = &salary.SnapshotEnqueuer{
 		Base:    enqueuer,
 		Repo:    database.Queries,
 		Pub:     publisher,
 		Routing: cfg.CapabilityRouting,
 	}
-	// generation.SnapshotEnqueuer intercepts only the "generate" work type,
-	// and only the legacy merged-resume/cover-letter path — a 042 workspace
-	// run always passes through regardless of routing (publish.go). Its
-	// ProfileStore/ShapeProvider/SummaryModelProvider are not ready yet at
-	// this point in startup (composeGeneration builds them); genLate is
-	// bound once they are, and every value below that captures this
-	// enqueuer sees the bound version because genLate is a pointer.
+
 	genLate := &lateGenerationSnapshot{}
 	enqueuer = &generation.SnapshotEnqueuer{
 		Base:         enqueuer,

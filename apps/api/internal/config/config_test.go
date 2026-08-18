@@ -62,13 +62,6 @@ func TestLoadGatewayOverride(t *testing.T) {
 	}
 }
 
-// TestConfigRequiresGateway guards K1: Load() (used by binaries that do
-// inference work) must fail closed when the gateway is not configured, and
-// the error must name the specific missing key — the same shape
-// queue.validateLiveness uses. It must never attempt to reach the network:
-// every case here runs with no server listening anywhere, and if Load()
-// tried an HTTP call the missing-key or bad-URL cases would hang or error on
-// the network rather than failing fast with a config error.
 func TestConfigRequiresGateway(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -100,8 +93,6 @@ func TestConfigRequiresGateway(t *testing.T) {
 	}
 }
 
-// TestLoadNonAIIgnoresGateway guards K1-4: the sibling loader for binaries and
-// tests that do no inference must succeed with no gateway configured at all.
 func TestLoadNonAIIgnoresGateway(t *testing.T) {
 	if err := unsetForTest(t); err != nil {
 		t.Fatal(err)
@@ -161,11 +152,6 @@ func TestLoadEnvOverride(t *testing.T) {
 	}
 }
 
-// TestCapabilityRoutingDefaultsToGo guards FR-020: an unlisted capability
-// (among match/embed/generation, the ones that still have a "go" fallback)
-// routes to "go". AI_SERVICE_URL/AI_SERVICE_TOKEN are still required
-// unconditionally (T113: recruiter/outreach/rephrase/salary no longer have
-// a "go" fallback to read AI_CAPABILITY_ROUTING for at all).
 func TestCapabilityRoutingDefaultsToGo(t *testing.T) {
 	if err := unsetForTest(t); err != nil {
 		t.Fatal(err)
@@ -185,8 +171,6 @@ func TestCapabilityRoutingDefaultsToGo(t *testing.T) {
 	}
 }
 
-// TestCapabilityRoutingParsesPairs guards the AI_CAPABILITY_ROUTING parse
-// path and per-capability override (FR-020).
 func TestCapabilityRoutingParsesPairs(t *testing.T) {
 	if err := unsetForTest(t); err != nil {
 		t.Fatal(err)
@@ -213,9 +197,6 @@ func TestCapabilityRoutingParsesPairs(t *testing.T) {
 	}
 }
 
-// TestCapabilityRoutingRejectsMalformedEntry guards the fail-loudly rule:
-// a malformed AI_CAPABILITY_ROUTING entry is a startup error naming it,
-// never silently ignored.
 func TestCapabilityRoutingRejectsMalformedEntry(t *testing.T) {
 	if err := unsetForTest(t); err != nil {
 		t.Fatal(err)
@@ -234,11 +215,6 @@ func TestCapabilityRoutingRejectsMalformedEntry(t *testing.T) {
 	}
 }
 
-// TestAIServiceCredentialsRequired guards T113: recruiter/outreach/rephrase/
-// salary had their Go LLM path deleted and no longer have a "go" fallback,
-// so AI_SERVICE_URL and AI_SERVICE_TOKEN are required unconditionally now —
-// not only once AI_CAPABILITY_ROUTING names an explicit "python" entry for
-// one of the capabilities that still can (match, embed, generation).
 func TestAIServiceCredentialsRequired(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -288,18 +264,6 @@ func unsetForTest(t *testing.T) error {
 	return nil
 }
 
-// TestApiContainerHoldsNoProviderCredentials guards Constitution Principle V's
-// credential clause: provider credentials must stay in the gateway container
-// and must not be readable through the application.
-//
-// This exists because the prod api service previously carried `env_file: .env`,
-// which handed it every provider key. That was a standing violation, not a
-// hypothetical — anyone with a shell in the app container could read
-// OPENROUTER_API_KEY. The allowlist that replaced it only stays correct if
-// something fails when a key is added back.
-//
-// LITELLM_MASTER_KEY is deliberately permitted: it authenticates the app TO the
-// gateway and is not a provider credential.
 func TestApiContainerHoldsNoProviderCredentials(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..")
 	for _, file := range []string{"docker-compose.prod.yml", "docker-compose.yml"} {
@@ -310,7 +274,7 @@ func TestApiContainerHoldsNoProviderCredentials(t *testing.T) {
 		}
 		api, ok := composeService(string(data), "api")
 		if !ok {
-			continue // dev compose has no api service; the process runs on the host
+			continue
 		}
 		if strings.Contains(api, "env_file") {
 			t.Errorf("%s: api service uses env_file, which imports every variable including provider credentials", file)
@@ -326,14 +290,6 @@ func TestApiContainerHoldsNoProviderCredentials(t *testing.T) {
 	}
 }
 
-// TestGatewayDoesNotDependOnTheCollector is the FR-004 gate expressed as
-// something that fails (036 contracts C3-2).
-//
-// The collector must never be able to hold inference up. A `depends_on` for any
-// collector service would mean a broken or slow-starting ClickHouse delays the
-// gateway, which delays every AI task in the platform — for a service whose
-// entire job is to watch. The rule is easy to violate by accident when adding
-// startup ordering, so it is asserted rather than remembered.
 func TestGatewayDoesNotDependOnTheCollector(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..")
 	collector := []string{"langfuse-web", "langfuse-worker", "clickhouse"}
@@ -346,7 +302,7 @@ func TestGatewayDoesNotDependOnTheCollector(t *testing.T) {
 		}
 		litellm, ok := composeService(string(data), "litellm")
 		if !ok {
-			continue // prod has no gateway; see the header comment in that file
+			continue
 		}
 		if !strings.Contains(litellm, "depends_on") {
 			continue
@@ -359,10 +315,6 @@ func TestGatewayDoesNotDependOnTheCollector(t *testing.T) {
 	}
 }
 
-// TestCollectorUIIsBoundToLoopback guards contracts C3-4. The collector's UI
-// holds the user's legal name, employers and contact details in plain text, so
-// a published port on 0.0.0.0 exposes the profile to the whole network — in dev
-// as much as in prod.
 func TestCollectorUIIsBoundToLoopback(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..")
 	for _, file := range []string{"docker-compose.yml", "docker-compose.prod.yml"} {
@@ -373,10 +325,10 @@ func TestCollectorUIIsBoundToLoopback(t *testing.T) {
 		}
 		web, ok := composeService(string(data), "langfuse-web")
 		if !ok {
-			continue // prod has no collector; see the header comment in that file
+			continue
 		}
 		if !strings.Contains(web, "ports:") {
-			continue // not published at all is stricter still
+			continue
 		}
 		if !strings.Contains(web, "127.0.0.1:") {
 			t.Errorf("%s: langfuse-web publishes a port without a loopback bind; the operator UI holds the user's full profile in plain text", file)
@@ -384,9 +336,6 @@ func TestCollectorUIIsBoundToLoopback(t *testing.T) {
 	}
 }
 
-// composeService returns the block of a compose file belonging to one service,
-// with comment lines stripped so a key named in a comment is not mistaken for a
-// key being granted.
 func composeService(doc, name string) (string, bool) {
 	lines := strings.Split(doc, "\n")
 	var out []string
@@ -397,7 +346,7 @@ func composeService(doc, name string) (string, bool) {
 			continue
 		}
 		if in {
-			// A new top-level service starts at exactly two spaces of indent.
+
 			if len(l) > 2 && l[0] == ' ' && l[1] == ' ' && l[2] != ' ' && strings.HasSuffix(strings.TrimSpace(l), ":") {
 				break
 			}

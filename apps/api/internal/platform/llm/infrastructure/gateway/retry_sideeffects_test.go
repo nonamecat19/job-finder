@@ -9,29 +9,12 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/domain"
 )
 
-// The third leg of 037's baseline (contracts C1-2 rows 3–5).
-//
-// The strict-schema retry is not observable from a request body: one logical
-// CompleteJSON call that takes it issues **two** upstream requests, and
-// therefore reports the served model twice and the usage twice. Those double
-// reports are what feature 035's per-stage cost accounting and feature 036's
-// tracing see. A shim that collapses the retry into one request, or that hoists
-// the reporting out of the retried path, would leave every request body
-// identical and still be a regression.
-//
-// So this file asserts side-effect *counts*, not bodies. It also pins the two
-// trigger classes (an unparsable 200 body and zero choices both raise
-// ErrInvalidResponse, not just a 4xx) and the one case that must NOT retry.
-
 type sideEffects struct {
 	requests int32
 	served   []string
 	usages   []domain.Usage
 }
 
-// runStrictCall issues one strict CompleteJSON against an upstream driven by
-// respond, and reports how many times the adapter reached upstream and how many
-// times it reported a served model and usage.
 func runStrictCall(t *testing.T, schema string, respond func(attempt int32, w http.ResponseWriter)) *sideEffects {
 	t.Helper()
 	fx := &sideEffects{}
@@ -40,16 +23,10 @@ func runStrictCall(t *testing.T, schema string, respond func(attempt int32, w ht
 		respond(n, w)
 	})
 
-	// Capture hooks are per-context, so each report overwrites the pointer.
-	// Counting instead needs the reports themselves, which the adapter emits
-	// through the same context — wrap it so every report is appended.
 	ctx := context.Background()
 	ctx, servedPtr := domain.WithServedModelCapture(ctx)
 	ctx, usagePtr := domain.WithUsageCapture(ctx)
 
-	// A recording upstream lets the count be derived from request count and the
-	// last-write pointers assert content; the double-report invariant is then
-	// "requests == 2", which is what actually drives the duplicate reporting.
 	_, _ = p.CompleteJSON(ctx, "prompt", &domain.CompleteOptions{
 		ResponseMode: domain.ResponseModeStrict,
 		JSONSchema:   schema,
@@ -65,7 +42,6 @@ func runStrictCall(t *testing.T, schema string, respond func(attempt int32, w ht
 
 const validSchema = `{"type":"object","properties":{"a":{"type":"string"}},"required":["a"],"additionalProperties":false}`
 
-// C1-2 row 3, first trigger: a 400 classifies as ErrModelUnavailable.
 func TestStrictRetryFiresOnModelUnavailable(t *testing.T) {
 	fx := runStrictCall(t, validSchema, func(attempt int32, w http.ResponseWriter) {
 		if attempt == 1 {
@@ -81,8 +57,6 @@ func TestStrictRetryFiresOnModelUnavailable(t *testing.T) {
 	}
 }
 
-// C1-2 row 3, second trigger — the one a "retry on 4xx" reading would miss: an
-// unparsable 200 body raises ErrInvalidResponse and must also retry.
 func TestStrictRetryFiresOnUnparsableBody(t *testing.T) {
 	fx := runStrictCall(t, validSchema, func(attempt int32, w http.ResponseWriter) {
 		if attempt == 1 {
@@ -96,7 +70,6 @@ func TestStrictRetryFiresOnUnparsableBody(t *testing.T) {
 	}
 }
 
-// C1-2 row 3, third trigger: a well-formed 200 with zero choices.
 func TestStrictRetryFiresOnZeroChoices(t *testing.T) {
 	fx := runStrictCall(t, validSchema, func(attempt int32, w http.ResponseWriter) {
 		if attempt == 1 {
@@ -110,9 +83,6 @@ func TestStrictRetryFiresOnZeroChoices(t *testing.T) {
 	}
 }
 
-// C1-2 row 5: a schema that will not parse disables strict mode up front, so
-// there is nothing to fall back FROM and the retry must be skipped. One failed
-// request stays one request.
 func TestUnparseableSchemaSkipsTheRetry(t *testing.T) {
 	fx := runStrictCall(t, "{not json", func(attempt int32, w http.ResponseWriter) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -123,8 +93,6 @@ func TestUnparseableSchemaSkipsTheRetry(t *testing.T) {
 	}
 }
 
-// A successful strict call must not retry. Stated explicitly so a change that
-// makes the retry unconditional fails here rather than doubling every bill.
 func TestSuccessfulStrictCallDoesNotRetry(t *testing.T) {
 	fx := runStrictCall(t, validSchema, func(attempt int32, w http.ResponseWriter) {
 		w.Header().Set("x-litellm-model-name", "served/model")

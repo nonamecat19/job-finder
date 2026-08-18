@@ -15,16 +15,6 @@ import (
 	"github.com/job-finder/api/internal/testinfra"
 )
 
-// The PDF renderer had no test: it drives Chrome through
-// scraping.HTTPScraper, and Chrome was a binary on the developer's machine.
-// So the one thing a user receives from the generation pipeline — the file —
-// was never produced in CI, and a broken template, a Chrome flag that stopped
-// being accepted, or an output directory that is not writable all failed
-// first in production.
-//
-// These render through a headless Chrome container (testinfra), the same seam
-// internal/scraping's tests use.
-
 func renderer(t *testing.T) *HtmlPdfRenderer {
 	t.Helper()
 
@@ -62,8 +52,6 @@ func sampleResume() dto.JsonResume {
 	}
 }
 
-// readPDF returns the rendered file's bytes, failing the test if the renderer
-// reported a path it did not write.
 func readPDF(t *testing.T, path string) []byte {
 	t.Helper()
 	body, err := os.ReadFile(path)
@@ -73,8 +61,6 @@ func readPDF(t *testing.T, path string) []byte {
 	return body
 }
 
-// TestRenderResumeProducesAPDF is the end of the generation pipeline: a
-// JsonResume in, a real PDF file on disk out.
 func TestRenderResumeProducesAPDF(t *testing.T) {
 	r := renderer(t)
 
@@ -90,16 +76,12 @@ func TestRenderResumeProducesAPDF(t *testing.T) {
 	if !strings.HasPrefix(string(body), "%PDF-") {
 		t.Fatalf("rendered file does not start with a PDF header: %.16q", body)
 	}
-	// A blank page is about 1KB; a rendered résumé is several times that.
-	// The bound is loose on purpose — it catches "Chrome printed nothing",
-	// not typography.
+
 	if len(body) < 3000 {
 		t.Fatalf("rendered pdf is %d bytes, too small to contain the résumé", len(body))
 	}
 }
 
-// TestRenderCoverLetterProducesAPDF covers the second template, which has its
-// own paragraph-splitting path.
 func TestRenderCoverLetterProducesAPDF(t *testing.T) {
 	r := renderer(t)
 
@@ -121,11 +103,6 @@ func TestRenderCoverLetterProducesAPDF(t *testing.T) {
 	}
 }
 
-// TestRenderResumeIsDeterministicInSize guards the property a re-run relies
-// on: rendering the same résumé twice produces the same document, so a
-// regenerated file is not gratuitously different from the one a user already
-// downloaded. Byte equality is too strong (PDFs embed a creation date), so
-// this compares length, which any content difference moves.
 func TestRenderResumeIsDeterministicInSize(t *testing.T) {
 	r := renderer(t)
 
@@ -146,9 +123,6 @@ func TestRenderResumeIsDeterministicInSize(t *testing.T) {
 	}
 }
 
-// TestRenderResumeCreatesTheOutputDirectory proves the renderer makes its own
-// output directory rather than requiring one — the API container starts with
-// an empty documents volume.
 func TestRenderResumeCreatesTheOutputDirectory(t *testing.T) {
 	if chromeErr != nil {
 		t.Fatalf("start chrome: %v", chromeErr)
@@ -178,9 +152,6 @@ var (
 	chromeErr error
 )
 
-// TestMain starts the browser once for the package. Nothing here needs host
-// access — the pages are set on the tab as document content, not fetched —
-// so no host port is exposed to it.
 func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	chromeWS, chromeErr = testinfra.ChromeWebSocketURL(ctx, 0)

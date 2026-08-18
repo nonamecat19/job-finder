@@ -12,9 +12,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// manualFeedFixture seeds two sources, a manual subscription under each, a
-// crawl subscription, and one vacancy per subscription — the smallest shape
-// that can tell "manual across all sources" from "one subscription".
 type manualFeedFixture struct {
 	manualDjinni sqlcgen.Subscription
 	manualDou    sqlcgen.Subscription
@@ -108,8 +105,6 @@ func TestIntegration_ManualAddsSurfaceFirstUnderScoreSortForTwentyFourHours(t *t
 	ctx := context.Background()
 	f := seedManualFeed(t, ctx)
 
-	// The crawled vacancy scores higher, so only the surfacing term can put a
-	// manual add above it.
 	mustScore(t, ctx, f.jobs["crawled"].ID, 95)
 	mustScore(t, ctx, f.jobs["manual-djinni"].ID, 10)
 
@@ -118,8 +113,6 @@ func TestIntegration_ManualAddsSurfaceFirstUnderScoreSortForTwentyFourHours(t *t
 		t.Fatalf("expected the fresh manual add to surface first under sort=score, got %v", titlesOf(rows))
 	}
 
-	// The same vacancy must not jump the queue under the explicitly chosen
-	// date ordering.
 	byDate, err := testDB.Queries.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{Limit: 50})
 	if err != nil {
 		t.Fatalf("list jobs by date: %v", err)
@@ -127,12 +120,11 @@ func TestIntegration_ManualAddsSurfaceFirstUnderScoreSortForTwentyFourHours(t *t
 	if len(byDate) == 0 {
 		t.Fatal("expected rows")
 	}
-	// mustInsertJob writes them in order, so the crawled one is newest.
+
 	if byDate[0].Title != "Crawled role" {
 		t.Errorf("sort=date must be pure recency, got %v", byDateTitles(byDate))
 	}
 
-	// Past 24 hours the boost expires on its own, with no cleanup job.
 	if _, err := testDB.Pool.Exec(ctx,
 		`UPDATE "Job" SET "ingestedAt" = now() - interval '25 hours' WHERE "id" = $1`,
 		f.jobs["manual-djinni"].ID); err != nil {
@@ -144,7 +136,6 @@ func TestIntegration_ManualAddsSurfaceFirstUnderScoreSortForTwentyFourHours(t *t
 	}
 }
 
-// SC-006b: a manual add and the same posting crawled must report the same age.
 func TestIntegration_ManualAddPostedAtIsNeverTheAddTime(t *testing.T) {
 	ctx := context.Background()
 	f := seedManualFeed(t, ctx)
@@ -177,8 +168,6 @@ func TestIntegration_ManualAddPostedAtIsNeverTheAddTime(t *testing.T) {
 	}
 }
 
-// FR-013 / FR-017h: the count and the most-recent timestamp come from run
-// records, so failed attempts appear in the history without inflating the total.
 func TestIntegration_ManualSubscriptionStats(t *testing.T) {
 	ctx := context.Background()
 	f := seedManualFeed(t, ctx)
@@ -188,7 +177,6 @@ func TestIntegration_ManualSubscriptionStats(t *testing.T) {
 		t.Fatalf("get job source: %v", err)
 	}
 
-	// Two successful adds and one failure.
 	for _, added := range []int32{1, 1} {
 		run, err := testDB.Queries.InsertSourceRun(ctx, sqlcgen.InsertSourceRunParams{
 			SourceId: source.ID, SubscriptionId: f.manualDjinni.ID, Trigger: "manual",
@@ -226,7 +214,6 @@ func TestIntegration_ManualSubscriptionStats(t *testing.T) {
 		t.Error("expected a most-recent-addition timestamp")
 	}
 
-	// A subscription that has added nothing reports zero, not an error.
 	empty, err := testDB.Queries.ManualSubscriptionStats(ctx, f.manualDou.ID)
 	if err != nil {
 		t.Fatalf("manual subscription stats (empty): %v", err)

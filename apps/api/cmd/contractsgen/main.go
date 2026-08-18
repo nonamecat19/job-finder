@@ -1,10 +1,3 @@
-// Command contractsgen regenerates apps/api/internal/events/schema/ from the
-// Go event structs in apps/api/internal/events. This is the Go side of R7:
-// JSON Schema generated from Go is the interchange, and apps/ai's Pydantic
-// models are generated from these schemas in turn (E7-1).
-//
-// Run via `make contracts-generate`. `make contracts-check` regenerates into
-// a temporary directory and diffs, mirroring sqlc-check/tygo-check.
 package main
 
 import (
@@ -19,9 +12,6 @@ import (
 	"github.com/job-finder/api/internal/events"
 )
 
-// schemas is the closed set of event package types generated to JSON Schema.
-// Each entry is one $id / file — every message shape a consumer needs to
-// validate against, per contracts/events.md E7-1.
 var schemas = []struct {
 	name string
 	typ  any

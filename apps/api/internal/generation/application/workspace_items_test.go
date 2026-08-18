@@ -13,8 +13,6 @@ func skillGroupRow(text string, dropped []string) sqlcgen.GenerationItem {
 	return sqlcgen.GenerationItem{Origin: "profile", SourceText: text, DroppedEntries: dropped}
 }
 
-// The stored drop set is canonical: the group's own entry order, deduped and
-// trimmed, so re-sending the same skills in another order is the same write.
 func TestNormalizeDroppedEntriesIsCanonical(t *testing.T) {
 	row := skillGroupRow("Backend: Go, NestJS, Redis", nil)
 
@@ -27,7 +25,6 @@ func TestNormalizeDroppedEntriesIsCanonical(t *testing.T) {
 	}
 }
 
-// An empty set restores the whole group rather than meaning "no change".
 func TestNormalizeDroppedEntriesAcceptsTheEmptySet(t *testing.T) {
 	got, err := normalizeDroppedEntries(skillGroupRow("Backend: Go, NestJS", []string{"Go"}), []string{})
 	if err != nil {
@@ -38,9 +35,6 @@ func TestNormalizeDroppedEntriesAcceptsTheEmptySet(t *testing.T) {
 	}
 }
 
-// A skill the group does not contain means the client is working from a stale
-// copy — a 400, not a silent no-op, because the next export would otherwise
-// drop something the user never named.
 func TestNormalizeDroppedEntriesRejectsAnUnknownSkill(t *testing.T) {
 	_, err := normalizeDroppedEntries(skillGroupRow("Backend: Go, NestJS", nil), []string{"Rust"})
 	if err == nil {

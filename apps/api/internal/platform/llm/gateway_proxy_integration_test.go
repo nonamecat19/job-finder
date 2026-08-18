@@ -21,22 +21,6 @@ import (
 	"github.com/job-finder/api/internal/testinfra"
 )
 
-// The guardrails in gateway_config_test.go read gateway/config.yaml as a YAML
-// document. They cannot tell whether LiteLLM itself accepts it: a renamed
-// key, a fallback shape the proxy no longer parses, or an `os.environ/*`
-// reference that fails to resolve would pass every one of them and fail on
-// `docker compose up`. These tests close that gap by running the pinned proxy
-// image on the real file (internal/testinfra) and driving it over HTTP.
-//
-// No provider is contacted and no credential is needed: both provider base
-// URLs point at the stub upstream below, so the proxy resolves scenarios,
-// walks fallback chains and applies its own retry policy against fake models.
-// What is under test is the routing contract, never a model.
-
-// stub is an OpenAI-compatible upstream standing in for every provider. It
-// records the model each request asked for — which is how a test tells which
-// tier of a chain the proxy chose — and lets a test make a given model fail
-// so the declared fallback is exercised.
 type stub struct {
 	mu       sync.Mutex
 	requests []stubRequest
@@ -66,8 +50,7 @@ func (s *stub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if failing {
-		// 500 is retried and then failed over by the proxy; 4xx auth errors
-		// are not, so this is the status that exercises the chain.
+
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = io.WriteString(w, `{"error":{"message":"stub upstream is failing this model","type":"server_error"}}`)
 		return
@@ -104,9 +87,6 @@ func (s *stub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 const stubReply = "testinfra-stub-reply"
 
-// reset clears the recorded requests and failure injections so each test
-// reads only its own traffic. The proxy is shared by the whole package, so
-// these tests do not run in parallel with each other.
 func (s *stub) reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -140,8 +120,6 @@ var (
 	gatewayErr  error
 )
 
-// TestMain starts the stub on a fixed listener before any test runs, because
-// the proxy container has to be told the port at creation time.
 func TestMain(m *testing.M) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -180,11 +158,6 @@ func gatewayBaseURL(t *testing.T) string {
 	return gatewayURL
 }
 
-// TestGatewayConfigLoadsInLiteLLM proves gateway/config.yaml is a config the
-// pinned proxy accepts, and that every deployment in the file became a group
-// the running proxy serves. The container only reports ready once
-// /health/liveliness answers, which LiteLLM does not do when config load
-// failed — so reaching this test's body is already part of the assertion.
 func TestGatewayConfigLoadsInLiteLLM(t *testing.T) {
 	base := gatewayBaseURL(t)
 	cfg := loadGatewayConfig(t)
@@ -209,9 +182,7 @@ func TestGatewayConfigLoadsInLiteLLM(t *testing.T) {
 			t.Errorf("group %q is declared in gateway/config.yaml but the running proxy does not serve it", name)
 		}
 	}
-	// requestedScenarioGroups is what the application actually sends as
-	// `model` (cmd/server/compose.go). Checked separately from the loop
-	// above so a chain deleted from both file and application still fails.
+
 	for _, scenario := range requestedScenarioGroups {
 		if !served[scenario] {
 			t.Errorf("scenario %q is requested by the application but not served by the proxy", scenario)
@@ -219,8 +190,6 @@ func TestGatewayConfigLoadsInLiteLLM(t *testing.T) {
 	}
 }
 
-// TestGatewayEnforcesMasterKey proves master_key: os.environ/LITELLM_MASTER_KEY
-// resolved. A config where it did not would serve an open proxy.
 func TestGatewayEnforcesMasterKey(t *testing.T) {
 	base := gatewayBaseURL(t)
 
@@ -239,11 +208,6 @@ func TestGatewayEnforcesMasterKey(t *testing.T) {
 	}
 }
 
-// TestGatewayRoutesScenarioToDeclaredPrimary sends one chat completion per
-// scenario the application requests and asserts the proxy asked the upstream
-// for the model gateway/config.yaml declares as that chain's first tier. This
-// is the assertion the YAML guardrails cannot make: it is the running proxy's
-// own resolution of the file, not a re-reading of it.
 func TestGatewayRoutesScenarioToDeclaredPrimary(t *testing.T) {
 	base := gatewayBaseURL(t)
 	cfg := loadGatewayConfig(t)
@@ -251,7 +215,7 @@ func TestGatewayRoutesScenarioToDeclaredPrimary(t *testing.T) {
 
 	for _, scenario := range requestedScenarioGroups {
 		if scenario == "embed" {
-			continue // an embedding group; covered by its own test below
+			continue
 		}
 		t.Run(scenario, func(t *testing.T) {
 			upstream.reset()
@@ -273,11 +237,6 @@ func TestGatewayRoutesScenarioToDeclaredPrimary(t *testing.T) {
 	}
 }
 
-// TestGatewayFallsBackToDeclaredTier makes each chain's primary tier fail at
-// the upstream and asserts the proxy reaches the tier the file names as its
-// fallback. The `litellm_settings.fallbacks` shape is the part of the config
-// most likely to break silently on an image bump: a fallback list the proxy
-// stopped parsing does not fail config load, it just stops failing over.
 func TestGatewayFallsBackToDeclaredTier(t *testing.T) {
 	base := gatewayBaseURL(t)
 	cfg := loadGatewayConfig(t)
@@ -286,7 +245,7 @@ func TestGatewayFallsBackToDeclaredTier(t *testing.T) {
 	for _, scenario := range requestedScenarioGroups {
 		chain := fullChain(cfg, scenario)
 		if scenario == "embed" || len(chain) < 2 {
-			continue // no fallback declared; nothing to fail over to
+			continue
 		}
 		t.Run(scenario, func(t *testing.T) {
 			upstream.reset()
@@ -310,11 +269,6 @@ func TestGatewayFallsBackToDeclaredTier(t *testing.T) {
 	}
 }
 
-// TestGatewayRejectsUnknownScenario proves what gateway/config.yaml's header
-// promises for 044: with the `default` catch-all group removed, a scenario
-// name the file does not declare fails loudly instead of being served by
-// something. A typo must reach the application as an error, not as an answer
-// from an unintended model.
 func TestGatewayRejectsUnknownScenario(t *testing.T) {
 	base := gatewayBaseURL(t)
 
@@ -327,11 +281,6 @@ func TestGatewayRejectsUnknownScenario(t *testing.T) {
 	}
 }
 
-// TestGatewayServesEmbedGroupAtDeclaredWidth covers the one group the chat
-// tests skip. `embed` is requested through /v1/embeddings by Router.Embed,
-// and its output_dimension is the width the database's vector columns are
-// declared at (C5-1), so this asserts the proxy both routes the group and
-// passes that width downstream.
 func TestGatewayServesEmbedGroupAtDeclaredWidth(t *testing.T) {
 	base := gatewayBaseURL(t)
 	cfg := loadGatewayConfig(t)
@@ -374,16 +323,10 @@ func TestGatewayServesEmbedGroupAtDeclaredWidth(t *testing.T) {
 	}
 }
 
-// fullChain is the ordered list of deployments a request for scenario walks:
-// the group of that name is tier 1, and litellm_settings.fallbacks lists the
-// rest (chainFor returns only the fallback tiers, not the primary).
 func fullChain(c *gatewayConfig, scenario string) []string {
 	return append([]string{scenario}, chainFor(c, scenario)...)
 }
 
-// upstreamModel strips the provider prefix LiteLLM routes on
-// (openrouter/deepseek/deepseek-v4-pro) down to the model id it actually
-// sends upstream (deepseek/deepseek-v4-pro), which is what the stub records.
 func upstreamModel(t *testing.T, deployments map[string]map[string]any, tier string) string {
 	t.Helper()
 	params, ok := deployments[tier]
@@ -437,9 +380,6 @@ func chatContent(t *testing.T, body []byte) string {
 	return completion.Choices[0].Message.Content
 }
 
-// httpTimeout is generous because these assertions are about routing, not
-// latency: a chain that retries then falls over takes several seconds even
-// against an instant upstream.
 const httpTimeout = 120 * time.Second
 
 func getJSON(t *testing.T, url string) []byte {

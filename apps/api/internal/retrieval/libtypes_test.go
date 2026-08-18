@@ -9,10 +9,6 @@ import (
 	js "github.com/nonamecat19/job-scraper/retrieval"
 )
 
-// The ladder, the outcome vocabulary and the fetch/status types moved into the
-// job-scraper library. These tests came with the app and stay here as the app's
-// regression gate on the library surface it depends on.
-
 func TestPageOutcome(t *testing.T) {
 	o := ports.PageOutcome{
 		Status: ports.PageRead,
@@ -36,9 +32,6 @@ func TestRunVerdict(t *testing.T) {
 	}
 }
 
-// stubRung stands in for a real strategy: the ladder cares only about a rung's
-// key and its position, so escalation can be exercised without a browser or a
-// sidecar.
 type stubRung struct{ key string }
 
 func (r stubRung) Key() string { return r.key }

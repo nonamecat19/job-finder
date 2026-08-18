@@ -387,10 +387,6 @@ func TestGatewayErrorClassificationUnaffectedByServedModelLogging(t *testing.T) 
 	}
 }
 
-// Embed's own coverage lives in embed_test.go and embed_golden_test.go (044
-// T014/T015): the real POST /embeddings implementation replaces the
-// delegation this test used to pin.
-
 func TestClientTimeoutExceedsProxyWorstCaseChain(t *testing.T) {
 	const proxyWorstCase = 600 * time.Second
 

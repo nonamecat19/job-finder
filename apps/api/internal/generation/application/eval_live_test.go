@@ -20,27 +20,6 @@ import (
 	"strconv"
 )
 
-// Live mode (038 US2) — the recorder and the model comparison.
-//
-// This file is behind `//go:build eval_live`, and that is not decoration: it is
-// how the recorder stays out of the binary that runs the gate. A failing
-// deterministic run has no code path to a live call, because the code does not
-// exist in that binary. An environment variable alone could not make that
-// claim.
-//
-// It replaces benchmark_test.go, whose three defects are fixed here rather than
-// carried over:
-//
-//   - it summed durations into a field named `medianMs`, divided by the attempt
-//     count, and printed the result under a "Median ms" header. That is a mean.
-//   - it had **no build tag at all**, despite a doc comment claiming
-//     `-tags benchmark`, so it compiled into every ordinary test run.
-//   - its `structuralViolations` column was never incremented by anything, so
-//     it printed 0 for every model since the day it was written.
-
-// liveCasesDir holds cases that only mean anything against a live provider, so
-// it lives here rather than beside the deterministic corpus — a case in it must
-// never be discovered by the gate.
 var liveCasesDir = filepath.Join(evalDataDir, "cases-live")
 
 var (
@@ -49,7 +28,6 @@ var (
 	flagOut    = flag.String("eval.out", "", "path to write the comparison artifact")
 )
 
-// median is a median. Named and tested because the thing it replaces was not.
 func median(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
@@ -63,12 +41,6 @@ func median(values []float64) float64 {
 	return (s[mid-1] + s[mid]) / 2
 }
 
-// StageRecord is one stage of one run, as the artifact records it.
-//
-// All four provenance fields come from StageOutcome, which 035 already
-// populates. Without them SC-008 is unverifiable: a task key does not determine
-// which model answered, so "model X scored Y" is not reproducible from a task
-// key alone.
 type StageRecord struct {
 	Stage       string  `json:"stage"`
 	ServedModel string  `json:"served_model"`
@@ -79,20 +51,17 @@ type StageRecord struct {
 	CostUSD     float64 `json:"cost_usd"`
 }
 
-// CaseResult is one model's run over one case.
 type CaseResult struct {
 	Case   string             `json:"case"`
 	Scores map[string]float64 `json:"scores"`
 	Stages []StageRecord      `json:"stages"`
-	// Incomplete marks a run that did not finish — a provider outage, a
-	// structural failure. A partial result is never presented as complete.
+
 	Incomplete bool    `json:"incomplete"`
 	Failure    string  `json:"failure,omitempty"`
 	DurationMs int64   `json:"duration_ms"`
 	CostUSD    float64 `json:"cost_usd"`
 }
 
-// ModelResult is one candidate's whole run.
 type ModelResult struct {
 	Model            string             `json:"model"`
 	Cases            []CaseResult       `json:"cases"`
@@ -100,13 +69,10 @@ type ModelResult struct {
 	MedianDurationMs float64            `json:"median_duration_ms"`
 	MedianCostUSD    float64            `json:"median_cost_usd"`
 	TotalCostUSD     float64            `json:"total_cost_usd"`
-	// IncompleteCases is how many runs did not finish. Reported so a model
-	// that failed half the corpus cannot look like a cheap one.
+
 	IncompleteCases int `json:"incomplete_cases"`
 }
 
-// RequestParams is the configuration a comparison ran under, recorded so a
-// second reader can reproduce the decision from the artifact alone.
 type RequestParams struct {
 	GroundingLevel string `json:"grounding_level"`
 	ResponseMode   int    `json:"response_mode"`
@@ -115,7 +81,6 @@ type RequestParams struct {
 	ShapeConfig    string `json:"shape_config"`
 }
 
-// ComparisonRun is the durable artifact.
 type ComparisonRun struct {
 	RunAt          string        `json:"run_at"`
 	CorpusRevision string        `json:"corpus_revision"`
@@ -124,11 +89,6 @@ type ComparisonRun struct {
 	Models         []ModelResult `json:"models"`
 }
 
-// TestEvalRecord records replay fixtures from live providers (T009, C3-6/C3-7).
-//
-// Fixtures are recorder-produced. Hand-editing one is hand-authoring an
-// expectation, which turns the corpus from a record of what a model did into a
-// record of what somebody wished it had done.
 func TestEvalRecord(t *testing.T) {
 	if !*flagRecord {
 		t.Skip("set -eval.record to record fixtures")
@@ -194,18 +154,10 @@ func recordCase(t *testing.T, gw llm.Provider, c EvalCase) {
 		t.Fatalf("case %q: page fitting failed, nothing recorded: %v", c.Name, rerr)
 	}
 
-	// The ranking stage (042 T045/T046/T047): a second request against the
-	// same `generation-select` provider, over the same replay/record
-	// mechanism as the five stages above — runCase makes this identical call
-	// in the deterministic gate, so recording it here is what lets that call
-	// replay instead of missing.
 	if _, rerr := rankContent(t.Context(), providers["generation-select"], "", c.Master, analysis, c.Cfg, nil); rerr != nil {
 		t.Fatalf("case %q: ranking failed, nothing recorded: %v", c.Name, rerr)
 	}
 
-	// The suggestion stage (042 T064), recorded for the same reason and over
-	// the same provider: runCase makes this exact call, so without it here the
-	// gate reports a replay miss rather than a score.
 	if _, serr := suggestContent(
 		t.Context(), providers["generation-select"], "",
 		experienceCompanies(c.Master), domain.SkillGroupLabels(c.Master), analysis); serr != nil {
@@ -235,8 +187,6 @@ func recordCase(t *testing.T, gw llm.Provider, c EvalCase) {
 	t.Logf("case %q: recorded %d fixture(s) into %s", c.Name, written, dir)
 }
 
-// TestLiveComparison runs the corpus against several candidate task keys and
-// writes a reproducible artifact (FR-013, FR-015, FR-023).
 func TestLiveComparison(t *testing.T) {
 	if os.Getenv("EVAL_LIVE") != "1" {
 		t.Skip("set EVAL_LIVE=1 to run the live comparison")
@@ -278,9 +228,7 @@ func TestLiveComparison(t *testing.T) {
 			mr.Cases = append(mr.Cases, cr)
 			mr.TotalCostUSD += cr.CostUSD
 			if cr.Incomplete {
-				// FR-016/FR-017: a structurally failing model is scored as
-				// failing and the comparison continues; a partial result is
-				// never folded into the medians as if it had succeeded.
+
 				mr.IncompleteCases++
 				continue
 			}
@@ -354,9 +302,6 @@ func runCaseLive(t *testing.T, gw llm.Provider, model string, c EvalCase) CaseRe
 	return cr
 }
 
-// printComparison renders the artifact. Every column printed here is written
-// somewhere above — see TestEveryReportedColumnIsAssigned, which exists because
-// the file this replaces printed a column nothing ever incremented.
 func printComparison(t *testing.T, run ComparisonRun) {
 	t.Helper()
 	names := scorerNames()
@@ -382,9 +327,7 @@ func printComparison(t *testing.T, run ComparisonRun) {
 
 func corpusRevision(t *testing.T) string {
 	t.Helper()
-	// The corpus revision is the content hash of the cases directory, not a git
-	// sha: an uncommitted fixture edit must change it, or the artifact claims
-	// to describe a corpus that was never run.
+
 	var parts []string
 	_ = filepath.WalkDir(casesDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -401,13 +344,6 @@ func corpusRevision(t *testing.T) string {
 	return strings.Join(parts, ",")
 }
 
-// --- live-mode guardrails ---------------------------------------------------
-
-// FR-012 / FR-025 / C6-1: live mode is excluded by its **build constraint**,
-// not only by an environment variable, and never appears in `go test ./...`.
-//
-// The file this replaces claimed `-tags benchmark` in its doc comment and had
-// no build line at all, so it compiled into every ordinary run.
 func TestLiveModeIsBuildConstrained(t *testing.T) {
 	raw, err := os.ReadFile("eval_live_test.go")
 	if err != nil {
@@ -419,11 +355,9 @@ func TestLiveModeIsBuildConstrained(t *testing.T) {
 	}
 }
 
-// FR-022 / C6-4: the median statistic is a median. The fixture's mean and
-// median differ, so an implementation that averages fails.
 func TestMedianIsAMedian(t *testing.T) {
 	values := []float64{1, 1, 1, 1, 96}
-	// mean = 20, median = 1
+
 	if got := median(values); got != 1 {
 		t.Errorf("median(%v) = %v, want 1 (the mean is 20 — the statistic this replaces reported that and called it a median)", values, got)
 	}
@@ -435,13 +369,6 @@ func TestMedianIsAMedian(t *testing.T) {
 	}
 }
 
-// FR-026 / SC-014 / C6-4a: every column in the reported table is assigned
-// somewhere.
-//
-// benchmark_test.go's `structuralViolations` printed 0 for every model since
-// the day it was written, because nothing incremented it. A column that is
-// declared and printed but never written is worse than an absent one: it reads
-// as a measurement.
 func TestEveryReportedColumnIsAssigned(t *testing.T) {
 	raw, err := os.ReadFile("eval_live_test.go")
 	if err != nil {
@@ -449,7 +376,6 @@ func TestEveryReportedColumnIsAssigned(t *testing.T) {
 	}
 	src := string(raw)
 
-	// Each printed field must appear on the left of an assignment somewhere.
 	assigned := map[string]string{
 		"MedianDurationMs": "mr.MedianDurationMs =",
 		"MedianCostUSD":    "mr.MedianCostUSD =",
@@ -469,16 +395,12 @@ func TestEveryReportedColumnIsAssigned(t *testing.T) {
 	}
 }
 
-// C6-8: live mode writes no baseline, under any circumstance. A live run's
-// scores depend on which upstream answered, so recording one as a baseline
-// would gate every future change on a provider's mood that day.
 func TestLiveModeWritesNoBaseline(t *testing.T) {
 	raw, err := os.ReadFile("eval_live_test.go")
 	if err != nil {
 		t.Fatalf("read own source: %v", err)
 	}
-	// Search only the code above the guardrails section, so this test's own
-	// error message does not match itself.
+
 	code := string(raw)
 	if i := strings.Index(code, "// --- live-mode guardrails"); i > 0 {
 		code = code[:i]
@@ -488,8 +410,6 @@ func TestLiveModeWritesNoBaseline(t *testing.T) {
 	}
 }
 
-// FR-016 / C6-5: a structurally failing model is scored as failing and the
-// comparison continues rather than aborting.
 func TestIncompleteRunIsNotFoldedIntoMedians(t *testing.T) {
 	mr := ModelResult{MedianScores: map[string]float64{}}
 	var scores []float64
@@ -512,40 +432,11 @@ func TestIncompleteRunIsNotFoldedIntoMedians(t *testing.T) {
 	}
 }
 
-// --- 035's cost and latency targets ------------------------------------------
-//
-// Ported here from benchmark_test.go, which 038 replaces. It measures something
-// live mode is the right home for — what the split pipeline actually costs and
-// how long it takes against real providers — and it gains the build tag it
-// should always have had. 038's own defect list applies to the file this came
-// from, not to this test: it computes a real median, asserts its targets, and
-// prints no column it does not write.
-
-// Pre-split baseline for the split pipeline's cost and latency targets (035
-// SC-001, SC-002): one full single-model run on the strongest option evaluated,
-// measured on 2026-08-07 and recorded in the feature's spec. Overridable with
-// BASELINE_COST_USD / BASELINE_SECONDS so a re-measured baseline does not
-// require a code change.
 const (
 	defaultBaselineCostUSD  = 0.113
 	defaultBaselineDuration = 60 * time.Second
 )
 
-// TestBenchmarkSplitPipelineTargets is the split-pipeline cost/latency
-// benchmark (035 T049, SC-001, SC-002, SC-009). It runs the real staged
-// pipeline against the gateway's stage keys, reads back per-stage duration,
-// tokens, cost and serving model from the run's own provenance — the same
-// side-channel the application records on a document — and asserts the two
-// measurable targets against the recorded pre-split baseline:
-//
-//	SC-001: cost per resume ≤ 1/5 of baseline
-//	SC-002: median wall-clock ≤ 1/2 of baseline
-//
-// It calls live providers, so it is skipped in short mode and unless
-// GENERATION_BENCHMARK=1. Run it manually:
-//
-//	GENERATION_BENCHMARK=1 go test -run TestBenchmarkSplitPipelineTargets \
-//	  -v -timeout 30m ./internal/generation/application/
 func TestBenchmarkSplitPipelineTargets(t *testing.T) {
 	if testing.Short() {
 		t.Skip("benchmark requires live providers")
@@ -566,10 +457,6 @@ func TestBenchmarkSplitPipelineTargets(t *testing.T) {
 		runs = 1
 	}
 
-	// The service is built from stage routers pointed at the gateway task keys,
-	// exactly as cmd/server wires them, so the benchmark measures the shipped
-	// routing rather than a benchmark-only path. The ollama leg is nil: the
-	// point of this measurement is the hosted chain.
 	gw, err := llm.NewGateway(gatewayURL, masterKey, 1024)
 	if err != nil {
 		t.Fatalf("gateway: %v", err)
@@ -647,8 +534,6 @@ func TestBenchmarkSplitPipelineTargets(t *testing.T) {
 	fmt.Printf("\nmedian cost: $%.6f (SC-001 target ≤ $%.6f, baseline $%.6f)\n", medianCost, costTarget, baselineCost)
 	fmt.Printf("median time: %s (SC-002 target ≤ %s, baseline %s)\n\n", medianDur, durTarget, baselineDur)
 
-	// A zero cost means the proxy reported none, not that the run was free —
-	// asserting the target against it would pass vacuously (FR-017/SC-009).
 	if medianCost <= 0 {
 		t.Fatalf("SC-001 unmeasurable: no stage reported a cost; the proxy must return usage for the target to mean anything")
 	}
@@ -660,12 +545,6 @@ func TestBenchmarkSplitPipelineTargets(t *testing.T) {
 	}
 }
 
-// loadBenchmarkMaster loads the real master profile the deployment generates
-// from, because the cost and latency figures are only meaningful against a
-// profile of realistic size — and the thin in-file sample cannot pass the
-// grounding check, so a run against it never reaches the measurement. Set
-// RESUME_MASTER_PATH to point elsewhere; the default is the repository's own
-// master, resolved relative to this package.
 func loadBenchmarkMaster(t *testing.T) domain.RendercvMaster {
 	t.Helper()
 	path := os.Getenv("RESUME_MASTER_PATH")

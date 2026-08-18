@@ -1,9 +1,3 @@
-// Package manualadd turns a pasted posting URL into an ordinary vacancy.
-//
-// It is its own module rather than a handler bolted onto jobsources because it
-// is a distinct, synchronous entry point with its own failure taxonomy. It
-// depends on jobsources' adapter registry and its extracted ingest package
-// rather than living inside them.
 package manualadd
 
 import (

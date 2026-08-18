@@ -13,9 +13,6 @@ import (
 	"github.com/job-finder/api/internal/testutil"
 )
 
-// T076/T077: POST .../rerun returns the SAME run id, 409s while the run is
-// already `running`, and preserves a user's toggle on a matched profile item
-// across the section's delete-and-recreate (data-model.md §4).
 func TestRerunGenerationRun_SameRunIdAndPreservesToggle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -55,8 +52,7 @@ func TestRerunGenerationRun_SameRunIdAndPreservesToggle(t *testing.T) {
 	if expSection == nil || len(expSection.Items) == 0 {
 		t.Fatal("expected a non-empty experience section")
 	}
-	// Deselect the item that started selected — a decision that must survive
-	// the rerun because its bullet (same sourceIndex) still exists after.
+
 	target := expSection.Items[0]
 	patchW := testutil.DoRequestJSON(r, "PATCH", "/api/generations/"+started.RunID+"/items/"+target.ID,
 		map[string]any{"selected": !target.Selected}, map[string]string{"runId": started.RunID, "itemId": target.ID})
@@ -64,7 +60,6 @@ func TestRerunGenerationRun_SameRunIdAndPreservesToggle(t *testing.T) {
 		t.Fatalf("PATCH item: expected 200, got %d: %s", patchW.Code, patchW.Body.String())
 	}
 
-	// Whole-run rerun: same run id back, 202.
 	rerunW := testutil.DoRequestJSON(r, "POST", "/api/generations/"+started.RunID+"/rerun",
 		map[string]any{}, map[string]string{"runId": started.RunID})
 	if rerunW.Code != 202 {
@@ -78,19 +73,12 @@ func TestRerunGenerationRun_SameRunIdAndPreservesToggle(t *testing.T) {
 		t.Fatalf("rerun runId = %q, want the same run id %q", rerunResp.RunID, started.RunID)
 	}
 
-	// 409 while the run is (still, or again) running.
 	conflictW := testutil.DoRequestJSON(r, "POST", "/api/generations/"+started.RunID+"/rerun",
 		map[string]any{}, map[string]string{"runId": started.RunID})
 	if conflictW.Code != 409 {
 		t.Fatalf("rerun while running: expected 409, got %d: %s", conflictW.Code, conflictW.Body.String())
 	}
 
-	// Drive the background half synchronously, the same way every other
-	// test in this package drives StartRun, then confirm the toggle survived
-	// the section's delete-and-recreate. A whole-run rerun targets every
-	// section, so pass every id explicitly — RerunGenerationRun computed the
-	// same set server-side before enqueuing, but this test calls the
-	// background half directly rather than through the queue.
 	allSectionIDs := make([]string, len(run.Sections))
 	for i, sec := range run.Sections {
 		allSectionIDs[i] = sec.ID

@@ -13,19 +13,8 @@ import (
 	"strings"
 )
 
-// SetTxRunner installs the transactional port PatchGenerationItem and
-// ReorderSection need (T025/T026). A setter for the same reason
-// SetEnqueuer is: it keeps every existing NewService call, and every test
-// that doesn't exercise item mutation, unchanged.
 func (s *Service) SetTxRunner(tx domain.TxRunner) { s.tx = tx }
 
-// PatchGenerationItem is `PATCH /v1/generations/{runId}/items/{itemId}`
-// (rest-api.md): toggle `selected`, move `position`, or edit `text` — any
-// subset. Takes a row-level `SELECT ... FOR UPDATE` on the run first (the
-// discipline 020 specified), then rejects `text` on a profile-origin item
-// with 403 (FR-009 at the API boundary), refuses a running run or an
-// unavailable item with 409, and is idempotent: re-applying the same values
-// is just another COALESCE update that lands on the same row.
 func (s *Service) PatchGenerationItem(ctx context.Context, runID, itemID string, req dto.PatchGenerationItemRequestDto) (dto.GenerationItemDto, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -63,7 +52,7 @@ func (s *Service) PatchGenerationItem(ctx context.Context, runID, itemID string,
 		}
 		kind, ok := sectionKindOf(sections, item.SectionID)
 		if !ok {
-			// The item exists but not under this run.
+
 			return apperr.NotFound("generation item", itemID)
 		}
 		sectionKind = kind
@@ -121,14 +110,6 @@ func (s *Service) PatchGenerationItem(ctx context.Context, runID, itemID string,
 	return itemToDto(sectionKind, updated), nil
 }
 
-// normalizeDroppedEntries validates a per-skill drop set against the group it
-// belongs to and returns it in the group's own entry order, deduped. Storing
-// it canonically is what makes the write idempotent: the same request twice,
-// or the same skills named in another order, lands the same row.
-//
-// An entry the group does not contain is a 400 rather than a silent no-op —
-// it means the client is working from a stale copy of the group, and dropping
-// the wrong skill from a resume is not a mistake worth swallowing.
 func normalizeDroppedEntries(item sqlcgen.GenerationItem, requested []string) ([]string, error) {
 	want := make(map[string]bool, len(requested))
 	for _, r := range requested {
@@ -154,11 +135,6 @@ func normalizeDroppedEntries(item sqlcgen.GenerationItem, requested []string) ([
 	return out, nil
 }
 
-// ReorderSection is
-// `PATCH /v1/generations/{runId}/sections/{sectionId}/order` (rest-api.md):
-// a whole-section reorder in one transaction, from the caller's item id
-// order. Same row-level run lock and `running` guard as
-// PatchGenerationItem.
 func (s *Service) ReorderSection(ctx context.Context, runID, sectionID string, itemIDs []string) (dto.GenerationSectionDto, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -242,9 +218,6 @@ func (s *Service) ReorderSection(ctx context.Context, runID, sectionID string, i
 	return sectionToDto(section, itemDtos), nil
 }
 
-// sectionToDto is the one place a sqlcgen.GenerationSection row becomes its
-// wire shape, shared by ReorderSection and SetSectionEnabled so neither can
-// drift and drop a field (Enabled included) the other remembers to set.
 func sectionToDto(section sqlcgen.GenerationSection, items []dto.GenerationItemDto) dto.GenerationSectionDto {
 	return dto.GenerationSectionDto{
 		ID: dbutil.UUIDString(section.ID), Kind: section.Kind, EntryKey: section.EntryKey, EntryLabel: section.EntryLabel,
@@ -253,9 +226,6 @@ func sectionToDto(section sqlcgen.GenerationSection, items []dto.GenerationItemD
 	}
 }
 
-// sectionKindOf finds sec.ID == sectionID among a run's sections and reports
-// its kind — how PatchGenerationItem confirms an item belongs to the run in
-// its URL (404 otherwise) without a dedicated GetSectionByID query.
 func sectionKindOf(sections []sqlcgen.GenerationSection, sectionID pgtype.UUID) (string, bool) {
 	for _, sec := range sections {
 		if sec.ID == sectionID {

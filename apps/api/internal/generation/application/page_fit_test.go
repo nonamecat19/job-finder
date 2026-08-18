@@ -7,10 +7,6 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 )
 
-// 035 FR-010: page fitting adjusts selection content only. The premium-written
-// summary is immutable once produced — a page-fit response has nowhere to put
-// a summary (TailoredSelection has no such field), and the merge carries the
-// existing one through rather than reverting to the master's.
 func TestPageFitCannotAlterTheSummary(t *testing.T) {
 	const premiumSummary = "8+ years of experience building payment systems."
 
@@ -21,8 +17,6 @@ func TestPageFitCannotAlterTheSummary(t *testing.T) {
 		t.Fatalf("merge: %v", err)
 	}
 
-	// A page-fit stage that tries to rewrite the summary: the field is not in
-	// the type, so whatever it says about the summary is discarded at unmarshal.
 	f := &fakeRenderer{pages: []int{1, 2}}
 	deps := f.deps()
 	cfg := domain.DefaultShapeConfig()
@@ -42,9 +36,6 @@ func TestPageFitCannotAlterTheSummary(t *testing.T) {
 	}
 }
 
-// The structure re-prompt rebuilds the selection from the master, which is
-// exactly where a premium summary would be silently lost if the merge did not
-// carry it through.
 func TestStructureRepromptKeepsTheSummary(t *testing.T) {
 	const premiumSummary = "8+ years of experience building payment systems."
 	merged, err := domain.MergeTailored(stageMaster(), domain.TailoredSelection{

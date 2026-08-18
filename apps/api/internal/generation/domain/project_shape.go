@@ -2,12 +2,6 @@ package domain
 
 import "sort"
 
-// Project density levels, stored per project entry in the profile as
-// "project_level". They bound how many bullets a project renders, the same way
-// "skills_level" bounds a skill group's details list: "top3" (3), "top5" (5),
-// "all" (everything), "relevant" (only the bullets that name something the
-// vacancy asks for). An unset or unrecognised level is auto — see
-// autoProjectCap.
 const (
 	ProjectLevelTop3     = "top3"
 	ProjectLevelTop5     = "top5"
@@ -15,9 +9,6 @@ const (
 	ProjectLevelRelevant = "relevant"
 )
 
-// Auto bullet bounds for a project, read from the project's own bullet count:
-// a project the candidate wrote six bullets about carries more than one they
-// wrote two about, and a fixed cap would erase that difference.
 const (
 	autoProjectMin = 2
 	autoProjectMax = 5
@@ -37,15 +28,6 @@ func autoProjectCap(size int) int {
 	return cap
 }
 
-// RankProjects orders the projects section by how much of the vacancy each
-// project covers, so the cap in ApplyHardLimits keeps the relevant projects
-// rather than whichever ones were written first.
-//
-// Same contract as RankSkills: nothing is added, reworded or removed — the
-// output is a permutation of the input — and the reorder only happens when a
-// cap is actually going to drop something. Without a cap every project renders
-// and the master's authored order is the user's own choice of what to lead
-// with; there is no decision for the score to make.
 func RankProjects(doc RendercvMaster, analysis VacancyAnalysis, cfg ShapeConfig) {
 	sections := CvSections(doc)
 	if sections == nil {
@@ -66,13 +48,6 @@ func RankProjects(doc RendercvMaster, analysis VacancyAnalysis, cfg ShapeConfig)
 	sections["projects"] = ranked
 }
 
-// RankedProjectOrder is the relevance order over the master's projects, as
-// indices into the master's own list — the form the workspace needs, where the
-// order is a *selection* boundary over items the user can still promote rather
-// than a rewrite of the section.
-//
-// RankProjects is this order applied in place; the generation workspace reads
-// the indices directly. Both stay one definition of "most relevant project".
 func RankedProjectOrder(doc RendercvMaster, analysis VacancyAnalysis) []int {
 	items, _ := CvSections(doc)["projects"].([]any)
 	if len(items) == 0 {
@@ -101,12 +76,6 @@ func RankedProjectOrder(doc RendercvMaster, analysis VacancyAnalysis) []int {
 	return order
 }
 
-// projectScore is a project's vacancy relevance and, as the tiebreaker, how
-// much of the rest of the profile echoes it. Relevance sums over the bullets
-// rather than taking the best one: a project touching four required skills is
-// a better answer to this vacancy than one touching a single required skill,
-// which is the opposite of the per-skill-entry case where summing would just
-// reward listing more words in one entry.
 func projectScore(p map[string]any, analysis VacancyAnalysis, evidence ProfileEvidence) (relevance, backing int) {
 	for _, text := range projectTexts(p) {
 		relevance += skillEntryScore(text, analysis)
@@ -127,15 +96,6 @@ func projectTexts(p map[string]any) []string {
 	return texts
 }
 
-// TrimProjectHighlights bounds every project's bullets to its authored density
-// level and reports whether it changed anything.
-//
-// It runs after the selection stage has already ordered each project's bullets
-// by relevance, so a count-based level keeps that order's first N. "relevant"
-// keeps the bullets naming something the vacancy asks for — and, when none do,
-// keeps the leading bullet rather than leaving a bare project title on the
-// page: an entry with a name and nothing under it reads as an omission, and
-// dropping the project entirely is the cap's decision to make, not this one's.
 func TrimProjectHighlights(doc RendercvMaster, analysis VacancyAnalysis) bool {
 	sections := CvSections(doc)
 	if sections == nil {
@@ -156,10 +116,6 @@ func TrimProjectHighlights(doc RendercvMaster, analysis VacancyAnalysis) bool {
 	return changed
 }
 
-// projectKeep returns the bullets a level keeps, in the order they were
-// authored. The count-based levels take a prefix, so they never reorder;
-// "relevant" filters, which drops non-matching bullets from the middle but
-// still leaves the survivors in their original sequence.
 func projectKeep(highlights []string, level string, analysis VacancyAnalysis) []string {
 	switch level {
 	case ProjectLevelAll:

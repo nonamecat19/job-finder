@@ -19,16 +19,8 @@ type SweeperStore interface {
 	PruneIdempotencyLedger(ctx context.Context, acceptedAt pgtype.Timestamptz) (int64, error)
 }
 
-// LongestRetryBudget is the sum of the fixed backoff ladder rungs
-// (data-model.md § 6, internal/events/retry.go): 1s + 10s + 1m + 10m. It
-// bounds how long after a work event's first attempt a legitimate
-// redelivered result can still arrive.
 const LongestRetryBudget = time.Second + 10*time.Second + time.Minute + 10*time.Minute
 
-// IdempotencyLedgerRetention is how long a ledger row (internal/events,
-// data-model.md § 7) is kept before pruning: the longest retry budget plus a
-// generous margin for operational delay (a broker or consumer outage between
-// attempts). The ledger is a short-horizon dedupe window, not an audit log.
 const IdempotencyLedgerRetention = LongestRetryBudget + 24*time.Hour
 
 type Sweeper struct {
@@ -39,11 +31,6 @@ type Sweeper struct {
 	ledgerRetention time.Duration
 }
 
-// NewSweeper no longer takes a broker Inspector (047): RabbitMQ has no
-// cheap "does this message still exist" query the way asynq's Redis-backed
-// inspector did, so a stale-queued row is DB-authoritative — the
-// ACTIVITY_QUEUED_GRACE window is what protects a genuinely-still-queued
-// run from a false positive (T043).
 func NewSweeper(store SweeperStore, staleAfter, sweepInterval, queuedGrace time.Duration) *Sweeper {
 	return &Sweeper{
 		store:           store,
@@ -74,10 +61,6 @@ func (s *Sweeper) sweepOnce(ctx context.Context) {
 	s.pruneLedger(ctx)
 }
 
-// pruneLedger deletes idempotency ledger rows older than ledgerRetention
-// (T031, data-model.md § 7). The ledger is a short-horizon dedupe window,
-// not an audit log, so pruning is unconditional — no soft-delete, no
-// archival.
 func (s *Sweeper) pruneLedger(ctx context.Context) {
 	cutoff := time.Now().Add(-s.ledgerRetention)
 	n, err := s.store.PruneIdempotencyLedger(ctx, pgtype.Timestamptz{Time: cutoff, Valid: true})

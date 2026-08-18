@@ -6,12 +6,6 @@ import (
 	"testing"
 )
 
-// TrimSkillGroups is the render-time enforcement of each skill group's
-// authored density level. These tests pin the levels against the relevance
-// order RankSkills produces, the auto count an unset or unknown level derives
-// from the group's own size, the pinned-group exemption and the
-// empty-"relevant"-group drop.
-
 func skillsDoc(groups ...[3]string) RendercvMaster {
 	raw := make([]any, 0, len(groups))
 	for _, g := range groups {
@@ -33,8 +27,6 @@ func groupDetails(t *testing.T, doc RendercvMaster) map[string]string {
 	return out
 }
 
-// An unset level is auto: the group is small enough that autoSkillMin holds
-// all of it, so nothing is trimmed and the vacancy match still leads.
 func TestTrimSkillGroups_NoLevelKeepsSmallGroupWhole(t *testing.T) {
 	doc := skillsDoc([3]string{"Backend", "Go, Node.js, Kafka", ""})
 	analysis := VacancyAnalysis{RequiredSkills: []string{"Go"}}
@@ -64,16 +56,14 @@ func TestTrimSkillGroups_UnknownLevelBehavesAsAuto(t *testing.T) {
 	}
 }
 
-// Auto scales with the group: half its entries, floored at autoSkillMin and
-// ceilinged at autoSkillMax, so a deep group says more than a shallow one.
 func TestTrimSkillGroups_AutoScalesWithGroupSize(t *testing.T) {
 	cases := []struct {
 		size, want int
 	}{
-		{3, 3},   // under the floor: kept whole
-		{6, 4},   // floor
-		{14, 7},  // half
-		{30, 12}, // ceiling
+		{3, 3},
+		{6, 4},
+		{14, 7},
+		{30, 12},
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("size%d", c.size), func(t *testing.T) {
@@ -93,8 +83,6 @@ func TestTrimSkillGroups_AutoScalesWithGroupSize(t *testing.T) {
 	}
 }
 
-// The cap bounds depth, never coverage: a vacancy asking for more skills than
-// the auto cap keeps gets all of them.
 func TestTrimSkillGroups_AutoKeepsEveryVacancyMatch(t *testing.T) {
 	skills := make([]string, 20)
 	required := make([]string, 0, 14)
@@ -115,8 +103,6 @@ func TestTrimSkillGroups_AutoKeepsEveryVacancyMatch(t *testing.T) {
 	}
 }
 
-// "relevant" stays available for the user who wants only what the vacancy
-// asked for — including the drop of a group that matches nothing.
 func TestTrimSkillGroups_RelevantIsStillOptIn(t *testing.T) {
 	doc := skillsDoc(
 		[3]string{"Backend", "Go, Node.js, Kafka", SkillLevelRelevant},
@@ -154,7 +140,7 @@ func TestTrimSkillGroups_CountCaps(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.level, func(t *testing.T) {
 			doc := skillsDoc([3]string{"Backend", strings.Join(skills, ", "), c.level})
-			// No vacancy skills match, so the ranked order is the authored order.
+
 			RankSkills(doc, VacancyAnalysis{}, ShapeConfig{SkillsEnabled: true})
 			TrimSkillGroups(doc, VacancyAnalysis{})
 
@@ -174,7 +160,7 @@ func TestTrimSkillGroups_AllKeepsEverything(t *testing.T) {
 	if changed := TrimSkillGroups(doc, analysis); changed {
 		t.Error("changed = true, want false (all keeps everything)")
 	}
-	// RankSkills still orders by relevance; "all" just skips the cap.
+
 	want := "Go, Node.js, Kafka, Redis, Fiber, NATS"
 	if got := groupDetails(t, doc)["Backend"]; got != want {
 		t.Errorf("details = %q, want %q", got, want)
@@ -260,9 +246,6 @@ func TestTrimSkillGroups_ExpandPathPreservesTrimmedDetails(t *testing.T) {
 	TrimSkillGroups(doc, analysis)
 	before := strings.Join(sortedGroupDetails(t, doc), "|")
 
-	// The expand path merges on top of an already-trimmed document and then
-	// runs DropUngroundedSkillTokens + ApplyHardLimits only — no RankSkills,
-	// no trim. Its skill section must reach the page exactly as trimmed.
 	DropUngroundedSkillTokens(doc, doc)
 	ApplyHardLimits(doc, doc, ShapeConfig{SkillsEnabled: true})
 	after := strings.Join(sortedGroupDetails(t, doc), "|")

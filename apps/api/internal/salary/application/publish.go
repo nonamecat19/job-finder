@@ -16,10 +16,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// ComparableBand is one row lookup_comparable_bands would have returned for
-// the posting's own bucket at publish time — the same rows GetSalaryCacheByBucket
-// serves the Go tool loop today, pre-fetched because FR-008 denies the
-// orchestration service database access (E3-2).
 type ComparableBand struct {
 	Source   string `json:"source"`
 	Min      int    `json:"min"`
@@ -27,10 +23,6 @@ type ComparableBand struct {
 	Currency string `json:"currency"`
 }
 
-// SalarySnapshot is salary's complete grounding input (E3-3): the posting
-// fields llmInfer reads plus the comparable bands for its own bucket, using
-// the same makeBucket logic the Go tool uses today (Python's make_bucket is a
-// verbatim port, salary_tools.py).
 type SalarySnapshot struct {
 	JobID           string           `json:"job_id"`
 	Title           string           `json:"title"`
@@ -46,12 +38,6 @@ type salaryRequestedMessage struct {
 	events.SalaryWork
 }
 
-// SnapshotEnqueuer wraps a base queue.Enqueuer, intercepting the "salary" work
-// type so that when AI_CAPABILITY_ROUTING routes salary to python, the
-// dispatch is an envelope-wrapped salary.requested event carrying the
-// snapshot instead of the bare SalaryInferPayload the Go consumer expects.
-// Every other work type — and salary itself when routed to go — passes
-// through to Base unchanged, mirroring ghostjob.SnapshotEnqueuer.
 type SnapshotEnqueuer struct {
 	Base    queue.Enqueuer
 	Repo    Repository
@@ -59,7 +45,6 @@ type SnapshotEnqueuer struct {
 	Routing func(capability string) string
 }
 
-// EnqueueContext implements queue.Enqueuer.
 func (e *SnapshotEnqueuer) EnqueueContext(ctx context.Context, workType string, payload []byte) error {
 	if workType != Kind || e.Routing == nil || e.Routing(Kind) != "python" {
 		return e.Base.EnqueueContext(ctx, workType, payload)

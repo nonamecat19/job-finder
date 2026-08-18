@@ -18,13 +18,6 @@ import (
 
 func statOptions() minio.StatObjectOptions { return minio.StatObjectOptions{} }
 
-// The unit test in this package only proves an unreachable endpoint errors.
-// Everything the application actually relies on — that New creates the bucket
-// when it is missing, that an upload survives a round trip byte for byte, and
-// that the content type it declares comes back — is behaviour of a real S3
-// implementation, so it needs one. These run against the MinIO image
-// docker-compose.yml runs.
-
 func newStore(t *testing.T, bucket string) *Store {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -56,10 +49,6 @@ func writeTemp(t *testing.T, content string) string {
 	return path
 }
 
-// TestNewCreatesMissingBucket proves ensureBucket does what the deployment
-// relies on. The `createbuckets` compose service makes the bucket too, so a
-// test that pre-created it would prove nothing about a fresh volume — this
-// one names a bucket nothing has ever made.
 func TestNewCreatesMissingBucket(t *testing.T) {
 	store := newStore(t, "documents-created-by-the-adapter")
 
@@ -73,18 +62,12 @@ func TestNewCreatesMissingBucket(t *testing.T) {
 	}
 }
 
-// TestNewIsIdempotentOverAnExistingBucket proves a restart against a volume
-// that already holds the bucket is not an error — the ordinary case every
-// time the API container starts.
 func TestNewIsIdempotentOverAnExistingBucket(t *testing.T) {
 	const bucket = "documents-reopened"
 	newStore(t, bucket)
 	newStore(t, bucket)
 }
 
-// TestUploadDownloadRoundTrip is the property the generated-document flow
-// depends on: what RenderCV wrote to disk is what a later download hands
-// back, unchanged, with the content type it was uploaded under.
 func TestUploadDownloadRoundTrip(t *testing.T) {
 	store := newStore(t, testinfra.MinIOBucket)
 	ctx := context.Background()
@@ -118,8 +101,6 @@ func TestUploadDownloadRoundTrip(t *testing.T) {
 	}
 }
 
-// TestUploadOverwritesSameKey proves a re-run of a generation replaces the
-// document rather than erroring or leaving the old bytes in place.
 func TestUploadOverwritesSameKey(t *testing.T) {
 	store := newStore(t, testinfra.MinIOBucket)
 	ctx := context.Background()
@@ -146,18 +127,13 @@ func TestUploadOverwritesSameKey(t *testing.T) {
 	}
 }
 
-// TestDownloadMissingKeyFails pins where the error surfaces. minio-go's
-// GetObject is lazy — it returns an object handle without contacting the
-// server — so a caller that only checks Download's error and never reads
-// would treat a missing document as success. This documents that the read is
-// what fails, which is what callers must therefore do.
 func TestDownloadMissingKeyFails(t *testing.T) {
 	store := newStore(t, testinfra.MinIOBucket)
 	ctx := context.Background()
 
 	reader, err := store.Download(ctx, "generated/never-uploaded.pdf")
 	if err != nil {
-		return // an eager implementation would be fine too
+		return
 	}
 	defer reader.Close()
 

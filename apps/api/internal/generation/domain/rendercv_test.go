@@ -61,10 +61,6 @@ func loadSampleMaster(t *testing.T) RendercvMaster {
 	return RendercvMaster(NormalizeYAMLMap(m).(map[string]any))
 }
 
-// A selection response has no way to reach the skills section: MergeTailored
-// carries every group over from the master untouched, so a model that invents,
-// truncates or reorders skills cannot land any of it in the document. Ordering
-// is RankSkills' job, from the vacancy analysis.
 func TestMergeTailored_LeavesSkillsAtTheirMasterValues(t *testing.T) {
 	master := RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"skills": []any{
@@ -122,8 +118,7 @@ func TestMergeTailored_PreservesDesignAndDates(t *testing.T) {
 	if StringField(exp[0], "start_date") != "2020-01" || StringField(exp[0], "end_date") != "present" {
 		t.Fatalf("experience dates must be preserved verbatim: %v", exp[0])
 	}
-	// A reference with no rewording resolves to the master's own bullet, and an
-	// index pointing at a bullet that does not exist resolves to nothing.
+
 	masterHighlights := StringSliceField(AsSliceOfMaps(CvSections(master)["experience"])[0], "highlights")
 	highlights := StringSliceField(exp[0], "highlights")
 	if len(highlights) != 1 || highlights[0] != masterHighlights[0] {
@@ -401,9 +396,6 @@ func TestVerifyRendercvGrounding_StrictRejectsUnlistedSkill(t *testing.T) {
 		t.Fatal("expected strict grounding to reject a skill token not in the master")
 	}
 
-	// 033 FR-001: moderate grounding now also rejects unlisted skill tokens
-	// (when not adjacency-allowed via the vacancy analysis). The previous
-	// assertion that moderate "should not check skill tokens" is inverted.
 	violationsModerate := VerifyRendercvGrounding(master, merged, GroundingModerate, VacancyAnalysis{})
 	if len(violationsModerate) == 0 {
 		t.Fatal("moderate grounding should now reject unlisted skill tokens (033 FR-001), got none")

@@ -82,8 +82,6 @@ func TestVerifyRendercvGroundingAllowsRemovedSections(t *testing.T) {
 	}
 }
 
-// 033 FR-001: moderate grounding now rejects skill tokens not in the master
-// (when not adjacency-allowed via the vacancy analysis).
 func TestVerifyRendercvGroundingModerateRejectsUnlistedSkill(t *testing.T) {
 	master := loadSampleMaster(t)
 	merged, err := DeepCloneYAML(master)
@@ -99,8 +97,6 @@ func TestVerifyRendercvGroundingModerateRejectsUnlistedSkill(t *testing.T) {
 	}
 }
 
-// 033 FR-001: moderate grounding allows a vacancy-required skill when the
-// master already has a skill in the same group (adjacency).
 func TestVerifyRendercvGroundingModerateAllowsAdjacentSkill(t *testing.T) {
 	master := loadSampleMaster(t)
 	merged, err := DeepCloneYAML(master)
@@ -108,7 +104,7 @@ func TestVerifyRendercvGroundingModerateAllowsAdjacentSkill(t *testing.T) {
 		t.Fatalf("clone: %v", err)
 	}
 	skills := AsSliceOfMaps(CvSections(merged)["skills"])
-	// Add a vacancy-required skill to the first group (which already has skills).
+
 	skills[0]["details"] = "Go, Terraform"
 
 	analysis := VacancyAnalysis{RequiredSkills: []string{"Terraform"}}
@@ -118,8 +114,6 @@ func TestVerifyRendercvGroundingModerateAllowsAdjacentSkill(t *testing.T) {
 	}
 }
 
-// 033 FR-002: a highlight that drifts too far from the master's bullets is
-// flagged at all grounding levels.
 func TestVerifyRendercvGroundingFlagsDriftedHighlight(t *testing.T) {
 	master := loadSampleMaster(t)
 	merged, err := DeepCloneYAML(master)
@@ -127,7 +121,7 @@ func TestVerifyRendercvGroundingFlagsDriftedHighlight(t *testing.T) {
 		t.Fatalf("clone: %v", err)
 	}
 	exp := AsSliceOfMaps(CvSections(merged)["experience"])
-	// Replace a highlight with something that shares no words with any master bullet.
+
 	exp[0]["highlights"] = []any{"Completely fabricated unrelated quantum banana"}
 
 	for _, level := range []GroundingLevel{GroundingStrict, GroundingModerate, GroundingAggressive} {
@@ -138,8 +132,6 @@ func TestVerifyRendercvGroundingFlagsDriftedHighlight(t *testing.T) {
 	}
 }
 
-// 033 FR-003: StripUngroundedHighlights replaces a drifted highlight with the
-// closest master bullet.
 func TestStripUngroundedHighlightsReplacesDriftedBullet(t *testing.T) {
 	master := loadSampleMaster(t)
 	merged, err := DeepCloneYAML(master)
@@ -152,7 +144,7 @@ func TestStripUngroundedHighlightsReplacesDriftedBullet(t *testing.T) {
 	if len(masterBullets) == 0 {
 		t.Skip("master has no experience highlights for the first entry")
 	}
-	// Replace with a completely unrelated highlight.
+
 	exp[0]["highlights"] = []any{"Completely fabricated unrelated quantum banana"}
 
 	result := StripUngroundedHighlights(master, merged)
@@ -161,7 +153,7 @@ func TestStripUngroundedHighlightsReplacesDriftedBullet(t *testing.T) {
 	if len(hl) != 1 {
 		t.Fatalf("expected 1 highlight after strip, got %d", len(hl))
 	}
-	// The replacement should be one of the master's bullets, not the fabricated text.
+
 	if hl[0] == "Completely fabricated unrelated quantum banana" {
 		t.Fatal("drifted highlight was not replaced")
 	}
@@ -265,9 +257,6 @@ func metricMaster(bullets ...string) RendercvMaster {
 	}}}
 }
 
-// The failure this check exists for: a real bullet with a number bolted on.
-// The word overlap is untouched, so the drift check passes it — and the number
-// is exactly what a hiring manager asks about in the interview.
 func TestVerifyRendercvGroundingRejectsInventedMetric(t *testing.T) {
 	master := metricMaster("Cut checkout latency on the payments service")
 	merged := metricMaster("Cut checkout latency on the payments service by 40%")
@@ -287,7 +276,6 @@ func TestVerifyRendercvGroundingAllowsMetricsTheMasterClaims(t *testing.T) {
 	}
 }
 
-// A scaled figure is a different claim, not a rewording.
 func TestVerifyRendercvGroundingRejectsAlteredMetric(t *testing.T) {
 	master := metricMaster("Cut checkout latency by 40%")
 	merged := metricMaster("Cut checkout latency by 60%")
@@ -297,7 +285,6 @@ func TestVerifyRendercvGroundingRejectsAlteredMetric(t *testing.T) {
 	}
 }
 
-// Digits inside an identifier name a technology rather than assert a quantity.
 func TestVerifyRendercvGroundingIgnoresDigitsInsideIdentifiers(t *testing.T) {
 	master := metricMaster("Tuned p95 latency", "Migrated storage to S3")
 	merged := metricMaster("Tuned p95 latency after migrating storage to S3")
@@ -331,7 +318,6 @@ func mergedHighlights(t *testing.T, master RendercvMaster, refs []HighlightRef, 
 	return StringSliceField(AsSliceOfMaps(CvSections(merged)["experience"])[0], "highlights")
 }
 
-// A reference with no rewording is the master's bullet, verbatim.
 func TestMergeResolvesReferencesToMasterBullets(t *testing.T) {
 	master := refMaster("Shipped the payments service", "Cut checkout latency by 40%")
 	got := mergedHighlights(t, master, []HighlightRef{{SourceIndex: 1}, {SourceIndex: 0}}, GroundingModerate)
@@ -342,9 +328,6 @@ func TestMergeResolvesReferencesToMasterBullets(t *testing.T) {
 	}
 }
 
-// The fabrication that motivated references: text that reads like a bullet but
-// belongs to no single one. It cannot be expressed — a rewording is held
-// against the bullet it names, and a failed rewording falls back to it.
 func TestMergeFallsBackToTheMasterBulletWhenARewordingDrifts(t *testing.T) {
 	master := refMaster("Shipped the payments service")
 	got := mergedHighlights(t, master, []HighlightRef{
@@ -378,7 +361,6 @@ func TestMergeKeepsAGroundedRewording(t *testing.T) {
 	}
 }
 
-// Strict grounding does not consult the rewording at all.
 func TestMergeIgnoresRewordingsUnderStrictGrounding(t *testing.T) {
 	master := refMaster("Cut checkout latency by 40%")
 	got := mergedHighlights(t, master, []HighlightRef{

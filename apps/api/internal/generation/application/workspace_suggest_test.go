@@ -20,9 +20,6 @@ func suggestMaster() domain.RendercvMaster {
 	}}}
 }
 
-// T050: every origin='ai' item buildSuggestionItems produces is created with
-// selected = false (FR-013/SC-004) — an AI suggestion is never pre-included,
-// regardless of how relevant it looked to the model.
 func TestBuildSuggestionItemsAreUnselected(t *testing.T) {
 	master := suggestMaster()
 	suggestions := domain.SuggestionSet{
@@ -60,8 +57,6 @@ func TestBuildSuggestionItemsAreUnselected(t *testing.T) {
 	}
 }
 
-// A suggestion for a company that is not in the master is dropped entirely
-// (T054's company-match step) rather than surfaced under a fabricated entry.
 func TestBuildSuggestionItemsDropsUnknownCompany(t *testing.T) {
 	master := suggestMaster()
 	suggestions := domain.SuggestionSet{
@@ -80,8 +75,6 @@ func TestBuildSuggestionItemsDropsUnknownCompany(t *testing.T) {
 	}
 }
 
-// A suggested bullet that duplicates the master's own bullet for that
-// company is suppressed (T052 wired in), so it never becomes an item at all.
 func TestBuildSuggestionItemsSuppressesDuplicate(t *testing.T) {
 	master := suggestMaster()
 	suggestions := domain.SuggestionSet{

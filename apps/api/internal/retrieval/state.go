@@ -19,9 +19,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 )
 
-// StateStore is the app-side implementation of the library's StateStorePort:
-// it owns the Postgres row shape and the cookie encryption, so the engine only
-// ever sees plaintext library types.
 var _ ports.StateStore = (*StateStore)(nil)
 
 type StateStore struct {

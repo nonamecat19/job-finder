@@ -1,9 +1,3 @@
-// Metrics exposes per-work-type observability for the broker (M8-1):
-// queue depth, consumer count, DLQ depth, redelivery rate and
-// publish-confirm latency. Counters are updated by the publisher and
-// consumer as they process deliveries; queue and DLQ depth are read live
-// from the broker via a passive queue inspection, since RabbitMQ — not this
-// process — is authoritative for them.
 package events
 
 import (
@@ -17,21 +11,14 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// QueueInspector reports live depth and consumer count for a named queue.
-// Implemented by an AMQP channel's passive queue inspection (M8-2, M8-1).
 type QueueInspector interface {
 	InspectQueue(ctx context.Context, name string) (messages, consumers int, err error)
 }
 
-// amqpInspectChannel is the subset of *amqp091.Channel AMQPInspector
-// depends on.
 type amqpInspectChannel interface {
 	QueueInspect(name string) (amqp.Queue, error)
 }
 
-// AMQPInspector implements QueueInspector via an AMQP channel's passive
-// queue inspection (QueueInspect issues a passive queue.declare, which
-// fails if the queue does not exist rather than creating it).
 type AMQPInspector struct {
 	Channel amqpInspectChannel
 }
@@ -51,16 +38,11 @@ type workTypeCounters struct {
 	confirmTotalNs atomic.Int64
 }
 
-// Metrics accumulates the counters M8-1 requires that the broker itself
-// does not track: redelivery rate and publish-confirm latency, per work
-// type. Queue depth, consumer count and DLQ depth are not accumulated here
-// — Snapshot reads them live via a QueueInspector.
 type Metrics struct {
 	mu       sync.Mutex
 	counters map[string]*workTypeCounters
 }
 
-// NewMetrics returns an empty Metrics ready to record and snapshot.
 func NewMetrics() *Metrics {
 	return &Metrics{counters: make(map[string]*workTypeCounters)}
 }
@@ -76,10 +58,6 @@ func (m *Metrics) counterFor(workType string) *workTypeCounters {
 	return c
 }
 
-// RecordDelivery counts one consumed delivery for workType, and — when
-// redelivered is true (the broker's `redelivered` flag) — one redelivery,
-// so Snapshot can derive a redelivery rate (M8-1). Called by the consumer
-// for every delivery it hands to a handler.
 func (m *Metrics) RecordDelivery(workType string, redelivered bool) {
 	c := m.counterFor(workType)
 	c.deliveries.Add(1)
@@ -88,17 +66,12 @@ func (m *Metrics) RecordDelivery(workType string, redelivered bool) {
 	}
 }
 
-// RecordPublishConfirm records one publish-confirm round trip's latency for
-// workType (M8-1). Called by the publisher after a confirm (ack or nack)
-// arrives.
 func (m *Metrics) RecordPublishConfirm(workType string, latency time.Duration) {
 	c := m.counterFor(workType)
 	c.confirmCount.Add(1)
 	c.confirmTotalNs.Add(latency.Nanoseconds())
 }
 
-// WorkTypeSnapshot is one work type's point-in-time observability, combining
-// this process's counters with a live broker read (M8-1).
 type WorkTypeSnapshot struct {
 	WorkType             string
 	QueueDepth           int
@@ -111,10 +84,6 @@ type WorkTypeSnapshot struct {
 	PublishConfirmSample int64
 }
 
-// Snapshot reads every work type's live queue and DLQ depth from the broker
-// via inspector, and combines it with this process's accumulated counters
-// (M8-1). It fails loudly, naming the queue, rather than returning a
-// partial or stale snapshot.
 func (m *Metrics) Snapshot(ctx context.Context, inspector QueueInspector) ([]WorkTypeSnapshot, error) {
 	snapshots := make([]WorkTypeSnapshot, 0, len(WorkTypes))
 	for _, wt := range WorkTypes {
@@ -157,8 +126,6 @@ func (m *Metrics) Snapshot(ctx context.Context, inspector QueueInspector) ([]Wor
 	return snapshots, nil
 }
 
-// DLQDepths reads only the DLQ depth per work type (M8-2), for callers that
-// need the health endpoint's narrower signal without a full Snapshot.
 func (m *Metrics) DLQDepths(ctx context.Context, inspector QueueInspector) (map[string]int, error) {
 	depths := make(map[string]int, len(WorkTypes))
 	for _, wt := range WorkTypes {
@@ -172,8 +139,6 @@ func (m *Metrics) DLQDepths(ctx context.Context, inspector QueueInspector) (map[
 	return depths, nil
 }
 
-// WriteProm renders snapshots as Prometheus text exposition format
-// (M8-1), one gauge/counter family per metric, labelled by work_type.
 func WriteProm(w io.Writer, snapshots []WorkTypeSnapshot) error {
 	families := []struct {
 		name string

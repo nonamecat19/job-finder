@@ -18,10 +18,6 @@ func suggestionsMaster() RendercvMaster {
 	}}}
 }
 
-// T049: SuppressDuplicateSuggestions removes a bullet matching a master
-// bullet for that entry on normalised form, removes one that only differs by
-// word-set containment >= 0.9, keeps a genuinely distinct bullet, and leaves
-// the master untouched.
 func TestSuppressDuplicateSuggestionsRemovesNormalisedMatch(t *testing.T) {
 	master := suggestionsMaster()
 	suggestions := SuggestionSet{
@@ -41,8 +37,7 @@ func TestSuppressDuplicateSuggestionsRemovesHighContainment(t *testing.T) {
 	master := suggestionsMaster()
 	suggestions := SuggestionSet{
 		Experience: []ExperienceSuggestions{
-			// Missing only "new" relative to the master bullet — every other
-			// significant word is shared, so containment is 8/8 = 1.0 >= 0.9.
+
 			{Company: "Acme", Bullets: []string{"Led a team of five engineers to launch the payments platform"}},
 		},
 	}
@@ -84,8 +79,6 @@ func TestSuppressDuplicateSuggestionsRemovesDuplicateSkillToken(t *testing.T) {
 	}
 }
 
-// The profile item itself — the master — must never be mutated by
-// suppression; only the candidate suggestion set is filtered.
 func TestSuppressDuplicateSuggestionsLeavesMasterUntouched(t *testing.T) {
 	master := suggestionsMaster()
 	before := StringSliceField(AsSliceOfMaps(CvSections(master)["experience"])[0], "highlights")

@@ -1,9 +1,3 @@
-// Package rephraseadapter provides coach's two RephraseModel implementations
-// (T107): one calling the legacy platform/llm gateway directly, the other
-// calling the `rephrase` capability over internal/aiclient once
-// AI_CAPABILITY_ROUTING routes it to python. Which one composeCoach wires up
-// is a config-only choice (C8-3) — coach.Service's RephraseModel field type
-// never changes.
 package rephraseadapter
 
 import (
@@ -16,11 +10,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// ProviderRephraseModel calls the legacy gateway directly, building the same
-// instructional prompt coach built inline before T107 (buildRephrasePrompt,
-// moved here since only this implementation needs literal prompt text — the
-// aiclient path sends the structured fields and lets the capability build
-// its own prompt server-side).
 type ProviderRephraseModel struct {
 	p     llm.Provider
 	model string
@@ -69,10 +58,6 @@ func buildPrompt(req application.RephraseRequest) string {
 	return b.String()
 }
 
-// AIClientRephraseModel calls the `rephrase` capability over aiclient
-// (contracts/http.md H1-1), sending the structured fields
-// rephrase.py's RephraseInput expects directly rather than a pre-built
-// prompt string — the capability builds its own prompt server-side.
 type AIClientRephraseModel struct {
 	Client *aiclient.Client
 }

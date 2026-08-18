@@ -21,9 +21,6 @@ type DocumentGenerator interface {
 	GetDocumentDownload(ctx context.Context, id string) (path *string, filename string, err error)
 }
 
-// SummaryModelStore remembers the user's summary-model choice (034). Optional:
-// a deployment without it still honours a per-run choice, it just does not
-// remember it.
 type SummaryModelStore interface {
 	Update(ctx context.Context, optionID string) (generation.SummaryOption, error)
 }

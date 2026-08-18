@@ -1,7 +1,3 @@
-// Package aiclient is the Go-side client for the AI service's interactive
-// HTTP surface (contracts/http.md H1-H8): capabilities invoked while a user
-// waits (rephrase, recruiter, outreach, embed). Queued capabilities travel
-// as events (internal/events), not through this package.
 package aiclient
 
 import (
@@ -21,11 +17,8 @@ import (
 	"github.com/job-finder/api/internal/events"
 )
 
-// DefaultTimeout is used for a capability absent from Client's timeouts map.
 const DefaultTimeout = 30 * time.Second
 
-// RequestContext is H3's context object — what makes the run's trace
-// findable (H3-2, FR-014) and lets the backend correlate an activity.
 type RequestContext struct {
 	UserID     string  `json:"user_id"`
 	WorkID     string  `json:"work_id"`
@@ -37,8 +30,6 @@ type wireRequest struct {
 	Context RequestContext  `json:"context"`
 }
 
-// Response mirrors the result event shape (H4-1, contracts/events.md E4),
-// so both transports produce one result type.
 type Response struct {
 	Status  events.ResultStatus `json:"status"`
 	Result  json.RawMessage     `json:"result,omitempty"`
@@ -47,8 +38,6 @@ type Response struct {
 	Usage   *events.Usage       `json:"usage,omitempty"`
 }
 
-// Client calls capabilities on the AI service's interactive HTTP surface,
-// authenticating with the shared secret H7-1 requires.
 type Client struct {
 	baseURL        string
 	token          string
@@ -58,10 +47,6 @@ type Client struct {
 	logger         *slog.Logger
 }
 
-// New builds a Client. timeouts gives a per-capability whole-request
-// timeout — H6-1 requires it exceed the capability's whole-run timeout
-// (C4-4); a capability absent from timeouts uses defaultTimeout
-// (DefaultTimeout if defaultTimeout <= 0).
 func New(baseURL, token string, timeouts map[string]time.Duration, defaultTimeout time.Duration, logger *slog.Logger) *Client {
 	if defaultTimeout <= 0 {
 		defaultTimeout = DefaultTimeout
@@ -79,8 +64,6 @@ func New(baseURL, token string, timeouts map[string]time.Duration, defaultTimeou
 	}
 }
 
-// timeoutFor returns capability's configured whole-request timeout, or the
-// client's default when none is configured for it.
 func (c *Client) timeoutFor(capability string) time.Duration {
 	if t, ok := c.timeouts[capability]; ok {
 		return t
@@ -88,28 +71,6 @@ func (c *Client) timeoutFor(capability string) time.Duration {
 	return c.defaultTimeout
 }
 
-// Invoke calls capability's HTTP surface (H2) with input (validated against
-// the capability's declared input model server-side, H3-1 — a mismatch
-// comes back as a 422 Response.Failure, not a Go error) and reqCtx (H3-2,
-// H3-3).
-//
-// A non-nil error means the call never produced a classified result at all
-// — the service was unreachable, the request could not be built, or the
-// response body did not match the expected shape (H6-4: no fallback, no
-// substituted result). A classified capability failure — invalid input,
-// rate limiting, an unavailable provider, a bound exceeded — comes back as
-// a non-nil Response with Response.Failure set and a nil error; the caller
-// decides what that means for its own flow (H4-2's status code is present
-// on Response but callers should switch on Failure.Category, which is what
-// survives the transport).
-//
-// trace_id is logged on every response, success or failure (H6-3), so a
-// user-facing error is traceable without searching Langfuse by hand.
-//
-// The client never retries a non-retryable failure (H6-2). A rate_limited
-// response is retried exactly once, honouring Retry-After when the header
-// is present; any other retryable category is left to the caller, which
-// already owns retry/backoff policy for its own synchronous request path.
 func (c *Client) Invoke(ctx context.Context, capability string, input any, reqCtx RequestContext) (*Response, error) {
 	resp, retryAfter, err := c.invokeOnce(ctx, capability, input, reqCtx)
 	if err != nil {
@@ -129,9 +90,7 @@ func (c *Client) Invoke(ctx context.Context, capability string, input any, reqCt
 		}
 		retried, _, err := c.invokeOnce(ctx, capability, input, reqCtx)
 		if err != nil {
-			// The retry attempt failed at the transport level; the
-			// original classified rate_limited response is still the more
-			// useful thing to hand back than a transport error (H6-4).
+
 			return resp, nil
 		}
 		return retried, nil
@@ -162,7 +121,7 @@ func (c *Client) invokeOnce(ctx context.Context, capability string, input any, r
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 	requestID := uuid.NewString()
-	httpReq.Header.Set("X-Request-Id", requestID) // H3-4: client-generated request id
+	httpReq.Header.Set("X-Request-Id", requestID)
 
 	httpResp, err := c.httpc.Do(httpReq)
 	if err != nil {
@@ -205,10 +164,6 @@ func (c *Client) logResult(capability, requestID string, status int, resp Respon
 	c.logger.Info("aiclient: capability invoked", fields...)
 }
 
-// retryAfterDelay parses a Retry-After header value as a number of seconds
-// (the AI service's expected form for a rate_limited response). An absent
-// or unparseable header yields zero, so callers wait no longer than
-// necessary rather than guessing.
 func retryAfterDelay(header string) time.Duration {
 	if header == "" {
 		return 0

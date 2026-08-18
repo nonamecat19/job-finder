@@ -39,8 +39,6 @@ func run() error {
 	tables := flag.String("tables", "", "comma-separated list of tables to seed (empty = all)")
 	flag.Parse()
 
-	// LoadNonAI: seeding does no inference work, so it must not be required
-	// to configure a gateway (contracts/configuration.md K1-4).
 	cfg, err := config.LoadNonAI()
 	if err != nil {
 		return err
@@ -64,9 +62,6 @@ func run() error {
 		slog.Info("seed: truncated all tables")
 	}
 
-	// Seeding only needs the source keys to exist as rows, so the sources are
-	// built with nothing behind them: an empty scraper is enough for a value
-	// that is never asked to crawl.
 	registry, err := jsadapter.NewRegistry(
 		adzuna.New(cfg.AdzunaAppID, cfg.AdzunaAppKey, cfg.AdzunaCountry),
 		remotive.New(),

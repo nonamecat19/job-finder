@@ -11,14 +11,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/domain"
 )
 
-// Every bound, asserted as an exact number rather than a range. "Stops
-// eventually" is not a bound; the whole value of FR-010–FR-016a is that an
-// operator can say in advance what the worst case costs.
-
-// C4-3a / FR-011a: no deadline, no exchange — and no request either. This is
-// the one refusal that happens before anything is sent, because the failure it
-// prevents (four rounds against a proxy whose worst case is 600s per call) is
-// forty minutes of a worker nobody is waiting for.
 func TestRunRefusesADeadlelessContext(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{{content: "should never be reached"}}}
@@ -32,10 +24,9 @@ func TestRunRefusesADeadlelessContext(t *testing.T) {
 	}
 }
 
-// C4-1 / SC-003: a runaway stops at exactly MaxRounds. Never one more.
 func TestRunawayStopsAtExactlyMaxRounds(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return "more data", nil })
-	// Always asks for another lookup, forever.
+
 	turns := make([]turn, 20)
 	for i := range turns {
 		turns[i] = turn{toolCalls: []domain.ToolCall{call("c", "lookup_comparable_bands", lookupArgs{Bucket: "a"})}}
@@ -60,8 +51,6 @@ func TestRunawayStopsAtExactlyMaxRounds(t *testing.T) {
 	}
 }
 
-// The default is 4 rounds, not 8. Asserted because it is a decision, not an
-// accident: four covers a two-lookup shape plus one recovery from a refusal.
 func TestDefaultRoundLimitIsFour(t *testing.T) {
 	if DefaultBounds().MaxRounds != 4 {
 		t.Errorf("default MaxRounds = %d, want 4", DefaultBounds().MaxRounds)
@@ -69,15 +58,13 @@ func TestDefaultRoundLimitIsFour(t *testing.T) {
 	if DefaultBounds().MaxTotalCostUSD != 0.50 {
 		t.Errorf("default MaxTotalCostUSD = %v, want 0.50", DefaultBounds().MaxTotalCostUSD)
 	}
-	// A zero field means "unspecified", never "unbounded".
+
 	got := Bounds{}.withDefaults()
 	if got.MaxRounds != 4 || got.PerToolTimeout != 10*time.Second || got.MaxResultBytes != 32*1024 {
 		t.Errorf("zero Bounds resolved to %+v, want the documented defaults", got)
 	}
 }
 
-// C4-2 / FR-011 / SC-004: an expired context stops the exchange and starts no
-// further lookup.
 func TestExpiredContextStopsWithoutStartingAnotherLookup(t *testing.T) {
 	var handlerRuns int
 	tool := domain.NewTool("lookup_comparable_bands", "look up",
@@ -95,7 +82,7 @@ func TestExpiredContextStopsWithoutStartingAnotherLookup(t *testing.T) {
 
 	p := &scriptedProvider{turns: []turn{
 		{toolCalls: []domain.ToolCall{call("c1", "lookup_comparable_bands", lookupArgs{Bucket: "a"})}},
-		// The second round outlives the context.
+
 		{delay: 200 * time.Millisecond, toolCalls: []domain.ToolCall{call("c2", "lookup_comparable_bands", lookupArgs{Bucket: "b"})}},
 		{content: "unreachable"},
 	}}
@@ -112,8 +99,6 @@ func TestExpiredContextStopsWithoutStartingAnotherLookup(t *testing.T) {
 	}
 }
 
-// C4-5 / FR-012: a hanging lookup is bounded by PerToolTimeout, on its own,
-// and the exchange continues rather than dying with it.
 func TestHangingLookupTimesOutAndTheExchangeContinues(t *testing.T) {
 	tool := domain.NewTool("lookup_comparable_bands", "look up",
 		func(ctx context.Context, args lookupArgs) (string, error) {
@@ -142,15 +127,13 @@ func TestHangingLookupTimesOutAndTheExchangeContinues(t *testing.T) {
 	if len(res.Rounds[0].Calls) != 1 || res.Rounds[0].Calls[0].Outcome != OutcomeTimeout {
 		t.Errorf("round 1 calls = %+v, want one timeout", res.Rounds[0].Calls)
 	}
-	// The model has to be told, or it reasons as if the lookup never happened.
+
 	second := p.seen[1]
 	if !strings.Contains(second[len(second)-1].Content, "TIMED OUT") {
 		t.Errorf("the timeout was not reported to the model: %q", second[len(second)-1].Content)
 	}
 }
 
-// C4-7 / FR-014: an oversized result is truncated **and says so**. A silently
-// truncated result is one the model reasons over as if it were complete.
 func TestOversizedResultIsTruncatedAndSaysSo(t *testing.T) {
 	big := strings.Repeat("x", 5000)
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return big, nil })
@@ -177,7 +160,6 @@ func TestOversizedResultIsTruncatedAndSaysSo(t *testing.T) {
 	}
 }
 
-// C4-6 / FR-013: a failing lookup becomes a message, not an abort.
 func TestFailingLookupBecomesAMessage(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) {
 		return "", errors.New("database unavailable")
@@ -200,9 +182,6 @@ func TestFailingLookupBecomesAMessage(t *testing.T) {
 	}
 }
 
-// C4-4 / FR-015: four calls in one assistant turn are one round, not four.
-// Charging per call would let a model with four cheap lookups exhaust a budget
-// a model with one expensive lookup keeps.
 func TestFourCallsInOneTurnCountAsOneRound(t *testing.T) {
 	ts, seen := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	p := &scriptedProvider{turns: []turn{
@@ -231,7 +210,6 @@ func TestFourCallsInOneTurnCountAsOneRound(t *testing.T) {
 	}
 }
 
-// C4-15 / FR-016a: accumulated cost past the ceiling stops the exchange.
 func TestAccumulatedCostStopsTheExchange(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	expensive := turn{
@@ -256,8 +234,6 @@ func TestAccumulatedCostStopsTheExchange(t *testing.T) {
 	}
 }
 
-// C4-16, stated once for every non-answered reason: no value without
-// StopAnswered, and always an error alongside.
 func TestNonAnsweredStopsReturnZeroValueAndAnError(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 	loop := turn{toolCalls: []domain.ToolCall{call("c", "lookup_comparable_bands", lookupArgs{Bucket: "a"})}}
@@ -302,9 +278,6 @@ func TestNonAnsweredStopsReturnZeroValueAndAnError(t *testing.T) {
 	}
 }
 
-// C4-3: there is no overall-deadline field, and adding one would be a
-// regression rather than a feature — a second competing timeout is what
-// produced 030's 830-second hang.
 func TestBoundsHasNoOverallDeadlineField(t *testing.T) {
 	tp := reflect.TypeOf(Bounds{})
 	for i := 0; i < tp.NumField(); i++ {
@@ -315,13 +288,9 @@ func TestBoundsHasNoOverallDeadlineField(t *testing.T) {
 	}
 }
 
-// C4-20: the toolset is immutable after construction. Nothing in a conversation
-// can add, remove or alter a tool — which is what makes the build-time
-// read-only fence mean anything at runtime.
 func TestToolsetIsImmutableAfterConstruction(t *testing.T) {
 	ts, _ := testToolset(t, func(lookupArgs) (string, error) { return "ok", nil })
 
-	// Declarations hands out a fresh slice; scribbling on it must not reach in.
 	decls := ts.Declarations()
 	if len(decls) != 1 {
 		t.Fatalf("got %d declarations, want 1", len(decls))

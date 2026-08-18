@@ -68,10 +68,6 @@ func TestSweeper_SweepsRunningWithCorrectCutoffAndReason(t *testing.T) {
 	}
 }
 
-// TestSweeper_StaleQueuedRowIsInterrupted covers T043/047: RabbitMQ has no
-// broker-native "does this task still exist" query the way asynq's
-// Inspector did, so every row past ACTIVITY_QUEUED_GRACE is interrupted —
-// the grace window itself is what protects a genuinely-still-queued run.
 func TestSweeper_StaleQueuedRowIsInterrupted(t *testing.T) {
 	taskID := "task-2"
 	store := &fakeSweeperStore{

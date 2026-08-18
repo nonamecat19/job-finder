@@ -17,16 +17,6 @@ import (
 	"github.com/job-finder/api/internal/queue"
 )
 
-// RerunGenerationRun is the synchronous half of
-// `POST /v1/generations/{runId}/rerun` (rest-api.md): it validates the run
-// (404) and that it is not already `running` (409), resolves which sections
-// the rerun targets — every section when `req.Sections` is omitted, exactly
-// the named ones otherwise (404 if any name doesn't belong to this run) —
-// marks the run and those sections `running`, and enqueues the background
-// half (RerunRun) on the same `generate` queue StartGenerationRun uses. It
-// returns the SAME run id: a rerun replaces sections in place rather than
-// forking a new run, so the sections not named keep their selections
-// untouched by construction (they are never deleted).
 func (s *Service) RerunGenerationRun(ctx context.Context, runID string, req dto.RerunGenerationRequestDto) (string, string, error) {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -130,20 +120,6 @@ func (s *Service) RerunGenerationRun(ctx context.Context, runID string, req dto.
 
 func strPtr(s string) *string { return &s }
 
-// RerunRun is the background half of a rerun, dispatched by worker.Handler
-// on `payload.IsRerun` (T076). It replaces exactly the named sections' items
-// in place — a plain run's whole pipeline (StartRun), narrowed to a target
-// set and reusing the run's already-persisted VacancyAnalysis instead of
-// re-analysing (data-model.md §1's stated reason for storing it).
-//
-// Every targeted experience/skills section is first reseeded to its
-// master-order baseline (the same shape SeedFromMaster gives a brand new
-// run — a correct thing for a rejected ranking to fall back to and for
-// ranking to upgrade), then rankExperienceSections/applyRankedSkills
-// upgrade it where the ranking verifies. A targeted summary section is
-// rewritten. Every replacement is passed through preserveMatchedSelections
-// (T077) against that section's pre-rerun items, so a matched item keeps its
-// selected/position/edited_text.
 func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []string, rec *activity.Recorder) error {
 	rid, err := dbutil.ParseUUID(runID)
 	if err != nil {
@@ -180,10 +156,6 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 		}
 	}
 
-	// Runs started before the projects section existed have no row for it, and
-	// a rerun can only replace sections it finds. Creating the missing one is
-	// additive — no existing section is touched — so an old run picks up
-	// projects on its next rerun instead of staying permanently without them.
 	created, err := s.backfillProjectsSection(ctx, rid, master, cfg, sections)
 	if err != nil && rec != nil {
 		rec.Step(ctx, "projects section backfill failed", map[string]any{"error": err.Error()})
@@ -362,10 +334,6 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 	return nil
 }
 
-// runAnalysisOrReanalyze reuses the run's persisted VacancyAnalysis
-// (data-model.md §1: "drives per-section rerun without re-analysing") and
-// only falls back to a fresh analyzeVacancy call for a run created before
-// that column was populated, or one whose stored value fails to decode.
 func (s *Service) runAnalysisOrReanalyze(ctx context.Context, rid pgtype.UUID, run sqlcgen.GenerationRun) (domain.VacancyAnalysis, error) {
 	var analysis domain.VacancyAnalysis
 	if len(run.Analysis) > 0 {
@@ -383,22 +351,6 @@ func (s *Service) runAnalysisOrReanalyze(ctx context.Context, rid pgtype.UUID, r
 	return analysis, nil
 }
 
-// reseedTargetedSections resets every targeted experience/skills section to
-// its master-order baseline — SeedFromMaster's own shape, with T077's
-// preservation overlaid — before ranking has a chance to upgrade it. This is
-// what makes a rejected ranking's fallback correct on a rerun: without it, a
-// section whose ranking is rejected twice would keep whatever items an
-// EARLIER rerun (or the original run) left behind rather than the current
-// master's bullets. The summary section is handled separately (it has no
-// "master order" to fall back to); a section reseed failure marks that
-// section `failed` and is folded into the run's final state (T081) rather
-// than left silently unreplaced.
-//
-// Certifications and education join this pass too, but for a different
-// reason: neither has a ranking stage to upgrade to (unlike
-// experience/skills) or its own arithmetic reorder to defer to (unlike
-// projects, which gets applyRankedProjects) — a master-order reseed here is
-// the entirety of what targeting either section on a rerun does.
 func (s *Service) reseedTargetedSections(ctx context.Context, master domain.RendercvMaster, cfg domain.ShapeConfig, sections []sqlcgen.GenerationSection, target map[pgtype.UUID]bool, oldBySection map[pgtype.UUID][]domain.Item) (anyFailed bool) {
 	fresh := domain.SeedFromMaster(master, cfg)
 	freshByKey := make(map[string]domain.Section, len(fresh))
@@ -440,9 +392,6 @@ func (s *Service) reseedTargetedSections(ctx context.Context, master domain.Rend
 	return anyFailed
 }
 
-// sectionMatchKey identifies a section by kind + entry key (company name for
-// experience, empty for summary/skills) — the same identity data-model.md §2
-// gives a section (its `UNIQUE (run_id, kind, COALESCE(entry_key, ”))`).
 func sectionMatchKey(kind domain.SectionKind, entryKey *string) string {
 	key := ""
 	if entryKey != nil {
@@ -451,11 +400,6 @@ func sectionMatchKey(kind domain.SectionKind, entryKey *string) string {
 	return string(kind) + "|" + key
 }
 
-// filterRankedResultsToTarget restricts rankExperienceSections' per-entry
-// results to the entries belonging to a targeted section — so a rerun scoped
-// to one experience block never re-ranks or replaces another one, even
-// though rankExperienceSections itself always ranks every entry in one call
-// (cheap, and the only way the model sees the whole profile at once).
 func filterRankedResultsToTarget(results []rankedSectionResult, sections []sqlcgen.GenerationSection, target map[pgtype.UUID]bool) []rankedSectionResult {
 	allowed := make(map[string]bool, len(sections))
 	for _, sec := range sections {

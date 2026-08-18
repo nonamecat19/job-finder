@@ -12,10 +12,7 @@ type StructureKind string
 
 const (
 	StructureTotalExperienceYears StructureKind = "total_experience_years"
-	// StructureHighlightDrift flags an experience highlight that has drifted
-	// too far from the master's original bullet (below the lcsCovered ≥50%
-	// word-overlap threshold). The strip-and-log fallback replaces it with
-	// the closest master bullet (033 FR-003).
+
 	StructureHighlightDrift StructureKind = "highlight_drift"
 )
 
@@ -43,20 +40,10 @@ func parseExperienceYear(s string) (int, bool) {
 	return y, true
 }
 
-// DeriveTotalExperienceYears resolves open-ended ("present") experience spans
-// against the current year.
-//
-// It is therefore NOT a pure function of its input: a profile with an ongoing
-// role yields a different figure on either side of 1 January. The value reaches
-// the summary prompt via SummaryBrief.TotalYears, so anything recording or
-// replaying generation requests must pin the year rather than call this —
-// use DeriveTotalExperienceYearsAsOf.
 func DeriveTotalExperienceYears(master RendercvMaster) int {
 	return DeriveTotalExperienceYearsAsOf(master, time.Now().Year())
 }
 
-// DeriveTotalExperienceYearsAsOf is DeriveTotalExperienceYears with "now"
-// supplied by the caller, making it deterministic for a fixed input.
 func DeriveTotalExperienceYearsAsOf(master RendercvMaster, now int) int {
 	sections := CvSections(master)
 	total := 0
@@ -223,11 +210,6 @@ func stripYearsAssertions(s string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// VerifyHighlightGrounding checks every experience highlight in merged
-// against the master's bullets for the same company. A highlight that does
-// not pass lcsCovered (≥50% word-overlap with at least one master bullet) is
-// a StructureHighlightDrift violation (033 FR-002). Returns one violation per
-// drifted highlight, carrying the company name and the truncated bullet text.
 func VerifyHighlightGrounding(master, merged RendercvMaster) []StructureViolation {
 	var violations []StructureViolation
 	masterSections := CvSections(master)
@@ -259,11 +241,6 @@ func VerifyHighlightGrounding(master, merged RendercvMaster) []StructureViolatio
 	return violations
 }
 
-// StripUngroundedHighlights replaces every experience highlight that fails
-// lcsCovered with the master bullet that has the highest word-overlap for the
-// same company (033 FR-003). If no master bullet exists for a company, the
-// highlight is dropped. Returns a new RendercvMaster (the input is not
-// mutated). The caller logs each replacement on the activity row.
 func StripUngroundedHighlights(master, merged RendercvMaster) RendercvMaster {
 	masterSections := CvSections(master)
 	mergedSections := CvSections(merged)
@@ -303,27 +280,6 @@ func StripUngroundedHighlights(master, merged RendercvMaster) RendercvMaster {
 	return merged
 }
 
-// VerifyHighlightProvenance reports experience entries where two rendered
-// highlights derive from the same master bullet.
-//
-// One master bullet is one accomplishment, and it can appear on the page once.
-// A document that says it twice — in two wordings, so neither is a literal
-// duplicate — reads as two accomplishments and inflates the candidate's record
-// without containing a single fabricated word. StripUngroundedHighlights cannot
-// catch it: both halves pass lcsCovered against the bullet they were spun from,
-// which is exactly why they pass.
-//
-// Selection cannot express it either, since ResolveHighlights drops a repeated
-// sourceIndex. That is the point of verifying rather than trusting: the repair
-// is silent, so without a check nothing downstream can tell a document where
-// the repair fired from one where it was never needed. Models do emit the
-// defect — the eval corpus has a recorded select response pointing three
-// references at the same bullet — and the check is what lets the gate see it.
-//
-// Attribution is by best word-overlap, the same rule StripUngroundedHighlights
-// uses to pick a replacement, so both agree on which master bullet a highlight
-// came from. Entries with no master bullets are skipped; a highlight that
-// belongs to no master bullet is drift, which VerifyHighlightGrounding reports.
 func VerifyHighlightProvenance(master, merged RendercvMaster) []string {
 	masterSections := CvSections(master)
 	mergedSections := CvSections(merged)
@@ -360,8 +316,6 @@ func VerifyHighlightProvenance(master, merged RendercvMaster) []string {
 	return violations
 }
 
-// bestOverlapBullet returns the master bullet with the highest word-overlap
-// against proposed. Returns "" if masterBullets is empty.
 func bestOverlapBullet(proposed string, masterBullets []string) string {
 	proposedWords := wordSet(proposed)
 	best := ""

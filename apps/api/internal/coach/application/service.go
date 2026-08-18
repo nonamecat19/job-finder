@@ -15,12 +15,6 @@ type Service struct {
 	log   *slog.Logger
 }
 
-// RephraseRequest is the grounding data a rephrase call needs (T107):
-// structured, rather than a pre-built prompt string, so a RephraseModel
-// implementation backed by the `rephrase` capability (aiclient) can send it
-// straight through as that capability's input model — the capability builds
-// its own prompt server-side (apps/ai's prompts/rephrase.py) instead of
-// receiving Go's.
 type RephraseRequest struct {
 	Term            string
 	Canonical       string
@@ -199,4 +193,3 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 
 	return ""
 }
-

@@ -68,9 +68,6 @@ type createSubscriptionBody struct {
 	Kind      *string `json:"kind"`
 }
 
-// writeSubscriptionError keeps the pre-existing status for plain errors and
-// lets the 041 guards pick their own — 400 for an immutable field, 409 for a
-// delete that would orphan vacancies.
 func writeSubscriptionError(w http.ResponseWriter, err error, fallbackStatus int, fallbackMessage string) {
 	var ae *apperr.Error
 	if errors.As(err, &ae) {

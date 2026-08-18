@@ -30,11 +30,6 @@ func (s *stubProvider) CompleteJSON(ctx context.Context, prompt string, opts *do
 	return s.name, nil
 }
 
-// CompleteChat satisfies the 037 Provider interface. The fake's behaviour lives
-// in CompleteJSON, so this delegates to it with the final turn as the prompt —
-// which is what the real adapters do in reverse. Tool calls are never
-// fabricated here: a fake that invented one would make a tool-loop test pass
-// for the wrong reason.
 func (s *stubProvider) CompleteChat(ctx context.Context, msgs []domain.Message, opts *domain.CompleteOptions) (domain.ChatResult, error) {
 	prompt := ""
 	if len(msgs) > 0 {
@@ -72,8 +67,6 @@ func TestRouterRoutesToGatewayWithTaskKeyAsModel(t *testing.T) {
 	}
 }
 
-// TestRouterEmbedRoutesToGateway — E5: there is no local provider to route to
-// in the target design. Every Embed call goes to the configured gateway.
 func TestRouterEmbedRoutesToGateway(t *testing.T) {
 	gateway := &stubProvider{name: "gateway", embedVec: []float32{0.1, 0.2, 0.3}}
 	r := NewRouter("embed", gateway)
@@ -93,8 +86,6 @@ func TestRouterEmbedRoutesToGateway(t *testing.T) {
 	}
 }
 
-// TestRouterEmbedPropagatesGatewayError — a failed embed call fails outright;
-// E3-1 states there is no fallback to a locally computed vector.
 func TestRouterEmbedPropagatesGatewayError(t *testing.T) {
 	wantErr := context.DeadlineExceeded
 	gateway := &stubProvider{name: "gateway", embedErr: wantErr}
@@ -105,8 +96,6 @@ func TestRouterEmbedPropagatesGatewayError(t *testing.T) {
 	}
 }
 
-// TestProviderClassIsAlwaysHosted — E5/T016: there is no local/nil-gateway
-// branch left; ProviderClass is unconditionally "hosted".
 func TestProviderClassIsAlwaysHosted(t *testing.T) {
 	gateway := &stubProvider{name: "gateway"}
 	r := NewRouter("match", gateway)
@@ -135,10 +124,6 @@ func TestRouterModelNameIsTaskKey(t *testing.T) {
 	}
 }
 
-// 036 FR-012: the router stamps its task key onto every call, so the collector
-// can group by task rather than by serving deployment. Setting it here rather
-// than at each call site is what makes coverage complete by construction —
-// every task routed through a Router gets it, including ones added later.
 func TestRouterStampsTaskKey(t *testing.T) {
 	stub := &stubProvider{}
 	r := NewRouter("generation-summary", stub)
@@ -158,7 +143,6 @@ func TestRouterStampsTaskKey(t *testing.T) {
 	}
 }
 
-// An explicit TaskKey from the caller wins, matching how Model already behaves.
 func TestRouterDoesNotOverrideExplicitTaskKey(t *testing.T) {
 	stub := &stubProvider{}
 	r := NewRouter("generation-summary", stub)
@@ -172,7 +156,6 @@ func TestRouterDoesNotOverrideExplicitTaskKey(t *testing.T) {
 	}
 }
 
-// The caller's options must not be mutated — the router copies.
 func TestRouterDoesNotMutateCallerOptions(t *testing.T) {
 	stub := &stubProvider{}
 	r := NewRouter("match", stub)

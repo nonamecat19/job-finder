@@ -17,9 +17,6 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
-// DLQDepther reports the current dead-letter queue depth per work type
-// (M8-2), so a non-empty DLQ is visible without inspecting the broker by
-// hand.
 type DLQDepther interface {
 	DLQDepths(ctx context.Context) (map[string]int, error)
 }
@@ -28,11 +25,9 @@ type HealthHandler struct {
 	Postgres Pinger
 	Redis    Pinger
 	Minio    Pinger
-	// Broker reports broker connectivity as a health signal distinct from
-	// Postgres/Redis/Minio (M8-3).
+
 	Broker Pinger
-	// DLQ reports dead-letter queue depth per work type (M8-2). Nil
-	// disables the dlq_depth block, matching how Minio is disabled.
+
 	DLQ DLQDepther
 
 	Pool PoolStatter

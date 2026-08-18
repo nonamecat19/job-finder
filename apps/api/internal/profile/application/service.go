@@ -353,9 +353,7 @@ func (s *Service) RefreshEmbedding(ctx context.Context, id string) error {
 		return err
 	}
 	text := generation.RendercvToText(master)
-	// The served model is captured from the gateway's response (not from a
-	// Go-side config mirror), so provenance stays correct while the model
-	// choice lives only in gateway/config.yaml.
+
 	embedCtx, servedModel := llm.WithServedModelCapture(ctx)
 	embedding, err := s.llmc.Embed(embedCtx, text)
 	if err != nil {

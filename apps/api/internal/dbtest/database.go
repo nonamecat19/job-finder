@@ -190,10 +190,6 @@ func maintenance() (*pgxpool.Pool, error) {
 	return maintenancePool, maintenanceErr
 }
 
-// baseDSN is the DSN of the containerised Postgres this process runs
-// against: the maintenance database used to create and drop the per-suite
-// clones. The container is started on first use and torn down when the test
-// binary exits, so no suite can see another run's leftovers.
 func baseDSN() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
 	defer cancel()

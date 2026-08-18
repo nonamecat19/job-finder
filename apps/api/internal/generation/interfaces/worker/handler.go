@@ -45,11 +45,6 @@ func (h *Handler) ProcessTask(ctx context.Context, t *queue.Task) (err error) {
 		}
 	}()
 
-	// 042: a workspace run carries its own id and is dispatched to the
-	// workspace pipeline instead of the legacy merged-resume path. This is a
-	// wire-nullable additive field — every payload written before it existed
-	// has it nil and takes the branch below unchanged (the same discipline
-	// 020's now-removed TailoringDraftID field followed).
 	if payload.GenerationRunID != nil && *payload.GenerationRunID != "" {
 		if payload.IsRerun {
 			if err = h.svc.RerunRun(ctx, *payload.GenerationRunID, payload.RerunSections, rec); err != nil {

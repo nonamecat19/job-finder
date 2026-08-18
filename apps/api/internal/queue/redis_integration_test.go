@@ -12,16 +12,6 @@ import (
 	"github.com/job-finder/api/internal/testinfra"
 )
 
-// NewRedisClient's URL handling is unit-tested against its own parsing, which
-// cannot tell whether the options it produces actually connect: a wrong
-// address form, a database index the server rejects, or a password field the
-// client never sends all parse fine and fail only against a server. These
-// tests point it at the Redis image docker-compose.yml runs.
-//
-// Redis is caching and rate-limit state now, not a queue backend (047), and
-// cmd/server's readiness check pings it — so "the client this constructor
-// returns can talk to a real Redis" is the whole contract.
-
 func redisURL(t *testing.T) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -34,8 +24,6 @@ func redisURL(t *testing.T) string {
 	return url
 }
 
-// withDB rewrites a redis:// URL's path to select a database index, the form
-// REDIS_URL takes in docker-compose.yml and CI (redis://host:6379/1).
 func withDB(t *testing.T, base string, db int) string {
 	t.Helper()
 	u, err := url.Parse(base)
@@ -46,8 +34,6 @@ func withDB(t *testing.T, base string, db int) string {
 	return u.String()
 }
 
-// TestNewRedisClientConnects is what the readiness endpoint depends on:
-// the client the constructor returns answers PING.
 func TestNewRedisClientConnects(t *testing.T) {
 	client, err := NewRedisClient(redisURL(t))
 	if err != nil {
@@ -62,11 +48,6 @@ func TestNewRedisClientConnects(t *testing.T) {
 	}
 }
 
-// TestRedisURLDatabaseIndexIsHonoured proves the `/1` in REDIS_URL reaches
-// the server as a SELECT, not just as a parsed integer. The deployment
-// relies on this: tests and the dev stack share one Redis and separate
-// themselves by database index alone, so a client that silently stayed on
-// database 0 would have them writing over each other.
 func TestRedisURLDatabaseIndexIsHonoured(t *testing.T) {
 	base := redisURL(t)
 
@@ -103,10 +84,6 @@ func TestRedisURLDatabaseIndexIsHonoured(t *testing.T) {
 	}
 }
 
-// TestNewRedisClientDefaultsToLocalPort proves the empty-URL default still
-// produces a usable client shape — the constructor's fallback is
-// redis://localhost:6379, so pointing it at the container's port through the
-// same code path is the closest a test can get to exercising that branch.
 func TestNewRedisClientDefaultsToLocalPort(t *testing.T) {
 	base := redisURL(t)
 	u, err := url.Parse(base)
@@ -114,7 +91,6 @@ func TestNewRedisClientDefaultsToLocalPort(t *testing.T) {
 		t.Fatalf("parse %s: %v", base, err)
 	}
 
-	// No path, no credentials: the minimal form the fallback produces.
 	client, err := NewRedisClient("redis://" + u.Host)
 	if err != nil {
 		t.Fatalf("NewRedisClient: %v", err)
@@ -128,11 +104,6 @@ func TestNewRedisClientDefaultsToLocalPort(t *testing.T) {
 	}
 }
 
-// TestRedisURLPasswordIsSent proves the password in a redis://user:pass@host
-// URL reaches the server, by turning authentication on for the duration of
-// the test: with requirepass set, a client built from a URL carrying the
-// right password must work and one carrying the wrong password must not. A
-// constructor that dropped the credential would fail both.
 func TestRedisURLPasswordIsSent(t *testing.T) {
 	base := redisURL(t)
 	u, err := url.Parse(base)
@@ -154,9 +125,7 @@ func TestRedisURLPasswordIsSent(t *testing.T) {
 		t.Fatalf("enable requirepass: %v", err)
 	}
 	t.Cleanup(func() {
-		// The admin client authenticated before requirepass existed, so it
-		// keeps its connection; a fresh authenticated client is what can
-		// turn it back off for the rest of the package.
+
 		restore, err := NewRedisClient("redis://default:" + password + "@" + u.Host)
 		if err != nil {
 			t.Fatalf("build client to restore requirepass: %v", err)

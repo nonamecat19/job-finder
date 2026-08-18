@@ -35,8 +35,6 @@ func setupManualAdd(t *testing.T) (context.Context, *db.DB, func()) {
 	return ctx, testDB, cancel
 }
 
-// realSourceProvider is the jobsources service's two-method surface, satisfied
-// directly against the test database rather than through the full service.
 type realSourceProvider struct{ q *sqlcgen.Queries }
 
 func (p realSourceProvider) GetByKey(ctx context.Context, key string) (sqlcgen.JobSource, error) {
@@ -82,8 +80,6 @@ func countJobsWithKey(t *testing.T, ctx context.Context, testDB *db.DB, key stri
 	return n
 }
 
-// A manual add and a crawl of the same posting must collapse to one vacancy,
-// because both go through the same dedupe key and the same insert (D5).
 func TestIntegration_ManualAddAndCrawlOfTheSamePostingYieldOneVacancy(t *testing.T) {
 	ctx, testDB, cleanup := setupManualAdd(t)
 	defer cleanup()
@@ -105,7 +101,6 @@ func TestIntegration_ManualAddAndCrawlOfTheSamePostingYieldOneVacancy(t *testing
 		t.Fatalf("outcome = %q, want created", result.Outcome)
 	}
 
-	// The crawl path, with the same posting, through the same ingest package.
 	source, err := testDB.Queries.GetJobSourceByKey(ctx, "djinni")
 	if err != nil {
 		t.Fatalf("get job source: %v", err)
@@ -130,8 +125,6 @@ func TestIntegration_ManualAddAndCrawlOfTheSamePostingYieldOneVacancy(t *testing
 	}
 }
 
-// FR-008: two simultaneous submissions of the same URL yield one vacancy. The
-// loser of the race must report duplicate, not an error.
 func TestIntegration_ConcurrentAddsOfTheSameURLYieldOneVacancy(t *testing.T) {
 	ctx, testDB, cleanup := setupManualAdd(t)
 	defer cleanup()
@@ -183,8 +176,6 @@ func TestIntegration_ConcurrentAddsOfTheSameURLYieldOneVacancy(t *testing.T) {
 	}
 }
 
-// FR-017g: three failed manual adds must leave the source healthy, because the
-// health query excludes runs triggered by hand.
 func TestIntegration_FailedManualAddsLeaveTheSourceHealthy(t *testing.T) {
 	ctx, testDB, cleanup := setupManualAdd(t)
 	defer cleanup()

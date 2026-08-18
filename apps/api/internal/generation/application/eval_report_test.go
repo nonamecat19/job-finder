@@ -11,22 +11,9 @@ import (
 	"testing"
 )
 
-// Reading two comparison runs against each other (038 US4).
-//
-// The question US4 exists to answer is "what does the extra quality cost", and
-// answering it must not require re-running anything: a comparison that can only
-// be read by repeating a live run is a comparison nobody repeats.
-//
-// This lives behind the live build tag with the runs it reads, because a report
-// over artifacts that only live mode produces has nothing to say in the
-// deterministic gate.
-
-// tradeRow is one model's quality-versus-cost position.
 type tradeRow struct {
 	Model string
-	// Quality is the per-scorer median, kept per scorer rather than summed.
-	// Summing would fold the declared grounding/drift overlap into a single
-	// inflated figure and quietly weight every scorer equally.
+
 	Quality      map[string]float64
 	MedianCost   float64
 	TotalCost    float64
@@ -37,12 +24,9 @@ type tradeRow struct {
 	CostDelta    float64
 }
 
-// compareRuns puts two artifacts side by side. `base` is the incumbent and
-// `candidate` the model being considered.
 func compareRuns(base, candidate ComparisonRun) ([]tradeRow, error) {
 	if base.ScorerSetVer != candidate.ScorerSetVer {
-		// Same rule as the baseline comparator, for the same reason: a delta
-		// measured across two instruments is not a quality signal.
+
 		return nil, fmt.Errorf("scorer set versions differ (%d vs %d); refusing to compare across instruments",
 			base.ScorerSetVer, candidate.ScorerSetVer)
 	}
@@ -88,7 +72,6 @@ func loadComparison(path string) (ComparisonRun, error) {
 	return run, json.Unmarshal(raw, &run)
 }
 
-// TestCompareArtifacts reads two artifacts named by flags and prints the trade.
 func TestCompareArtifacts(t *testing.T) {
 	basePath := os.Getenv("EVAL_BASE_ARTIFACT")
 	candPath := os.Getenv("EVAL_CANDIDATE_ARTIFACT")
@@ -128,9 +111,6 @@ func TestCompareArtifacts(t *testing.T) {
 	}
 }
 
-// Two runs measured with different scorer sets, or over different corpora, are
-// not comparable. Asserted because the tempting behaviour — compare anyway and
-// let the reader notice — produces a table that looks authoritative and is not.
 func TestCompareRunsRefusesAcrossInstrumentsAndCorpora(t *testing.T) {
 	base := ComparisonRun{ScorerSetVer: 1, CorpusRevision: "rev-a"}
 	if _, err := compareRuns(base, ComparisonRun{ScorerSetVer: 2, CorpusRevision: "rev-a"}); err == nil {
@@ -141,9 +121,6 @@ func TestCompareRunsRefusesAcrossInstrumentsAndCorpora(t *testing.T) {
 	}
 }
 
-// The trade is readable per scorer, never as one summed quality number.
-// Summing would fold the declared grounding/drift overlap into a single
-// inflated figure and weight every scorer equally without saying so.
 func TestQualityIsReportedPerScorerNotSummed(t *testing.T) {
 	rev := "rev-a"
 	base := ComparisonRun{ScorerSetVer: ScorerSetVersion, CorpusRevision: rev, Models: []ModelResult{{
@@ -175,7 +152,7 @@ func TestQualityIsReportedPerScorerNotSummed(t *testing.T) {
 	if r.CostDelta < 0.0299 || r.CostDelta > 0.0301 {
 		t.Errorf("cost delta = %v, want ~0.03", r.CostDelta)
 	}
-	// No summed total anywhere on the row.
+
 	if _, summed := r.Quality["total"]; summed {
 		t.Error("a summed quality total appeared; the declared grounding/drift overlap makes one defect count twice in any sum")
 	}

@@ -11,8 +11,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm"
 )
 
-// stageProvider records what a stage asked for and replies with a canned
-// payload, so a test can assert routing and prompt content without a gateway.
 type stageProvider struct {
 	name     string
 	model    string
@@ -48,11 +46,6 @@ func (p *stageProvider) CompleteJSON(ctx context.Context, prompt string, opts *l
 	return p.reply(prompt), nil
 }
 
-// CompleteChat satisfies the 037 Provider interface. The fake's behaviour lives
-// in CompleteJSON, so this delegates to it with the final turn as the prompt —
-// which is what the real adapters do in reverse. Tool calls are never
-// fabricated here: a fake that invented one would make a tool-loop test pass
-// for the wrong reason.
 func (p *stageProvider) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
 	prompt := ""
 	if len(msgs) > 0 {
@@ -98,9 +91,7 @@ func stagedService(t *testing.T) (*Service, *stageProvider, *stageProvider, *sta
 	analyze := &stageProvider{name: "generation-analyze", reply: analysisReply(t)}
 	sel := &stageProvider{name: "generation-select", reply: selectionReply(t)}
 	premium := &stageProvider{name: "generation-select-premium", reply: selectionReply(t)}
-	// The years figure has to match what the master's dates derive to, or the
-	// structure verifier correctly strips it and the assertions below would be
-	// testing the stripped text rather than the summary stage's output.
+
 	years := domain.DeriveTotalExperienceYears(stageMaster())
 	summary := &stageProvider{name: "generation-summary", reply: summaryReply(t, fmt.Sprintf("%d+ years of experience building Go services.", years))}
 	svc := &Service{llm: GenerationRouters{Analyze: analyze, Select: sel, Premium: premium, Summary: summary, Cover: summary}}
@@ -120,8 +111,6 @@ func stageMaster() domain.RendercvMaster {
 	}}}
 }
 
-// 035 FR-001/FR-002/FR-003: each stage goes to its own provider, and none of
-// them is told which model to use — the task key is the whole request.
 func TestEachStageRoutesToItsOwnProvider(t *testing.T) {
 	svc, analyze, sel, premium, summary := stagedService(t)
 
@@ -149,7 +138,6 @@ func TestEachStageRoutesToItsOwnProvider(t *testing.T) {
 	}
 }
 
-// 035 FR-004: the premium stage's prompt carries the brief, not the master.
 func TestSummaryPromptExcludesMasterProfile(t *testing.T) {
 	svc, _, _, _, summary := stagedService(t)
 
@@ -169,10 +157,6 @@ func TestSummaryPromptExcludesMasterProfile(t *testing.T) {
 	}
 }
 
-// 035 FR-012: a summary served by a fallback is recorded as substituted, and a
-// summary served by tier 1 is not. The signal is the proxy's own
-// attempted-fallbacks count, so the application never learns which upstream
-// model was configured — only that the chain advanced.
 func TestSummarySubstitutionIsRecorded(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -210,8 +194,6 @@ func TestSummarySubstitutionIsRecorded(t *testing.T) {
 	}
 }
 
-// 035 FR-011/SC-008: with no gateway configured every stage still resolves —
-// the routers fall back to the local provider and a resume is produced.
 func TestLocalOnlyRunProducesAResume(t *testing.T) {
 	local := &stageProvider{name: "local", reply: func(prompt string) string {
 		switch {
@@ -225,8 +207,7 @@ func TestLocalOnlyRunProducesAResume(t *testing.T) {
 			}})
 		}
 	}}
-	// Every stage routes to the same local provider, which is what
-	// llm.NewRouter does when GATEWAY_URL is empty.
+
 	svc := &Service{llm: GenerationRouters{Analyze: local, Select: local, Premium: local, Summary: local, Cover: local}}
 
 	merged, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
@@ -241,9 +222,6 @@ func TestLocalOnlyRunProducesAResume(t *testing.T) {
 	}
 }
 
-// The per-group skills_level trim is part of the tailoring pipeline: the
-// merged document that leaves tailorRendercvResume is already density-capped,
-// so the render loop and the page-fit passes never see the full groups again.
 func TestSkillDensityTrimmedInTailoring(t *testing.T) {
 	master := domain.RendercvMaster{"cv": map[string]any{"sections": map[string]any{
 		"summary": []any{"A summary."},

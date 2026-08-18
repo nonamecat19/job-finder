@@ -8,22 +8,6 @@ import (
 	"github.com/job-finder/api/internal/platform/llm/domain"
 )
 
-// This file is the behavioural baseline for 037 (SC-001, contracts C1-2).
-//
-// `Complete` and `CompleteJSON` become shims onto `CompleteChat`. Fourteen
-// structured call sites depend on their current wire output, and the way a shim
-// breaks them is not by failing — it is by quietly normalising a difference
-// between the two entry points that was load-bearing. These goldens exist to
-// make that impossible to do silently: they were captured against the
-// unmodified adapter and must be byte-identical afterwards.
-//
-// A failure here after the shim lands is a defect in the shim, never a stale
-// golden. Do not re-record.
-
-// assertGolden compares the captured body against an expected object, field by
-// field, and — critically — also asserts the *key set*, so a shim that adds
-// `tools: null` or `tool_choice: ""` fails rather than passing on the fields
-// somebody thought to check.
 func assertGolden(t *testing.T, got map[string]any, want map[string]any) {
 	t.Helper()
 	for k, wantV := range want {
@@ -56,7 +40,7 @@ func TestGoldenCompleteWithoutSystemPrompt(t *testing.T) {
 		"messages": []any{
 			map[string]any{"role": "user", "content": "hello"},
 		},
-		// C1-2 row 2: Complete never sets response_format. C2-1: no tools key.
+
 		"temperature": 0.3,
 	})
 }
@@ -93,9 +77,6 @@ func TestGoldenCompleteJSONNonStrict(t *testing.T) {
 	})
 }
 
-// C1-2 row 2, the nil-options case: CompleteJSON sets response_format even when
-// there are no options at all. cmd/llmsmoke calls exactly this way, so the nil
-// path is live, not hypothetical (row 7).
 func TestGoldenCompleteJSONWithNilOptions(t *testing.T) {
 	body := captureBody(t, func(p *Provider) error {
 		_, err := p.CompleteJSON(context.Background(), "give me json", nil)
@@ -143,8 +124,6 @@ func TestGoldenCompleteJSONStrict(t *testing.T) {
 	})
 }
 
-// C1-2 row 5: an unparseable schema downgrades to json_object rather than
-// sending a broken json_schema — and, per the retry test, skips the retry.
 func TestGoldenCompleteJSONStrictWithUnparseableSchema(t *testing.T) {
 	body := captureBody(t, func(p *Provider) error {
 		_, err := p.CompleteJSON(context.Background(), "give me json", &domain.CompleteOptions{
@@ -181,10 +160,6 @@ func TestGoldenMaxTokensBecomesMaxCompletionTokens(t *testing.T) {
 	})
 }
 
-// C2-1, stated on its own rather than left implicit in the key-set assertions
-// above: declaring no tools must leave `tools` and `tool_choice` **absent**.
-// `"tools": null` or `"tools": []` is a different request, and a proxy that
-// receives one is not receiving what it received yesterday.
 func TestToolKeysAbsentWhenNoToolsDeclared(t *testing.T) {
 	for name, opts := range map[string]*domain.CompleteOptions{
 		"nil opts":                      nil,
