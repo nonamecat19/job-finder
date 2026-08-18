@@ -5,7 +5,6 @@ package events_test
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -13,30 +12,31 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/job-finder/api/internal/events"
+	"github.com/job-finder/api/internal/testinfra"
 )
 
-// defaultTestBrokerURL mirrors .env.example's dev default. RABBITMQ_URL
-// overrides it, matching the convention TEST_DATABASE_URL/DATABASE_URL use
-// for Postgres.
-const defaultTestBrokerURL = "amqp://jobfinder:change-me@localhost:5672/"
-
-func testBrokerURL() string {
-	if url := os.Getenv("RABBITMQ_URL"); url != "" {
-		return url
+// testBrokerURL is the URL of the RabbitMQ container this test binary owns
+// (internal/testinfra), started on first use and removed when the binary
+// exits. These are integration tests against real broker behaviour
+// (durability, redelivery, dead-lettering) that no fake can stand in for, and
+// a container makes that broker unconditionally present rather than something
+// the run may skip over.
+func testBrokerURL(t *testing.T) string {
+	t.Helper()
+	url, err := testinfra.RabbitMQURL(context.Background())
+	if err != nil {
+		t.Fatalf("events: start rabbitmq container: %v", err)
 	}
-	return defaultTestBrokerURL
+	return url
 }
 
-// dialTestBroker opens a connection to a live RabbitMQ, skipping the test
-// (never failing it) when none is reachable — these are integration tests
-// against real broker behaviour (durability, redelivery, dead-lettering)
-// that no fake can stand in for.
+// dialTestBroker opens a connection to the container broker.
 func dialTestBroker(t *testing.T) *amqp.Connection {
 	t.Helper()
-	url := testBrokerURL()
-	conn, err := amqp.DialConfig(url, amqp.Config{Dial: amqp.DefaultDial(3 * time.Second)})
+	url := testBrokerURL(t)
+	conn, err := amqp.DialConfig(url, amqp.Config{Dial: amqp.DefaultDial(10 * time.Second)})
 	if err != nil {
-		t.Skipf("events: no live RabbitMQ reachable at %s: %v (set RABBITMQ_URL or start the broker; skipping)", url, err)
+		t.Fatalf("events: dial broker at %s: %v", url, err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	return conn

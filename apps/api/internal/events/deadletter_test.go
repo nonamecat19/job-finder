@@ -52,7 +52,7 @@ func TestDeadLetter_Integration_BudgetExhaustionLandsInDLQWithFirstFailureReason
 		t.Fatalf("HandleFailure: %v", err)
 	}
 
-	consumeConn, err := amqp.Dial(testBrokerURL())
+	consumeConn, err := amqp.Dial(testBrokerURL(t))
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestDeadLetter_Integration_NonRetryableGoesStraightToDLQWithoutBudget(t *te
 		t.Fatalf("HandleFailure: %v", err)
 	}
 
-	consumeConn, err := amqp.Dial(testBrokerURL())
+	consumeConn, err := amqp.Dial(testBrokerURL(t))
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestDeadLetter_Integration_UnknownEventTypeAndUnimplementedSchemaVersionRej
 	unknownType := newTestEnvelope("nonexistent.event", "job_"+uuid.NewString(), "unknown-type:"+uuid.NewString(), uuid.NewString())
 	publishWork(t, pub, workType, mustMarshal(t, unknownType))
 
-	consumeConn, err := amqp.Dial(testBrokerURL())
+	consumeConn, err := amqp.Dial(testBrokerURL(t))
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}

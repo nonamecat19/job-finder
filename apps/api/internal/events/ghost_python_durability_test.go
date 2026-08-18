@@ -66,7 +66,7 @@ func TestGhostPython_Integration_RequestedWorkSurvivesAiServiceDownAndDrainsOnRe
 	defer cancel()
 
 	consumer := &events.Consumer{
-		Dial:        func() (*amqp.Connection, error) { return amqp.Dial(testBrokerURL()) },
+		Dial:        func() (*amqp.Connection, error) { return amqp.Dial(testBrokerURL(t)) },
 		Queue:       "work." + workType,
 		Concurrency: 1,
 		HandlerFunc: func(_ context.Context, d amqp.Delivery) error {

@@ -58,7 +58,7 @@ func TestDurability_Integration_PublishedWhileConsumerStoppedIsProcessedOnRestar
 	defer cancel()
 
 	consumer := &events.Consumer{
-		Dial:        func() (*amqp.Connection, error) { return amqp.Dial(testBrokerURL()) },
+		Dial:        func() (*amqp.Connection, error) { return amqp.Dial(testBrokerURL(t)) },
 		Queue:       "work." + workType,
 		Concurrency: 4,
 		HandlerFunc: func(_ context.Context, d amqp.Delivery) error {
@@ -137,7 +137,7 @@ func TestDurability_Integration_ReconnectAfterConnectionLossLosesNoAcceptedWork(
 
 	consumer := &events.Consumer{
 		Dial: func() (*amqp.Connection, error) {
-			c, err := amqp.Dial(testBrokerURL())
+			c, err := amqp.Dial(testBrokerURL(t))
 			if err == nil {
 				consumerConnMu.Lock()
 				currentConn = c

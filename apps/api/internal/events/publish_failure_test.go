@@ -24,7 +24,7 @@ func TestPublish_Integration_BrokerUnreachableReturnsError(t *testing.T) {
 	conn := dialTestBroker(t)
 	declareTopologyOrFail(t, conn)
 
-	deadConn, err := amqp.Dial(testBrokerURL())
+	deadConn, err := amqp.Dial(testBrokerURL(t))
 	if err != nil {
 		t.Fatalf("dial connection to close: %v", err)
 	}

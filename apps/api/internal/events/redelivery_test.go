@@ -83,7 +83,7 @@ func TestRedelivery_Integration_ConsumerCrashMidProcessingYieldsExactlyOneAccept
 
 	// Consumer "A": receives the delivery, then crashes (connection closed)
 	// without acking and without ever calling Admit — nothing is persisted.
-	crashConn, err := amqp.Dial(testBrokerURL())
+	crashConn, err := amqp.Dial(testBrokerURL(t))
 	if err != nil {
 		t.Fatalf("dial crashing consumer: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestRedelivery_Integration_ConsumerCrashMidProcessingYieldsExactlyOneAccept
 
 	// Consumer "B": a fresh connection receives the redelivered message and
 	// is the one that actually admits and persists the result.
-	recoverConn, err := amqp.Dial(testBrokerURL())
+	recoverConn, err := amqp.Dial(testBrokerURL(t))
 	if err != nil {
 		t.Fatalf("dial recovering consumer: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestRedelivery_Integration_DuplicateDeliveryDoesNotDuplicateOrCorruptResult
 		return disposition
 	}
 
-	consumerConn, err := amqp.Dial(testBrokerURL())
+	consumerConn, err := amqp.Dial(testBrokerURL(t))
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
