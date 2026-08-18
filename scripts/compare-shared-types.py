@@ -29,9 +29,6 @@ INDEX_TS = REPO_ROOT / "packages" / "shared" / "src" / "index.ts"
 GENERATED_TS = REPO_ROOT / "packages" / "shared" / "src" / "generated.ts"
 DTO_DIR = REPO_ROOT / "apps" / "api" / "internal" / "dto"
 
-# ---------------------------------------------------------------------------
-# Parser
-# ---------------------------------------------------------------------------
 
 INTERFACE_RE = re.compile(r"^export\s+interface\s+(\w+)\s*\{", re.MULTILINE)
 FIELD_RE = re.compile(r"^\s*(\w+)(\?)?\s*:\s*(.+?)(?:;|$)", re.MULTILINE)
@@ -69,10 +66,6 @@ def parse_interfaces(path: Path) -> dict[str, dict[str, tuple[bool, str]]]:
         result[name] = fields
     return result
 
-
-# ---------------------------------------------------------------------------
-# Go DTO analysis (T014 — nullability derived from Go struct tags)
-# ---------------------------------------------------------------------------
 
 GO_STRUCT_RE = re.compile(r"type\s+(\w+)\s+struct\s*{(.*?)}", re.S)
 GO_FIELD_RE = re.compile(
@@ -117,7 +110,6 @@ def index_nullability_coverage() -> dict[str, set[str]]:
     for m in RESTATED_RE.finditer(text):
         for fm in RESTATED_FIELD_RE.finditer(m.group(1)):
             restated.add(fm.group(1))
-    # Fields restated inline via intersection are explicitly handled.
     for gtype in list(coverage):
         coverage[gtype] |= restated
     return coverage
@@ -134,17 +126,13 @@ def check_go_nullability() -> list[str]:
     problems: list[str] = []
     for gtype, fields in sorted(go_pointer_without_omitempty().items()):
         if not re.search(rf"Gen\.{gtype}\b", index_text):
-            continue  # not on the public surface
+            continue
         covered = coverage.get(gtype, set())
         for f in fields:
             if f not in covered:
                 problems.append(f"Gen.{gtype}.{f}")
     return problems
 
-
-# ---------------------------------------------------------------------------
-# Analysis
-# ---------------------------------------------------------------------------
 
 def compare(
     index_ifaces: dict[str, dict[str, tuple[bool, str]]],
@@ -184,7 +172,6 @@ def compare(
 
             diffs += 1
 
-            # null-union: index has `T | null`, generated has `T?`
             if not i_opt and g_opt and i_type.endswith("| null"):
                 null_union += 1
                 base = i_type[: -len(" | null")].strip()
@@ -192,19 +179,16 @@ def compare(
                     weakened.append(f"{name}.{f}: index={i_type} gen={g_type}")
                 continue
 
-            # literal-union-lost: index has a literal union, generated has string
             if not i_opt and not g_opt:
                 if "|" in i_type and g_type == "string":
                     literal_union_lost += 1
                     continue
 
-            # alias-lost: index has a named type, generated has string/any/etc.
             if not i_opt and not g_opt:
                 if i_type != g_type:
                     alias_lost += 1
                     continue
 
-            # optionality difference
             if i_opt != g_opt:
                 null_union += 1
                 continue
@@ -225,10 +209,6 @@ def compare(
         "weakened": weakened,
     }
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="Compare shared type definitions")
@@ -258,7 +238,9 @@ def main():
             print("Each Go *T field without omitempty always hits the wire as null;")
             print("index.ts must name it in a Nullable list or restate it inline.")
             sys.exit(1)
-        print("go-nullability check passed — all Go pointer-no-omitempty fields covered")
+        print(
+            "go-nullability check passed — all Go pointer-no-omitempty fields covered"
+        )
         sys.exit(0)
 
     index_ifaces = parse_interfaces(INDEX_TS)
@@ -285,10 +267,13 @@ def main():
         print("strictness check passed — 0 weakened fields")
         sys.exit(0)
 
-    # Default: report
-    print(f"pairs={result['pairs']} identical={result['identical']} drifted={result['drifted']}")
-    print(f"null-union={result['null_union']} alias-lost={result['alias_lost']} "
-          f"literal-union-lost={result['literal_union_lost']} missing-field={result['missing_field']}")
+    print(
+        f"pairs={result['pairs']} identical={result['identical']} drifted={result['drifted']}"
+    )
+    print(
+        f"null-union={result['null_union']} alias-lost={result['alias_lost']} "
+        f"literal-union-lost={result['literal_union_lost']} missing-field={result['missing_field']}"
+    )
 
 
 if __name__ == "__main__":
