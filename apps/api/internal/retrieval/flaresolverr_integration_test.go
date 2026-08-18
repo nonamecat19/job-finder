@@ -222,10 +222,16 @@ func TestFlareSolverrHidesTheOriginStatusCode(t *testing.T) {
 }
 
 func TestFlareSolverrReportsUnreachableHostAsError(t *testing.T) {
-	parsed, _, raw := solve(t, "http://jobfinder-no-such-host.invalid/listing")
+	// 192.0.2.0/24 is TEST-NET-1 (RFC 5737): reserved for documentation and
+	// guaranteed never routed on the public internet. A hostname under the
+	// .invalid TLD would rely on DNS resolution failing, which some CI
+	// resolvers hijack into a synthetic "ok" search/landing page instead of
+	// a real failure; an IP literal skips DNS entirely so the connection
+	// itself is what fails.
+	parsed, _, raw := solve(t, "http://192.0.2.1/listing")
 
 	if parsed.Status == "ok" {
-		t.Fatalf("status = %q for an unresolvable host, want a failure value: the library would treat a non-page as a fetched page: %s", parsed.Status, truncate(raw))
+		t.Fatalf("status = %q for an unreachable host, want a failure value: the library would treat a non-page as a fetched page: %s", parsed.Status, truncate(raw))
 	}
 	if parsed.Message == "" {
 		t.Errorf("status = %q but message is empty: the library's error text comes entirely from this field: %s", parsed.Status, truncate(raw))
