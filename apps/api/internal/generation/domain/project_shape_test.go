@@ -211,7 +211,7 @@ func TestAssemble_KeepsOnlySelectedProjectsInOrder(t *testing.T) {
 	)
 	idx := func(i int) *int { return &i }
 	sections := []Section{{
-		Kind: SectionKindProjects,
+		Kind: SectionKindProjects, Enabled: true,
 		Items: []Item{
 			{ID: "1", Origin: OriginProfile, Kind: ItemKindProject, SourceIndex: idx(2), Position: 0, Selected: true},
 			{ID: "2", Origin: OriginProfile, Kind: ItemKindProject, SourceIndex: idx(0), Position: 1, Selected: true},

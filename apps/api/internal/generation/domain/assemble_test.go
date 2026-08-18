@@ -45,11 +45,11 @@ func str(s string) *string { return &s }
 func assembleSections() []Section {
 	return []Section{
 		{
-			ID: "sec-summary", Kind: SectionKindSummary, Position: 0,
+			ID: "sec-summary", Kind: SectionKindSummary, Position: 0, Enabled: true,
 			Items: []Item{{ID: "sum-1", Origin: OriginAI, Kind: ItemKindSummary, SourceText: "Written summary.", Position: 0, Selected: true}},
 		},
 		{
-			ID: "sec-acme", Kind: SectionKindExperience, EntryKey: str("Acme Inc."), Position: 1,
+			ID: "sec-acme", Kind: SectionKindExperience, EntryKey: str("Acme Inc."), Position: 1, Enabled: true,
 			Items: []Item{
 				{ID: "a-0", Origin: OriginProfile, SourceIndex: idx(0), SourceText: "Shipped the thing", Rank: 0, Position: 1, Selected: true},
 				{ID: "a-1", Origin: OriginProfile, SourceIndex: idx(1), SourceText: "Fixed the other thing", Rank: 1, Position: 2, Selected: false},
@@ -57,14 +57,14 @@ func assembleSections() []Section {
 			},
 		},
 		{
-			ID: "sec-globex", Kind: SectionKindExperience, EntryKey: str("Globex"), Position: 2,
+			ID: "sec-globex", Kind: SectionKindExperience, EntryKey: str("Globex"), Position: 2, Enabled: true,
 			Items: []Item{
 				{ID: "g-0", Origin: OriginProfile, SourceIndex: idx(0), SourceText: "Built the pipeline", Rank: 0, Position: 0, Selected: true, Unavailable: true},
 				{ID: "g-1", Origin: OriginProfile, SourceIndex: idx(1), SourceText: "Cut costs 30%", Rank: 1, Position: 1, Selected: true},
 			},
 		},
 		{
-			ID: "sec-skills", Kind: SectionKindSkills, Position: 3,
+			ID: "sec-skills", Kind: SectionKindSkills, Position: 3, Enabled: true,
 			Items: []Item{
 				{ID: "s-0", Origin: OriginProfile, Kind: ItemKindSkillGroup, SourceIndex: idx(0), SourceText: "Languages: Go, TypeScript", Rank: 0, Position: 0, Selected: true},
 				{ID: "s-1", Origin: OriginProfile, Kind: ItemKindSkillGroup, SourceIndex: idx(1), SourceText: "Spoken Languages: English", Rank: 1, Position: 1, Selected: false},
@@ -123,6 +123,58 @@ func TestAssembleOmitsUnselectedAndUnavailableItems(t *testing.T) {
 	}
 	if !reflect.DeepEqual(labels, []string{"Languages"}) {
 		t.Errorf("skill groups = %v, want only the selected one", labels)
+	}
+}
+
+// A disabled section is removed from the document outright, regardless of
+// Kind — the per-run "disable this section" switch means "excluded from
+// export", not "print the heading over nothing" and not "leave the master's
+// raw, uncurated content in place" either (which would surface every
+// unfiltered highlight and every certification the user never reviewed).
+func TestAssembleRemovesDisabledSectionsRegardlessOfKind(t *testing.T) {
+	sections := assembleSections()
+	for i := range sections {
+		sections[i].Enabled = false
+	}
+	doc, err := Assemble(assembleMaster(), sections)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	cv := CvSections(doc)
+	if _, ok := cv["summary"]; ok {
+		t.Errorf("summary = %v, want the key removed", cv["summary"])
+	}
+	if _, ok := cv["skills"]; ok {
+		t.Errorf("skills = %v, want the key removed", cv["skills"])
+	}
+	// Both experience entries in assembleSections are disabled, so nothing
+	// is left in the array at all — the "experience" key goes too.
+	if _, ok := cv["experience"]; ok {
+		t.Errorf("experience = %v, want the key removed once every entry is disabled", cv["experience"])
+	}
+}
+
+// Disabling one experience entry removes just that company, leaving any
+// other (enabled) entry and the "experience" key itself in place.
+func TestAssembleRemovesOneDisabledExperienceEntry(t *testing.T) {
+	sections := assembleSections()
+	for i := range sections {
+		if sections[i].Kind == SectionKindExperience && sections[i].EntryKey != nil && *sections[i].EntryKey == "Acme Inc." {
+			sections[i].Enabled = false
+		}
+	}
+	doc, err := Assemble(assembleMaster(), sections)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	var companies []string
+	for _, e := range AsSliceOfMaps(CvSections(doc)["experience"]) {
+		companies = append(companies, StringField(e, "company"))
+	}
+	if !reflect.DeepEqual(companies, []string{"Globex"}) {
+		t.Errorf("companies = %v, want only Globex left", companies)
 	}
 }
 

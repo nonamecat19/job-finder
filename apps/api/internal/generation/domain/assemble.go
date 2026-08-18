@@ -7,11 +7,17 @@ import "strings"
 // `position` order, with the wording the workspace displayed (FR-018).
 //
 // It follows MergeTailored's discipline — deep-clone first, then write only
-// section *contents*. It never creates or removes a section key and never
-// touches `_order`, so an entry's company, dates, education and every other
-// out-of-scope field reach the PDF byte-identical to the master. Experience
-// entries stay in master order; an entry with nothing selected keeps its
-// place with an empty highlight list rather than disappearing.
+// section *contents*. For an enabled section it never creates or removes a
+// section key and never touches `_order`, so an entry's company, dates,
+// education and every other out-of-scope field reach the PDF byte-identical
+// to the master. Experience entries stay in master order; an entry with
+// nothing selected keeps its place with an empty highlight list rather than
+// disappearing.
+//
+// A *disabled* section is the one exception: it is removed from the document
+// outright (key and `_order` entry both), not left present with nothing
+// under it — an empty "Skills" heading over blank space is not what
+// "excluded from export" should look like.
 //
 // No model call, no trimming, no padding: the selection is the shape.
 func Assemble(master RendercvMaster, sections []Section) (RendercvMaster, error) {
@@ -30,8 +36,37 @@ func Assemble(master RendercvMaster, sections []Section) (RendercvMaster, error)
 	}
 	masterSkills := AsSliceOfMaps(cvSections["skills"])
 	masterProjects := AsSliceOfMaps(cvSections["projects"])
+	masterCertifications := AsSliceOfMaps(cvSections["certifications"])
+	masterEducation := AsSliceOfMaps(cvSections["education"])
 
 	for _, sec := range sections {
+		// A disabled section is removed outright, not written as empty: an
+		// empty-but-present section still prints its heading and rule with
+		// nothing under it (a "Skills" heading over blank space), which is
+		// not what "excluded from export" should look like. Experience is
+		// the one section shared by many Sections (one per company), so
+		// disabling one entry removes just that company from the array
+		// rather than the whole "experience" key.
+		if !sec.Enabled {
+			switch sec.Kind {
+			case SectionKindExperience:
+				if sec.EntryKey != nil {
+					removeExperienceEntry(cvSections, *sec.EntryKey)
+				}
+			case SectionKindSummary:
+				RemoveSection(cvSections, "summary")
+			case SectionKindSkills:
+				RemoveSection(cvSections, "skills")
+			case SectionKindProjects:
+				RemoveSection(cvSections, "projects")
+			case SectionKindCertifications:
+				RemoveSection(cvSections, "certifications")
+			case SectionKindEducation:
+				RemoveSection(cvSections, "education")
+			}
+			continue
+		}
+
 		selected := selectedInOrder(sec)
 		switch sec.Kind {
 		case SectionKindSummary:
@@ -71,11 +106,43 @@ func Assemble(master RendercvMaster, sections []Section) (RendercvMaster, error)
 			if _, ok := cvSections["projects"]; !ok {
 				continue
 			}
-			cvSections["projects"] = assembleProjects(masterProjects, selected)
+			cvSections["projects"] = assembleBySourceIndex(masterProjects, selected)
+		case SectionKindCertifications:
+			if _, ok := cvSections["certifications"]; !ok {
+				continue
+			}
+			cvSections["certifications"] = assembleBySourceIndex(masterCertifications, selected)
+		case SectionKindEducation:
+			if _, ok := cvSections["education"]; !ok {
+				continue
+			}
+			cvSections["education"] = assembleBySourceIndex(masterEducation, selected)
 		}
 	}
 
 	return doc, nil
+}
+
+// removeExperienceEntry drops one company's entry from cv.sections.experience
+// entirely — the disabled equivalent of assembleBySourceIndex/assembleSkillGroups
+// dropping an unselected entry from their own arrays. If that leaves no
+// entries at all, the "experience" key itself goes too, same as any other
+// section with nothing left in it.
+func removeExperienceEntry(cvSections map[string]any, entryKey string) {
+	key := norm(entryKey)
+	entries := AsSliceOfMaps(cvSections["experience"])
+	filtered := make([]any, 0, len(entries))
+	for _, e := range entries {
+		if norm(StringField(e, "company")) == key {
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+	if len(filtered) == 0 {
+		RemoveSection(cvSections, "experience")
+		return
+	}
+	cvSections["experience"] = filtered
 }
 
 // selectedInOrder is the one place the inclusion rule lives: selected, not
@@ -98,20 +165,21 @@ func selectedInOrder(sec Section) []Item {
 	return out
 }
 
-// assembleProjects rebuilds the projects section from the selected items, in
-// the order the workspace shows them. Every project resolves through its
-// SourceIndex back to the master's own entry, so name, link, dates and bullets
-// reach the PDF verbatim — the workspace only ever decided *which* projects
-// and in what order, never their contents. A project has no AI-origin
-// counterpart to parse: nothing in this section is model-written.
-func assembleProjects(masterProjects []map[string]any, selected []Item) []any {
+// assembleBySourceIndex rebuilds a section from the selected items, in the
+// order the workspace shows them, by resolving each item's SourceIndex back
+// to the master's own entry — so every field (name, link, dates, bullets,
+// institution, degree...) reaches the PDF verbatim. The workspace only ever
+// decided *which* entries and in what order, never their contents. Shared by
+// Projects, Certifications and Education: none of the three has an AI-origin
+// counterpart to parse, unlike Skills.
+func assembleBySourceIndex(master []map[string]any, selected []Item) []any {
 	out := make([]any, 0, len(selected))
 	for _, it := range selected {
 		if it.Origin != OriginProfile || it.SourceIndex == nil {
 			continue
 		}
-		if idx := *it.SourceIndex; idx >= 0 && idx < len(masterProjects) {
-			out = append(out, masterProjects[idx])
+		if idx := *it.SourceIndex; idx >= 0 && idx < len(master) {
+			out = append(out, master[idx])
 		}
 	}
 	return out

@@ -168,3 +168,109 @@ func TestSeedFromMaster_SummaryAndSkillsSections(t *testing.T) {
 func highlightText(company string, i int) string {
 	return fmt.Sprintf("%s bullet %d", company, i)
 }
+
+// Every section SeedFromMaster produces must come out Enabled — the zero
+// value is false, and a seeder that forgets to set it would silently ship a
+// resume export missing whatever section it skipped.
+func TestSeedFromMaster_EverySectionComesOutEnabled(t *testing.T) {
+	m := masterWithCertifications("AWS Certified Solutions Architect")
+	cvSections := CvSections(m)
+	cvSections["education"] = []any{map[string]any{"institution": "MIT", "degree": "BSc", "area": "CS"}}
+	cvSections["experience"] = []any{map[string]any{"company": "Acme", "highlights": []any{"Did a thing"}}}
+	cvSections["skills"] = []any{map[string]any{"label": "Languages", "details": "Go"}}
+	cvSections["projects"] = []any{map[string]any{"name": "job-finder", "highlights": []any{"Built it"}}}
+
+	out := SeedFromMaster(m, DefaultShapeConfig())
+	if len(out) == 0 {
+		t.Fatal("SeedFromMaster returned no sections")
+	}
+	for _, s := range out {
+		if !s.Enabled {
+			t.Errorf("section kind=%s entryKey=%v: Enabled = false, want true", s.Kind, s.EntryKey)
+		}
+	}
+}
+
+// Summary/experience/skills/projects/certifications/education are each
+// omitted entirely when their settings flag is off — not seeded-but-disabled,
+// genuinely absent, mirroring the existing "projects only get a section when
+// the master has one" rule.
+func TestSeedFromMaster_DisabledSectionsAreNotSeeded(t *testing.T) {
+	m := masterWithCertifications("AWS Certified Solutions Architect")
+	cvSections := CvSections(m)
+	cvSections["education"] = []any{map[string]any{"institution": "MIT", "degree": "BSc"}}
+	cvSections["experience"] = []any{map[string]any{"company": "Acme", "highlights": []any{"Did a thing"}}}
+	cvSections["skills"] = []any{map[string]any{"label": "Languages", "details": "Go"}}
+	cvSections["projects"] = []any{map[string]any{"name": "job-finder", "highlights": []any{"Built it"}}}
+
+	cfg := DefaultShapeConfig()
+	cfg.SummaryEnabled = false
+	cfg.ExperienceEnabled = false
+	cfg.SkillsEnabled = false
+	cfg.ProjectsEnabled = false
+	cfg.CertificationsEnabled = false
+	cfg.EducationEnabled = false
+
+	out := SeedFromMaster(m, cfg)
+	if len(out) != 0 {
+		kinds := make([]SectionKind, len(out))
+		for i, s := range out {
+			kinds[i] = s.Kind
+		}
+		t.Errorf("sections = %v, want none — every section switched off", kinds)
+	}
+}
+
+func TestSeedFromMaster_SeedsCertificationsAndEducationWhenPresentAndEnabled(t *testing.T) {
+	m := masterWithCertifications("AWS Certified Solutions Architect", "Certified Kubernetes Administrator")
+	cvSections := CvSections(m)
+	cvSections["education"] = []any{
+		map[string]any{"institution": "State University", "degree": "BSc", "area": "Computer Science", "start_date": "2016", "end_date": "2020"},
+	}
+
+	out := SeedFromMaster(m, DefaultShapeConfig())
+
+	var certs, edu *Section
+	for i := range out {
+		switch out[i].Kind {
+		case SectionKindCertifications:
+			certs = &out[i]
+		case SectionKindEducation:
+			edu = &out[i]
+		}
+	}
+	if certs == nil {
+		t.Fatal("no certifications section seeded")
+	}
+	if len(certs.Items) != 2 {
+		t.Fatalf("certifications items = %d, want 2", len(certs.Items))
+	}
+	if certs.Items[0].SourceText != "AWS Certified Solutions Architect: AWS Certified Solutions Architect details" {
+		t.Errorf("certification item text = %q", certs.Items[0].SourceText)
+	}
+	if !certs.Items[0].Selected {
+		t.Error("certification items should be selected by default")
+	}
+
+	if edu == nil {
+		t.Fatal("no education section seeded")
+	}
+	if len(edu.Items) != 1 {
+		t.Fatalf("education items = %d, want 1", len(edu.Items))
+	}
+	if want := "BSc — State University, 2016–2020"; edu.Items[0].SourceText != want {
+		t.Errorf("education item text = %q, want %q", edu.Items[0].SourceText, want)
+	}
+}
+
+func TestSeedFromMaster_NoCertificationsOrEducationSectionWhenMasterHasNone(t *testing.T) {
+	m := masterWithBullets(map[string]int{"Acme": 1}, "Acme")
+
+	out := SeedFromMaster(m, DefaultShapeConfig())
+
+	for _, s := range out {
+		if s.Kind == SectionKindCertifications || s.Kind == SectionKindEducation {
+			t.Errorf("section kind=%s seeded despite the master having none", s.Kind)
+		}
+	}
+}

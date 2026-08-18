@@ -18,8 +18,10 @@ type ShapeReport struct {
 
 type ShapeConfig struct {
 	SummaryLines          int
+	SummaryEnabled        bool
 	SkillsEnabled         bool
 	SkillsMaxGroups       int
+	ExperienceEnabled     bool
 	ExperienceBulletsMin  int
 	ExperienceBulletsMax  int
 	TargetPages           int
@@ -30,14 +32,17 @@ type ShapeConfig struct {
 	CertificationsEnabled bool
 	CertificationsMin     int
 	CertificationsMax     int
+	EducationEnabled      bool
 	FontSize              int
 }
 
 func DefaultShapeConfig() ShapeConfig {
 	return ShapeConfig{
 		SummaryLines:          4,
+		SummaryEnabled:        true,
 		SkillsEnabled:         true,
 		SkillsMaxGroups:       0,
+		ExperienceEnabled:     true,
 		ExperienceBulletsMin:  8,
 		ExperienceBulletsMax:  10,
 		TargetPages:           2,
@@ -48,6 +53,7 @@ func DefaultShapeConfig() ShapeConfig {
 		CertificationsEnabled: true,
 		CertificationsMin:     0,
 		CertificationsMax:     0,
+		EducationEnabled:      true,
 		FontSize:              10,
 	}
 }

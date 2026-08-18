@@ -24,71 +24,104 @@ func SeedFromMaster(master RendercvMaster, cfg ShapeConfig) []Section {
 	out := make([]Section, 0, 2)
 	position := 0
 
-	out = append(out, Section{
-		Kind:     SectionKindSummary,
-		Position: position,
-		State:    SectionRunning,
-		Items:    []Item{},
-	})
-	position++
-
-	sections := CvSections(master)
-	for _, e := range AsSliceOfMaps(sections["experience"]) {
-		company := StringField(e, "company")
-		label := entryLabel(e)
-		highlights := StringSliceField(e, "highlights")
-
-		n := cfg.ExperienceBulletsMin
-		if n > len(highlights) {
-			n = len(highlights)
-		}
-
-		items := make([]Item, 0, len(highlights))
-		for i, h := range highlights {
-			idx := i
-			items = append(items, Item{
-				Origin:      OriginProfile,
-				Kind:        ItemKindAchievement,
-				SourceIndex: &idx,
-				SourceText:  h,
-				Rank:        i,
-				Position:    i,
-				Selected:    i < n,
-			})
-		}
-
-		key := company
+	if cfg.SummaryEnabled {
 		out = append(out, Section{
-			Kind:        SectionKindExperience,
-			EntryKey:    &key,
-			EntryLabel:  &label,
-			Position:    position,
-			TargetCount: cfg.ExperienceBulletsMin,
-			State:       SectionReady,
-			Items:       items,
+			Kind:     SectionKindSummary,
+			Position: position,
+			State:    SectionRunning,
+			Enabled:  true,
+			Items:    []Item{},
 		})
 		position++
 	}
 
-	out = append(out, Section{
-		Kind:     SectionKindSkills,
-		Position: position,
-		State:    SectionReady,
-		Items:    SeedSkillItems(AsSliceOfMaps(sections["skills"]), nil, cfg.SkillsMaxGroups),
-	})
-	position++
+	sections := CvSections(master)
+	if cfg.ExperienceEnabled {
+		for _, e := range AsSliceOfMaps(sections["experience"]) {
+			company := StringField(e, "company")
+			label := entryLabel(e)
+			highlights := StringSliceField(e, "highlights")
 
-	// Projects only get a section when the master has one. Unlike experience
-	// and skills — which every resume carries — a profile with no projects
-	// should show no projects block rather than an empty one asking to be
-	// filled.
-	if projects := AsSliceOfMaps(sections["projects"]); len(projects) > 0 {
+			n := cfg.ExperienceBulletsMin
+			if n > len(highlights) {
+				n = len(highlights)
+			}
+
+			items := make([]Item, 0, len(highlights))
+			for i, h := range highlights {
+				idx := i
+				items = append(items, Item{
+					Origin:      OriginProfile,
+					Kind:        ItemKindAchievement,
+					SourceIndex: &idx,
+					SourceText:  h,
+					Rank:        i,
+					Position:    i,
+					Selected:    i < n,
+				})
+			}
+
+			key := company
+			out = append(out, Section{
+				Kind:        SectionKindExperience,
+				EntryKey:    &key,
+				EntryLabel:  &label,
+				Position:    position,
+				TargetCount: cfg.ExperienceBulletsMin,
+				State:       SectionReady,
+				Enabled:     true,
+				Items:       items,
+			})
+			position++
+		}
+	}
+
+	if cfg.SkillsEnabled {
+		out = append(out, Section{
+			Kind:     SectionKindSkills,
+			Position: position,
+			State:    SectionReady,
+			Enabled:  true,
+			Items:    SeedSkillItems(AsSliceOfMaps(sections["skills"]), nil, cfg.SkillsMaxGroups),
+		})
+		position++
+	}
+
+	// Projects/certifications/education only get a section when the master
+	// has content for it and the account hasn't switched it off. Unlike
+	// experience and skills — which every resume carries — a profile with
+	// none of these should show no block rather than an empty one asking to
+	// be filled.
+	if projects := AsSliceOfMaps(sections["projects"]); cfg.ProjectsEnabled && len(projects) > 0 {
 		out = append(out, Section{
 			Kind:        SectionKindProjects,
 			Position:    position,
 			TargetCount: cfg.ProjectsMax,
 			State:       SectionReady,
+			Enabled:     true,
 			Items:       SeedProjectItems(projects, nil, cfg.ProjectsMax),
+		})
+		position++
+	}
+
+	if certs := AsSliceOfMaps(sections["certifications"]); cfg.CertificationsEnabled && len(certs) > 0 {
+		out = append(out, Section{
+			Kind:     SectionKindCertifications,
+			Position: position,
+			State:    SectionReady,
+			Enabled:  true,
+			Items:    SeedCertificationItems(certs, nil),
+		})
+		position++
+	}
+
+	if edu := AsSliceOfMaps(sections["education"]); cfg.EducationEnabled && len(edu) > 0 {
+		out = append(out, Section{
+			Kind:     SectionKindEducation,
+			Position: position,
+			State:    SectionReady,
+			Enabled:  true,
+			Items:    SeedEducationItems(edu, nil),
 		})
 	}
 
@@ -161,6 +194,99 @@ func projectItemText(p map[string]any) string {
 		return name + " · 1 bullet"
 	}
 	return name + " · " + strconv.Itoa(n) + " bullets"
+}
+
+// SeedCertificationItems builds the certifications section's items from the
+// master's certifications, in `order` (nil for master order). No ranking
+// model exists for certifications — every item defaults selected, and the
+// whole-section enable/disable switch is the only cap, unlike projects'
+// count-based slots.
+func SeedCertificationItems(certs []map[string]any, order []int) []Item {
+	return seedWholeSectionItems(certs, order, ItemKindCertification, skillGroupText)
+}
+
+// SeedEducationItems builds the education section's items from the master's
+// education entries, in `order` (nil for master order). Same no-ranking,
+// no-cap treatment as certifications.
+func SeedEducationItems(edu []map[string]any, order []int) []Item {
+	return seedWholeSectionItems(edu, order, ItemKindEducation, educationItemText)
+}
+
+// seedWholeSectionItems is SeedProjectItems' shape without the count-based
+// cap: every entry is seeded selected, in `order` (master order for any
+// index `order` doesn't name, exactly like SeedProjectItems' fallback).
+func seedWholeSectionItems(entries []map[string]any, order []int, kind ItemKind, text func(map[string]any) string) []Item {
+	seen := make(map[int]bool, len(entries))
+	ranked := make([]int, 0, len(entries))
+	for _, idx := range order {
+		if idx < 0 || idx >= len(entries) || seen[idx] {
+			continue
+		}
+		seen[idx] = true
+		ranked = append(ranked, idx)
+	}
+	for i := range entries {
+		if !seen[i] {
+			ranked = append(ranked, i)
+		}
+	}
+
+	items := make([]Item, 0, len(entries))
+	for i, source := range ranked {
+		idx := source
+		items = append(items, Item{
+			Origin:      OriginProfile,
+			Kind:        kind,
+			SourceIndex: &idx,
+			SourceText:  text(entries[source]),
+			Rank:        i,
+			Position:    i,
+			Selected:    true,
+		})
+	}
+	return items
+}
+
+// educationItemText renders an education entry as the workspace shows it:
+// "<degree> — <institution>, <date>", degrading gracefully when a field is
+// missing, mirroring entryLabel's date-range fallback for experience.
+func educationItemText(e map[string]any) string {
+	degree := strings.TrimSpace(StringField(e, "degree"))
+	institution := strings.TrimSpace(StringField(e, "institution"))
+	date := educationDate(e)
+
+	head := degree
+	if institution != "" {
+		if head != "" {
+			head += " — " + institution
+		} else {
+			head = institution
+		}
+	}
+	if date != "" {
+		if head != "" {
+			return head + ", " + date
+		}
+		return date
+	}
+	return head
+}
+
+// educationDate mirrors entryLabel's date-range fallback: a single "date"
+// field wins if present, otherwise start–end (open-ended if no end yet).
+func educationDate(e map[string]any) string {
+	if d := strings.TrimSpace(StringField(e, "date")); d != "" {
+		return d
+	}
+	start := strings.TrimSpace(StringField(e, "start_date"))
+	if start == "" {
+		return ""
+	}
+	end := strings.TrimSpace(StringField(e, "end_date"))
+	if end == "" {
+		end = "present"
+	}
+	return start + "–" + end
 }
 
 // SeedSkillItems builds the skills section's items from the master's skill

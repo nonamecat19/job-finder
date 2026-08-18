@@ -21,10 +21,12 @@ const (
 type ItemKind string
 
 const (
-	ItemKindAchievement ItemKind = "achievement"
-	ItemKindSkillGroup  ItemKind = "skill_group"
-	ItemKindSummary     ItemKind = "summary"
-	ItemKindProject     ItemKind = "project"
+	ItemKindAchievement   ItemKind = "achievement"
+	ItemKindSkillGroup    ItemKind = "skill_group"
+	ItemKindSummary       ItemKind = "summary"
+	ItemKindProject       ItemKind = "project"
+	ItemKindCertification ItemKind = "certification"
+	ItemKindEducation     ItemKind = "education"
 )
 
 // SectionKind is one of the section granularities data-model.md §2 collapses
@@ -32,10 +34,12 @@ const (
 type SectionKind string
 
 const (
-	SectionKindSummary    SectionKind = "summary"
-	SectionKindExperience SectionKind = "experience"
-	SectionKindSkills     SectionKind = "skills"
-	SectionKindProjects   SectionKind = "projects"
+	SectionKindSummary        SectionKind = "summary"
+	SectionKindExperience     SectionKind = "experience"
+	SectionKindSkills         SectionKind = "skills"
+	SectionKindProjects       SectionKind = "projects"
+	SectionKindCertifications SectionKind = "certifications"
+	SectionKindEducation      SectionKind = "education"
 )
 
 // RunState is a generation_runs.state value (data-model.md §4).
@@ -142,7 +146,12 @@ type Section struct {
 	State        SectionState
 	Error        *string
 	FallbackUsed bool
-	Items        []Item
+	// Enabled excludes the whole section from export/preview when false
+	// (Assemble skips it outright), independent of any item's own
+	// selection. Every constructor MUST set this explicitly — Go's zero
+	// value is false, which would silently disable a freshly built section.
+	Enabled bool
+	Items   []Item
 }
 
 // NormalizeText exports grounding.go's norm() for callers outside this
