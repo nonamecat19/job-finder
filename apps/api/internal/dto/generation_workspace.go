@@ -54,16 +54,22 @@ type GenerationVacancyDto struct {
 // GenerationSectionDto is one `generation_sections` row plus its items, in
 // `position` order.
 type GenerationSectionDto struct {
-	ID           string              `json:"id"`
-	Kind         string              `json:"kind"` // summary | experience | skills | projects
-	EntryKey     *string             `json:"entryKey,omitempty"`
-	EntryLabel   *string             `json:"entryLabel,omitempty"`
-	Position     int                 `json:"position"`
-	TargetCount  int                 `json:"targetCount"`
-	State        string              `json:"state"` // running | ready | failed
-	Error        *string             `json:"error,omitempty"`
-	FallbackUsed bool                `json:"fallbackUsed"`
-	Items        []GenerationItemDto `json:"items"`
+	ID           string  `json:"id"`
+	Kind         string  `json:"kind"` // summary | experience | skills | projects | certifications | education
+	EntryKey     *string `json:"entryKey,omitempty"`
+	EntryLabel   *string `json:"entryLabel,omitempty"`
+	Position     int     `json:"position"`
+	TargetCount  int     `json:"targetCount"`
+	State        string  `json:"state"` // running | ready | failed
+	Error        *string `json:"error,omitempty"`
+	FallbackUsed bool    `json:"fallbackUsed"`
+	// Enabled excludes the whole section from export/preview when false,
+	// independent of any item's own selection — the per-run "disable this
+	// section" switch. Seeded from the account's resume-shape settings when
+	// the run is created, changed afterward only via
+	// `PATCH /v1/generations/{runId}/sections/{sectionId}`.
+	Enabled bool                `json:"enabled"`
+	Items   []GenerationItemDto `json:"items"`
 }
 
 // GenerationItemDto is one ranked candidate for inclusion — profile-sourced
@@ -73,7 +79,7 @@ type GenerationSectionDto struct {
 type GenerationItemDto struct {
 	ID          string `json:"id"`
 	Origin      string `json:"origin"` // profile | ai
-	Kind        string `json:"kind"`   // achievement | skill_group | summary | project
+	Kind        string `json:"kind"`   // achievement | skill_group | summary | project | certification | education
 	Text        string `json:"text"`   // effective text: editedText ?? sourceText
 	SourceIndex *int   `json:"sourceIndex,omitempty"`
 	Rank        int    `json:"rank"`
@@ -159,6 +165,14 @@ type PatchGenerationItemRequestDto struct {
 	// group. Rejected with 403 for anything but a profile-origin item in a
 	// skills section, and with 400 for an entry that group does not contain.
 	DroppedEntries *[]string `json:"droppedEntries,omitempty"`
+}
+
+// PatchGenerationSectionRequestDto is the body of
+// `PATCH /v1/generations/{runId}/sections/{sectionId}` — currently just the
+// per-run enable/disable switch, kept as its own endpoint separate from
+// `.../order` since the two have unrelated validation.
+type PatchGenerationSectionRequestDto struct {
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // RerunGenerationRequestDto is the body of

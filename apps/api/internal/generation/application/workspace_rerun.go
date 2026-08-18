@@ -197,6 +197,22 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 		sections = append(sections, *created)
 		target[created.ID] = true
 	}
+	if created, err := s.backfillCertificationsSection(ctx, rid, master, cfg, sections); err != nil {
+		if rec != nil {
+			rec.Step(ctx, "certifications section backfill failed", map[string]any{"error": err.Error()})
+		}
+	} else if created != nil {
+		sections = append(sections, *created)
+		target[created.ID] = true
+	}
+	if created, err := s.backfillEducationSection(ctx, rid, master, cfg, sections); err != nil {
+		if rec != nil {
+			rec.Step(ctx, "education section backfill failed", map[string]any{"error": err.Error()})
+		}
+	} else if created != nil {
+		sections = append(sections, *created)
+		target[created.ID] = true
+	}
 
 	existingItems, err := s.q.ListItemsByRun(ctx, rid)
 	if err != nil {
@@ -382,6 +398,12 @@ func (s *Service) runAnalysisOrReanalyze(ctx context.Context, rid pgtype.UUID, r
 // "master order" to fall back to); a section reseed failure marks that
 // section `failed` and is folded into the run's final state (T081) rather
 // than left silently unreplaced.
+//
+// Certifications and education join this pass too, but for a different
+// reason: neither has a ranking stage to upgrade to (unlike
+// experience/skills) or its own arithmetic reorder to defer to (unlike
+// projects, which gets applyRankedProjects) — a master-order reseed here is
+// the entirety of what targeting either section on a rerun does.
 func (s *Service) reseedTargetedSections(ctx context.Context, master domain.RendercvMaster, cfg domain.ShapeConfig, sections []sqlcgen.GenerationSection, target map[pgtype.UUID]bool, oldBySection map[pgtype.UUID][]domain.Item) (anyFailed bool) {
 	fresh := domain.SeedFromMaster(master, cfg)
 	freshByKey := make(map[string]domain.Section, len(fresh))
@@ -394,7 +416,9 @@ func (s *Service) reseedTargetedSections(ctx context.Context, master domain.Rend
 			continue
 		}
 		kind := domain.SectionKind(sec.Kind)
-		if kind != domain.SectionKindExperience && kind != domain.SectionKindSkills {
+		switch kind {
+		case domain.SectionKindExperience, domain.SectionKindSkills, domain.SectionKindCertifications, domain.SectionKindEducation:
+		default:
 			continue
 		}
 		fs, ok := freshByKey[sectionMatchKey(kind, sec.EntryKey)]

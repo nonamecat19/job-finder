@@ -655,12 +655,43 @@ func (s *Service) applyRankedSkills(ctx context.Context, runID pgtype.UUID, mast
 // master has no projects to show). Items are left to applyRankedProjects, the
 // same split StartRun uses.
 func (s *Service) backfillProjectsSection(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, cfg domain.ShapeConfig, sections []sqlcgen.GenerationSection) (*sqlcgen.GenerationSection, error) {
-	if len(domain.AsSliceOfMaps(domain.CvSections(master)["projects"])) == 0 {
+	if !cfg.ProjectsEnabled || len(domain.AsSliceOfMaps(domain.CvSections(master)["projects"])) == 0 {
 		return nil, nil
 	}
+	return s.backfillSection(ctx, runID, domain.SectionKindProjects, cfg.ProjectsMax, sections)
+}
+
+// backfillCertificationsSection/backfillEducationSection are
+// backfillProjectsSection's counterparts for the two sections added
+// alongside the per-section enable toggle: a run started before either
+// existed (or while the account had it switched off) has no row for it, and
+// a rerun can only replace sections it finds. Items are left to the reseed
+// pass in reseedTargetedSections — neither section has a ranking stage of
+// its own to defer to.
+func (s *Service) backfillCertificationsSection(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, cfg domain.ShapeConfig, sections []sqlcgen.GenerationSection) (*sqlcgen.GenerationSection, error) {
+	if !cfg.CertificationsEnabled || len(domain.AsSliceOfMaps(domain.CvSections(master)["certifications"])) == 0 {
+		return nil, nil
+	}
+	return s.backfillSection(ctx, runID, domain.SectionKindCertifications, 0, sections)
+}
+
+func (s *Service) backfillEducationSection(ctx context.Context, runID pgtype.UUID, master domain.RendercvMaster, cfg domain.ShapeConfig, sections []sqlcgen.GenerationSection) (*sqlcgen.GenerationSection, error) {
+	if !cfg.EducationEnabled || len(domain.AsSliceOfMaps(domain.CvSections(master)["education"])) == 0 {
+		return nil, nil
+	}
+	return s.backfillSection(ctx, runID, domain.SectionKindEducation, 0, sections)
+}
+
+// backfillSection creates an empty row for `kind` at the end of `sections`'
+// positions, when the run doesn't already have one — the shared shape
+// backfillProjectsSection/backfillCertificationsSection/
+// backfillEducationSection each call with their own presence/enabled check.
+// The created row's `enabled` comes from the table's DEFAULT true, matching
+// what a fresh SeedFromMaster would have set.
+func (s *Service) backfillSection(ctx context.Context, runID pgtype.UUID, kind domain.SectionKind, targetCount int, sections []sqlcgen.GenerationSection) (*sqlcgen.GenerationSection, error) {
 	position := 0
 	for _, sec := range sections {
-		if sec.Kind == string(domain.SectionKindProjects) {
+		if sec.Kind == string(kind) {
 			return nil, nil
 		}
 		if int(sec.Position) >= position {
@@ -669,11 +700,11 @@ func (s *Service) backfillProjectsSection(ctx context.Context, runID pgtype.UUID
 	}
 	created, err := s.q.CreateSections(ctx, sqlcgen.CreateSectionsParams{
 		RunID:        runID,
-		Kinds:        []string{string(domain.SectionKindProjects)},
+		Kinds:        []string{string(kind)},
 		EntryKeys:    []string{""},
 		EntryLabels:  []string{""},
 		Positions:    []int32{int32(position)},
-		TargetCounts: []int32{int32(cfg.ProjectsMax)},
+		TargetCounts: []int32{int32(targetCount)},
 	})
 	if err != nil || len(created) == 0 {
 		return nil, err
@@ -1065,11 +1096,7 @@ func (s *Service) runToDto(run sqlcgen.GenerationRun, sections []sqlcgen.Generat
 		for _, it := range secItems {
 			itemDtos = append(itemDtos, itemToDto(sec.Kind, it))
 		}
-		sectionDtos = append(sectionDtos, dto.GenerationSectionDto{
-			ID: dbutil.UUIDString(sec.ID), Kind: sec.Kind, EntryKey: sec.EntryKey, EntryLabel: sec.EntryLabel,
-			Position: int(sec.Position), TargetCount: int(sec.TargetCount), State: sec.State, Error: sec.Error,
-			FallbackUsed: sec.FallbackUsed, Items: itemDtos,
-		})
+		sectionDtos = append(sectionDtos, sectionToDto(sec, itemDtos))
 	}
 
 	var cfg domain.ShapeConfig
@@ -1212,6 +1239,12 @@ func itemKindFor(sectionKind string) string {
 		return string(domain.ItemKindSummary)
 	case domain.SectionKindSkills:
 		return string(domain.ItemKindSkillGroup)
+	case domain.SectionKindProjects:
+		return string(domain.ItemKindProject)
+	case domain.SectionKindCertifications:
+		return string(domain.ItemKindCertification)
+	case domain.SectionKindEducation:
+		return string(domain.ItemKindEducation)
 	default:
 		return string(domain.ItemKindAchievement)
 	}
@@ -1236,6 +1269,9 @@ func shapeConfigToDto(c domain.ShapeConfig) dto.ResumeShapeConfigDto {
 		CertificationsEnabled: c.CertificationsEnabled,
 		CertificationsMin:     c.CertificationsMin,
 		CertificationsMax:     c.CertificationsMax,
+		EducationEnabled:      c.EducationEnabled,
+		ExperienceEnabled:     c.ExperienceEnabled,
+		SummaryEnabled:        c.SummaryEnabled,
 		FontSize:              c.FontSize,
 	}
 }

@@ -239,11 +239,18 @@ func (s *Service) ReorderSection(ctx context.Context, runID, sectionID string, i
 	for _, it := range secItems {
 		itemDtos = append(itemDtos, itemToDto(section.Kind, it))
 	}
+	return sectionToDto(section, itemDtos), nil
+}
+
+// sectionToDto is the one place a sqlcgen.GenerationSection row becomes its
+// wire shape, shared by ReorderSection and SetSectionEnabled so neither can
+// drift and drop a field (Enabled included) the other remembers to set.
+func sectionToDto(section sqlcgen.GenerationSection, items []dto.GenerationItemDto) dto.GenerationSectionDto {
 	return dto.GenerationSectionDto{
 		ID: dbutil.UUIDString(section.ID), Kind: section.Kind, EntryKey: section.EntryKey, EntryLabel: section.EntryLabel,
 		Position: int(section.Position), TargetCount: int(section.TargetCount), State: section.State, Error: section.Error,
-		FallbackUsed: section.FallbackUsed, Items: itemDtos,
-	}, nil
+		FallbackUsed: section.FallbackUsed, Enabled: section.Enabled, Items: items,
+	}
 }
 
 // sectionKindOf finds sec.ID == sectionID among a run's sections and reports

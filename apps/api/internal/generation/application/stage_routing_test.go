@@ -181,7 +181,7 @@ func TestSummarySubstitutionIsRecorded(t *testing.T) {
 		wantSubbed  bool
 	}{
 		{name: "tier 1 served", fallbacks: 0, servedModel: "anthropic/claude-sonnet-5", wantSubbed: false},
-		{name: "fallback served", fallbacks: 1, servedModel: "cerebras/gpt-oss-120b", wantSubbed: true},
+		{name: "fallback served", fallbacks: 1, servedModel: "openrouter/anthropic/claude-haiku-4.5", wantSubbed: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, _, _, _, summary := stagedService(t)

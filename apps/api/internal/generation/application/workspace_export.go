@@ -336,6 +336,7 @@ func sectionsFromRows(secRows []sqlcgen.GenerationSection, itemRows []sqlcgen.Ge
 			State:        domain.SectionState(sec.State),
 			Error:        sec.Error,
 			FallbackUsed: sec.FallbackUsed,
+			Enabled:      sec.Enabled,
 			Items:        itemsBySection[sec.ID],
 		})
 	}

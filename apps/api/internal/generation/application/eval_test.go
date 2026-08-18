@@ -106,7 +106,7 @@ func TestGateRunsWithNoTagAndNoEnvVar(t *testing.T) {
 // fails here rather than in CI on a runner without keys.
 func TestGateRunsWithNoCredentials(t *testing.T) {
 	for _, key := range []string{
-		"CEREBRAS_API_KEY", "GROQ_API_KEY", "COHERE_API_KEY", "OPENROUTER_API_KEY",
+		"GROQ_API_KEY", "COHERE_API_KEY", "OPENROUTER_API_KEY",
 		"GATEWAY_URL", "LITELLM_MASTER_KEY", "OLLAMA_URL", "OLLAMA_KEY",
 	} {
 		t.Setenv(key, "")

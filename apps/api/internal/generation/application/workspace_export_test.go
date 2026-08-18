@@ -28,7 +28,7 @@ func exportSections() []domain.Section {
 	entry := "Acme"
 	return []domain.Section{
 		{
-			ID: "sec-exp", Kind: domain.SectionKindExperience, EntryKey: &entry, Position: 0,
+			ID: "sec-exp", Kind: domain.SectionKindExperience, EntryKey: &entry, Position: 0, Enabled: true,
 			Items: []domain.Item{
 				{ID: "i-0", Origin: domain.OriginProfile, SourceIndex: intPtr(0), SourceText: "Shipped the thing", Rank: 0, Position: 0, Selected: true},
 				{ID: "i-1", Origin: domain.OriginProfile, SourceIndex: intPtr(1), SourceText: "Fixed the other thing", Rank: 1, Position: 1, Selected: true},
