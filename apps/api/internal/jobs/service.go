@@ -38,6 +38,10 @@ type ListParams struct {
 	IncludeApplied bool
 	Remote         *bool
 	Q              *string
+	// URL matches a single vacancy by its exact stored URL. The browser
+	// extension resolves the tab it is sitting on with it, so it needs an
+	// exact hit rather than the ILIKE sweep Q performs.
+	URL            *string
 	Page           int
 	PageSize       int
 	ShowBelowFloor bool
@@ -104,7 +108,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	onlyManual := &params.OnlyManual
 
 	count, err := s.q.CountJobs(ctx, sqlcgen.CountJobsParams{
-		Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
+		Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, Url: params.URL, MinScore: minScore,
 		SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
 		OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, OnlyManual: onlyManual,
 	})
@@ -118,7 +122,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 	var rows []jobRow
 	if params.Sort == "date" {
 		r, err := s.q.ListJobsByDate(ctx, sqlcgen.ListJobsByDateParams{
-			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
+			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, Url: params.URL, MinScore: minScore,
 			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
 			OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, OnlyManual: onlyManual,
 			Offset: offset, Limit: limit,
@@ -143,7 +147,7 @@ func (s *Service) List(ctx context.Context, params ListParams) (dto.JobListRespo
 		}
 	} else {
 		r, err := s.q.ListJobsByScore(ctx, sqlcgen.ListJobsByScoreParams{
-			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, MinScore: minScore,
+			Source: params.Source, SubscriptionID: subscriptionID, Status: params.Status, Remote: params.Remote, Q: qPattern, Url: params.URL, MinScore: minScore,
 			SalaryFloor: salaryFloor, IncludeHidden: includeHidden, IncludeApplied: includeApplied,
 			OnlyHidden: onlyHidden, OnlyApplied: onlyApplied, OnlyBelowFloor: onlyBelowFloor, OnlyManual: onlyManual,
 			Offset: offset, Limit: limit,

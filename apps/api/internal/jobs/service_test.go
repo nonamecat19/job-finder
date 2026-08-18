@@ -204,3 +204,55 @@ func TestList_OnlyManualDefaultsOffSoTheFeedIsUnfiltered(t *testing.T) {
 		t.Error("expected onlyManual to default to false")
 	}
 }
+
+// --- URL filter (browser extension resolves the tab it sits on) ---
+
+func TestList_URLIsThreadedToBothQueries(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := jobs.NewService(repo, &fakeEnqueuer{}, 0)
+
+	url := "https://djinni.co/jobs/123-go-engineer"
+	if _, err := svc.List(context.Background(), jobs.ListParams{URL: &url}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	if repo.listParams.Url == nil || *repo.listParams.Url != url {
+		t.Errorf("list query Url = %v, want %q", repo.listParams.Url, url)
+	}
+	if repo.countParams.Url == nil || *repo.countParams.Url != url {
+		t.Errorf("count query Url = %v, want %q — otherwise the page total lies", repo.countParams.Url, url)
+	}
+}
+
+func TestList_URLDefaultsToNilSoTheFeedIsUnfiltered(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := jobs.NewService(repo, &fakeEnqueuer{}, 0)
+
+	if _, err := svc.List(context.Background(), jobs.ListParams{}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	if repo.listParams.Url != nil {
+		t.Errorf("list query Url = %v, want nil", repo.listParams.Url)
+	}
+}
+
+// The URL filter is exact, unlike Q which wraps its value in ILIKE wildcards.
+// A vacancy URL is a key, not a search term.
+func TestList_URLIsNotWrappedInWildcardsUnlikeQ(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := jobs.NewService(repo, &fakeEnqueuer{}, 0)
+
+	url := "https://jobs.dou.ua/companies/acme/vacancies/42"
+	q := "golang"
+	if _, err := svc.List(context.Background(), jobs.ListParams{URL: &url, Q: &q}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	if repo.listParams.Url == nil || *repo.listParams.Url != url {
+		t.Errorf("Url = %v, want the raw URL", repo.listParams.Url)
+	}
+	if repo.listParams.Q == nil || *repo.listParams.Q != "%golang%" {
+		t.Errorf("Q = %v, want the wildcard-wrapped pattern", repo.listParams.Q)
+	}
+}

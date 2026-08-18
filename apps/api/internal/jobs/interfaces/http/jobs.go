@@ -82,6 +82,9 @@ func (h *JobsHandler) list(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("q"); v != "" {
 		params.Q = &v
 	}
+	if v := q.Get("url"); v != "" {
+		params.URL = &v
+	}
 	if v := q.Get("page"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			params.Page = n

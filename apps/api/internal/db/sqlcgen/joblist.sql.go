@@ -42,23 +42,24 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."company" ILIKE $9
     OR j."description" ILIKE $9
   )
-  AND ($10::int IS NULL OR mr."score" >= $10)
+  AND ($10::text IS NULL OR j."url" = $10)
+  AND ($11::int IS NULL OR mr."score" >= $11)
   AND (
-    (COALESCE($11::bool, false)
+    (COALESCE($12::bool, false)
       AND j."salaryMax" IS NOT NULL
       AND j."salaryCurrency" = 'USD'
-      AND j."salaryMax" < $12)
+      AND j."salaryMax" < $13)
     OR (
-      NOT COALESCE($11::bool, false)
+      NOT COALESCE($12::bool, false)
       AND (
-        $12::int IS NULL
+        $13::int IS NULL
         OR j."salaryMax" IS NULL
         OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-        OR j."salaryMax" >= $12
+        OR j."salaryMax" >= $13
       )
     )
   )
-  AND (NOT COALESCE($13::bool, false) OR s."kind" = 'manual')
+  AND (NOT COALESCE($14::bool, false) OR s."kind" = 'manual')
 `
 
 type CountJobsParams struct {
@@ -71,6 +72,7 @@ type CountJobsParams struct {
 	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
+	Url            *string     `json:"url"`
 	MinScore       *int32      `json:"min_score"`
 	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
@@ -88,6 +90,7 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
+		arg.Url,
 		arg.MinScore,
 		arg.OnlyBelowFloor,
 		arg.SalaryFloor,
@@ -173,26 +176,27 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."company" ILIKE $9
     OR j."description" ILIKE $9
   )
-  AND ($10::int IS NULL OR mr."score" >= $10)
+  AND ($10::text IS NULL OR j."url" = $10)
+  AND ($11::int IS NULL OR mr."score" >= $11)
   AND (
-    (COALESCE($11::bool, false)
+    (COALESCE($12::bool, false)
       AND j."salaryMax" IS NOT NULL
       AND j."salaryCurrency" = 'USD'
-      AND j."salaryMax" < $12)
+      AND j."salaryMax" < $13)
     OR (
-      NOT COALESCE($11::bool, false)
+      NOT COALESCE($12::bool, false)
       AND (
-        $12::int IS NULL
+        $13::int IS NULL
         OR j."salaryMax" IS NULL
         OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-        OR j."salaryMax" >= $12
+        OR j."salaryMax" >= $13
       )
     )
   )
-  AND (NOT COALESCE($13::bool, false) OR s."kind" = 'manual')
+  AND (NOT COALESCE($14::bool, false) OR s."kind" = 'manual')
 ORDER BY j."ingestedAt" DESC
-OFFSET $14
-LIMIT $15
+OFFSET $15
+LIMIT $16
 `
 
 type ListJobsByDateParams struct {
@@ -205,6 +209,7 @@ type ListJobsByDateParams struct {
 	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
+	Url            *string     `json:"url"`
 	MinScore       *int32      `json:"min_score"`
 	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
@@ -271,6 +276,7 @@ func (q *Queries) ListJobsByDate(ctx context.Context, arg ListJobsByDateParams) 
 		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
+		arg.Url,
 		arg.MinScore,
 		arg.OnlyBelowFloor,
 		arg.SalaryFloor,
@@ -374,27 +380,28 @@ WHERE ($1::text IS NULL OR j."sourceKey" = $1)
     OR j."company" ILIKE $9
     OR j."description" ILIKE $9
   )
-  AND ($10::int IS NULL OR mr."score" >= $10)
+  AND ($10::text IS NULL OR j."url" = $10)
+  AND ($11::int IS NULL OR mr."score" >= $11)
   AND (
-    (COALESCE($11::bool, false)
+    (COALESCE($12::bool, false)
       AND j."salaryMax" IS NOT NULL
       AND j."salaryCurrency" = 'USD'
-      AND j."salaryMax" < $12)
+      AND j."salaryMax" < $13)
     OR (
-      NOT COALESCE($11::bool, false)
+      NOT COALESCE($12::bool, false)
       AND (
-        $12::int IS NULL
+        $13::int IS NULL
         OR j."salaryMax" IS NULL
         OR j."salaryCurrency" IS DISTINCT FROM 'USD'
-        OR j."salaryMax" >= $12
+        OR j."salaryMax" >= $13
       )
     )
   )
-  AND (NOT COALESCE($13::bool, false) OR s."kind" = 'manual')
+  AND (NOT COALESCE($14::bool, false) OR s."kind" = 'manual')
 ORDER BY (s."kind" = 'manual' AND j."ingestedAt" > now() - interval '24 hours') DESC,
          mr."score" DESC NULLS LAST, j."ingestedAt" DESC
-OFFSET $14
-LIMIT $15
+OFFSET $15
+LIMIT $16
 `
 
 type ListJobsByScoreParams struct {
@@ -407,6 +414,7 @@ type ListJobsByScoreParams struct {
 	IncludeApplied *bool       `json:"include_applied"`
 	Remote         *bool       `json:"remote"`
 	Q              *string     `json:"q"`
+	Url            *string     `json:"url"`
 	MinScore       *int32      `json:"min_score"`
 	OnlyBelowFloor *bool       `json:"only_below_floor"`
 	SalaryFloor    *int32      `json:"salary_floor"`
@@ -473,6 +481,7 @@ func (q *Queries) ListJobsByScore(ctx context.Context, arg ListJobsByScoreParams
 		arg.IncludeApplied,
 		arg.Remote,
 		arg.Q,
+		arg.Url,
 		arg.MinScore,
 		arg.OnlyBelowFloor,
 		arg.SalaryFloor,

@@ -2,6 +2,7 @@ package http_test
 
 import (
 	"context"
+	"net/url"
 	"testing"
 
 	"github.com/job-finder/api/internal/dto"
@@ -11,10 +12,12 @@ import (
 )
 
 type fakeJobsProvider struct {
-	jobs []dto.JobDto
+	jobs       []dto.JobDto
+	lastParams jobs.ListParams
 }
 
 func (f *fakeJobsProvider) List(ctx context.Context, params jobs.ListParams) (dto.JobListResponse, error) {
+	f.lastParams = params
 	return dto.JobListResponse{Items: f.jobs, Total: int64(len(f.jobs))}, nil
 }
 
@@ -133,5 +136,33 @@ func TestJobsDocuments(t *testing.T) {
 	w := testutil.DoRequest(r, "GET", "/api/jobs/job-1/documents", nil, map[string]string{"id": "job-1"})
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+// The browser extension resolves the vacancy it is sitting on with ?url=, so
+// the query parameter has to survive the handler untouched.
+func TestJobsListPassesURLFilter(t *testing.T) {
+	fake := &fakeJobsProvider{}
+	h := &jobshttp.JobsHandler{Jobs: fake, Generation: &fakeDocLister{}}
+	r := testutil.SetupRouter(h.Mount)
+
+	want := "https://djinni.co/jobs/123-go-engineer"
+	w := testutil.DoRequest(r, "GET", "/api/jobs?url="+url.QueryEscape(want), nil, nil)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if fake.lastParams.URL == nil || *fake.lastParams.URL != want {
+		t.Errorf("URL = %v, want %q", fake.lastParams.URL, want)
+	}
+}
+
+func TestJobsListOmitsURLFilterWhenAbsent(t *testing.T) {
+	fake := &fakeJobsProvider{}
+	h := &jobshttp.JobsHandler{Jobs: fake, Generation: &fakeDocLister{}}
+	r := testutil.SetupRouter(h.Mount)
+
+	testutil.DoRequest(r, "GET", "/api/jobs", nil, nil)
+	if fake.lastParams.URL != nil {
+		t.Errorf("URL = %v, want nil", fake.lastParams.URL)
 	}
 }
