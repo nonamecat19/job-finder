@@ -225,6 +225,13 @@ type HostRetrievalState struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
+type IdempotencyLedger struct {
+	IdempotencyKey string             `json:"idempotency_key"`
+	WorkType       string             `json:"work_type"`
+	RunID          pgtype.UUID        `json:"run_id"`
+	AcceptedAt     pgtype.Timestamptz `json:"accepted_at"`
+}
+
 type Job struct {
 	ID                     pgtype.UUID      `json:"id"`
 	DedupeKey              string           `json:"dedupeKey"`

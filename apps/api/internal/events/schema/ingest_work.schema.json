@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jobfinder.internal/schema/ingest_work.schema.json",
+  "properties": {
+    "searchId": {
+      "type": "string"
+    },
+    "subscriptionId": {
+      "type": "string"
+    },
+    "sourceKey": {
+      "type": "string"
+    },
+    "activityId": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "searchId",
+    "sourceKey"
+  ],
+  "title": "ingest_work"
+}

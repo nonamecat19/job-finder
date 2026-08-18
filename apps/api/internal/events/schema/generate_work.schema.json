@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jobfinder.internal/schema/generate_work.schema.json",
+  "properties": {
+    "jobId": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "profileId": {
+      "type": "string"
+    },
+    "activityId": {
+      "type": "string"
+    },
+    "generationRunId": {
+      "type": "string"
+    },
+    "isRerun": {
+      "type": "boolean"
+    },
+    "rerunSections": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "snapshot": {
+      "type": "object"
+    },
+    "snapshot_hash": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "jobId",
+    "type",
+    "snapshot",
+    "snapshot_hash"
+  ],
+  "title": "generate_work"
+}

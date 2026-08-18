@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jobfinder.internal/schema/match_work.schema.json",
+  "properties": {
+    "jobId": {
+      "type": "string"
+    },
+    "activityId": {
+      "type": "string"
+    },
+    "snapshot": {
+      "type": "object"
+    },
+    "snapshot_hash": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "jobId",
+    "snapshot",
+    "snapshot_hash"
+  ],
+  "title": "match_work"
+}
