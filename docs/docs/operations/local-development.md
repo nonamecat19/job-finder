@@ -103,7 +103,7 @@ simultaneously.
 | `make test` | `test-go` + `test-react` |
 | `make test-go` | Go tests against `jobfinder_test` and Redis DB 1 |
 | `make test-react` | `npx vitest run` |
-| `make test-integration` | `test-db-setup`, wait for Postgres, `go test -tags integration` |
+| `make test-integration` | `go test -tags integration` — starts its own Postgres/RabbitMQ/ClickHouse containers (testcontainers), needs only Docker |
 | `make test-e2e` | compose up, then Playwright |
 | `make test-lint` | `test-go` + `test-react` |
 | `make test-db-setup` | drop and recreate `jobfinder_test` |

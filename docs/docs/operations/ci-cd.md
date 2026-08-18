@@ -135,7 +135,7 @@ change fails the build.
 
 | Not covered | Why | Mitigation |
 | --- | --- | --- |
-| Integration tests | needs Postgres | run `make test-integration` locally |
+| Integration tests against production data | fixtures only, by design | the suite seeds every row it asserts on |
 | E2E | needs the full stack | run `make test-e2e` locally |
 | Live smoke tests | hits real sites and paid APIs | run manually when diagnosing |
 | `index.ts` versus Go DTOs | `index.ts` is hand-maintained | review — see [shared types](/frontend/shared-types) |

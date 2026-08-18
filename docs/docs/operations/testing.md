@@ -22,7 +22,7 @@ flowchart TD
 | --- | --- | --- |
 | Go unit | `make test-go` | yes (`go-test`) |
 | Go vet | `go vet ./...` | yes (`go-vet`) |
-| Go integration | `make test-integration` | no |
+| Go integration | `make test-integration` | yes (`integration-test`) |
 | Frontend unit | `make test-react` | yes (`frontend-test`) |
 | Typecheck | `pnpm typecheck` | yes (`frontend-typecheck`) |
 | Codegen drift | `make sqlc-check`, `make tygo-check` | yes (`sqlc-drift`, `tygo-drift`) |
@@ -58,12 +58,29 @@ flowchart LR
 ## Database-backed tests
 
 ```bash
-make test-db-setup       # drop + recreate jobfinder_test
 make test-integration    # go test -tags integration ./...
 ```
 
 Suites are behind `//go:build integration`, and `internal/dbtest` is compiled only under
 that tag — it never links into the production binary.
+
+No database has to exist first. `internal/testinfra` starts a `pgvector/pgvector:pg16`
+container per test binary via [testcontainers](https://golang.testcontainers.org/), and
+`internal/dbtest` clones a migrated template database out of it per suite, so a run needs a
+Docker daemon and nothing else and can never read the dev stack's data. The same package
+starts RabbitMQ for `internal/events` and ClickHouse for the Langfuse retention tests — those
+suites fail rather than skip when a broker or server cannot be started.
+
+### The gateway config
+
+`internal/platform/llm/gateway_proxy_integration_test.go` runs the pinned LiteLLM image on the
+real `gateway/config.yaml`, with both provider base URLs pointed at an in-test stub upstream.
+No provider is contacted and no key is needed. It asserts what a YAML-level check cannot: that
+the proxy accepts the file at all (a config it rejects never passes the liveliness wait), that
+every scenario resolves to the tier the file declares, that `litellm_settings.fallbacks` still
+fails over to the declared tier when the primary errors, that an unknown scenario name 4xxs
+instead of finding a catch-all, and that `embed` requests the declared `output_dimension` —
+the width the schema's vector columns are built on.
 
 ### The shared-database lock
 

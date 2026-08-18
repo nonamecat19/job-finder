@@ -29,8 +29,8 @@ flowchart TD
 | Layer | Location | Needs | Run by |
 | --- | --- | --- | --- |
 | Unit | `internal/**/ *_test.go` | nothing | `make test-go`, CI `go-test` |
-| Repository / DB | helpers in `internal/dbtest` | Postgres | `make test-integration` |
-| Integration | files behind `//go:build integration` | Postgres, sometimes Redis | `make test-integration` |
+| Repository / DB | helpers in `internal/dbtest` | a Docker daemon (Postgres container) | `make test-integration` |
+| Integration | files behind `//go:build integration` | a Docker daemon (Postgres, RabbitMQ, ClickHouse, LiteLLM containers) | `make test-integration` |
 | Live smoke | `adapters/live/live_test.go` (library), `internal/*/application/live_test.go` | real network + credentials | manual |
 | Frontend unit | `apps/dashboard/**/*.test.ts(x)` | jsdom | `make test-react`, CI `frontend-test` |
 | E2E | `apps/dashboard/tests` (Playwright) | full stack up | `make test-e2e` |

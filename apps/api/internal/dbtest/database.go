@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -19,9 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/job-finder/api/internal/db"
+	"github.com/job-finder/api/internal/testinfra"
 )
-
-const defaultDSN = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
 
 const templateLockKey = 0x104B_F1DE
 
@@ -174,9 +172,14 @@ func dropDatabase(name string) {
 
 func maintenance() (*pgxpool.Pool, error) {
 	maintenanceOnce.Do(func() {
-		cfg, err := pgxpool.ParseConfig(baseDSN())
+		base, err := baseDSN()
 		if err != nil {
-			maintenanceErr = fmt.Errorf("parse DATABASE_URL: %w", err)
+			maintenanceErr = err
+			return
+		}
+		cfg, err := pgxpool.ParseConfig(base)
+		if err != nil {
+			maintenanceErr = fmt.Errorf("parse container DSN: %w", err)
 			return
 		}
 		cfg.MaxConns = 4
@@ -187,29 +190,40 @@ func maintenance() (*pgxpool.Pool, error) {
 	return maintenancePool, maintenanceErr
 }
 
-func baseDSN() string {
-	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		return dsn
-	}
-	return defaultDSN
+// baseDSN is the DSN of the containerised Postgres this process runs
+// against: the maintenance database used to create and drop the per-suite
+// clones. The container is started on first use and torn down when the test
+// binary exits, so no suite can see another run's leftovers.
+func baseDSN() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
+	defer cancel()
+	return testinfra.PostgresDSN(ctx)
 }
 
 func templateName() (string, error) {
-	u, err := url.Parse(baseDSN())
+	base, err := baseDSN()
 	if err != nil {
-		return "", fmt.Errorf("parse DATABASE_URL: %w", err)
+		return "", err
 	}
-	base := strings.TrimPrefix(u.Path, "/")
-	if base == "" {
-		return "", fmt.Errorf("DATABASE_URL has no database name")
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("parse container DSN: %w", err)
 	}
-	return truncateName(base + "_tmpl"), nil
+	name := strings.TrimPrefix(u.Path, "/")
+	if name == "" {
+		return "", fmt.Errorf("container DSN has no database name")
+	}
+	return truncateName(name + "_tmpl"), nil
 }
 
 func dsnFor(name string) (string, error) {
-	u, err := url.Parse(baseDSN())
+	base, err := baseDSN()
 	if err != nil {
-		return "", fmt.Errorf("parse DATABASE_URL: %w", err)
+		return "", err
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("parse container DSN: %w", err)
 	}
 	u.Path = "/" + name
 	return u.String(), nil

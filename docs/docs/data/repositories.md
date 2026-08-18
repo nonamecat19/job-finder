@@ -141,7 +141,7 @@ advisory locks when the connection closes.
 | Two writes that must agree | `WithinTx` |
 | Dynamic filters (job list) | build SQL over `db.Pool`, keep it in one place |
 | Vector similarity | `db.Pool` — pgvector operators are not expressible as a static sqlc query here |
-| A DB-backed test | `//go:build integration`, `dbtest.LockSharedDB`, run via `make test-integration` |
+| A DB-backed test | `//go:build integration`, `dbtest.New(t)` for a clone of the migrated template, run via `make test-integration` |
 
 ## Truncation helper
 

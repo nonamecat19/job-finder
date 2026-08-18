@@ -119,8 +119,7 @@ stateDiagram-v2
 ## Testing a migration
 
 ```bash
-make test-db-setup        # drops and recreates jobfinder_test
-make test-integration     # migrates, then runs the DB-backed tests
+make test-integration     # starts a Postgres container, migrates it, runs the DB-backed tests
 ```
 
 Each git worktree gets its own compose project and Postgres host port (derived in the

@@ -5,18 +5,20 @@ package db
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
+
+	"github.com/job-finder/api/internal/testinfra"
 )
 
 func TestPoolSaturationFailsFast(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://jobfinder:jobfinder@localhost:5432/jobfinder"
+	ctx := context.Background()
+
+	dsn, err := testinfra.PostgresDSN(ctx)
+	if err != nil {
+		t.Fatalf("start postgres container: %v", err)
 	}
 
-	ctx := context.Background()
 	pool, err := Open(ctx, dsn, WithPoolConfig(PoolConfig{
 		MaxConns:        2,
 		MinConns:        1,
