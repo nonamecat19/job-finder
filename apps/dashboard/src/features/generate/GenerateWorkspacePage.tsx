@@ -4,11 +4,12 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import type { GenerationRunDto, GenerationSectionDto } from '@job-finder/shared';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Tile, TileEmpty, TileError, TileSkeleton } from '../../components/layout';
-import { Button, Field, Select, Spinner, Tabs } from '../../components/ui';
+import { Button, Spinner, Tabs } from '../../components/ui';
 import { PreviewHighlightProvider } from './preview/highlight';
 import { useProfiles } from '../profile/hooks';
 import CertificationsBlock from './components/CertificationsBlock';
 import EducationBlock from './components/EducationBlock';
+import GenerateSettingsTab, { GROUNDING_LEVELS } from './components/GenerateSettingsTab';
 import JobPickerList from './components/JobPickerList';
 import ProjectsBlock from './components/ProjectsBlock';
 import ResumePreviewPane from './components/ResumePreviewPane';
@@ -24,11 +25,8 @@ import {
   useRewriteGenerationItem,
   useSetSectionEnabled,
   useStartGenerationRun,
-  useSummaryModel,
   useToggleGenerationItem,
 } from './hooks';
-
-const GROUNDING_LEVELS = ['strict', 'moderate', 'aggressive'] as const;
 
 // T020/T032: the two-pane shell — generated items on the left, assembled as
 // Summary / Work Experience / Skills blocks (US1), a read-only vacancy card
@@ -52,14 +50,13 @@ export default function GenerateWorkspacePage() {
   const rerunRun = useRerunGenerationRun(runId);
   const rewriteItem = useRewriteGenerationItem(runId);
   const setSectionEnabled = useSetSectionEnabled(runId);
-  const { data: summaryModel } = useSummaryModel();
 
   const [groundingLevel, setGroundingLevel] = useState<(typeof GROUNDING_LEVELS)[number]>('moderate');
   const [summaryOptionId, setSummaryOptionId] = useState<string | undefined>(undefined);
   // The preview is the thing being judged, so it gets the room: two thirds of
   // the workspace by default, and the whole viewport on demand.
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
-  const [leftTab, setLeftTab] = useState<'resume' | 'job'>('resume');
+  const [leftTab, setLeftTab] = useState<'resume' | 'job' | 'settings'>('resume');
 
   const vacancyJobId = run?.jobId ?? jobId;
 
@@ -127,39 +124,6 @@ export default function GenerateWorkspacePage() {
   // on the right, and no page chrome above either of them.
   const leftColumn = (
     <div className="flex min-h-0 w-full min-w-0 flex-col gap-4 lg:min-w-[26rem] lg:flex-1">
-      {!run ? (
-        <div className="flex flex-col gap-2">
-          <Field label="Grounding">
-            <Select
-              aria-label="Grounding level"
-              value={groundingLevel}
-              onChange={(e) => setGroundingLevel(e.target.value as typeof groundingLevel)}
-            >
-              {GROUNDING_LEVELS.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {summaryModel ? (
-            <Field label="Summary writer">
-              <Select
-                aria-label="Summary writer"
-                value={summaryOptionId ?? summaryModel.optionId}
-                onChange={(e) => setSummaryOptionId(e.target.value)}
-              >
-                {summaryModel.options.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label} — {o.cost}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : null}
-        </div>
-      ) : null}
-
       {startRun.isError ? <p className="text-sm text-danger">{(startRun.error as Error).message}</p> : null}
       {rerunRun.isError ? <p className="text-sm text-danger">{(rerunRun.error as Error).message}</p> : null}
 
@@ -170,6 +134,7 @@ export default function GenerateWorkspacePage() {
             tabs={[
               { id: 'resume', label: 'Generated resume' },
               { id: 'job', label: 'Job description' },
+              { id: 'settings', label: 'Settings' },
             ]}
             active={leftTab}
             onChange={(id) => setLeftTab(id as typeof leftTab)}
@@ -177,10 +142,19 @@ export default function GenerateWorkspacePage() {
         }
         className="min-h-0 flex-1"
         scroll
-        scrollLabel={leftTab === 'resume' ? 'Generated resume sections' : 'Job description'}
+        scrollLabel={leftTab === 'resume' ? 'Generated resume sections' : leftTab === 'job' ? 'Job description' : 'Settings'}
       >
         {leftTab === 'job' ? (
           <VacancySummaryBar jobId={vacancyJobId} bare />
+        ) : leftTab === 'settings' ? (
+          <GenerateSettingsTab
+            run={run}
+            onToggleEnabled={(sectionId, enabled) => setSectionEnabled.mutate({ sectionId, enabled })}
+            groundingLevel={groundingLevel}
+            onGroundingLevelChange={setGroundingLevel}
+            summaryOptionId={summaryOptionId}
+            onSummaryOptionIdChange={setSummaryOptionId}
+          />
         ) : tileState === 'loading' ? (
           <TileSkeleton className="p-0" />
         ) : tileState === 'error' ? (

@@ -359,6 +359,7 @@ export interface MatchableSection {
   kind: string;
   entryLabel?: string;
   position: number;
+  enabled?: boolean;
   items: {
     id: string;
     text: string;
@@ -374,6 +375,7 @@ export function matchableItems(sections: MatchableSection[]): MatchableItem[] {
   // position), skills, then everything else (projects, certifications).
   const rank = (kind: string) => (kind === 'summary' ? 0 : kind === 'experience' ? 1 : kind === 'skills' ? 2 : 3);
   return [...sections]
+    .filter((section) => section.enabled !== false)
     .sort((a, b) => rank(a.kind) - rank(b.kind) || a.position - b.position)
     .flatMap((section) => {
       const included = section.items.filter((i) => i.selected && !i.unavailable);

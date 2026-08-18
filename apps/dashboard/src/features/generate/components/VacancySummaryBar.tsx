@@ -38,7 +38,7 @@ export default function VacancySummaryBar({ jobId, bare = false }: { jobId: stri
         <p
           className={
             bare
-              ? 'mt-2.5 max-w-[78ch] whitespace-pre-wrap text-sm leading-relaxed text-muted'
+              ? 'mt-2.5 whitespace-pre-wrap text-sm leading-relaxed text-muted'
               : 'mt-2.5 line-clamp-2 max-w-[78ch] text-sm leading-relaxed text-muted'
           }
         >

@@ -22,7 +22,7 @@ vi.mock('../job-detail/hooks', () => ({
   useJobDetail: vi.fn(),
 }));
 vi.mock('../../lib/api', () => ({
-  api: { jobs: { list: vi.fn() } },
+  api: { jobs: { list: vi.fn() }, settings: { getResumeShape: vi.fn() } },
 }));
 
 import { api } from '../../lib/api';
@@ -264,6 +264,9 @@ describe('GenerateWorkspacePage', () => {
     // default tab.
     expect(screen.getByRole('tab', { name: /generated resume/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /generate resume/i })).toBeInTheDocument();
+
+    // Grounding / summary writer live under the Settings tab.
+    await user.click(screen.getByRole('tab', { name: /settings/i }));
     expect(screen.getByLabelText(/grounding level/i)).toBeInTheDocument();
 
     // Vacancy card (read-only job display) lives under the other tab.
