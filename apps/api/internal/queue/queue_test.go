@@ -2,6 +2,8 @@ package queue
 
 import (
 	"testing"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func TestQueueTypes(t *testing.T) {
@@ -115,7 +117,7 @@ func TestGeneratePayloadWithoutProfile(t *testing.T) {
 	}
 }
 
-func TestRedisOpt(t *testing.T) {
+func TestNewRedisClient(t *testing.T) {
 	tests := []struct {
 		name     string
 		redisURL string
@@ -150,19 +152,29 @@ func TestRedisOpt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := RedisOpt(tt.redisURL)
+			_, err := NewRedisClient(tt.redisURL)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("RedisOpt() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("NewRedisClient() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestRedisOptDefault(t *testing.T) {
-	opt, err := RedisOpt("")
+func redisClientOptions(t *testing.T, redisURL string) *redis.Options {
+	t.Helper()
+	client, err := NewRedisClient(redisURL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	rc, ok := client.(*redis.Client)
+	if !ok {
+		t.Fatalf("expected *redis.Client, got %T", client)
+	}
+	return rc.Options()
+}
+
+func TestNewRedisClientDefault(t *testing.T) {
+	opt := redisClientOptions(t, "")
 
 	if opt.Addr != "localhost:6379" {
 		t.Errorf("expected addr 'localhost:6379', got %q", opt.Addr)
@@ -175,33 +187,24 @@ func TestRedisOptDefault(t *testing.T) {
 	}
 }
 
-func TestRedisOptCustom(t *testing.T) {
-	opt, err := RedisOpt("redis://custom-host:6380")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+func TestNewRedisClientCustom(t *testing.T) {
+	opt := redisClientOptions(t, "redis://custom-host:6380")
 
 	if opt.Addr != "custom-host:6380" {
 		t.Errorf("expected addr 'custom-host:6380', got %q", opt.Addr)
 	}
 }
 
-func TestRedisOptWithPassword(t *testing.T) {
-	opt, err := RedisOpt("redis://:secret@localhost:6379")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+func TestNewRedisClientWithPassword(t *testing.T) {
+	opt := redisClientOptions(t, "redis://:secret@localhost:6379")
 
 	if opt.Password != "secret" {
 		t.Errorf("expected password 'secret', got %q", opt.Password)
 	}
 }
 
-func TestRedisOptWithDB(t *testing.T) {
-	opt, err := RedisOpt("redis://localhost:6379/5")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+func TestNewRedisClientWithDB(t *testing.T) {
+	opt := redisClientOptions(t, "redis://localhost:6379/5")
 
 	if opt.DB != 5 {
 		t.Errorf("expected DB 5, got %d", opt.DB)

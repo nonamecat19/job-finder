@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -167,10 +166,10 @@ type countingEnqueuer struct {
 	types []string
 }
 
-func (e *countingEnqueuer) EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error) {
+func (e *countingEnqueuer) EnqueueContext(ctx context.Context, workType string, payload []byte) error {
 	e.count++
-	e.types = append(e.types, task.Type())
-	return &asynq.TaskInfo{}, nil
+	e.types = append(e.types, workType)
+	return nil
 }
 
 func dueSubscription() sqlcgen.Subscription {

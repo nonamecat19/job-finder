@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
@@ -26,12 +25,12 @@ import (
 // returning the whole history.
 const defaultRunListLimit = 20
 
-// SetAsynqClient installs the queue client the workspace uses to enqueue a
+// SetEnqueuer installs the queue client the workspace uses to enqueue a
 // run's background processing (StartRun, below). A setter rather than a
 // NewService parameter for the same reason SetSummaryModelProvider is: it
 // keeps every existing call to NewService, and every test that constructs a
 // Service without exercising this feature, unchanged.
-func (s *Service) SetAsynqClient(c *asynq.Client) { s.asynqClient = c }
+func (s *Service) SetEnqueuer(e queue.Enqueuer) { s.enqueuer = e }
 
 // StartGenerationRun is the synchronous half of `POST /v1/generations`
 // (rest-api.md): it resolves the profile and vacancy, resolves ShapeConfig /
@@ -168,7 +167,7 @@ func (s *Service) StartGenerationRun(ctx context.Context, req dto.StartGeneratio
 		rec.Step(ctx, "queued", map[string]any{"runId": runIDStr})
 	}
 
-	if s.asynqClient != nil {
+	if s.enqueuer != nil {
 		payload, err := json.Marshal(queue.GeneratePayload{
 			JobID:           derefOrEmpty(req.JobID),
 			Type:            string(dto.DocumentTypeResume),
@@ -179,11 +178,7 @@ func (s *Service) StartGenerationRun(ctx context.Context, req dto.StartGeneratio
 		if err != nil {
 			return "", "", err
 		}
-		genOpts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate)}
-		if actID != nil {
-			genOpts = append(genOpts, asynq.TaskID(*actID))
-		}
-		if _, err := s.asynqClient.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload), genOpts...); err != nil {
+		if err := s.enqueuer.EnqueueContext(ctx, queue.TypeGenerate, payload); err != nil {
 			return "", "", err
 		}
 	}

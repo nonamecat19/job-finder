@@ -12,6 +12,7 @@ type Config struct {
 
 	DatabaseURL string `mapstructure:"DATABASE_URL"`
 	RedisURL    string `mapstructure:"REDIS_URL"`
+	RabbitMQURL string `mapstructure:"RABBITMQ_URL"`
 
 	GatewayURL       string `mapstructure:"GATEWAY_URL"`
 	LiteLLMMasterKey string `mapstructure:"LITELLM_MASTER_KEY"`
@@ -162,6 +163,9 @@ func validateAISurface(cfg *Config) error {
 	}
 	if cfg.LiteLLMMasterKey == "" {
 		return fmt.Errorf("config: LITELLM_MASTER_KEY is required")
+	}
+	if cfg.RabbitMQURL == "" {
+		return fmt.Errorf("config: RABBITMQ_URL is required")
 	}
 	return nil
 }

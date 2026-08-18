@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	jsadapter "github.com/nonamecat19/job-scraper/adapter"
@@ -31,12 +30,12 @@ const unhealthyAfterConsecutiveFailures = 3
 const triggerScheduled = "scheduled"
 
 func permanent(err error) error {
-	return fmt.Errorf("%w: %w", asynq.SkipRetry, err)
+	return fmt.Errorf("%w: %w", queue.ErrSkipRetry, err)
 }
 
 func lastAttempt(ctx context.Context) bool {
-	retried, ok1 := asynq.GetRetryCount(ctx)
-	maxRetry, ok2 := asynq.GetMaxRetry(ctx)
+	retried, ok1 := queue.GetRetryCount(ctx)
+	maxRetry, ok2 := queue.GetMaxRetry(ctx)
 	if !ok1 || !ok2 {
 		return true
 	}
@@ -70,7 +69,7 @@ func NewHandler(q domain.SearchRepository, registry *jsadapter.Registry, sources
 	return h
 }
 
-func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
+func (h *Handler) ProcessTask(ctx context.Context, t *queue.Task) (err error) {
 	var payload queue.IngestPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return permanent(fmt.Errorf("ingestion: invalid payload: %w", err))
@@ -271,11 +270,7 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, actID *string)
 	if err != nil {
 		return
 	}
-	opts := []asynq.Option{asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)}
-	if actID != nil {
-		opts = append(opts, asynq.TaskID(*actID))
-	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload), opts...); err != nil {
+	if err := h.client.EnqueueContext(ctx, queue.TypeMatch, payload); err != nil {
 		slog.Warn("ingestion: enqueue match failed", "job", jobID, "error", err)
 	}
 }
@@ -285,11 +280,7 @@ func (h *Handler) enqueueGhostScore(ctx context.Context, jobID string, actID *st
 	if err != nil {
 		return
 	}
-	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGhostScore)}
-	if actID != nil {
-		opts = append(opts, asynq.TaskID(*actID))
-	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGhostScore, payload), opts...); err != nil {
+	if err := h.client.EnqueueContext(ctx, queue.TypeGhostScore, payload); err != nil {
 		slog.Warn("ingestion: enqueue ghost score failed", "job", jobID, "error", err)
 	}
 }
@@ -299,11 +290,7 @@ func (h *Handler) enqueueEnrich(ctx context.Context, jobID string, j dto.Normali
 	if err != nil {
 		return err
 	}
-	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)}
-	if actID != nil {
-		opts = append(opts, asynq.TaskID(*actID))
-	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload), opts...); err != nil {
+	if err := h.client.EnqueueContext(ctx, queue.TypeEnrich, payload); err != nil {
 		return fmt.Errorf("ingestion: enqueue enrich: %w", err)
 	}
 	return nil

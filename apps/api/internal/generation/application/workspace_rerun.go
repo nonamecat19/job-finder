@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
@@ -105,7 +104,7 @@ func (s *Service) RerunGenerationRun(ctx context.Context, runID string, req dto.
 		rec.Step(ctx, "queued", map[string]any{"runId": runIDStr, "sections": sectionIDs})
 	}
 
-	if s.asynqClient != nil {
+	if s.enqueuer != nil {
 		payload, mErr := json.Marshal(queue.GeneratePayload{
 			JobID:           derefOrEmpty(dbutil.UUIDStringPtr(run.JobID)),
 			Type:            string(dto.DocumentTypeResume),
@@ -118,11 +117,7 @@ func (s *Service) RerunGenerationRun(ctx context.Context, runID string, req dto.
 		if mErr != nil {
 			return "", "", mErr
 		}
-		genOpts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate)}
-		if actID != nil {
-			genOpts = append(genOpts, asynq.TaskID(*actID))
-		}
-		if _, err := s.asynqClient.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload), genOpts...); err != nil {
+		if err := s.enqueuer.EnqueueContext(ctx, queue.TypeGenerate, payload); err != nil {
 			return "", "", err
 		}
 	}

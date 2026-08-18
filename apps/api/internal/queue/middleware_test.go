@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -60,9 +59,9 @@ func (f *fakeActivityStore) SetActivityRunTimeout(ctx context.Context, arg sqlcg
 	return nil
 }
 
-func taskWithActivityID(id string) *asynq.Task {
+func taskWithActivityID(id string) *Task {
 	payload, _ := json.Marshal(map[string]string{"jobId": "job-1", "activityId": id})
-	return asynq.NewTask("match", payload)
+	return NewTask("match", payload)
 }
 
 // Gate has a single concurrency pool since 044 (T027): ClassResolver is no
@@ -134,7 +133,7 @@ func TestDeadlineMiddleware_ExceedingMaxDurationFinalizesTimedOut(t *testing.T) 
 	dm := NewDeadlineMiddleware(policy, store, 5*time.Millisecond)
 
 	downstreamEnqueued := false
-	handler := func(ctx context.Context, t *asynq.Task) error {
+	handler := func(ctx context.Context, t *Task) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -171,7 +170,7 @@ func TestDeadlineMiddleware_SuccessWithinDeadline(t *testing.T) {
 	policy := TaskPolicy{MaxDuration: 200 * time.Millisecond}
 	dm := NewDeadlineMiddleware(policy, store, 5*time.Millisecond)
 
-	handler := func(ctx context.Context, t *asynq.Task) error { return nil }
+	handler := func(ctx context.Context, t *Task) error { return nil }
 	wrapped := dm.Middleware(handler)
 
 	if err := wrapped(context.Background(), taskWithActivityID(testActivityID)); err != nil {
@@ -189,7 +188,7 @@ func TestDeadlineMiddleware_HeartbeatTicksWhileRunning(t *testing.T) {
 	policy := TaskPolicy{MaxDuration: 500 * time.Millisecond}
 	dm := NewDeadlineMiddleware(policy, store, 10*time.Millisecond)
 
-	handler := func(ctx context.Context, t *asynq.Task) error {
+	handler := func(ctx context.Context, t *Task) error {
 		time.Sleep(60 * time.Millisecond)
 		return nil
 	}
@@ -211,7 +210,7 @@ func TestGate_Middleware_AcquiresAndReleases(t *testing.T) {
 
 	var running int32
 	var maxRunning int32
-	handler := func(ctx context.Context, task *asynq.Task) error {
+	handler := func(ctx context.Context, task *Task) error {
 		n := atomic.AddInt32(&running, 1)
 		if n > atomic.LoadInt32(&maxRunning) {
 			atomic.StoreInt32(&maxRunning, n)

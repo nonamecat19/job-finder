@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/hibiken/asynq"
-
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/matching/application"
 	"github.com/job-finder/api/internal/notifier"
@@ -35,7 +33,7 @@ func NewHandler(svc *application.Service, notifier *notifier.Service, autogen Au
 	return &Handler{svc: svc, notifier: notifier, autogen: autogen, generator: generator}
 }
 
-func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
+func (h *Handler) ProcessTask(ctx context.Context, t *queue.Task) (err error) {
 	var payload queue.MatchPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("matching: invalid payload: %w", err)
@@ -50,9 +48,10 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 		rec.Start(ctx)
 	}
 
+	retrying := false
 	defer func() {
 		if rec != nil {
-			if err != nil {
+			if err != nil && !retrying {
 				rec.Fail(ctx, err)
 			}
 		}
@@ -61,11 +60,18 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	result, err := h.svc.MatchJob(ctx, payload.JobID, rec)
 	if err != nil {
 		if errors.Is(err, llm.ErrRateLimited) {
-			slog.Warn("matching cancelled: upstream rate limited", "jobId", payload.JobID)
-			if rec != nil {
-				rec.Cancel(ctx, err.Error())
+			n, _ := queue.GetRetryCount(ctx)
+			max, _ := queue.GetMaxRetry(ctx)
+			if n >= max {
+				slog.Warn("matching cancelled: upstream rate limited, retries exhausted", "jobId", payload.JobID)
+				if rec != nil {
+					rec.Cancel(ctx, err.Error())
+				}
+				return nil
 			}
-			return nil
+			slog.Warn("matching retrying: upstream rate limited", "jobId", payload.JobID, "attempt", n)
+			retrying = true
+			return err
 		}
 		if errors.Is(err, application.ErrNoProfileConfig) {
 			slog.Warn("matching skipped: no profile config", "jobId", payload.JobID)

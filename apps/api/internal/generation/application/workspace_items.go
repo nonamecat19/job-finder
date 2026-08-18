@@ -15,7 +15,7 @@ import (
 
 // SetTxRunner installs the transactional port PatchGenerationItem and
 // ReorderSection need (T025/T026). A setter for the same reason
-// SetAsynqClient is: it keeps every existing NewService call, and every test
+// SetEnqueuer is: it keeps every existing NewService call, and every test
 // that doesn't exercise item mutation, unchanged.
 func (s *Service) SetTxRunner(tx domain.TxRunner) { s.tx = tx }
 

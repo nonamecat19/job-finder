@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/hibiken/asynq"
 
 	jsadapter "github.com/nonamecat19/job-scraper/adapter"
 
@@ -216,8 +215,7 @@ func (s *SearchService) RunSearch(ctx context.Context, searchID string) ([]strin
 		if err != nil {
 			return nil, err
 		}
-		if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
-			asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)); err != nil {
+		if err := s.client.EnqueueContext(ctx, queue.TypeIngest, payload); err != nil {
 			return nil, fmt.Errorf("ingestion: enqueue %s: %w", key, err)
 		}
 	}
@@ -248,8 +246,7 @@ func (s *SearchService) RunSource(ctx context.Context, sourceKey string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
-		asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)); err != nil {
+	if err := s.client.EnqueueContext(ctx, queue.TypeIngest, payload); err != nil {
 		return fmt.Errorf("ingestion: enqueue source %s: %w", sourceKey, err)
 	}
 	return nil
@@ -294,8 +291,7 @@ func (s *SearchService) RunSubscription(ctx context.Context, subscriptionID stri
 	if err != nil {
 		return err
 	}
-	if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload),
-		asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)); err != nil {
+	if err := s.client.EnqueueContext(ctx, queue.TypeIngest, payload); err != nil {
 		return fmt.Errorf("ingestion: enqueue subscription %s: %w", subscriptionID, err)
 	}
 	return nil
@@ -346,11 +342,7 @@ func (s *SearchService) ReconcileUnmatched(ctx context.Context) (int, error) {
 		if err != nil {
 			continue
 		}
-		opts := []asynq.Option{asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)}
-		if actID != nil {
-			opts = append(opts, asynq.TaskID(*actID))
-		}
-		if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, payload), opts...); err != nil {
+		if err := s.client.EnqueueContext(ctx, queue.TypeMatch, payload); err != nil {
 			slog.Warn("ingestion: reconcile enqueue match failed", "job", jobID, "error", err)
 			continue
 		}

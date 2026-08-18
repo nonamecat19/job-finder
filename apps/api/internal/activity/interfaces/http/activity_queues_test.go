@@ -5,30 +5,27 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/hibiken/asynq"
-
 	activityhttp "github.com/job-finder/api/internal/activity/interfaces/http"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/events"
 	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/testutil"
 )
 
 type fakeInspector struct {
-	infos map[string]*asynq.QueueInfo
+	infos map[string]events.QueueInfo
 	errs  map[string]error
 }
 
-func (f *fakeInspector) CancelProcessing(id string) error  { return nil }
-func (f *fakeInspector) DeleteTask(queue, id string) error { return nil }
-func (f *fakeInspector) GetQueueInfo(qname string) (*asynq.QueueInfo, error) {
+func (f *fakeInspector) QueueDepth(qname string) (events.QueueInfo, error) {
 	if err, ok := f.errs[qname]; ok {
-		return nil, err
+		return events.QueueInfo{}, err
 	}
 	if info, ok := f.infos[qname]; ok {
 		return info, nil
 	}
-	return &asynq.QueueInfo{Queue: qname}, nil
+	return events.QueueInfo{}, nil
 }
 
 type fakeResolver struct{ class llm.ProviderClass }
@@ -47,7 +44,7 @@ func testPolicies() []queue.TaskPolicy {
 }
 
 func TestActivityQueues_FixedOrderingAndProviderClass(t *testing.T) {
-	insp := &fakeInspector{infos: map[string]*asynq.QueueInfo{}}
+	insp := &fakeInspector{infos: map[string]events.QueueInfo{}}
 	resolvers := map[string]queue.ClassResolver{
 		queue.QueueMatch:       fakeResolver{llm.ProviderClassHosted},
 		queue.QueueGenerate:    fakeResolver{llm.ProviderClassLocal},
@@ -64,7 +61,7 @@ func TestActivityQueues_FixedOrderingAndProviderClass(t *testing.T) {
 	var out dto.QueueBacklogResponse
 	testutil.ParseJSON(w, &out)
 
-	wantOrder := []string{"ingest", "match", "generate", "enrich", "salary:infer", "ghost:score"}
+	wantOrder := []string{"ingest", "match", "generate", "enrich", "salary", "ghost"}
 	if len(out.Queues) != len(wantOrder) {
 		t.Fatalf("expected %d queues, got %d", len(wantOrder), len(out.Queues))
 	}
@@ -96,10 +93,9 @@ func TestActivityQueues_FixedOrderingAndProviderClass(t *testing.T) {
 	}
 }
 
-func TestActivityQueues_EtaNilWhenThroughputOrPendingZero(t *testing.T) {
-	insp := &fakeInspector{infos: map[string]*asynq.QueueInfo{
-		"match":       {Queue: "match", Pending: 100, Processed: 0},
-		"ghost:score": {Queue: "ghost:score", Pending: 0, Processed: 50},
+func TestActivityQueues_PendingAndActiveFromMessageCounts(t *testing.T) {
+	insp := &fakeInspector{infos: map[string]events.QueueInfo{
+		"match": {MessagesReady: 100, MessagesUnacked: 3},
 	}}
 	h := activityhttp.NewActivityHandler(nil, nil, insp, testPolicies(), nil)
 	r := testutil.SetupRouter(h.Mount)
@@ -109,19 +105,21 @@ func TestActivityQueues_EtaNilWhenThroughputOrPendingZero(t *testing.T) {
 	testutil.ParseJSON(w, &out)
 
 	for _, q := range out.Queues {
-		if q.Queue == "match" && q.EtaSeconds != nil {
-			t.Errorf("expected nil etaSeconds when throughput is 0, got %v", *q.EtaSeconds)
-		}
-		if q.Queue == "ghost:score" && q.EtaSeconds != nil {
-			t.Errorf("expected nil etaSeconds when pending is 0, got %v", *q.EtaSeconds)
+		if q.Queue == "match" {
+			if q.Pending != 100 {
+				t.Errorf("expected pending 100, got %d", q.Pending)
+			}
+			if q.Active != 3 {
+				t.Errorf("expected active 3, got %d", q.Active)
+			}
 		}
 	}
 }
 
 func TestActivityQueues_SingleFailingQueueYieldsPerEntryError(t *testing.T) {
 	insp := &fakeInspector{
-		infos: map[string]*asynq.QueueInfo{},
-		errs:  map[string]error{"match": errors.New("redis timeout")},
+		infos: map[string]events.QueueInfo{},
+		errs:  map[string]error{"match": errors.New("mgmt api timeout")},
 	}
 	h := activityhttp.NewActivityHandler(nil, nil, insp, testPolicies(), nil)
 	r := testutil.SetupRouter(h.Mount)

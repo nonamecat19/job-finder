@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/hibiken/asynq"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/nonamecat19/job-scraper/model"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/config"
 	"github.com/job-finder/api/internal/db"
+	"github.com/job-finder/api/internal/events"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/scraping"
 	"github.com/nonamecat19/job-scraper/adapters/djinni"
@@ -20,13 +22,20 @@ import (
 )
 
 type Platform struct {
-	Config         *config.Config
-	DB             *db.DB
-	Logger         *slog.Logger
-	RedisOpt       asynq.RedisClientOpt
-	AsynqClient    *asynq.Client
-	AsynqInspector *asynq.Inspector
-	Scraping       *scraping.HTTPScraper
+	Config      *config.Config
+	DB          *db.DB
+	Logger      *slog.Logger
+	RedisClient redis.UniversalClient
+	Scraping    *scraping.HTTPScraper
+
+	// RabbitConn is the connection topology is declared on and the publisher
+	// publishes over. Consumers (servers.go) dial their own connections —
+	// each Consumer reconnects independently on failure (M3-4).
+	RabbitConn  *amqp.Connection
+	Publisher   *events.Publisher
+	Enqueuer    queue.Enqueuer
+	RabbitAdmin *events.Admin
+	Metrics     *events.Metrics
 
 	Policies []queue.TaskPolicy
 
@@ -87,15 +96,50 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 
 	scrapingSvc := scraping.New()
 
-	redisOpt, err := queue.RedisOpt(cfg.RedisURL)
+	redisClient, err := queue.NewRedisClient(cfg.RedisURL)
 	if err != nil {
 		database.Close()
 		scrapingSvc.Close()
 		return nil, err
 	}
 
-	asynqInspector := asynq.NewInspector(redisOpt)
-	sweeper := activity.NewSweeper(database.Queries, asynqInspector,
+	rabbitConn, err := amqp.Dial(cfg.RabbitMQURL)
+	if err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		return nil, fmt.Errorf("platform: dial rabbitmq: %w", err)
+	}
+	rabbitCh, err := rabbitConn.Channel()
+	if err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		_ = rabbitConn.Close()
+		return nil, fmt.Errorf("platform: open rabbitmq channel: %w", err)
+	}
+	if err := events.DeclareTopology(rabbitCh); err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		_ = rabbitConn.Close()
+		return nil, err
+	}
+	publisher, err := events.NewPublisher(rabbitCh, 0)
+	if err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		_ = rabbitConn.Close()
+		return nil, err
+	}
+	var enqueuer queue.Enqueuer = &events.PublishEnqueuer{Publisher: publisher}
+
+	admin, err := events.NewAdmin(cfg.RabbitMQURL)
+	if err != nil {
+		database.Close()
+		scrapingSvc.Close()
+		_ = rabbitConn.Close()
+		return nil, err
+	}
+
+	sweeper := activity.NewSweeper(database.Queries,
 		cfg.ActivityStaleAfter, cfg.ActivitySweepInterval, cfg.ActivityQueuedGrace)
 
 	sourceConfig := &lateSourceConfig{}
@@ -113,15 +157,20 @@ func buildPlatform(ctx context.Context, cfg *config.Config) (*Platform, error) {
 	}
 
 	return &Platform{
-		Config:         cfg,
-		DB:             database,
-		Logger:         slog.Default(),
-		RedisOpt:       redisOpt,
-		AsynqClient:    asynq.NewClient(redisOpt),
-		AsynqInspector: asynqInspector,
-		Scraping:       scrapingSvc,
-		Policies:       policies,
-		Sweeper:        sweeper,
+		Config:      cfg,
+		DB:          database,
+		Logger:      slog.Default(),
+		RedisClient: redisClient,
+		Scraping:    scrapingSvc,
+
+		RabbitConn:  rabbitConn,
+		Publisher:   publisher,
+		Enqueuer:    enqueuer,
+		RabbitAdmin: admin,
+		Metrics:     events.NewMetrics(),
+
+		Policies: policies,
+		Sweeper:  sweeper,
 
 		SourceConfig:    sourceConfig,
 		DjinniSession:   djinniSession,

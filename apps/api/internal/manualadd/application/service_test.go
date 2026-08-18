@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -122,9 +121,9 @@ func (fakeJobs) Get(_ context.Context, id string) (dto.JobDto, error) {
 
 type fakeEnqueuer struct{ types []string }
 
-func (f *fakeEnqueuer) EnqueueContext(_ context.Context, task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
-	f.types = append(f.types, task.Type())
-	return &asynq.TaskInfo{}, nil
+func (f *fakeEnqueuer) EnqueueContext(_ context.Context, workType string, _ []byte) error {
+	f.types = append(f.types, workType)
+	return nil
 }
 
 // stubAdapter is a PostingReader whose behaviour each test dictates.

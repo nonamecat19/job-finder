@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 
 	activityhttp "github.com/job-finder/api/internal/activity/interfaces/http"
@@ -74,6 +76,7 @@ import (
 	postagehttp "github.com/job-finder/api/internal/postage/interfaces/http"
 	"github.com/job-finder/api/internal/profile"
 	profilehttp "github.com/job-finder/api/internal/profile/interfaces/http"
+	"github.com/job-finder/api/internal/events"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/recruiter"
 	recruiterhttp "github.com/job-finder/api/internal/recruiter/interfaces/http"
@@ -226,8 +229,8 @@ type ingestionHandles struct {
 }
 
 func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
-	ingestionSvc := application.NewSearchService(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient)
-	ingestionHandler := worker.NewHandler(p.DB.Queries, sources.Registry, sources.Sources, p.AsynqClient,
+	ingestionSvc := application.NewSearchService(p.DB.Queries, sources.Registry, sources.Sources, p.Enqueuer)
+	ingestionHandler := worker.NewHandler(p.DB.Queries, sources.Registry, sources.Sources, p.Enqueuer,
 		worker.WithTxRunner(p.DB),
 		worker.WithChunkSize(p.Config.IngestPersistChunkSize),
 	)
@@ -338,7 +341,7 @@ func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Servi
 		notifier.WithMatchThreshold(p.Config.MatchNotifyScoreThreshold),
 		notifier.WithRateLimitCap(p.Config.MatchNotifyRateLimit),
 	)
-	jobsSvc := jobs.NewService(p.DB.Queries, p.AsynqClient, p.Config.SalaryFloorUsd)
+	jobsSvc := jobs.NewService(p.DB.Queries, p.Enqueuer, p.Config.SalaryFloorUsd)
 	aiFeatureSvc, err := aifeature.NewService(ctx, p.DB.Queries)
 	if err != nil {
 		return nil, err
@@ -416,7 +419,7 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	// 042: the workspace run's background half (StartRun) is dispatched the
 	// same way every other async pipeline in this codebase is — enqueued on
 	// the existing `generate` queue and picked up by generation.Handler.
-	generationSvc.SetAsynqClient(p.AsynqClient)
+	generationSvc.SetEnqueuer(p.Enqueuer)
 	// 042 T025/T026: item/section mutations take a row-level lock on the run
 	// and write in the same transaction (rest-api.md) — *db.DB.WithinTx is
 	// the TxRunner.
@@ -448,7 +451,7 @@ func composeSubscriptions(p *Platform, sourcesSvc *application.Service, ingestio
 func composeManualAdd(p *Platform, sources *sourcesHandles, jobsSvc *jobs.Service) *manualaddhttp.ManualAddHandler {
 	subsSvc := subscriptions.NewService(p.DB.Queries, sources.Sources)
 	manualSvc := manualadd.NewService(
-		p.DB.Queries, sources.Sources, subsSvc, sources.Registry, jobsSvc, p.AsynqClient,
+		p.DB.Queries, sources.Sources, subsSvc, sources.Registry, jobsSvc, p.Enqueuer,
 		manualadd.WithTxRunner(p.DB),
 		// User Story 3 has shipped, so no_reader and incomplete answer with a
 		// draft rather than dead-ending (FR-019, FR-023).
@@ -470,7 +473,7 @@ func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc ports.
 		jobleads.Source{Scraping: p.Scraping, Session: p.JobLeadsSession},
 		wellfound.Source{Scraping: p.Scraping, Retrieval: retrievalSvc},
 		jobgether.Source{Scraping: p.Scraping, Retrieval: retrievalSvc},
-		p.AsynqClient, enrichDelay, enrichDelays)
+		p.Enqueuer, enrichDelay, enrichDelays)
 }
 
 type salaryHandles struct {
@@ -619,11 +622,45 @@ func (p redisPinger) Ping(ctx context.Context) error {
 	return p.client.Ping(ctx).Err()
 }
 
+// brokerPinger reports RabbitMQ connectivity as its own health signal,
+// distinct from Postgres/Redis/Minio (M8-3): a broker-only outage should
+// read differently from a database outage.
+type brokerPinger struct{ conn *amqp.Connection }
+
+func (b brokerPinger) Ping(ctx context.Context) error {
+	if b.conn == nil || b.conn.IsClosed() {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	ch, err := b.conn.Channel()
+	if err != nil {
+		return err
+	}
+	return ch.Close()
+}
+
+// dlqDepther backs health.DLQDepther with a fresh inspection channel per
+// call (M8-2) — readiness checks are infrequent enough that a dedicated
+// long-lived channel isn't worth the added state.
+type dlqDepther struct {
+	conn    *amqp.Connection
+	metrics *events.Metrics
+}
+
+func (d dlqDepther) DLQDepths(ctx context.Context) (map[string]int, error) {
+	ch, err := d.conn.Channel()
+	if err != nil {
+		return nil, err
+	}
+	defer ch.Close()
+	return d.metrics.DLQDepths(ctx, events.AMQPInspector{Channel: ch})
+}
+
 func composeHealth(p *Platform) *health.HealthHandler {
-	redisClient, _ := p.RedisOpt.MakeRedisClient().(redis.UniversalClient)
 	return &health.HealthHandler{
 		Postgres: p.DB.Pool,
-		Redis:    redisPinger{client: redisClient},
+		Redis:    redisPinger{client: p.RedisClient},
+		Broker:   brokerPinger{conn: p.RabbitConn},
+		DLQ:      dlqDepther{conn: p.RabbitConn, metrics: p.Metrics},
 		Pool:     p.DB,
 	}
 }
@@ -773,7 +810,7 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Applications:  composeApplications(p),
 		Subs:          composeSubscriptions(p, sources.Sources, ingestionH.Ingestion),
 		ManualAdd:     composeManualAdd(p, sources, matchingH.Jobs),
-		Activity:      activityhttp.NewActivityHandler(p.DB.Queries, p.AsynqClient, p.AsynqInspector, p.Policies, queueClassResolvers(p.Policies, llmH)),
+		Activity:      activityhttp.NewActivityHandler(p.DB.Queries, p.Enqueuer, p.RabbitAdmin, p.Policies, queueClassResolvers(p.Policies, llmH)),
 		Keyword:       keywordH.Handler,
 		PostAge:       composePostAge(p),
 		Notification:  composeNotifications(p),

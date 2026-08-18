@@ -105,3 +105,7 @@ func validateLiveness(cfg *config.Config) error {
 	}
 	return nil
 }
+
+// RateLimitRetryDelay was ported to events.RateLimitRetryDelay (T024,
+// data-model.md § 6) now that retry delay is computed as a delay-queue TTL
+// rather than an asynq RetryDelayFunc.

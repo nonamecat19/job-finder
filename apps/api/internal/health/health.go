@@ -17,10 +17,23 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
+// DLQDepther reports the current dead-letter queue depth per work type
+// (M8-2), so a non-empty DLQ is visible without inspecting the broker by
+// hand.
+type DLQDepther interface {
+	DLQDepths(ctx context.Context) (map[string]int, error)
+}
+
 type HealthHandler struct {
 	Postgres Pinger
 	Redis    Pinger
 	Minio    Pinger
+	// Broker reports broker connectivity as a health signal distinct from
+	// Postgres/Redis/Minio (M8-3).
+	Broker Pinger
+	// DLQ reports dead-letter queue depth per work type (M8-2). Nil
+	// disables the dlq_depth block, matching how Minio is disabled.
+	DLQ DLQDepther
 
 	Pool PoolStatter
 }
@@ -40,9 +53,10 @@ type depCheck struct {
 }
 
 type readinessReport struct {
-	OK     bool                `json:"ok"`
-	Checks map[string]depCheck `json:"checks"`
-	Pool   *db.PoolStats       `json:"pool,omitempty"`
+	OK       bool                `json:"ok"`
+	Checks   map[string]depCheck `json:"checks"`
+	Pool     *db.PoolStats       `json:"pool,omitempty"`
+	DLQDepth map[string]int      `json:"dlq_depth,omitempty"`
 }
 
 func (h *HealthHandler) ready(w http.ResponseWriter, r *http.Request) {
@@ -69,10 +83,22 @@ func (h *HealthHandler) ready(w http.ResponseWriter, r *http.Request) {
 	checkOne("postgres", h.Postgres)
 	checkOne("redis", h.Redis)
 	checkOne("minio", h.Minio)
+	checkOne("broker", h.Broker)
 
 	if h.Pool != nil {
 		stats := h.Pool.PoolStats()
 		report.Pool = &stats
+	}
+
+	if h.DLQ != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), readinessTimeout)
+		defer cancel()
+		depths, err := h.DLQ.DLQDepths(ctx)
+		if err != nil {
+			report.Checks["dlq"] = depCheck{Status: "error", Error: err.Error()}
+		} else {
+			report.DLQDepth = depths
+		}
 	}
 
 	status := http.StatusOK

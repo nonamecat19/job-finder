@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -259,26 +258,22 @@ func (s *Service) enqueueInserted(ctx context.Context, ins ingest.InsertedJob, n
 	}
 	jobID := dbutil.UUIDString(ins.JobID)
 	if needsDetail {
-		s.enqueue(ctx, queue.TypeEnrich, queue.QueueEnrich, jobID, activityID(ins, ingest.OpEnrich),
+		s.enqueue(ctx, queue.TypeEnrich, jobID,
 			queue.EnrichPayload{JobID: jobID, ActivityID: activityID(ins, ingest.OpEnrich)})
 		return
 	}
-	s.enqueue(ctx, queue.TypeMatch, queue.QueueMatch, jobID, activityID(ins, ingest.OpMatch),
+	s.enqueue(ctx, queue.TypeMatch, jobID,
 		queue.MatchPayload{JobID: jobID, ActivityID: activityID(ins, ingest.OpMatch)})
-	s.enqueue(ctx, queue.TypeGhostScore, queue.QueueGhostScore, jobID, activityID(ins, ingest.OpGhost),
+	s.enqueue(ctx, queue.TypeGhostScore, jobID,
 		queue.GhostScorePayload{JobID: jobID, ActivityID: activityID(ins, ingest.OpGhost)})
 }
 
-func (s *Service) enqueue(ctx context.Context, taskType, queueName, jobID string, actID *string, payload any) {
+func (s *Service) enqueue(ctx context.Context, taskType, jobID string, payload any) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return
 	}
-	opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queueName)}
-	if actID != nil {
-		opts = append(opts, asynq.TaskID(*actID))
-	}
-	if _, err := s.client.EnqueueContext(ctx, asynq.NewTask(taskType, body), opts...); err != nil {
+	if err := s.client.EnqueueContext(ctx, taskType, body); err != nil {
 		slog.Warn("manualadd: enqueue failed", "task", taskType, "job", jobID, "error", err)
 	}
 }

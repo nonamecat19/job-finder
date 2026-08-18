@@ -41,13 +41,15 @@ WHERE "state" = 'running' AND ("heartbeatAt" IS NULL OR "heartbeatAt" < sqlc.arg
 RETURNING *;
 
 -- name: ListStaleQueuedActivityRuns :many
--- Rows past the queued grace window with no live asynq task; the sweeper
--- checks queueTaskId against the Inspector before marking these interrupted.
+-- Rows past the queued grace window (ACTIVITY_QUEUED_GRACE). RabbitMQ has
+-- no per-message "does this still exist" query the way asynq's Inspector
+-- did, so these rows are DB-authoritative: past the grace window means
+-- interrupted, unconditionally.
 SELECT * FROM "ActivityRun" WHERE "state" = 'queued' AND "createdAt" < sqlc.arg('cutoff');
 
 -- name: FinishActivityRunInterrupted :exec
--- Per-row finalizer for a stale queued run whose asynq task the sweeper
--- confirmed no longer exists (checked via the Inspector, one row at a time).
+-- Per-row finalizer for a stale queued run past ACTIVITY_QUEUED_GRACE, one
+-- row at a time.
 UPDATE "ActivityRun" SET "state" = 'interrupted', "error" = $2, "finishedAt" = now() WHERE "id" = $1 AND "state" = 'queued';
 
 -- name: GetActivityRun :one

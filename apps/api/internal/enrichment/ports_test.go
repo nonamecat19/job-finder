@@ -4,10 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hibiken/asynq"
-
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/enrichment"
+	"github.com/job-finder/api/internal/events"
 	djinnisrc "github.com/nonamecat19/job-scraper/adapters/djinni"
 	dousrc "github.com/nonamecat19/job-scraper/adapters/dou"
 	glassdoorsrc "github.com/nonamecat19/job-scraper/adapters/glassdoor"
@@ -21,7 +20,7 @@ import (
 
 var (
 	_ enrichment.Repository = (*sqlcgen.Queries)(nil)
-	_ enrichment.Enqueuer   = (*asynq.Client)(nil)
+	_ enrichment.Enqueuer   = (*events.PublishEnqueuer)(nil)
 )
 
 type fakeRepo struct {

@@ -41,8 +41,7 @@ func run() error {
 	}
 	defer platform.DB.Close()
 	defer platform.Scraping.Close()
-	defer platform.AsynqClient.Close()
-	defer platform.AsynqInspector.Close()
+	defer platform.RabbitConn.Close()
 
 	app, err := buildContexts(ctx, platform)
 	if err != nil {

@@ -2,44 +2,97 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/hibiken/asynq"
+	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/job-finder/api/internal/db"
+	"github.com/job-finder/api/internal/events"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
 	"github.com/job-finder/api/internal/queue"
 )
 
 type Servers struct {
-	HTTP    *http.Server
-	Workers []namedWorker
+	HTTP      *http.Server
+	Consumers []namedConsumer
 }
 
-type namedWorker struct {
+type namedConsumer struct {
 	name string
-	srv  *asynq.Server
-	mux  *asynq.ServeMux
+	c    *events.Consumer
 }
 
-func (p *Platform) worker(name string, policy queue.TaskPolicy, handler func(context.Context, *asynq.Task) error) namedWorker {
+// consumer builds one work type's Consumer: an events.Consumer wired to
+// this work type's queue, wrapped in the same Gate/DeadlineMiddleware
+// pipeline the asynq workers used, and translating a handler error into a
+// durable retry/dead-letter publish before ack (consumer.go's
+// ack-only-after-durable-handling contract, M3-2).
+func (p *Platform) consumer(name string, policy queue.TaskPolicy, handler func(context.Context, *queue.Task) error) namedConsumer {
 	gate := queue.NewGate(policy)
 	deadline := queue.NewDeadlineMiddleware(policy, p.DB.Queries, p.Config.ActivityHeartbeatInterval)
 	wrapped := gate.Middleware(deadline.Middleware(handler))
-	mux := asynq.NewServeMux()
-	mux.HandleFunc(policy.TaskType, wrapped)
-	return namedWorker{
+
+	return namedConsumer{
 		name: name,
-		srv: asynq.NewServer(p.RedisOpt, asynq.Config{
+		c: &events.Consumer{
+			Dial:        func() (*amqp.Connection, error) { return amqp.Dial(p.Config.RabbitMQURL) },
+			Queue:       "work." + policy.TaskType,
 			Concurrency: policy.PoolSize(),
-			Queues:      map[string]int{policy.Queue: 1},
-		}),
-		mux: mux,
+			Logger:      p.Logger,
+			HandlerFunc: func(ctx context.Context, d amqp.Delivery) error {
+				attempt := headerInt(d.Headers, events.HeaderAttempt)
+				ctx = queue.ContextWithRetry(ctx, attempt, events.MaxAttempts(policy.TaskType)-1)
+
+				task := queue.NewTask(policy.TaskType, d.Body)
+				if err := wrapped(ctx, task); err != nil {
+					failure := classifyWorkError(err)
+					// A fresh, uncancelled context: the durable retry/DLQ
+					// publish must complete even if the delivery's own
+					// context is on its way out (e.g. deadline exceeded).
+					return events.HandleFailure(context.Background(), p.Publisher, policy.TaskType, d.Body, d.Headers, attempt, failure)
+				}
+				return nil
+			},
+		},
 	}
+}
+
+func headerInt(h amqp.Table, key string) int {
+	if h == nil {
+		return 0
+	}
+	switch v := h[key].(type) {
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case int:
+		return v
+	}
+	return 0
+}
+
+// classifyWorkError maps a Go-handled work type's handler error onto a
+// result-event Failure category (E5). These work types (ingest, enrich,
+// match, generate, salary, ghost) are not yet migrated to the AI service's
+// richer LLM-specific categories (rate_limited, credential_rejected, ...) —
+// this is deliberately coarse: a handler that wraps queue.ErrSkipRetry is
+// non-retryable (invalid_input), a deadline is a retryable timeout,
+// anything else is a retryable internal failure.
+func classifyWorkError(err error) events.Failure {
+	msg := err.Error()
+	if errors.Is(err, queue.ErrSkipRetry) {
+		return events.Failure{Category: events.FailureInvalidInput, Retryable: false, Message: msg}
+	}
+	if errors.Is(err, queue.ErrDeadlineExceeded) {
+		return events.Failure{Category: events.FailureTimeout, Retryable: events.FailureTimeout.DefaultRetryable(), Message: msg}
+	}
+	return events.Failure{Category: events.FailureInternal, Retryable: events.FailureInternal.DefaultRetryable(), Message: msg}
 }
 
 func (p *Platform) policyFor(taskType string) queue.TaskPolicy {
@@ -71,16 +124,16 @@ func buildServers(p *Platform, app *App) *Servers {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	workers := []namedWorker{
-		p.worker("ingest", p.policyFor(queue.TypeIngest), app.Ingestion.ProcessTask),
-		p.worker("match", p.policyFor(queue.TypeMatch), app.Matching.ProcessTask),
-		p.worker("generate", p.policyFor(queue.TypeGenerate), app.Generation.ProcessTask),
-		p.worker("enrich", p.policyFor(queue.TypeEnrich), app.Enrichment.ProcessTask),
-		p.worker("salary", p.policyFor(queue.TypeSalaryInfer), app.Salary.ProcessTask),
-		p.worker("ghost", p.policyFor(queue.TypeGhostScore), app.Ghost.ProcessTask),
+	consumers := []namedConsumer{
+		p.consumer("ingest", p.policyFor(queue.TypeIngest), app.Ingestion.ProcessTask),
+		p.consumer("match", p.policyFor(queue.TypeMatch), app.Matching.ProcessTask),
+		p.consumer("generate", p.policyFor(queue.TypeGenerate), app.Generation.ProcessTask),
+		p.consumer("enrich", p.policyFor(queue.TypeEnrich), app.Enrichment.ProcessTask),
+		p.consumer("salary", p.policyFor(queue.TypeSalaryInfer), app.Salary.ProcessTask),
+		p.consumer("ghost", p.policyFor(queue.TypeGhostScore), app.Ghost.ProcessTask),
 	}
 
-	return &Servers{HTTP: srv, Workers: workers}
+	return &Servers{HTTP: srv, Consumers: consumers}
 }
 
 func runServers(ctx context.Context, p *Platform, servers *Servers, scheduler *worker.Scheduler) error {
@@ -91,11 +144,11 @@ func runServers(ctx context.Context, p *Platform, servers *Servers, scheduler *w
 		}
 	}()
 
-	for _, w := range servers.Workers {
-		w := w
+	for _, c := range servers.Consumers {
+		c := c
 		go func() {
-			if err := w.srv.Run(w.mux); err != nil {
-				slog.Error("asynq worker error", "worker", w.name, "error", err)
+			if err := c.c.Run(ctx); err != nil {
+				slog.Error("consumer error", "consumer", c.name, "error", err)
 			}
 		}()
 	}
@@ -106,9 +159,6 @@ func runServers(ctx context.Context, p *Platform, servers *Servers, scheduler *w
 
 	<-ctx.Done()
 	slog.Info("shutting down")
-	for _, w := range servers.Workers {
-		w.srv.Shutdown()
-	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return servers.HTTP.Shutdown(shutdownCtx)

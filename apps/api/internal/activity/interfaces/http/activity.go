@@ -3,19 +3,18 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
+	"github.com/job-finder/api/internal/events"
 	"github.com/job-finder/api/internal/httpx"
 	"github.com/job-finder/api/internal/queue"
 )
@@ -29,13 +28,20 @@ type ActivityProvider interface {
 }
 
 type ActivityEnqueuer interface {
-	EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error)
+	EnqueueContext(ctx context.Context, workType string, payload []byte) error
 }
 
+// ActivityInspector reports queue depth via RabbitMQ's management API
+// (events.Admin). Unlike asynq's Redis-backed Inspector, RabbitMQ has no
+// per-message cancel/delete-by-id — a queued unit of work can no longer be
+// surgically pulled off the broker, so cancellation is DB-state-only now
+// (cancelOne, below): the activity row is marked cancelled, but its message
+// may still be delivered and run to completion by a domain handler, which
+// does not currently check for a cancelled activity before starting work.
+// This is an accepted regression from asynq's behavior, not a deliberate
+// design choice — flagged for a follow-up rather than silently narrowed.
 type ActivityInspector interface {
-	CancelProcessing(id string) error
-	DeleteTask(queue, id string) error
-	GetQueueInfo(queue string) (*asynq.QueueInfo, error)
+	QueueDepth(queueName string) (events.QueueInfo, error)
 }
 
 var queueOrder = []string{
@@ -43,14 +49,6 @@ var queueOrder = []string{
 	queue.QueueEnrich, queue.QueueSalaryInfer, queue.QueueGhostScore,
 }
 
-var queueForOp = map[string]string{
-	"ingest":       queue.QueueIngest,
-	"match":        queue.QueueMatch,
-	"generate":     queue.QueueGenerate,
-	"enrich":       queue.QueueEnrich,
-	"ghost_score":  queue.QueueGhostScore,
-	"salary_infer": queue.QueueSalaryInfer,
-}
 
 type ActivityHandler struct {
 	q         ActivityProvider
@@ -109,17 +107,6 @@ func (h *ActivityHandler) cancelAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ActivityHandler) cancelOne(ctx context.Context, id string, op string) {
-	if h.inspector != nil {
-		if err := h.inspector.CancelProcessing(id); err != nil {
-			slog.Warn("activity: cancel processing failed", "id", id, "error", err)
-		}
-		if qname, ok := queueForOp[op]; ok {
-			if err := h.inspector.DeleteTask(qname, id); err != nil {
-				slog.Warn("activity: delete pending task failed", "id", id, "queue", qname, "error", err)
-			}
-		}
-	}
-
 	rec := activity.FromID(h.q, id)
 	if rec != nil {
 		rec.Cancel(ctx, "cancelled by user")
@@ -184,35 +171,20 @@ func (h *ActivityHandler) queueBacklog(qname string) dto.QueueBacklogDto {
 		}
 	}
 
-	info, err := h.inspector.GetQueueInfo(qname)
+	// RabbitMQ's management API gives point-in-time counts, not asynq's
+	// richer per-state breakdown (active/scheduled/archived) or a processed
+	// rate — Pending is the one figure with a direct equivalent (T048/M8-1
+	// carry the fuller per-work-type metrics in internal/events/metrics.go).
+	info, err := h.inspector.QueueDepth(qname)
 	if err != nil {
 		msg := err.Error()
 		entry.Error = &msg
 		return entry
 	}
 
-	entry.Pending = info.Pending
-	entry.Active = info.Active
-	entry.Scheduled = info.Scheduled
-	entry.Retry = info.Retry
-	entry.Archived = info.Archived
-
-	minutesToday := time.Since(startOfDay(info.Timestamp)).Minutes()
-	if minutesToday < 1 {
-		minutesToday = 1
-	}
-	entry.ProcessedPerMinute = float64(info.Processed) / minutesToday
-
-	if entry.ProcessedPerMinute > 0 && entry.Pending > 0 {
-		eta := int(float64(entry.Pending) / entry.ProcessedPerMinute * 60)
-		entry.EtaSeconds = &eta
-	}
+	entry.Pending = info.MessagesReady
+	entry.Active = info.MessagesUnacked
 	return entry
-}
-
-func startOfDay(t time.Time) time.Time {
-	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 }
 
 func (h *ActivityHandler) policyFor(qname string) (queue.TaskPolicy, bool) {
@@ -311,12 +283,7 @@ func (h *ActivityHandler) retryOne(ctx context.Context, row sqlcgen.ActivityRun)
 		if err != nil {
 			return false
 		}
-		opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate)}
-		if actID != nil {
-			opts = append(opts, asynq.TaskID(*actID))
-		}
-		_, err = h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload), opts...)
-		return err == nil
+		return h.client.EnqueueContext(ctx, queue.TypeGenerate, payload) == nil
 	case "ingest":
 		if row.SourceKey == nil {
 			return false
@@ -331,50 +298,36 @@ func (h *ActivityHandler) retryOne(ctx context.Context, row sqlcgen.ActivityRun)
 		if err != nil {
 			return false
 		}
-		opts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueIngest)}
-		if actID != nil {
-			opts = append(opts, asynq.TaskID(*actID))
-		}
-		_, err = h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeIngest, payload), opts...)
-		return err == nil
+		return h.client.EnqueueContext(ctx, queue.TypeIngest, payload) == nil
 	default:
 		return false
 	}
 }
 
 func (h *ActivityHandler) enqueueJobTask(ctx context.Context, op, jobID string, actID *string) bool {
-	var task *asynq.Task
-	var q string
+	var workType string
+	var payload []byte
+	var err error
 	switch op {
 	case "match":
-		payload, err := json.Marshal(queue.MatchPayload{JobID: jobID, ActivityID: actID})
-		if err != nil {
-			return false
-		}
-		task, q = asynq.NewTask(queue.TypeMatch, payload), queue.QueueMatch
+		workType = queue.TypeMatch
+		payload, err = json.Marshal(queue.MatchPayload{JobID: jobID, ActivityID: actID})
 	case "enrich":
-		payload, err := json.Marshal(queue.EnrichPayload{JobID: jobID, ActivityID: actID})
-		if err != nil {
-			return false
-		}
-		task, q = asynq.NewTask(queue.TypeEnrich, payload), queue.QueueEnrich
+		workType = queue.TypeEnrich
+		payload, err = json.Marshal(queue.EnrichPayload{JobID: jobID, ActivityID: actID})
 	case "ghost_score":
-		payload, err := json.Marshal(queue.GhostScorePayload{JobID: jobID, ActivityID: actID})
-		if err != nil {
-			return false
-		}
-		task, q = asynq.NewTask(queue.TypeGhostScore, payload), queue.QueueGhostScore
+		workType = queue.TypeGhostScore
+		payload, err = json.Marshal(queue.GhostScorePayload{JobID: jobID, ActivityID: actID})
 	case "salary_infer":
-		payload, err := json.Marshal(queue.SalaryInferPayload{JobID: jobID, ActivityID: actID})
-		if err != nil {
-			return false
-		}
-		task, q = asynq.NewTask(queue.TypeSalaryInfer, payload), queue.QueueSalaryInfer
+		workType = queue.TypeSalaryInfer
+		payload, err = json.Marshal(queue.SalaryInferPayload{JobID: jobID, ActivityID: actID})
 	default:
 		return false
 	}
-	_, err := h.client.EnqueueContext(ctx, task, asynq.MaxRetry(0), asynq.Queue(q))
-	return err == nil
+	if err != nil {
+		return false
+	}
+	return h.client.EnqueueContext(ctx, workType, payload) == nil
 }
 
 func rowToDto(row sqlcgen.ActivityRun) dto.ActivityRunDto {

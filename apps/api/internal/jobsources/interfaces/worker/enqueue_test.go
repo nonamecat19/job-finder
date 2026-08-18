@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/dto"
@@ -26,9 +25,9 @@ type recordingEnqueuer struct {
 	types []string
 }
 
-func (r *recordingEnqueuer) EnqueueContext(_ context.Context, task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
-	r.types = append(r.types, task.Type())
-	return &asynq.TaskInfo{}, nil
+func (r *recordingEnqueuer) EnqueueContext(_ context.Context, workType string, _ []byte) error {
+	r.types = append(r.types, workType)
+	return nil
 }
 
 func TestEnqueueInsertedRouting(t *testing.T) {

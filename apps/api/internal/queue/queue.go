@@ -5,16 +5,19 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 )
 
+// These match the work-type names events.WorkTypes/topology.go declare
+// (data-model.md § 4) — asynq's colon-namespaced task-type convention
+// ("salary:infer", "ghost:score") is gone along with asynq.
 const (
 	TypeIngest      = "ingest"
 	TypeMatch       = "match"
 	TypeGenerate    = "generate"
 	TypeEnrich      = "enrich"
-	TypeSalaryInfer = "salary:infer"
-	TypeGhostScore  = "ghost:score"
+	TypeSalaryInfer = "salary"
+	TypeGhostScore  = "ghost"
 )
 
 const (
@@ -72,19 +75,23 @@ type GeneratePayload struct {
 	RerunSections []string `json:"rerunSections,omitempty"`
 }
 
-func RedisOpt(redisURL string) (asynq.RedisClientOpt, error) {
+// NewRedisClient builds a redis.UniversalClient from a REDIS_URL, replacing
+// the asynq.RedisClientOpt-based parsing this used to share with the queue
+// backend. Redis is caching/rate-limit state only now (047) — no longer a
+// queue backend.
+func NewRedisClient(redisURL string) (redis.UniversalClient, error) {
 	if redisURL == "" {
 		redisURL = "redis://localhost:6379"
 	}
 	u, err := url.Parse(redisURL)
 	if err != nil {
-		return asynq.RedisClientOpt{}, fmt.Errorf("queue: invalid REDIS_URL: %w", err)
+		return nil, fmt.Errorf("queue: invalid REDIS_URL: %w", err)
 	}
 	port := u.Port()
 	if port == "" {
 		port = "6379"
 	}
-	opt := asynq.RedisClientOpt{Addr: u.Hostname() + ":" + port}
+	opt := &redis.Options{Addr: u.Hostname() + ":" + port}
 	if pw, ok := u.User.Password(); ok {
 		opt.Password = pw
 	}
@@ -93,5 +100,5 @@ func RedisOpt(redisURL string) (asynq.RedisClientOpt, error) {
 			opt.DB = db
 		}
 	}
-	return opt, nil
+	return redis.NewClient(opt), nil
 }

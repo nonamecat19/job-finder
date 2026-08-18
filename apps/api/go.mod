@@ -9,7 +9,6 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-chi/cors v1.2.2
 	github.com/google/uuid v1.6.0
-	github.com/hibiken/asynq v0.26.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728

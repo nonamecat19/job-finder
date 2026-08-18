@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
@@ -51,9 +50,9 @@ type enrichFakeEnqueuer struct {
 	enqueued []string
 }
 
-func (f *enrichFakeEnqueuer) EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error) {
-	f.enqueued = append(f.enqueued, task.Type())
-	return &asynq.TaskInfo{}, nil
+func (f *enrichFakeEnqueuer) EnqueueContext(ctx context.Context, workType string, payload []byte) error {
+	f.enqueued = append(f.enqueued, workType)
+	return nil
 }
 
 func (f *enrichFakeEnqueuer) has(taskType string) bool {
@@ -87,7 +86,7 @@ func TestEnrichIndeed_Success(t *testing.T) {
 		indeedsrc.Source{Scraping: scraping.New()}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("ProcessTask returned error: %v", err)
 	}
 	if !repo.updateCalled {
@@ -114,7 +113,7 @@ func TestEnrichIndeed_FetchDetailFailureDoesNotPropagate(t *testing.T) {
 		indeedsrc.Source{Scraping: scraping.New()}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("expected FetchDetail failure to be swallowed (nil returned to asynq), got: %v", err)
 	}
 	if repo.updateCalled {
@@ -143,7 +142,7 @@ func TestEnrichRemoteOK_Success(t *testing.T) {
 		indeedsrc.Source{}, remoteoksrc.Source{Scraping: scraping.New(), APIURL: srv.URL}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("ProcessTask returned error: %v", err)
 	}
 	if !repo.updateCalled {
@@ -170,7 +169,7 @@ func TestEnrichRemoteOK_RotatedOutDoesNotUpdate(t *testing.T) {
 		indeedsrc.Source{}, remoteoksrc.Source{Scraping: scraping.New(), APIURL: srv.URL}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("expected rotated-out listing to be swallowed (nil returned to asynq), got: %v", err)
 	}
 	if repo.updateCalled {
@@ -204,7 +203,7 @@ func TestEnrichJobLeads_Success(t *testing.T) {
 		jobleadssrc.Source{Scraping: scraping.New(), Session: &enrichJobLeadsFakeSession{cookie: "cookie-xyz"}}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("ProcessTask returned error: %v", err)
 	}
 	if !repo.updateCalled {
@@ -231,7 +230,7 @@ func TestEnrichJobLeads_UnavailableDoesNotUpdate(t *testing.T) {
 		jobleadssrc.Source{Scraping: scraping.New(), Session: &enrichJobLeadsFakeSession{cookie: "cookie-xyz"}}, wellfoundsrc.Source{}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("expected unavailable listing to be swallowed (nil returned to asynq), got: %v", err)
 	}
 	if repo.updateCalled {
@@ -261,7 +260,7 @@ func TestEnrichWellfound_Success(t *testing.T) {
 		wellfoundsrc.Source{Scraping: scraping.New()}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("ProcessTask returned error: %v", err)
 	}
 	if !repo.updateCalled {
@@ -289,7 +288,7 @@ func TestEnrichWellfound_UnavailableDoesNotUpdate(t *testing.T) {
 		wellfoundsrc.Source{Scraping: scraping.New()}, jobgethersrc.Source{}, &enrichFakeEnqueuer{}, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("expected unavailable listing to be swallowed (nil returned to asynq), got: %v", err)
 	}
 	if repo.updateCalled {
@@ -314,7 +313,7 @@ func TestEnrich_EnqueuesDownstreamEvenWhenFetchDetailFails(t *testing.T) {
 		indeedsrc.Source{Scraping: scraping.New()}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, enq, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("ProcessTask returned error: %v", err)
 	}
 	if !enq.has(queue.TypeMatch) {
@@ -336,7 +335,7 @@ func TestEnrich_UnknownSourceStillEnqueuesDownstream(t *testing.T) {
 		indeedsrc.Source{}, remoteoksrc.Source{}, glassdoorsrc.Source{}, jobleadssrc.Source{}, wellfoundsrc.Source{}, jobgethersrc.Source{}, enq, 0, nil)
 
 	payload, _ := json.Marshal(queue.EnrichPayload{JobID: "00000000-0000-0000-0000-000000000001"})
-	if err := h.ProcessTask(context.Background(), asynq.NewTask(queue.TypeEnrich, payload)); err != nil {
+	if err := h.ProcessTask(context.Background(), queue.NewTask(queue.TypeEnrich, payload)); err != nil {
 		t.Fatalf("ProcessTask returned error: %v", err)
 	}
 	if repo.updateCalled {

@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -66,7 +65,7 @@ func (h *Handler) delayFor(sourceKey string) time.Duration {
 	return h.defaultDelay
 }
 
-func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
+func (h *Handler) ProcessTask(ctx context.Context, t *queue.Task) (err error) {
 	var payload queue.EnrichPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("enrichment: invalid payload: %w", err)
@@ -522,8 +521,7 @@ func (h *Handler) enqueueMatch(ctx context.Context, jobID string, job sqlcgen.Jo
 	if err != nil {
 		return
 	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeMatch, matchPayload),
-		asynq.MaxRetry(1), asynq.Queue(queue.QueueMatch)); err != nil {
+	if err := h.client.EnqueueContext(ctx, queue.TypeMatch, matchPayload); err != nil {
 		slog.Warn("enrichment: enqueue match failed", "job", jobID, "error", err)
 	}
 }
@@ -540,8 +538,7 @@ func (h *Handler) enqueueSalaryInfer(ctx context.Context, jobID string) {
 	if err != nil {
 		return
 	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeSalaryInfer, payload),
-		asynq.MaxRetry(1), asynq.Queue(queue.QueueSalaryInfer)); err != nil {
+	if err := h.client.EnqueueContext(ctx, queue.TypeSalaryInfer, payload); err != nil {
 		slog.Warn("enrichment: enqueue salary infer failed", "job", jobID, "error", err)
 	}
 }
@@ -570,8 +567,7 @@ func (h *Handler) RescrapeOne(ctx context.Context, jobID string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload),
-		asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)); err != nil {
+	if err := h.client.EnqueueContext(ctx, queue.TypeEnrich, payload); err != nil {
 		return fmt.Errorf("enrichment: enqueue rescrape: %w", err)
 	}
 	return nil
@@ -596,8 +592,7 @@ func (h *Handler) EnqueueBackfill(ctx context.Context, sourceKey string, limit i
 		if err != nil {
 			continue
 		}
-		if _, err := h.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeEnrich, payload),
-			asynq.MaxRetry(0), asynq.Queue(queue.QueueEnrich)); err != nil {
+		if err := h.client.EnqueueContext(ctx, queue.TypeEnrich, payload); err != nil {
 			return n, fmt.Errorf("enrichment: enqueue backfill: %w", err)
 		}
 		n++

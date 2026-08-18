@@ -3,13 +3,12 @@ package application_test
 import (
 	"testing"
 
-	"github.com/hibiken/asynq"
-
+	"github.com/job-finder/api/internal/events"
 	"github.com/job-finder/api/internal/jobsources/application"
 	"github.com/job-finder/api/internal/jobsources/domain"
 )
 
-var _ application.Enqueuer = (*asynq.Client)(nil)
+var _ application.Enqueuer = (*events.PublishEnqueuer)(nil)
 
 type fakeSearchRepo struct {
 	domain.SearchRepository

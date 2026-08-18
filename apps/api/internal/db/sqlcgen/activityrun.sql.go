@@ -117,8 +117,8 @@ type FinishActivityRunInterruptedParams struct {
 	Error *string     `json:"error"`
 }
 
-// Per-row finalizer for a stale queued run whose asynq task the sweeper
-// confirmed no longer exists (checked via the Inspector, one row at a time).
+// Per-row finalizer for a stale queued run past ACTIVITY_QUEUED_GRACE, one
+// row at a time.
 func (q *Queries) FinishActivityRunInterrupted(ctx context.Context, arg FinishActivityRunInterruptedParams) error {
 	_, err := q.db.Exec(ctx, finishActivityRunInterrupted, arg.ID, arg.Error)
 	return err
@@ -359,8 +359,10 @@ const listStaleQueuedActivityRuns = `-- name: ListStaleQueuedActivityRuns :many
 SELECT id, op, state, label, step, "jobId", "sourceKey", "queueTaskId", "refId", error, meta, "createdAt", "startedAt", "finishedAt", "heartbeatAt", "timeoutMs" FROM "ActivityRun" WHERE "state" = 'queued' AND "createdAt" < $1
 `
 
-// Rows past the queued grace window with no live asynq task; the sweeper
-// checks queueTaskId against the Inspector before marking these interrupted.
+// Rows past the queued grace window (ACTIVITY_QUEUED_GRACE). RabbitMQ has
+// no per-message "does this still exist" query the way asynq's Inspector
+// did, so these rows are DB-authoritative: past the grace window means
+// interrupted, unconditionally.
 func (q *Queries) ListStaleQueuedActivityRuns(ctx context.Context, cutoff pgtype.Timestamp) ([]ActivityRun, error) {
 	rows, err := q.db.Query(ctx, listStaleQueuedActivityRuns, cutoff)
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
@@ -15,12 +14,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbtest"
 )
-
-type noopInspector struct{}
-
-func (noopInspector) GetTaskInfo(queue, id string) (*asynq.TaskInfo, error) {
-	return nil, asynq.ErrTaskNotFound
-}
 
 func insertRun(ctx context.Context, t *testing.T, testDB *db.DB, state string, heartbeat *time.Time) pgtype.UUID {
 	t.Helper()
@@ -61,7 +54,7 @@ func TestSweeper_Integration_ExactlyStaleRowsInterrupted(t *testing.T) {
 	freshID := insertRun(ctx, t, testDB, "running", &fresh)
 	succeededID := insertRun(ctx, t, testDB, "succeeded", &stale)
 
-	sweeper := activity.NewSweeper(testDB.Queries, noopInspector{}, 2*time.Minute, time.Minute, 30*time.Minute)
+	sweeper := activity.NewSweeper(testDB.Queries, 2*time.Minute, time.Minute, 30*time.Minute)
 	sweeper.Run(sweepOnceCtx(t))
 
 	rows, err := testDB.Queries.ListRecentActivityRuns(ctx, 10)

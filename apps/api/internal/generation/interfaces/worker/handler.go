@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/hibiken/asynq"
-
 	"github.com/job-finder/api/internal/activity"
 	"github.com/job-finder/api/internal/generation/application"
 	"github.com/job-finder/api/internal/platform/llm"
@@ -24,7 +22,7 @@ func NewHandler(svc *application.Service, store activity.Store) *Handler {
 	return &Handler{svc: svc, store: store}
 }
 
-func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
+func (h *Handler) ProcessTask(ctx context.Context, t *queue.Task) (err error) {
 	var payload queue.GeneratePayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("generation: invalid payload: %w", err)

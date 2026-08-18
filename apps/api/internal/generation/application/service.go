@@ -12,7 +12,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
@@ -22,6 +21,7 @@ import (
 	"github.com/job-finder/api/internal/generation/domain"
 	"github.com/job-finder/api/internal/generation/infrastructure"
 	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/strutil"
 )
 
@@ -99,15 +99,15 @@ type Service struct {
 	defaultLevel domain.GroundingLevel
 	shape        ShapeProvider
 	summaryModel SummaryModelProvider
-	// asynqClient enqueues a workspace run's background half (StartRun) onto
-	// the existing `generate` queue. Installed via SetAsynqClient for the same
-	// reason SetSummaryModelProvider is a setter: NewService already has nine
+	// enqueuer publishes a workspace run's background half (StartRun) as
+	// `generate` work. Installed via SetEnqueuer for the same reason
+	// SetSummaryModelProvider is a setter: NewService already has nine
 	// parameters and most callers — every test that doesn't exercise the 042
 	// workspace — have no reason to grow one more.
-	asynqClient *asynq.Client
+	enqueuer queue.Enqueuer
 	// tx runs the row-locked, multi-statement item/section mutations
 	// (PatchGenerationItem, ReorderSection) inside one transaction. Installed
-	// via SetTxRunner, same setter discipline as asynqClient.
+	// via SetTxRunner, same setter discipline as enqueuer.
 	tx domain.TxRunner
 	// exportRender overrides the 042 export path's render collaborators when
 	// set (SetExportRenderer); zero value means the real RenderCv renderer.

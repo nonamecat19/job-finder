@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/activity"
@@ -340,15 +339,14 @@ func (s *Service) EnqueueGeneration(ctx context.Context, id, docType string, pro
 	if err != nil {
 		return nil, err
 	}
-	genOpts := []asynq.Option{asynq.MaxRetry(0), asynq.Queue(queue.QueueGenerate)}
-	if actID != nil {
-		genOpts = append(genOpts, asynq.TaskID(*actID))
-	}
-	info, err := s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeGenerate, payload), genOpts...)
-	if err != nil {
+	if err := s.client.EnqueueContext(ctx, queue.TypeGenerate, payload); err != nil {
 		return nil, err
 	}
-	return map[string]any{"queued": true, "queueJobId": info.ID, "type": docType}, nil
+	queueJobID := ""
+	if actID != nil {
+		queueJobID = *actID
+	}
+	return map[string]any{"queued": true, "queueJobId": queueJobID, "type": docType}, nil
 }
 
 func (s *Service) EnqueueSalaryInfer(ctx context.Context, jobID string) error {
@@ -368,12 +366,7 @@ func (s *Service) EnqueueSalaryInfer(ctx context.Context, jobID string) error {
 	if err != nil {
 		return err
 	}
-	opts := []asynq.Option{asynq.MaxRetry(1), asynq.Queue(queue.QueueSalaryInfer)}
-	if actID != nil {
-		opts = append(opts, asynq.TaskID(*actID))
-	}
-	_, err = s.client.EnqueueContext(ctx, asynq.NewTask(queue.TypeSalaryInfer, payload), opts...)
-	return err
+	return s.client.EnqueueContext(ctx, queue.TypeSalaryInfer, payload)
 }
 
 func jobToDto(j sqlcgen.Job) dto.JobDto {

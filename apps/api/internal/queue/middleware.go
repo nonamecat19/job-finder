@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/job-finder/api/internal/activity"
@@ -42,8 +41,8 @@ func (g *Gate) Acquire(ctx context.Context) (release func(), err error) {
 	return func() { g.sem.Release(1) }, nil
 }
 
-func (g *Gate) Middleware(handler func(context.Context, *asynq.Task) error) func(context.Context, *asynq.Task) error {
-	return func(ctx context.Context, t *asynq.Task) error {
+func (g *Gate) Middleware(handler func(context.Context, *Task) error) func(context.Context, *Task) error {
+	return func(ctx context.Context, t *Task) error {
 		release, err := g.Acquire(ctx)
 		if err != nil {
 			return err
@@ -75,8 +74,8 @@ func NewDeadlineMiddleware(policy TaskPolicy, store activity.Store, heartbeatInt
 	return &DeadlineMiddleware{policy: policy, store: store, heartbeatInterval: heartbeatInterval}
 }
 
-func (d *DeadlineMiddleware) Middleware(handler func(context.Context, *asynq.Task) error) func(context.Context, *asynq.Task) error {
-	return func(ctx context.Context, t *asynq.Task) error {
+func (d *DeadlineMiddleware) Middleware(handler func(context.Context, *Task) error) func(context.Context, *Task) error {
+	return func(ctx context.Context, t *Task) error {
 		var rec *activity.Recorder
 		if id := payloadActivityID(t.Payload()); id != nil && *id != "" {
 			rec = activity.FromID(d.store, *id)

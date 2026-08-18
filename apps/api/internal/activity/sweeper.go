@@ -2,21 +2,15 @@ package activity
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 )
-
-type Inspector interface {
-	GetTaskInfo(queue, id string) (*asynq.TaskInfo, error)
-}
 
 type SweeperStore interface {
 	SweepStaleRunningActivityRuns(ctx context.Context, arg sqlcgen.SweepStaleRunningActivityRunsParams) ([]sqlcgen.ActivityRun, error)
@@ -37,28 +31,22 @@ const LongestRetryBudget = time.Second + 10*time.Second + time.Minute + 10*time.
 // attempts). The ledger is a short-horizon dedupe window, not an audit log.
 const IdempotencyLedgerRetention = LongestRetryBudget + 24*time.Hour
 
-var queueForOp = map[string]string{
-	"ingest":       "ingest",
-	"match":        "match",
-	"generate":     "generate",
-	"enrich":       "enrich",
-	"ghost_score":  "ghost:score",
-	"salary_infer": "salary:infer",
-}
-
 type Sweeper struct {
 	store           SweeperStore
-	inspector       Inspector
 	staleAfter      time.Duration
 	sweepInterval   time.Duration
 	queuedGrace     time.Duration
 	ledgerRetention time.Duration
 }
 
-func NewSweeper(store SweeperStore, inspector Inspector, staleAfter, sweepInterval, queuedGrace time.Duration) *Sweeper {
+// NewSweeper no longer takes a broker Inspector (047): RabbitMQ has no
+// cheap "does this message still exist" query the way asynq's Redis-backed
+// inspector did, so a stale-queued row is DB-authoritative — the
+// ACTIVITY_QUEUED_GRACE window is what protects a genuinely-still-queued
+// run from a false positive (T043).
+func NewSweeper(store SweeperStore, staleAfter, sweepInterval, queuedGrace time.Duration) *Sweeper {
 	return &Sweeper{
 		store:           store,
-		inspector:       inspector,
 		staleAfter:      staleAfter,
 		sweepInterval:   sweepInterval,
 		queuedGrace:     queuedGrace,
@@ -126,9 +114,6 @@ func (s *Sweeper) sweepQueued(ctx context.Context) {
 		return
 	}
 	for _, row := range rows {
-		if s.queuedTaskStillExists(row) {
-			continue
-		}
 		reason := "interrupted: queued task no longer exists"
 		if err := s.store.FinishActivityRunInterrupted(ctx, sqlcgen.FinishActivityRunInterruptedParams{
 			ID:    row.ID,
@@ -137,23 +122,4 @@ func (s *Sweeper) sweepQueued(ctx context.Context) {
 			slog.Error("activity: finish interrupted (queued) failed", "error", err)
 		}
 	}
-}
-
-func (s *Sweeper) queuedTaskStillExists(row sqlcgen.ActivityRun) bool {
-	if row.QueueTaskId == nil || *row.QueueTaskId == "" {
-		return false
-	}
-	qname, ok := queueForOp[row.Op]
-	if !ok {
-		return false
-	}
-	_, err := s.inspector.GetTaskInfo(qname, *row.QueueTaskId)
-	if err != nil {
-		if errors.Is(err, asynq.ErrTaskNotFound) || errors.Is(err, asynq.ErrQueueNotFound) {
-			return false
-		}
-		slog.Warn("activity: inspector lookup failed, assuming task still live", "queue", qname, "id", *row.QueueTaskId, "error", err)
-		return true
-	}
-	return true
 }

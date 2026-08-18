@@ -46,6 +46,7 @@ func TestLoadGatewayOverride(t *testing.T) {
 	}
 	t.Setenv("GATEWAY_URL", "http://litellm:4000")
 	t.Setenv("LITELLM_MASTER_KEY", "sk-test")
+	t.Setenv("RABBITMQ_URL", "amqp://jobfinder:test@localhost:5672/")
 
 	cfg, err := Load()
 	if err != nil {
