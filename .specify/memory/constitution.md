@@ -149,6 +149,64 @@ Templates requiring updates:
 Follow-up TODOs: the documents that describe the old guarantee are updated
   in the same feature, not here — specs/domains/llm-routing.md,
   docs/docs/ai/*, .env.example, docker-compose.prod.yml, README.md.
+--------------------------------------------------------------------------
+
+Version change: 2.0.0 → 2.1.0 (MINOR — guidance materially expanded; no
+  principle removed or redefined)
+Modified principles:
+  - **Principle IV, "Test Discipline Per Language"** — `pytest` for apps/ai
+    added alongside `go test` and `vitest`; the integration-test clause now
+    names "a real message broker" rather than Redis; `make audit` is stated
+    as covering every language's dependency surface. The principle itself —
+    native toolchain per app, real dependencies for cross-service paths,
+    enforced at the merge gate — is unchanged. A third runtime enters the
+    repository and the gate must see it.
+Modified sections:
+  - **Technology & Architecture Constraints, data layer**: "asynq on Redis
+    for async work, with one dedicated queue per task type" → RabbitMQ, one
+    durable queue per work type plus a dead-letter queue per work type, with
+    Redis explicitly demoted to caching and rate-limit state. The
+    one-queue-per-work-type rule survives the broker change; what changes is
+    what implements it, and that services now communicate by events rather
+    than by one process consuming its own job list.
+  - **Technology & Architecture Constraints**: `apps/ai` added as a third
+    runtime — Python, LangChain/LangGraph, Langfuse — with its boundaries
+    stated where the constraint lives rather than only in a feature spec: no
+    persistence, no database or provider credential, gateway-only model
+    access, in-repository prompts.
+Added sections: none
+Removed sections: none
+
+Why now, before the code. This amendment lands ahead of the implementation
+it describes, which inverts the usual order and is deliberate: spec 047
+cannot be implemented without contradicting the constraints as written, and
+a plan whose first task violates the constitution is a plan that teaches
+people to ignore it. The constraints section is prescriptive — it says what
+MUST be built — so it is the correct place for a decided-but-unbuilt rule.
+
+What is NOT amended here, and why. Every other asynq reference in the
+repository — README.md, docs/docs/async/*, docs/docs/architecture/*,
+specs/domains/*.md — describes the system as it currently runs, and asynq is
+still the live dispatch mechanism at the time of this amendment. specs/README
+draws the line: specs say what must be true, docs say how it works. Those
+documents become false at the moment the migration lands and are corrected
+in that change, not in this one. A doc that describes a system nobody has
+built yet is worse than one that is merely out of date.
+
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ re-checked, Constitution Check
+    gate is generic, no queue-technology or runtime reference, no change
+  - .specify/templates/spec-template.md ✅ re-checked, no change needed
+  - .specify/templates/tasks-template.md ✅ re-checked, no change needed
+  - .specify/templates/checklist-template.md ✅ re-checked, no change needed
+  - .claude/skills/speckit-*/SKILL.md ✅ re-checked, no queue-technology or
+    runtime reference found, no change needed
+Follow-up TODOs: AGENTS.md ("No Python is in this repository", the
+  `test-lint` description, and the apps/api "asynq workers" line), README.md,
+  docs/docs/async/*, docs/docs/architecture/* and the affected
+  specs/domains/*.md are corrected in the feature that removes asynq — spec
+  047, phases 2 and 4 — not here. Tracked in
+  specs/047-langchain-ai-service/contracts/configuration.md K6.
 -->
 
 # job-finder Constitution
@@ -184,10 +242,12 @@ services is the most common source of silent integration bugs in this codebase.
 
 ### IV. Test Discipline Per Language, Enforced at the Boundary
 Each app tests in its native toolchain — `go test` for apps/api, `vitest` for the
-dashboard — and integration/e2e paths (`test-integration`,
-`test-e2e`) MUST exercise real Postgres/Redis via Docker Compose, not mocks, for
-cross-service behavior. `make test-lint` (both suites) MUST pass before a change
-touching more than one app is considered done.
+dashboard, `pytest` for apps/ai — and integration/e2e paths (`test-integration`,
+`test-e2e`) MUST exercise real Postgres and a real message broker via Docker Compose, not
+mocks, for cross-service behavior. `make test-lint` (every language's suite) MUST pass
+before a change touching more than one app is considered done, and `make audit` MUST cover
+every language's dependency surface — a runtime whose dependencies no gate inspects is a
+supply-chain hole, not a new app.
 Rationale: matches the existing Makefile-enforced workflow; per-language suites keep
 feedback fast, while Docker-backed integration tests catch the cross-service bugs unit
 tests can't.
@@ -220,13 +280,21 @@ genuinely keep controlling: their data, their routing policy, their credentials.
 - Backend (`apps/api`): Go, sqlc for typed DB access, goose for migrations — migration
   version numbers MUST be unique and sequential; never reuse or duplicate a goose version.
 - Dashboard (`apps/dashboard`): React + Vite + TanStack Query + dnd-kit + Tailwind.
+- AI orchestration (`apps/ai`): Python, LangChain and LangGraph for prompt assembly, step
+  sequencing and bounded tool loops, Langfuse for run-level tracing. It owns no persistence
+  and holds no database or provider credential; every model call goes through the gateway
+  by task key (Principle V). Prompts and workflow definitions live in-repository and are
+  changed by commit, never fetched at runtime.
 - Scraping-based job sources: treated as best-effort/unstable upstream (scraping targets
   change), not a hard dependency for core functionality.
 - `packages/shared`: shared TypeScript types (NormalizedJob, DTOs, JSON Resume subset) —
   the only place cross-app TS types are defined by hand; everything else generates from it
   or from Go via tygo.
-- Data layer: Postgres with pgvector for embeddings; asynq on Redis for async work, with
-  one dedicated queue per task type (ingest, match, generate, enrich, salary, ghost).
+- Data layer: Postgres with pgvector for embeddings; RabbitMQ for asynchronous work, with
+  one dedicated durable queue per work type (ingest, match, generate, enrich, salary,
+  ghost) and a dead-letter queue per work type. Redis is for caching and rate-limit state
+  only — it is not a queue backend. Services communicate by publishing and consuming
+  events; a service MUST NOT be called synchronously to perform queued work.
 - Full stack ships via Docker Compose (`docker-compose.yml` dev, `docker-compose.prod.yml`
   prod); GPU is recommended, not required, for the Ollama model runtime.
 
@@ -264,4 +332,4 @@ should be checked against the five Core Principles above before being marked rea
 review; deviations must be justified in the plan's Complexity Tracking section (or PR
 description) rather than silently introduced.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-12
+**Version**: 2.1.0 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-08-18
