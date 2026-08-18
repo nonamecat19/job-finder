@@ -77,13 +77,15 @@ test-react:
 test-py:
 	cd apps/ai && uv run pytest
 
-test-integration: test-db-setup
-	@echo "Waiting for postgres to be healthy..."
-	@docker compose up -d postgres
-	@docker compose exec -T postgres sh -c 'until pg_isready -U jobfinder; do sleep 1; done'
-	cd apps/api && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:${POSTGRES_HOST_PORT}/jobfinder_test \
-		REDIS_URL=redis://localhost:6379/1 \
-		go test -tags integration ./...
+# Needs a Docker daemon and nothing else: every backing service the integration
+# suite touches (Postgres, RabbitMQ, ClickHouse, MinIO, Redis, headless Chrome,
+# FlareSolverr, and the LiteLLM proxy on the real gateway/config.yaml) is
+# started as a throwaway container by apps/api/internal/testinfra. The suite
+# never borrows the dev stack's data and never silently skips a service that
+# happened not to be running; no provider credential is involved, since the
+# proxy's upstreams point at an in-test stub.
+test-integration:
+	cd apps/api && go test -tags integration ./...
 
 test-ai-optional:
 	./scripts/test-ai-optional.sh

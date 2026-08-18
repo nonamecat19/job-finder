@@ -20,7 +20,9 @@ package testinfra
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,6 +33,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/clickhouse"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/modules/rabbitmq"
+	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
@@ -47,6 +50,7 @@ const (
 	// HTTP API, and internal/events tests purge queues the same way.
 	rabbitMQImage     = "rabbitmq:4.3.4-management-alpine"
 	clickHouseImage   = "clickhouse/clickhouse-server:26.4.5"
+	rabbitInitImage   = "curlimages/curl:8.11.1"
 	minioImage        = "minio/minio:latest"
 	redisImage        = "redis:7-alpine"
 	flareSolverrImage = "ghcr.io/flaresolverr/flaresolverr:latest"
@@ -56,6 +60,20 @@ const (
 	liteLLMImage = "ghcr.io/berriai/litellm:main-stable"
 )
 
+// The AI orchestration service is not pulled but built, from apps/ai/
+// Dockerfile in this working tree, so a test always runs the code in front of
+// it. The tag is fixed rather than random so successive runs (and successive
+// test binaries) reuse the same built image instead of producing a new
+// dangling one each time.
+const (
+	aiImageRepo = "jobfinder-ai"
+	aiImageTag  = "testinfra"
+	// A cold `uv sync` of the whole dependency set (langchain, langgraph,
+	// faststream) is minutes of work; startTTL is sized for pulling a
+	// prebuilt image and is far too tight for that first build.
+	aiBuildTTL = 15 * time.Minute
+)
+
 // Credentials the containers are created with. They are fixed rather than
 // random because they appear in DSNs in test failure output, and a container
 // that lives for one test process has nothing to protect.
@@ -63,8 +81,6 @@ const (
 	dbName   = "jobfinder_test"
 	dbUser   = "jobfinder"
 	dbPass   = "jobfinder"
-	mqUser   = "jobfinder"
-	mqPass   = "jobfinder"
 	chDB     = "default"
 	chUser   = "default"
 	chPass   = "clickhouse"
@@ -75,6 +91,14 @@ const (
 // Callers must send it as `Authorization: Bearer <key>`; the proxy rejects an
 // unauthenticated request the same way the deployed one does.
 const LiteLLMMasterKey = "sk-testinfra-master-key"
+
+// The broker's administrator account — the RABBITMQ_DEFAULT_USER of
+// docker-compose.yml, which owns topology and is what internal/events
+// connects as.
+const (
+	MQAdminUser = "jobfinder"
+	MQAdminPass = "jobfinder"
+)
 
 // MinIO credentials and bucket, matching docker-compose.yml's defaults so a
 // test exercises the same names the stack does.
@@ -93,8 +117,9 @@ var (
 	postgresOnce   sync.Once
 	postgresResult result
 
-	rabbitOnce   sync.Once
-	rabbitResult result
+	rabbitOnce    sync.Once
+	rabbitResult  result
+	rabbitNetwork *testcontainers.DockerNetwork
 
 	clickHouseOnce   sync.Once
 	clickHouseResult result
@@ -113,6 +138,9 @@ var (
 
 	chromeOnce   sync.Once
 	chromeResult result
+
+	aiOnce   sync.Once
+	aiResult result
 )
 
 // PostgresDSN starts (once per process) a pgvector-enabled Postgres and
@@ -155,9 +183,21 @@ func RabbitMQURL(ctx context.Context) (string, error) {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startTTL)
 		defer cancel()
 
+		// A dedicated network with the `rabbitmq` alias, because
+		// docker/rabbitmq/init-ai-user.sh addresses the broker by that
+		// hostname (it is a compose service name) and this package runs that
+		// script verbatim rather than a paraphrase of it.
+		nw, err := network.New(ctx)
+		if err != nil {
+			rabbitResult.err = fmt.Errorf("testinfra: create network: %w", err)
+			return
+		}
+		rabbitNetwork = nw
+
 		container, err := rabbitmq.Run(ctx, rabbitMQImage,
-			rabbitmq.WithAdminUsername(mqUser),
-			rabbitmq.WithAdminPassword(mqPass),
+			rabbitmq.WithAdminUsername(MQAdminUser),
+			rabbitmq.WithAdminPassword(MQAdminPass),
+			network.WithNetwork([]string{"rabbitmq"}, nw),
 		)
 		if err != nil {
 			rabbitResult.err = fmt.Errorf("testinfra: start rabbitmq: %w", err)
@@ -171,6 +211,81 @@ func RabbitMQURL(ctx context.Context) (string, error) {
 		rabbitResult.dsn = url
 	})
 	return rabbitResult.dsn, rabbitResult.err
+}
+
+// RabbitMQURLAs returns an amqp:// URL for the running broker under another
+// account, so a test can act as the restricted AI service user rather than as
+// the administrator RabbitMQURL hands out.
+func RabbitMQURLAs(ctx context.Context, user, password string) (string, error) {
+	admin, err := RabbitMQURL(ctx)
+	if err != nil {
+		return "", err
+	}
+	u, err := url.Parse(admin)
+	if err != nil {
+		return "", fmt.Errorf("testinfra: parse broker url: %w", err)
+	}
+	u.User = url.UserPassword(user, password)
+	return u.String(), nil
+}
+
+// ProvisionRabbitMQAIUser runs docker/rabbitmq/init-ai-user.sh — the actual
+// script the `rabbitmq-init` compose service runs, from the repository, in
+// the image compose pins — against the running broker.
+//
+// Running the file rather than reimplementing its two API calls is the point:
+// what needs proving is that the script provisions an account with exactly
+// the permissions contracts/messaging.md M7-3 describes, and a paraphrase of
+// it here would prove that only about the paraphrase.
+func ProvisionRabbitMQAIUser(ctx context.Context, aiUser, aiPass string) error {
+	if _, err := RabbitMQURL(ctx); err != nil {
+		return err
+	}
+
+	script, err := repoFile("docker", "rabbitmq", "init-ai-user.sh")
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startTTL)
+	defer cancel()
+
+	container, err := testcontainers.Run(ctx, rabbitInitImage,
+		testcontainers.WithEntrypointArgs("/bin/sh", "/init-ai-user.sh"),
+		network.WithNetwork([]string{"rabbitmq-init"}, rabbitNetwork),
+		testcontainers.WithFiles(testcontainers.ContainerFile{
+			HostFilePath:      script,
+			ContainerFilePath: "/init-ai-user.sh",
+			FileMode:          0o555,
+		}),
+		testcontainers.WithEnv(map[string]string{
+			"RABBITMQ_DEFAULT_USER": MQAdminUser,
+			"RABBITMQ_DEFAULT_PASS": MQAdminPass,
+			"RABBITMQ_AI_USER":      aiUser,
+			"RABBITMQ_AI_PASS":      aiPass,
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForExit().WithExitTimeout(startTTL),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("testinfra: run init-ai-user.sh: %w", err)
+	}
+
+	state, err := container.State(ctx)
+	if err != nil {
+		return fmt.Errorf("testinfra: init-ai-user.sh state: %w", err)
+	}
+	if state.ExitCode != 0 {
+		logs, _ := container.Logs(ctx)
+		var output []byte
+		if logs != nil {
+			output, _ = io.ReadAll(logs)
+			logs.Close()
+		}
+		return fmt.Errorf("testinfra: init-ai-user.sh exited %d: %s", state.ExitCode, output)
+	}
+	return nil
 }
 
 // ClickHouseDSN starts (once per process) a ClickHouse server and returns a
@@ -428,15 +543,10 @@ func ChromeWebSocketURL(ctx context.Context, upstreamPort int) (string, error) {
 
 		container, err := testcontainers.Run(ctx, chromeImage,
 			testcontainers.WithHostPortAccess(upstreamPort),
-			// The image listens on loopback by default, which is
-			// unreachable from outside the container.
-			testcontainers.WithCmdArgs(
-				"--remote-debugging-address=0.0.0.0",
-				"--remote-debugging-port=9222",
-				"--no-sandbox",
-				"--disable-gpu",
-				"--headless=new",
-			),
+			// No command override: the image's own run.sh already binds
+			// the DevTools endpoint to 0.0.0.0:9222 with the sandbox
+			// flags a container needs, and replacing it with a bare
+			// browser invocation is what makes the endpoint never come up.
 			testcontainers.WithExposedPorts("9222/tcp"),
 			testcontainers.WithWaitStrategy(
 				wait.ForHTTP("/json/version").
@@ -473,4 +583,176 @@ func hostPort(ctx context.Context, container testcontainers.Container, port stri
 		return "", "", err
 	}
 	return host, mapped.Port(), nil
+}
+
+// AIServiceConfig configures the apps/ai container AIService starts.
+type AIServiceConfig struct {
+	// BrokerUser/BrokerPass are the broker account the service connects as.
+	// A test provisions them with ProvisionRabbitMQAIUser first, so the
+	// service runs under exactly the restricted account compose gives it
+	// rather than as the administrator.
+	BrokerUser string
+	BrokerPass string
+	// GatewayPort is a port on the host serving an OpenAI-compatible stub.
+	// GATEWAY_URL points at it, so every model call the service makes lands
+	// on the test's own handler and no provider is ever contacted.
+	GatewayPort int
+	// ServiceToken is AI_SERVICE_TOKEN — required for the process to boot at
+	// all (settings.REQUIRED_ENV_KEYS), and the shared secret its HTTP
+	// surface authenticates with.
+	ServiceToken string
+}
+
+// AIService builds apps/ai's image from this repository and runs it against
+// the RabbitMQ container this package owns, returning the service's base URL
+// on the host.
+//
+// The image is built the way docker-compose.yml's `ai` service builds it —
+// context = the repository root, dockerfile = apps/ai/Dockerfile — so what
+// runs here is the artifact that ships, not a paraphrase of it assembled by
+// the test. The build is expensive the first time and nearly free afterwards:
+// Docker's layer cache is shared with compose's, and KeepImage stops the
+// reaper from deleting the result when the test binary exits.
+//
+// The container joins the same network as the broker (see rabbitNetwork) and
+// addresses it as `rabbitmq:5672`, which is what compose's RABBITMQ_URL does
+// and therefore what the AMQP permissions the init script writes are scoped
+// against.
+//
+// Readiness is /health/ready, not /health/live: live only proves the process
+// started, while ready additionally pings the broker (main.py), so a service
+// that booted but could not reach or authenticate against RabbitMQ never
+// becomes ready and the caller fails with a startup error instead of a
+// mystifying "no result ever arrived" timeout minutes later.
+func AIService(ctx context.Context, cfg AIServiceConfig) (string, error) {
+	aiOnce.Do(func() {
+		// The broker must exist before the service is told to dial it, and
+		// starting it here also populates rabbitNetwork.
+		if _, err := RabbitMQURL(ctx); err != nil {
+			aiResult.err = err
+			return
+		}
+
+		root, err := repoRoot()
+		if err != nil {
+			aiResult.err = err
+			return
+		}
+		detachRegistryCredentials()
+
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), aiBuildTTL)
+		defer cancel()
+
+		gateway := fmt.Sprintf("http://host.testcontainers.internal:%d", cfg.GatewayPort)
+		brokerURL := fmt.Sprintf("amqp://%s:%s@rabbitmq:5672/", cfg.BrokerUser, cfg.BrokerPass)
+
+		container, err := testcontainers.Run(ctx, "",
+			testcontainers.WithDockerfile(testcontainers.FromDockerfile{
+				Context:    root,
+				Dockerfile: "apps/ai/Dockerfile",
+				Repo:       aiImageRepo,
+				Tag:        aiImageTag,
+				KeepImage:  true,
+			}),
+			network.WithNetwork([]string{"ai"}, rabbitNetwork),
+			testcontainers.WithHostPortAccess(cfg.GatewayPort),
+			testcontainers.WithEnv(map[string]string{
+				"GATEWAY_URL":        gateway,
+				"LITELLM_MASTER_KEY": LiteLLMMasterKey,
+				"RABBITMQ_URL":       brokerURL,
+				"AI_SERVICE_TOKEN":   cfg.ServiceToken,
+				// Empty is what makes Langfuse inert, exactly as in a dev
+				// stack with no collector configured: the client disables
+				// itself rather than exporting to cloud.langfuse.com.
+				"LANGFUSE_PUBLIC_KEY": "",
+				"LANGFUSE_SECRET_KEY": "",
+				"LANGFUSE_HOST":       "",
+				"LOG_LEVEL":           "INFO",
+			}),
+			testcontainers.WithExposedPorts("8000/tcp"),
+			testcontainers.WithWaitStrategy(
+				wait.ForHTTP("/health/ready").
+					WithPort("8000/tcp").
+					WithStatusCodeMatcher(func(status int) bool { return status == 200 }).
+					WithStartupTimeout(startTTL),
+			),
+		)
+		if err != nil {
+			aiResult.err = fmt.Errorf("testinfra: build+start apps/ai: %w%s", err, aiLogs(ctx, container))
+			return
+		}
+		host, port, err := hostPort(ctx, container, "8000/tcp")
+		if err != nil {
+			aiResult.err = fmt.Errorf("testinfra: ai service endpoint: %w", err)
+			return
+		}
+		aiResult.dsn = fmt.Sprintf("http://%s", net.JoinHostPort(host, port))
+	})
+	return aiResult.dsn, aiResult.err
+}
+
+// aiLogs appends the container's own stdout/stderr to a startup failure.
+// Without it a service that boots and then dies — a refused AMQP
+// declaration, a missing environment variable — surfaces only as a wait
+// strategy timeout, which names nothing about the actual cause.
+func aiLogs(ctx context.Context, container *testcontainers.DockerContainer) string {
+	if container == nil {
+		return ""
+	}
+	reader, err := container.Logs(ctx)
+	if err != nil {
+		return ""
+	}
+	defer reader.Close()
+	output, err := io.ReadAll(reader)
+	if err != nil || len(output) == 0 {
+		return ""
+	}
+	return "\n--- apps/ai container logs ---\n" + string(output)
+}
+
+// repoRoot resolves the repository root the same way repoFile does, for
+// callers that need the directory itself (a Docker build context).
+func repoRoot() (string, error) {
+	_, self, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("testinfra: cannot locate own source file")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(self), "..", "..", "..", ".."))
+	if _, err := os.Stat(filepath.Join(root, "apps", "ai", "Dockerfile")); err != nil {
+		return "", fmt.Errorf("testinfra: repository root: %w", err)
+	}
+	return root, nil
+}
+
+// detachRegistryCredentials makes the image build ignore whatever registry
+// credentials the developer's ~/.docker/config.json points at.
+//
+// Building from a Dockerfile is the one thing testcontainers does that reads
+// that file: it resolves an auth config for every FROM image, and it treats a
+// failing credential helper as fatal, where the docker CLI only warns. A
+// machine with a stale credHelpers entry (an expired cloud login, a deleted
+// account) therefore cannot build this image at all, with an error naming
+// registries this repository does not use — python:3.13-slim comes from Docker
+// Hub anonymously.
+//
+// Every image the suite touches is public, so having no credentials is the
+// correct configuration here, and an explicitly empty one is also more
+// hermetic than reading the developer's. It is left overridable: a caller that
+// really does need authenticated pulls can set DOCKER_AUTH_CONFIG itself.
+// detachRegistryCredentials stops testcontainers from consulting the
+// machine's docker credential helpers while building an image.
+//
+// Every image this package pulls is public, but testcontainers resolves an
+// auth config for each FROM at build time and treats a failing credential
+// helper as fatal, where the docker CLI only warns. A stale gcloud helper on
+// a developer's machine therefore makes the build impossible with an error
+// naming registries this repository has never used. An explicitly empty
+// config is both correct here and more hermetic — and it only applies when
+// DOCKER_AUTH_CONFIG is unset, so a CI runner that does need registry
+// credentials keeps them.
+func detachRegistryCredentials() {
+	if _, set := os.LookupEnv("DOCKER_AUTH_CONFIG"); !set {
+		_ = os.Setenv("DOCKER_AUTH_CONFIG", "{}")
+	}
 }

@@ -68,8 +68,30 @@ No database has to exist first. `internal/testinfra` starts a `pgvector/pgvector
 container per test binary via [testcontainers](https://golang.testcontainers.org/), and
 `internal/dbtest` clones a migrated template database out of it per suite, so a run needs a
 Docker daemon and nothing else and can never read the dev stack's data. The same package
-starts RabbitMQ for `internal/events` and ClickHouse for the Langfuse retention tests — those
-suites fail rather than skip when a broker or server cannot be started.
+starts every other backing service a suite needs — RabbitMQ for `internal/events`, ClickHouse
+for the Langfuse retention tests, MinIO for the blobstore, Redis for the cache client, LiteLLM
+for the gateway config, headless Chrome for the browser and PDF paths, and FlareSolverr for
+the retrieval ladder. Images match `docker-compose.yml` exactly, so a test runs what the stack
+runs, and a suite fails rather than skips when a service cannot be started.
+
+### What the containers made testable
+
+| Suite | Was | Is |
+| --- | --- | --- |
+| `internal/db` migrations | only `goose up` ever ran | every `Down` block runs, rollback leaves an empty schema, and down-then-up rebuilds the identical one |
+| `internal/events` AI account | `init-ai-user.sh` ran in compose and was trusted | the script itself runs against the broker; the account can read its four work queues, write results, and is refused ingest/enrich, work publishes and every declaration |
+| `internal/platform/storage/.../minio` | one test: an unreachable endpoint errors | bucket creation, round trip, content type, overwrite, and where a missing key surfaces |
+| `internal/queue` Redis | URL parsing only | the client connects, the `/1` database index is honoured, and credentials reach the server |
+| `internal/scraping` browser | nothing — Chrome was a local binary | script-rendered content is read, the browser is reused across callers, and `Close` releases it |
+| `internal/generation/infrastructure` | nothing — same reason | résumé and cover-letter PDFs are actually produced, deterministically, into a directory the renderer creates |
+| `internal/aicontract` (new) | the Python consumer was stood in for by a Go fake | the real `apps/ai` container, as the restricted broker account, round-trips a ghost work event with every field decoded by each side's own types |
+| `internal/retrieval` FlareSolverr | the library's client structs are unexported, so nothing could see the wire | the `request.get` contract holds, challenge-page rendering works, and the origin's status code is *not* reported — see below |
+
+FlareSolverr's flat status code is worth knowing about: it drives a real browser, so `solution.status`
+is always 200 and a 404 origin arrives as a successful solve whose body happens to be an error page.
+Nothing downstream of that rung can tell a dead posting from a live one by status alone. The test
+pins it, so if a future image starts reporting the real code the suite says so rather than the
+behaviour changing silently.
 
 ### The gateway config
 
@@ -102,6 +124,21 @@ sequenceDiagram
 
 A suite ending with `os.Exit` can ignore the release function — Postgres drops session
 locks when the connection closes.
+
+## Python tests
+
+```bash
+make test-py             # cd apps/ai && uv run pytest
+```
+
+`apps/ai/tests/integration/test_broker_contract.py` runs the service's real FastStream
+consumers against a RabbitMQ container (`testcontainers[rabbitmq]`, same image as compose),
+with the capability itself stubbed so no gateway is contacted. It proves the half of the
+messaging contract the Go suite cannot see from its side: that the Python declarations and
+`internal/events/topology.go`'s are compatible in either order, that a flat work message is
+consumed and answered with a result the Go side can parse, that a classified failure is acked
+and reported rather than redelivered forever, and that a raising handler dead-letters instead
+of dropping the delivery. Like the Go suite, these fail rather than skip without Docker.
 
 ## Frontend tests
 

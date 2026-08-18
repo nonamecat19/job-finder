@@ -30,7 +30,7 @@ flowchart TD
 | --- | --- | --- | --- |
 | Unit | `internal/**/ *_test.go` | nothing | `make test-go`, CI `go-test` |
 | Repository / DB | helpers in `internal/dbtest` | a Docker daemon (Postgres container) | `make test-integration` |
-| Integration | files behind `//go:build integration` | a Docker daemon (Postgres, RabbitMQ, ClickHouse, LiteLLM containers) | `make test-integration` |
+| Integration | files behind `//go:build integration` | a Docker daemon — every service is a container (Postgres, RabbitMQ, ClickHouse, MinIO, Redis, Chrome, FlareSolverr, LiteLLM) | `make test-integration` |
 | Live smoke | `adapters/live/live_test.go` (library), `internal/*/application/live_test.go` | real network + credentials | manual |
 | Frontend unit | `apps/dashboard/**/*.test.ts(x)` | jsdom | `make test-react`, CI `frontend-test` |
 | E2E | `apps/dashboard/tests` (Playwright) | full stack up | `make test-e2e` |

@@ -221,30 +221,14 @@ jobs:
     name: integration test
     needs: changes
     if: needs.changes.outputs.go == 'true'
+    # No `services:` block: the suite starts every backing service it needs
+    # (pgvector Postgres, RabbitMQ, ClickHouse, MinIO, Redis, Chrome,
+    # FlareSolverr, LiteLLM) itself, as testcontainers
+    # containers owned by the test binary (apps/api/internal/testinfra). That
+    # keeps the workflow and a developer's laptop running the exact same
+    # infrastructure, and means a service the workflow forgot to declare fails
+    # the run rather than being skipped over.
     runs-on: ubuntu-latest
-    services:
-      # pgvector, not stock postgres: integration fixtures build vector(768)
-      # values (internal/matching/integration_test.go), which stock postgres
-      # cannot even create the schema for.
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_DB: jobfinder_test
-          POSTGRES_USER: jobfinder
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U jobfinder"
-          --health-interval 5s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-    env:
-      DATABASE_URL: postgresql://jobfinder:postgres@localhost:5432/jobfinder_test
-      REDIS_URL: redis://localhost:6379/1
     steps:
       - uses: actions/checkout@v7
 
@@ -252,11 +236,16 @@ jobs:
         with:
           go-version-file: apps/api/go.mod
 
+      # This step builds the apps/ai image (internal/aicontract runs the real
+      # AI service against the real broker), so a cold runner pays ~4 minutes
+      # for that build before any of it runs. Cached rebuilds are seconds; if
+      # the wall-clock ever matters more than the coverage, split that one
+      # package into its own job rather than deleting the test.
+      #
       # One invocation, packages in parallel: each suite creates its own
-      # database from a migrated template (internal/dbtest), so no suite
-      # depends on another having migrated or truncated the shared one.
-      # DATABASE_URL names the database dbtest connects to in order to create
-      # and drop those clones.
+      # database from a migrated template (internal/dbtest) inside its own
+      # package's Postgres container, so no suite depends on another having
+      # migrated or truncated a shared one.
       - name: go test -tags integration ./...
         working-directory: apps/api
         run: go test -tags integration ./...

@@ -30,6 +30,14 @@ const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, li
 type HTTPScraper struct {
 	http *http.Client
 
+	// remoteWS, when set, makes BrowserContext attach to an already-running
+	// browser over the DevTools protocol instead of launching one from a
+	// local Chrome binary. Nothing in the deployment sets it — the API image
+	// ships its own Chrome — but it is what lets the browser paths be tested
+	// at all: a CI runner has no Chrome, so before this every test of this
+	// package and of the PDF renderer had to stop at the process boundary.
+	remoteWS string
+
 	mu          sync.Mutex
 	allocCancel context.CancelFunc
 	browserCtx  context.Context
@@ -39,6 +47,15 @@ type HTTPScraper struct {
 // New builds a scraper with a 20s request budget and no browser running yet.
 func New() *HTTPScraper {
 	return &HTTPScraper{http: &http.Client{Timeout: 20 * time.Second}}
+}
+
+// NewWithRemoteBrowser builds a scraper that drives a browser already
+// listening for DevTools connections at wsURL (ws://host:port) rather than
+// launching one. Same behaviour otherwise; see HTTPScraper.remoteWS.
+func NewWithRemoteBrowser(wsURL string) *HTTPScraper {
+	s := New()
+	s.remoteWS = wsURL
+	return s
 }
 
 var _ ports.Scraper = (*HTTPScraper)(nil)
@@ -84,10 +101,18 @@ func (s *HTTPScraper) BrowserContext(ctx context.Context) (context.Context, erro
 		}
 	}
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("no-sandbox", true),
+	var (
+		allocCtx    context.Context
+		allocCancel context.CancelFunc
 	)
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	if s.remoteWS != "" {
+		allocCtx, allocCancel = chromedp.NewRemoteAllocator(context.Background(), s.remoteWS)
+	} else {
+		opts := append(chromedp.DefaultExecAllocatorOptions[:],
+			chromedp.Flag("no-sandbox", true),
+		)
+		allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), opts...)
+	}
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 	if err := chromedp.Run(browserCtx); err != nil {
 		browserCancel()
