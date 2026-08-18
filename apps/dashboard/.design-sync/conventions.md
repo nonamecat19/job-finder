@@ -74,8 +74,13 @@ the value.
 - Form controls (`Input`, `Textarea`, `Select`, `Checkbox`) are thin wrappers over the
   native element and forward every native prop. They carry no label — wrap them in
   `Field` for the label treatment.
-- `Stepper` and `RangeSlider` are controlled: they take `value`/`valueMin`/`valueMax`
-  and require `onChange` handlers; they hold no internal state.
+- `Stepper`, `RangeSlider`, `Switch`, `Tabs` and `TagInput` are controlled: they take
+  `value`/`valueMin`/`valueMax`, `checked`, `active` or `values` and require `onChange`
+  handlers; they hold no internal state (`TagInput` keeps only its uncommitted draft).
+- `Tabs` takes `tabs: TabItem[]` (`{id, label, icon?}`) plus `active`/`onChange`, and has
+  two variants: `segmented` (default, a pill row on `var(--surface-track)`) and
+  `underline` (a bottom-border row). It renders the tab strip only — render your own
+  panel for the active id.
 - `GhostBadge` renders `null` below a score of 50, and `ScoreBadge` renders an em dash
   for `null`/`undefined` — both are deliberate, don't guard around them.
 - `Surface` caps at `max-w-3xl` and accepts `as` to change the element (`article`,

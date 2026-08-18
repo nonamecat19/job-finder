@@ -59,6 +59,12 @@
   can't trigger. Its preview shows the provider wrapping app content and explains that in
   copy. Hover/drag/focus states are likewise not covered by any preview.
 - `GhostBadge` returns `null` below score 50, so its cells only use scores ≥ 50.
+- `Switch`, `Tabs` and `TagInput` were added in the 2026-08 re-sync (they had drifted into
+  `src/components/ui.tsx` after the first sync). All three are controlled, so their previews
+  pass fixed props + a `noop` handler — the same pattern `RangeSlider.tsx` uses.
+- Previews deliberately avoid `lucide-react`: preview files import from `@job-finder/dashboard`
+  only, and icons are not part of the barrel. `Tabs`'s `TabItem.icon` is therefore unexercised
+  by its card.
 - Preview composition was ported from real usage: `TrackerPage.tsx` (EmptyState,
   LoadingRegion, Field+Select), `NormalEntryForm.tsx` (Field grid), `ContactLine.tsx`.
 
@@ -84,6 +90,9 @@
   hand — nothing links them.
 - **Font files** are copied from `public/fonts/` by an enumerated `cfg.extraFonts` list.
   Adding or renaming a woff2 in the app requires regenerating that list.
+- **`--surface-track`** is the only token `Tabs` needs that no other component uses; it is
+  emitted via the arbitrary utility `bg-[var(--surface-track)]`, so a Tailwind source-scan
+  regression would drop it silently. Check it in `ds-bundle/_ds_bundle.css` on re-sync.
 - Scope excluded deliberately: `src/components/layout/`, `VirtualList`, and all feature
   components. `useToast` is exported from the barrel but excluded from the component map
   (it's a hook).
