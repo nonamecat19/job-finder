@@ -21,6 +21,11 @@ type (
 	RenderCvRenderer = infrastructure.RenderCvRenderer
 
 	Handler = worker.Handler
+
+	SnapshotEnqueuer     = application.SnapshotEnqueuer
+	TxRunner             = application.TxRunner
+	ShapeProvider        = application.ShapeProvider
+	SummaryModelProvider = application.SummaryModelProvider
 )
 
 var (
@@ -51,4 +56,6 @@ var (
 	NewHtmlPdfRenderer  = infrastructure.NewHtmlPdfRenderer
 	NewRenderCvRenderer = infrastructure.NewRenderCvRenderer
 	NewHandler          = worker.NewHandler
+	NewResultHandler    = application.NewResultHandler
+	Kind                = application.Kind
 )

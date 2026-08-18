@@ -74,7 +74,7 @@ func masterJSON(t *testing.T, company string, bullets []string, skillLabel, skil
 
 func newWorkspaceHandler(t *testing.T, testDB *db.DB) (*generationhttp.GenerationsHandler, *generationapp.Service) {
 	t.Helper()
-	profileSvc := profileapp.NewService(testDB.Queries, nil, "", "")
+	profileSvc := profileapp.NewService(testDB.Queries, nil)
 	routers := generationapp.GenerationRouters{
 		Analyze: &stubProvider{reply: func(string) string {
 			b, _ := json.Marshal(map[string]any{
