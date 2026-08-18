@@ -14,10 +14,11 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/minio/minio-go/v7 v7.2.1
-	github.com/nonamecat19/job-scraper v0.2.0
+	github.com/nonamecat19/job-scraper v0.2.2
 	github.com/nonamecat19/rendercv-go v1.0.0
 	github.com/pgvector/pgvector-go v0.4.1
 	github.com/pressly/goose/v3 v3.27.3
+	github.com/rabbitmq/amqp091-go v1.13.0
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/viper v1.21.0

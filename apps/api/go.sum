@@ -107,8 +107,8 @@ github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOF
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/nlnwa/whatwg-url v0.6.2 h1:jU61lU2ig4LANydbEJmA2nPrtCGiKdtgT0rmMd2VZ/Q=
 github.com/nlnwa/whatwg-url v0.6.2/go.mod h1:x0FPXJzzOEieQtsBT/AKvbiBbQ46YlL6Xa7m02M1ECk=
-github.com/nonamecat19/job-scraper v0.2.0 h1:xYXJ9wFRh+Z2oaM+qKT6eIroopVHyMgG7sDeby8NKI0=
-github.com/nonamecat19/job-scraper v0.2.0/go.mod h1:DMGWYkgJTXdvJk0uEnoGmsITda7tUzBDxhaP/PcHMQI=
+github.com/nonamecat19/job-scraper v0.2.2 h1:d1iHfcIxdbTOQ2cr6XpTLY9VtMb1RHZ9i7ms0xIj6U0=
+github.com/nonamecat19/job-scraper v0.2.2/go.mod h1:DMGWYkgJTXdvJk0uEnoGmsITda7tUzBDxhaP/PcHMQI=
 github.com/nonamecat19/rendercv-go v1.0.0 h1:xdKDQttnCVDPB8Oqd6DZwK3CJrrjU7j7O91dSMMbB0Y=
 github.com/nonamecat19/rendercv-go v1.0.0/go.mod h1:RDZgQahfSgjeXDxYgoo5rGt3/gRn+CYvPGN7k1/mSBk=
 github.com/nyaruka/phonenumbers v1.8.1 h1:2K9YMQuv1dCGqjjzB1DwmdCe89khT4KPBQb2CxAMMlU=
@@ -127,6 +127,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pressly/goose/v3 v3.27.3 h1:pIglVHjw99r4e/hDHHwbl9vfOsDMqUokfkXo6+n/RxA=
 github.com/pressly/goose/v3 v3.27.3/go.mod h1:Dag+xpV6o20HR2LFY1j0q6MDwc3f7vPUFDA77R+0yGY=
+github.com/rabbitmq/amqp091-go v1.13.0 h1:L8NA1WtF76C6KA3LAoufjfLgbist/If1UQYcsOjtxXA=
+github.com/rabbitmq/amqp091-go v1.13.0/go.mod h1:Hy4jKW5kQART1u+JkDTF9YYOQUHXqMuhrgxOEeS7G4o=
 github.com/quic-go/qpack v0.6.0 h1:g7W+BMYynC1LbYLSqRt8PBg5Tgwxn214ZZR34VIOjz8=
 github.com/quic-go/qpack v0.6.0/go.mod h1:lUpLKChi8njB4ty2bFLX2x4gzDqXwUpaO1DP9qMDZII=
 github.com/redis/go-redis/v9 v9.22.0 h1:laDvpYXTJtZLloinw1fA5Kqd6HAEH2XKxOkG/PDq2F0=
