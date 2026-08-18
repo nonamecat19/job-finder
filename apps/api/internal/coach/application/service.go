@@ -15,8 +15,22 @@ type Service struct {
 	log   *slog.Logger
 }
 
+// RephraseRequest is the grounding data a rephrase call needs (T107):
+// structured, rather than a pre-built prompt string, so a RephraseModel
+// implementation backed by the `rephrase` capability (aiclient) can send it
+// straight through as that capability's input model — the capability builds
+// its own prompt server-side (apps/ai's prompts/rephrase.py) instead of
+// receiving Go's.
+type RephraseRequest struct {
+	Term            string
+	Canonical       string
+	SourceBullet    string
+	SourceLabel     string
+	PriorViolations []string
+}
+
 type RephraseModel interface {
-	Rephrase(ctx context.Context, prompt string) (string, error)
+	Rephrase(ctx context.Context, req RephraseRequest) (string, error)
 }
 
 func NewService(model RephraseModel) *Service {
@@ -149,10 +163,21 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 	sourceSeniority := domain.ExtractSeniority(entry.SourceLabel)
 	sourceDateRange := domain.ExtractDateRange(entry.SourceLabel)
 
+	want := term.Term
+	if term.Canonical != "" {
+		want = term.Canonical
+	}
+
 	var lastViol []string
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		prompt := buildRephrasePrompt(term, entry.Bullet, entry.SourceLabel, lastViol)
-		raw, err := s.model.Rephrase(ctx, prompt)
+		req := RephraseRequest{
+			Term:            want,
+			Canonical:       term.Canonical,
+			SourceBullet:    entry.Bullet,
+			SourceLabel:     entry.SourceLabel,
+			PriorViolations: lastViol,
+		}
+		raw, err := s.model.Rephrase(ctx, req)
 		if err != nil {
 			s.log.WarnContext(ctx, "coach: rephrase model error",
 				"term", term.Term, "error", err)
@@ -175,28 +200,3 @@ func (s *Service) generateGroundedRephrase(ctx context.Context, term keyword.Dif
 	return ""
 }
 
-func buildRephrasePrompt(term keyword.DiffTerm, sourceBullet string, sourceLabel string, priorViolations []string) string {
-	want := term.Term
-	if term.Canonical != "" {
-		want = term.Canonical
-	}
-	var b strings.Builder
-	b.WriteString("Reframe the candidate's EXISTING resume bullet so that it honestly surfaces the target skill/term the job wants.\n\n")
-	b.WriteString("STRICT RULES:\n")
-	b.WriteString("- Rephrase ONLY the experience shown in the source bullet below.\n")
-	b.WriteString("- Do NOT add any skill, technology, employer, job title, date, or metric that is not already in the source bullet.\n")
-	b.WriteString("- Do NOT inflate seniority. If the source label says 'Junior', do not call it 'Senior'.\n")
-	b.WriteString("- Do NOT inflate duration. If the source label says '2022–2024', do not claim '10+ years'.\n")
-	b.WriteString("- Do NOT borrow technologies from other entries. Only use what is in the source bullet.\n")
-	b.WriteString("- If the source bullet does not genuinely support the target term, do not stretch it — return the bullet unchanged.\n")
-	b.WriteString("- Output the single reframed bullet as plain text. No preamble, no quotes, no bullet marker.\n\n")
-	b.WriteString("TARGET TERM: " + want + "\n\n")
-	b.WriteString("SOURCE LABEL (seniority, employer, dates):\n" + sourceLabel + "\n\n")
-	b.WriteString("SOURCE BULLET:\n" + sourceBullet + "\n")
-	if len(priorViolations) > 0 {
-		b.WriteString("\nYour previous attempt violated the no-invention rule:\n- ")
-		b.WriteString(strings.Join(priorViolations, "\n- "))
-		b.WriteString("\nRegenerate using only what the source bullet and label contain.\n")
-	}
-	return b.String()
-}

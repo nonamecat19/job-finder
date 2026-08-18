@@ -12,9 +12,10 @@ type fakeRephraseModel struct {
 	responses map[string]string
 }
 
-func (f *fakeRephraseModel) Rephrase(ctx context.Context, prompt string) (string, error) {
+func (f *fakeRephraseModel) Rephrase(ctx context.Context, req RephraseRequest) (string, error) {
+	haystack := req.Term + " " + req.Canonical + " " + req.SourceBullet + " " + req.SourceLabel
 	for term, resp := range f.responses {
-		if contains(prompt, term) {
+		if contains(haystack, term) {
 			return resp, nil
 		}
 	}
