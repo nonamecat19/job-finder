@@ -55,7 +55,6 @@ services:
       - ./gateway/config.yaml:/app/config.yaml:ro
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
-      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # Observability collector (036 FR-001, contracts C2-6). These live here

@@ -42,7 +42,7 @@ flowchart LR
 | Core | `PORT`, `DATABASE_URL`, `REDIS_URL` |
 | Inference | `OLLAMA_URL`, `OLLAMA_KEY`, `EMBED_URL`, `EMBED_MODEL`, `EMBED_DIMS`, `OLLAMA_KEEP_ALIVE`, `LLM_MAX_IDLE_CONNS_PER_HOST` |
 | Models per task | `LLM_MODEL`, `LLM_MODEL_MATCH`, `LLM_MODEL_GENERATION`, `LLM_MODEL_REPHRASE`, `LLM_MODEL_GHOST` |
-| Gateway | `GATEWAY_URL`, `LITELLM_MASTER_KEY` — provider keys (`CEREBRAS_API_KEY`, `GROQ_API_KEY`, …) belong to the gateway, never to the API; `config_test.go:158-165` fails the build if a compose file grants them |
+| Gateway | `GATEWAY_URL`, `LITELLM_MASTER_KEY` — provider keys (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`) belong to the gateway, never to the API; `config_test.go:158-165` fails the build if a compose file grants them |
 | Matching | `MATCH_SIMILARITY_THRESHOLD`, `MATCH_NOTIFY_SCORE_THRESHOLD`, `MATCH_NOTIFY_RATE_LIMIT` |
 | Throughput | `AI_CONCURRENCY_CLOUD`, `AI_CONCURRENCY_LOCAL`, `INGEST_CONCURRENCY`, `ENRICH_CONCURRENCY` |
 | Deadlines | `AI_TASK_TIMEOUT_MATCH`, `_GENERATE`, `_SALARY`, `_GHOST`, `_ENRICH`, `_INGEST` |

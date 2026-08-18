@@ -38,12 +38,12 @@ history.
 `docker compose --profile scraping-extras up` adds FlareSolverr for Cloudflare-protected pages.
 
 There is one inference path: every AI request goes through the self-hosted LiteLLM proxy
-(`gateway/config.yaml`) to a hosted provider. `GATEWAY_URL` and `LITELLM_MASTER_KEY` are required —
-the application refuses to boot without them, naming the missing key. Each scenario (match,
-generation, rephrase, ghost-job, salary, outreach, recruiter, every generation sub-stage, and
-embeddings) resolves to its own ordered failover chain of at least two tiers across at least two
-distinct providers (Cerebras, OpenRouter, OpenAI). Provider keys
-(`CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`) live
+(`gateway/config.yaml`) to OpenRouter (embeddings go straight to OpenAI instead — see that file's
+`embed` block). `GATEWAY_URL` and `LITELLM_MASTER_KEY` are required — the application refuses to
+boot without them, naming the missing key. Each scenario (match, generation, rephrase, ghost-job,
+salary, outreach, recruiter, every generation sub-stage, and embeddings) resolves to its own
+ordered failover chain declared in `gateway/config.yaml`. Provider keys
+(`OPENROUTER_API_KEY`, `OPENAI_API_KEY`) live
 in the `litellm` compose service's environment only — the Go backend never reads them and never
 learns which upstream served a request beyond a `served_model` log line. **Changing which model
 serves a scenario is a `gateway/config.yaml` edit followed by `docker compose restart litellm` — no

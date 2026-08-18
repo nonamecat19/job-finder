@@ -29,8 +29,8 @@ restart.
 See [LLM abstraction](./llm-abstraction.md) for the routing mechanics and
 `specs/domains/llm-routing.md` for the requirements that bind it.
 
-Provider credentials (`CEREBRAS_API_KEY`, `GROQ_API_KEY`, `COHERE_API_KEY`,
-`OPENROUTER_API_KEY`) live in the `litellm` compose service's environment only. The Go
+Provider credentials (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`) live in the
+`litellm` compose service's environment only. The Go
 backend never reads them and cannot expose them.
 
 ## `aifeature`

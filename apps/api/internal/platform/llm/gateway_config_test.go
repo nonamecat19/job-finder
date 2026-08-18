@@ -16,18 +16,18 @@ import (
 
 // The routing contract Constitution V depends on lives in a file the Go build
 // never touches, so nothing but this test stands between a forgotten fallback
-// chain and a scenario that terminates on a single provider.
+// chain and a scenario that has no working tier at all.
 // specs/044-litellm-only-routing/contracts/gateway-config.md.
 //
 // Each invariant is a pure func returning its violations, so the checks
 // themselves are tested against inline fixtures below — a guardrail that can
 // only ever pass guards nothing.
 //
-// This file is deliberately incompatible with gateway/config.yaml as it
-// stands today: that file still declares `default`/`local`, which this
-// contract removes (specs/044-litellm-only-routing/contracts/gateway-config.md
-// C1-2). TestGatewayConfigHonoursRoutingContract is expected to fail until a
-// later change migrates gateway/config.yaml and internal/config/defaults.go.
+// TestGatewayConfigHonoursRoutingContract runs these invariants against the
+// real gateway/config.yaml on disk; TestGatewayInvariantsAcceptValidConfig
+// and TestGatewayInvariantsRejectBrokenConfig below exercise the same
+// invariants against the inline validFixture instead, so a check's own logic
+// can be tested without touching the real file.
 
 type gatewayConfig struct {
 	ModelList []struct {
@@ -74,15 +74,18 @@ var requestedScenarioGroups = []string{
 // (contracts/gateway-config.md C3-2).
 var toolCapableTaskKeys = []string{"salary"}
 
-// singleProviderScenarios lists scenario groups that are a deliberate,
-// temporary exception to C2-1's "at least two tiers from at least two
-// distinct providers" rule. 2026-08-13 removed Cohere and Groq from every
-// chain; `embed` — whose primary was Cohere with OpenAI as its only fallback
-// — is left as a single OpenAI tier with no fallback until a second
-// embedding provider is added back (contracts/gateway-config.md C2-5). These
-// groups must still declare a model_list entry, but are not required to
-// declare a fallback chain.
-var singleProviderScenarios = map[string]bool{"embed": true}
+// singleProviderScenarios lists scenario groups that are not required to
+// declare a litellm_settings.fallbacks chain — they resolve on their single
+// model_list entry alone. `embed` has no fallback because it is the one
+// chain left off OpenRouter (see its own block in gateway/config.yaml);
+// generation-analyze and generation-select have no fallback because 038's
+// measurement found nothing worth falling back to for those two stages.
+// These groups must still declare a model_list entry.
+var singleProviderScenarios = map[string]bool{
+	"embed":              true,
+	"generation-analyze": true,
+	"generation-select":  true,
+}
 
 func parseGatewayConfig(raw []byte) (*gatewayConfig, error) {
 	cfg := &gatewayConfig{}
@@ -234,38 +237,26 @@ func checkRequestedGroupsHaveChains(c *gatewayConfig) []string {
 	return violations
 }
 
-// Invariant: every requested scenario resolves to a chain of at least two
-// tiers drawn from at least two distinct providers, replacing "every chain
-// terminates at local" (contracts/gateway-config.md C2-1, data-model.md §2
-// "Chain invariant, restated").
+// Invariant: every chain with a fallback list resolves to at least two
+// tiers. Replaces "every chain terminates at local" (contracts/gateway-
+// config.md C2-1, data-model.md §2 "Chain invariant, restated").
+//
+// 2026-08-17: the ">=2 distinct providers" half of C2-1 is retired along
+// with Cerebras — every tier in this file is OpenRouter now (except embed's
+// OpenAI tier), by explicit choice, so "distinct providers" is no longer a
+// meaningful signal. A chain still gets multiple tiers where one is useful
+// (retries against a second model if the first errors or rate-limits), just
+// not from a second provider.
 func checkChainArityAndProviders(c *gatewayConfig) []string {
 	var violations []string
 	chains := c.chains()
-	deployments := c.deployments()
 
 	for _, group := range sortedKeys(chains) {
 		full := append([]string{group}, chains[group]...)
 		if len(full) < 2 {
 			violations = append(violations, fmt.Sprintf(
-				"chain for %q has %d tier(s) total (%v); every scenario must resolve to at least two tiers drawn from at least two distinct providers (contracts/gateway-config.md C2-1)",
+				"chain for %q has %d tier(s) total (%v); a declared fallback chain must resolve to at least two tiers (contracts/gateway-config.md C2-1)",
 				group, len(full), full))
-		}
-
-		providers := map[string]bool{}
-		for _, tier := range full {
-			params, ok := deployments[tier]
-			if !ok {
-				// Reported by checkChainTiersAreDeclared; not this check's job.
-				continue
-			}
-			if provider, ok := providerOf(params); ok {
-				providers[provider] = true
-			}
-		}
-		if len(providers) < 2 {
-			violations = append(violations, fmt.Sprintf(
-				"chain for %q draws tiers from %d distinct provider(s) (%v); every scenario must span at least two providers so a single upstream outage cannot block it (contracts/gateway-config.md C2-1)",
-				group, len(providers), sortedKeys(providers)))
 		}
 	}
 	return violations
@@ -448,7 +439,7 @@ var gatewayInvariants = []struct {
 	check func(*gatewayConfig) []string
 }{
 	{"every requested scenario has a fallback chain", checkRequestedGroupsHaveChains},
-	{"every chain has >=2 tiers from >=2 distinct providers", checkChainArityAndProviders},
+	{"every declared chain has >=2 tiers", checkChainArityAndProviders},
 	{"no group named default, no tier named local", checkNoDefaultOrLocalNaming},
 	{"every chain tier is declared in model_list", checkChainTiersAreDeclared},
 	{"every openrouter/* deployment bounds reasoning", checkOpenRouterReasoningBounds},
@@ -599,67 +590,55 @@ func TestGatewayConfigHonoursRoutingContract(t *testing.T) {
 const validFixture = `
 model_list:
   - model_name: match
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
-  - model_name: match-openrouter
     litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}
+  - model_name: match-gpt-4o-mini
+    litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: ghost
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
-  - model_name: ghost-openrouter
     litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}
+  - model_name: ghost-gpt-4o-mini
+    litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: rephrase
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
-  - model_name: rephrase-openrouter
     litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
-  - model_name: recruiter
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
-  - model_name: recruiter-openrouter
+  - model_name: rephrase-deepseek
     litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}
-  - model_name: salary
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
-    model_info: {supports_function_calling: true}
-  - model_name: salary-openrouter
+  - model_name: recruiter
+    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}
+  - model_name: recruiter-gpt-4o-mini
     litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
+  - model_name: salary
+    litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
+    model_info: {supports_function_calling: true}
+  - model_name: salary-claude-haiku
+    litellm_params: {model: openrouter/anthropic/claude-haiku-4.5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
     model_info: {supports_function_calling: true}
   - model_name: outreach
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: outreach-haiku
     litellm_params: {model: openrouter/anthropic/claude-haiku-4.5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
-  - model_name: outreach-cerebras
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
   - model_name: generation
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: generation-haiku
     litellm_params: {model: openrouter/anthropic/claude-haiku-4.5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
-  - model_name: generation-cerebras
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
   - model_name: generation-analyze
     litellm_params: {model: openrouter/google/gemini-2.5-flash-lite, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
-  - model_name: generation-analyze-cerebras
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
   - model_name: generation-select
     litellm_params: {model: openrouter/google/gemini-2.5-flash-lite, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
-  - model_name: generation-select-cerebras
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
   - model_name: generation-select-premium
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: generation-select-premium-haiku
     litellm_params: {model: openrouter/anthropic/claude-haiku-4.5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
-  - model_name: generation-select-premium-cerebras
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
   - model_name: generation-summary
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: generation-summary-haiku
     litellm_params: {model: openrouter/anthropic/claude-haiku-4.5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
-  - model_name: generation-summary-cerebras
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
   - model_name: generation-summary-premium
     litellm_params: {model: openrouter/anthropic/claude-opus-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: generation-summary-premium-sonnet
     litellm_params: {model: openrouter/anthropic/claude-sonnet-5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: generation-summary-fast
-    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}
-  - model_name: generation-summary-fast-openrouter
     litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}
+  - model_name: generation-summary-fast-deepseek
+    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}
   - model_name: embed
     litellm_params: {model: openai/text-embedding-3-small, api_key: os.environ/OPENAI_API_KEY, output_dimension: 1024, input_type: search_document}
 litellm_settings:
@@ -670,19 +649,17 @@ litellm_settings:
   allowed_fails: 3
   cooldown_time: 60
   fallbacks:
-    - match: [match-openrouter]
-    - ghost: [ghost-openrouter]
-    - rephrase: [rephrase-openrouter]
-    - recruiter: [recruiter-openrouter]
-    - salary: [salary-openrouter]
-    - outreach: [outreach-haiku, outreach-cerebras]
-    - generation: [generation-haiku, generation-cerebras]
-    - generation-analyze: [generation-analyze-cerebras]
-    - generation-select: [generation-select-cerebras]
-    - generation-select-premium: [generation-select-premium-haiku, generation-select-premium-cerebras]
-    - generation-summary: [generation-summary-haiku, generation-summary-cerebras]
-    - generation-summary-premium: [generation-summary-premium-sonnet, generation-summary-cerebras]
-    - generation-summary-fast: [generation-summary-fast-openrouter]
+    - match: [match-gpt-4o-mini]
+    - ghost: [ghost-gpt-4o-mini]
+    - rephrase: [rephrase-deepseek]
+    - recruiter: [recruiter-gpt-4o-mini]
+    - salary: [salary-claude-haiku]
+    - outreach: [outreach-haiku]
+    - generation: [generation-haiku]
+    - generation-select-premium: [generation-select-premium-haiku]
+    - generation-summary: [generation-summary-haiku]
+    - generation-summary-premium: [generation-summary-premium-sonnet]
+    - generation-summary-fast: [generation-summary-fast-deepseek]
 `
 
 func fixture(t *testing.T, yamlText string) *gatewayConfig {
@@ -722,7 +699,7 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			name:  "chain dropped for the escalation key",
 			check: checkRequestedGroupsHaveChains,
 			mutate: func(s string) string {
-				return strings.Replace(s, "    - generation-select-premium: [generation-select-premium-haiku, generation-select-premium-cerebras]\n", "", 1)
+				return strings.Replace(s, "    - generation-select-premium: [generation-select-premium-haiku]\n", "", 1)
 			},
 			wantSub: `"generation-select-premium" has no litellm_settings.fallbacks chain`,
 		},
@@ -730,25 +707,15 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			name:  "chain has fewer than two tiers total",
 			check: checkChainArityAndProviders,
 			mutate: func(s string) string {
-				return strings.Replace(s, "    - match: [match-openrouter]\n", "    - match: []\n", 1)
+				return strings.Replace(s, "    - match: [match-gpt-4o-mini]\n", "    - match: []\n", 1)
 			},
 			wantSub: "has 1 tier(s) total",
-		},
-		{
-			name:  "chain draws tiers from a single provider",
-			check: checkChainArityAndProviders,
-			mutate: func(s string) string {
-				return strings.Replace(s,
-					"model_name: ghost-openrouter\n    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}",
-					"model_name: ghost-openrouter\n    litellm_params: {model: cerebras/gpt-120b-instruct, api_key: os.environ/CEREBRAS_API_KEY}", 1)
-			},
-			wantSub: "draws tiers from 1 distinct provider(s)",
 		},
 		{
 			name:  "a group is renamed to default",
 			check: checkNoDefaultOrLocalNaming,
 			mutate: func(s string) string {
-				return strings.Replace(s, "    - match: [match-openrouter]\n", "    - default: [match-openrouter]\n", 1)
+				return strings.Replace(s, "    - match: [match-gpt-4o-mini]\n", "    - default: [match-gpt-4o-mini]\n", 1)
 			},
 			wantSub: `is named "default"`,
 		},
@@ -757,9 +724,9 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			check: checkNoDefaultOrLocalNaming,
 			mutate: func(s string) string {
 				s = strings.Replace(s,
-					"model_name: match-openrouter\n    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}",
-					"model_name: match-local\n    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}", 1)
-				return strings.Replace(s, "    - match: [match-openrouter]\n", "    - match: [match-local]\n", 1)
+					"model_name: match-gpt-4o-mini\n    litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}",
+					"model_name: match-local\n    litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}", 1)
+				return strings.Replace(s, "    - match: [match-gpt-4o-mini]\n", "    - match: [match-local]\n", 1)
 			},
 			wantSub: `"match-local"`,
 		},
@@ -767,9 +734,9 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			name:  "chain names an undeclared tier",
 			check: checkChainTiersAreDeclared,
 			mutate: func(s string) string {
-				return strings.Replace(s, "    - generation-analyze: [generation-analyze-cerebras]\n", "    - generation-analyze: [generation-analyze-typo, generation-analyze-cerebras]\n", 1)
+				return strings.Replace(s, "    - generation-select-premium: [generation-select-premium-haiku]\n", "    - generation-select-premium: [generation-select-premium-typo, generation-select-premium-haiku]\n", 1)
 			},
-			wantSub: `names tier "generation-analyze-typo"`,
+			wantSub: `names tier "generation-select-premium-typo"`,
 		},
 		{
 			name:  "an openrouter tier is left without a reasoning bound",
@@ -786,8 +753,8 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			check: checkNoLiteralAPIKeys,
 			mutate: func(s string) string {
 				return strings.Replace(s,
-					"model_name: match\n    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}",
-					"model_name: match\n    litellm_params: {model: cerebras/gpt-oss-120b, api_key: sk-real-secret}", 1)
+					"model_name: match\n    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}",
+					"model_name: match\n    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: sk-real-secret}", 1)
 			},
 			wantSub: "has a literal api_key",
 		},
@@ -809,8 +776,8 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			check: checkObservabilityCallbacks,
 			mutate: func(s string) string {
 				return strings.Replace(s,
-					"model_name: match\n    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY}",
-					"model_name: match\n    litellm_params: {model: cerebras/gpt-oss-120b, api_key: os.environ/CEREBRAS_API_KEY, success_callback: [langfuse]}", 1)
+					"model_name: match\n    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY}",
+					"model_name: match\n    litellm_params: {model: openrouter/deepseek/deepseek-v4-pro, reasoning: {enabled: false}, api_key: os.environ/OPENROUTER_API_KEY, success_callback: [langfuse]}", 1)
 			},
 			wantSub: "callbacks are global only",
 		},
@@ -832,8 +799,8 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			check: checkToolChainsDeclareCapability,
 			mutate: func(s string) string {
 				return strings.Replace(s,
-					"    - salary: [salary-openrouter]\n",
-					"    - salary: [salary-openrouter, salary-mystery]\n", 1)
+					"    - salary: [salary-claude-haiku]\n",
+					"    - salary: [salary-claude-haiku, salary-mystery]\n", 1)
 			},
 			wantSub: "declares no model_info.supports_function_calling",
 		},
@@ -842,10 +809,10 @@ func TestGatewayInvariantsRejectBrokenConfig(t *testing.T) {
 			check: checkToolChainsDeclareCapability,
 			mutate: func(s string) string {
 				return strings.Replace(s,
-					"model_name: salary-openrouter\n    litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}\n    model_info: {supports_function_calling: true}",
-					"model_name: salary-openrouter\n    litellm_params: {model: openrouter/openai/gpt-4o-mini, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}", 1)
+					"model_name: salary-claude-haiku\n    litellm_params: {model: openrouter/anthropic/claude-haiku-4.5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}\n    model_info: {supports_function_calling: true}",
+					"model_name: salary-claude-haiku\n    litellm_params: {model: openrouter/anthropic/claude-haiku-4.5, reasoning_effort: low, api_key: os.environ/OPENROUTER_API_KEY}", 1)
 			},
-			wantSub: `tier "salary-openrouter"`,
+			wantSub: `tier "salary-claude-haiku"`,
 		},
 		{
 			name:  "an embed tier loses its output_dimension",

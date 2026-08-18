@@ -40,8 +40,8 @@ const pageSize = 100
 // Config is what the pruner needs to reach the collector.
 //
 // The credentials here are the collector's own API keys, not provider
-// credentials — the application still holds no CEREBRAS/GROQ/COHERE/OPENROUTER
-// key, which is the clause Constitution Principle V actually protects. They are
+// credentials — the application still holds no OPENROUTER/OPENAI key, which
+// is the clause Constitution Principle V actually protects. They are
 // named EVAL_PRUNE_* rather than LANGFUSE_* on purpose: 036 C2-2 forbids
 // granting the application container a LANGFUSE_* variable, and the pruning job
 // is a different grant with a different reason, so it reads different names and

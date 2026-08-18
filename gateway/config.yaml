@@ -12,9 +12,10 @@
 # There is no local/self-hosted terminal tier and no `default` catch-all
 # group any more (044 removes both — the free-tier-first-then-Ollama rule
 # this header used to describe is gone with them). Every scenario instead
-# resolves to a chain of at least two tiers drawn from at least two distinct
-# hosted providers (C2-1); an unknown scenario name fails loudly (4xx)
-# instead of falling through to a default.
+# resolves to a chain of at least one tier, drawn from OpenRouter only (see
+# the 2026-08-17 note below) except `embed`, which stays on OpenAI directly
+# for the reason its own block explains; an unknown scenario name fails
+# loudly (4xx) instead of falling through to a default.
 #
 # TEMPORARY (2026-08-13): Groq and Cohere are removed from every chain.
 # Their fallback tiers below are gone, and `embed` — whose primary was Cohere
@@ -24,21 +25,32 @@
 # their whole fallback list (recruiter, generation-summary-fast) gained an
 # openrouter tier instead so C2-1 still holds for them.
 #
-# Naming convention: <scenario>-<tier> for every non-primary tier; the
-# primary group is bare <scenario> so app requests (model=<scenario>) hit
-# tier 1 directly. Ordering follows the scenario's class (C2-3):
-#   - economy-structured: a free tier leads, paid aggregator tiers follow
-#     (match, ghost, rephrase, recruiter, generation-summary-fast)
+# 2026-08-17: Cerebras is removed from every chain — OpenRouter only, no
+# other provider, per direct instruction. C2-1's ">=2 distinct providers"
+# rule is retired along with it: every chain below draws all its tiers from
+# OpenRouter. Where a chain still has two tiers, that redundancy is now
+# against OpenRouter itself going down or rate-limiting, not against a
+# second provider's outage — a narrower guarantee than before, accepted
+# deliberately in exchange for a single-provider bill and a single API key
+# to manage.
+#
+# Naming convention: <scenario>-<tier> for every non-primary tier, named
+# after its model rather than its provider now that every tier is
+# OpenRouter; the primary group is bare <scenario> so app requests
+# (model=<scenario>) hit tier 1 directly. Ordering follows the scenario's
+# class (C2-3):
+#   - economy-structured: the cheap tier leads, a second cheap OpenRouter
+#     model follows (match, ghost, rephrase, recruiter, generation-summary-fast)
 #   - quality-writing: the quality model leads, cheaper tiers are fallbacks
 #     (generation, outreach, generation-select-premium, generation-summary,
 #     generation-summary-premium) — FR-011 requires `generation` and
 #     `outreach` specifically to lead with openrouter/anthropic/claude-sonnet-5
-#   - tool-capable: free tier leads, but EVERY tier is tool-capable (salary
-#     is the only scenario this applies to — C3-2)
+#   - tool-capable: the cheap tier leads, but EVERY tier is tool-capable
+#     (salary is the only scenario this applies to — C3-2)
 #   - embedding: the primary provider leads, every tier at the declared
 #     width (embed)
 #   generation-analyze and generation-select are economy-structured but are
-#   the deliberate exception to "free tier leads": see their block below.
+#   the deliberate exception to "the cheap tier leads": see their block below.
 #
 # Every model below is response_format:json_object-capable (C3-5) so the
 # chain never silently degrades a structured-output scenario into prose.
@@ -51,8 +63,8 @@
 # generation-* ones (C6).
 #
 # Model IDs verified live against each provider's catalog 2026-07-31
-# (research.md R8): Cerebras gpt-oss-120b, OpenRouter
-# deepseek/deepseek-v4-pro / anthropic/claude-* / openai/gpt-4o-mini,
+# (research.md R8): OpenRouter deepseek/deepseek-v4-pro / anthropic/claude-*
+# / openai/gpt-4o-mini / google/gemini-2.5-flash-lite,
 # OpenAI text-embedding-3-small (research.md R4). The
 # `litellm_settings.fallbacks` shape below (a list of single-key dicts under
 # litellm_settings, not litellm_params) was confirmed against the pinned
@@ -65,50 +77,52 @@ model_list:
   # --- match (economy-structured) ---
   - model_name: match
     litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: match-openrouter
-    litellm_params:
       model: openrouter/deepseek/deepseek-v4-pro
       reasoning: { enabled: false }
       api_key: os.environ/OPENROUTER_API_KEY
-
-  # --- ghost (economy-structured) ---
-  - model_name: ghost
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: ghost-openrouter
-    litellm_params:
-      model: openrouter/deepseek/deepseek-v4-pro
-      reasoning: { enabled: false }
-      api_key: os.environ/OPENROUTER_API_KEY
-
-  # --- rephrase (economy-structured) ---
-  - model_name: rephrase
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: rephrase-openrouter
+  - model_name: match-gpt-4o-mini
     litellm_params:
       model: openrouter/openai/gpt-4o-mini
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
 
-  # --- recruiter (economy-structured, new in 044) ---
-  # Recruiter-message extraction is a structured-output task in the same
-  # class as match/ghost/rephrase, so it is modelled on their shape: free
-  # tier leads, an openrouter tier follows. Two tiers is the whole chain
-  # (2026-08-13: groq and cohere were removed; the openrouter tier that the
-  # other economy-structured scenarios carried is what fills the gap).
-  - model_name: recruiter
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: recruiter-openrouter
+  # --- ghost (economy-structured) ---
+  - model_name: ghost
     litellm_params:
       model: openrouter/deepseek/deepseek-v4-pro
       reasoning: { enabled: false }
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: ghost-gpt-4o-mini
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # --- rephrase (economy-structured) ---
+  - model_name: rephrase
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: rephrase-deepseek
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-pro
+      reasoning: { enabled: false }
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # --- recruiter (economy-structured, new in 044) ---
+  # Recruiter-message extraction is a structured-output task in the same
+  # class as match/ghost/rephrase, so it is modelled on their shape: the
+  # cheap tier leads, a second cheap OpenRouter model follows.
+  - model_name: recruiter
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-pro
+      reasoning: { enabled: false }
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: recruiter-gpt-4o-mini
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
 
   # --- salary (tool-capable, new in 044) ---
@@ -138,13 +152,14 @@ model_list:
   # first line to re-verify.
   - model_name: salary
     litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
+      model: openrouter/openai/gpt-4o-mini
+      reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
     model_info:
       supports_function_calling: true
-  - model_name: salary-openrouter
+  - model_name: salary-claude-haiku
     litellm_params:
-      model: openrouter/openai/gpt-4o-mini
+      model: openrouter/anthropic/claude-haiku-4.5
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
     model_info:
@@ -165,10 +180,6 @@ model_list:
       model: openrouter/anthropic/claude-haiku-4.5
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
-  - model_name: outreach-cerebras
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
 
   # --- generation (cover letters, quality-writing) ---
   # Since 035 this key serves the cover letter only; the resume is produced
@@ -185,10 +196,6 @@ model_list:
       model: openrouter/anthropic/claude-haiku-4.5
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
-  - model_name: generation-cerebras
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
 
   # --- generation stages (035-split-model-generation) ---
   # The generation task is split into stages so each is served by the
@@ -197,8 +204,8 @@ model_list:
   # a fraction of the price, and fails only at writing the summary.
   #
   # generation-analyze and generation-select are economy-structured, but are
-  # the deliberate exception to "free tier leads" (FR-011's second clause):
-  # they lead with a paid OpenRouter tier because the mechanical stages
+  # the deliberate exception to "the cheap tier leads" (FR-011's second
+  # clause): they lead with a pricier OpenRouter tier because the mechanical stages
   # measured better there. WHERE THE EVIDENCE LIVES (038). Do not record
   # measurements in this comment. The evaluation harness produces a durable
   # comparison artifact — per model, per case, per stage, with cost, latency,
@@ -230,20 +237,12 @@ model_list:
       model: openrouter/google/gemini-2.5-flash-lite
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
-  - model_name: generation-analyze-cerebras
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
 
   - model_name: generation-select
     litellm_params:
       model: openrouter/google/gemini-2.5-flash-lite
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
-  - model_name: generation-select-cerebras
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
 
   # Escalation target (quality-writing): reached only when the economy model
   # returns incomplete selection output twice (FR-007).
@@ -257,10 +256,6 @@ model_list:
       model: openrouter/anthropic/claude-haiku-4.5
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
-  - model_name: generation-select-premium-cerebras
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
 
   - model_name: generation-summary
     litellm_params:
@@ -272,10 +267,6 @@ model_list:
       model: openrouter/anthropic/claude-haiku-4.5
       reasoning_effort: low
       api_key: os.environ/OPENROUTER_API_KEY
-  - model_name: generation-summary-cerebras
-    litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
 
   # --- user-selectable summary options (034) ---
   # The summary stage is the only stage the user gets to choose, because it
@@ -300,12 +291,13 @@ model_list:
       api_key: os.environ/OPENROUTER_API_KEY
   - model_name: generation-summary-fast
     litellm_params:
-      model: cerebras/gpt-oss-120b
-      api_key: os.environ/CEREBRAS_API_KEY
-  - model_name: generation-summary-fast-openrouter
-    litellm_params:
       model: openrouter/openai/gpt-4o-mini
       reasoning_effort: low
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: generation-summary-fast-deepseek
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-pro
+      reasoning: { enabled: false }
       api_key: os.environ/OPENROUTER_API_KEY
 
   # --- embed (embedding, new in 044) ---
@@ -373,7 +365,8 @@ litellm_settings:
   # order for the whole request, so later tiers are reached even though only
   # tier 1 is keyed — verified 2026-08-04 by running this image with
   # generation and generation-haiku pointed at a dead endpoint: the call was
-  # served by generation-cerebras in 5.3s.
+  # served by the chain's third tier (then `generation-cerebras`, since
+  # removed — see the 2026-08-17 note near the top of this file) in 5.3s.
   #
   # The "No fallback model group found for original model_group=<scenario>-<tier>"
   # line this produces is a nested-lookup diagnostic, not a chain stop; the
@@ -382,16 +375,14 @@ litellm_settings:
   # then get retried by the outer walk, roughly doubling the attempt count
   # and breaking the worst-case arithmetic above.
   fallbacks:
-    - match: [match-openrouter]
-    - ghost: [ghost-openrouter]
-    - rephrase: [rephrase-openrouter]
-    - recruiter: [recruiter-openrouter]
-    - salary: [salary-openrouter]
-    - outreach: [outreach-haiku, outreach-cerebras]
-    - generation: [generation-haiku, generation-cerebras]
-    - generation-analyze: [generation-analyze-cerebras]
-    - generation-select: [generation-select-cerebras]
-    - generation-select-premium: [generation-select-premium-haiku, generation-select-premium-cerebras]
-    - generation-summary: [generation-summary-haiku, generation-summary-cerebras]
-    - generation-summary-premium: [generation-summary-premium-sonnet, generation-summary-cerebras]
-    - generation-summary-fast: [generation-summary-fast-openrouter]
+    - match: [match-gpt-4o-mini]
+    - ghost: [ghost-gpt-4o-mini]
+    - rephrase: [rephrase-deepseek]
+    - recruiter: [recruiter-gpt-4o-mini]
+    - salary: [salary-claude-haiku]
+    - outreach: [outreach-haiku]
+    - generation: [generation-haiku]
+    - generation-select-premium: [generation-select-premium-haiku]
+    - generation-summary: [generation-summary-haiku]
+    - generation-summary-premium: [generation-summary-premium-sonnet]
+    - generation-summary-fast: [generation-summary-fast-deepseek]

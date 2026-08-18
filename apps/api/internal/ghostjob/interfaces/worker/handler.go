@@ -46,7 +46,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 			return nil
 		}
 		if errors.Is(err, llm.ErrRateLimited) {
-			slog.Warn("ghostjob: cancelled: cerebras rate limited", "job", payload.JobID)
+			slog.Warn("ghostjob: cancelled: upstream rate limited", "job", payload.JobID)
 			if rec != nil {
 				rec.Cancel(ctx, err.Error())
 			}

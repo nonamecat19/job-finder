@@ -79,7 +79,6 @@ them, and none of them may be set in the api service's environment.
 
 | Variable | Provider |
 | --- | --- |
-| `CEREBRAS_API_KEY` | Cerebras |
 | `GROQ_API_KEY` | Groq |
 | `COHERE_API_KEY` | Cohere |
 | `OPENROUTER_API_KEY` | OpenRouter |

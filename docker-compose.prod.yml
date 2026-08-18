@@ -22,7 +22,6 @@ services:
       - ./gateway/config.yaml:/app/config.yaml:ro
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
-      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     healthcheck:
@@ -67,10 +66,10 @@ services:
     # NO `env_file: .env` (036 FR-007 / Constitution Principle V).
     #
     # This service used to ingest the whole .env, which handed the application
-    # container every provider credential — CEREBRAS_API_KEY,
-    # OPENROUTER_API_KEY. The constitution requires those to stay in the
-    # gateway container and be unreadable through the application, so the
-    # wholesale import was a standing violation independent of any feature.
+    # container every provider credential — OPENROUTER_API_KEY, OPENAI_API_KEY.
+    # The constitution requires those to stay in the gateway container and be
+    # unreadable through the application, so the wholesale import was a
+    # standing violation independent of any feature.
     #
     # The list below is explicit and enumerates exactly what internal/config
     # reads. It is verbose on purpose: an allowlist that must be edited to add
@@ -94,9 +93,8 @@ services:
       # configuration.md K1) — this is the application's only inference path.
       # LITELLM_MASTER_KEY authenticates the app TO the gateway; it is not a
       # provider credential and is the one secret the application container
-      # is permitted. No provider API key (CEREBRAS/OPENROUTER/OPENAI) is
-      # ever granted here — those live only in the litellm service's
-      # environment above.
+      # is permitted. No provider API key (OPENROUTER/OPENAI) is ever granted
+      # here — those live only in the litellm service's environment above.
       GATEWAY_URL: ${GATEWAY_URL:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       EMBED_DIMS: ${EMBED_DIMS:-}

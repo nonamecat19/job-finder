@@ -200,7 +200,7 @@ func TestApiContainerHoldsNoProviderCredentials(t *testing.T) {
 			t.Errorf("%s: api service uses env_file, which imports every variable including provider credentials", file)
 		}
 		for _, key := range []string{
-			"CEREBRAS_API_KEY", "GROQ_API_KEY", "COHERE_API_KEY", "OPENROUTER_API_KEY",
+			"GROQ_API_KEY", "COHERE_API_KEY", "OPENROUTER_API_KEY",
 			"LANGFUSE_SECRET_KEY", "LANGFUSE_PUBLIC_KEY",
 		} {
 			if strings.Contains(api, key) {

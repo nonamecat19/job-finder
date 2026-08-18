@@ -252,10 +252,10 @@ func ReportUsage(ctx context.Context, u Usage) {
 	}
 }
 
-// Provider is the interface the infrastructure/ollama and
-// infrastructure/cerebras adapters implement. CompleteJSON is the low-level
-// "ask for JSON, no retry" call; the retry loop (strip fences → parse →
-// validate → retry with error) lives in CompleteStructured below.
+// Provider is the interface the infrastructure/gateway adapter implements.
+// CompleteJSON is the low-level "ask for JSON, no retry" call; the retry loop
+// (strip fences → parse → validate → retry with error) lives in
+// CompleteStructured below.
 type Provider interface {
 	ModelName() string
 	Complete(ctx context.Context, prompt string, opts *CompleteOptions) (string, error)

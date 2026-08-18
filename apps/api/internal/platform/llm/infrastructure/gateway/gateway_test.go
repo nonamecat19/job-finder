@@ -226,7 +226,7 @@ func TestGatewayCapturesSubstitutionFromHeaders(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newTestGateway(t, func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("x-litellm-model-group", "generation-analyze-cerebras")
+				w.Header().Set("x-litellm-model-group", "generation-analyze-fallback")
 				if tc.attemptedHeader != "" {
 					w.Header().Set("x-litellm-attempted-fallbacks", tc.attemptedHeader)
 				}
@@ -237,8 +237,8 @@ func TestGatewayCapturesSubstitutionFromHeaders(t *testing.T) {
 			if _, err := p.Complete(ctx, "hi", nil); err != nil {
 				t.Fatalf("Complete: %v (a malformed provenance header must never fail the call)", err)
 			}
-			if usage.ServedGroup != "generation-analyze-cerebras" {
-				t.Errorf("ServedGroup = %q, want generation-analyze-cerebras", usage.ServedGroup)
+			if usage.ServedGroup != "generation-analyze-fallback" {
+				t.Errorf("ServedGroup = %q, want generation-analyze-fallback", usage.ServedGroup)
 			}
 			if usage.AttemptedFallbacks != tc.wantAttempted {
 				t.Errorf("AttemptedFallbacks = %d, want %d", usage.AttemptedFallbacks, tc.wantAttempted)
@@ -342,9 +342,9 @@ func TestGatewayConnectionRefused(t *testing.T) {
 
 func TestServedModelPrefersHeaderOverBody(t *testing.T) {
 	h := http.Header{}
-	h.Set("x-litellm-model-name", "cerebras/gpt-oss-120b")
+	h.Set("x-litellm-model-name", "openrouter/anthropic/claude-haiku-4.5")
 	got := servedModel(h, chatResponse{Model: "match"})
-	if got != "cerebras/gpt-oss-120b" {
+	if got != "openrouter/anthropic/claude-haiku-4.5" {
 		t.Errorf("servedModel() = %q, want header value", got)
 	}
 }

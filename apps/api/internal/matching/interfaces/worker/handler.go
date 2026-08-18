@@ -61,7 +61,7 @@ func (h *Handler) ProcessTask(ctx context.Context, t *asynq.Task) (err error) {
 	result, err := h.svc.MatchJob(ctx, payload.JobID, rec)
 	if err != nil {
 		if errors.Is(err, llm.ErrRateLimited) {
-			slog.Warn("matching cancelled: cerebras rate limited", "jobId", payload.JobID)
+			slog.Warn("matching cancelled: upstream rate limited", "jobId", payload.JobID)
 			if rec != nil {
 				rec.Cancel(ctx, err.Error())
 			}
