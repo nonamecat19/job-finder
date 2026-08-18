@@ -6,8 +6,24 @@
 ## M1. Topology declaration
 
 - **M1-1**: Every exchange, queue and binding in data-model.md § 4 MUST be declared by the
-  publisher at startup, idempotently. A consumer MUST NOT rely on a queue another service
-  declared first.
+  publisher at startup, idempotently.
+- **M1-1a**: A consumer that M7-3 denies topology administration MUST declare **passively** —
+  asserting the object and creating nothing — and MUST wait for the publisher rather than
+  exiting when the topology is not there yet. This supersedes M1-1's original "a consumer MUST
+  NOT rely on a queue another service declared first", which could not hold alongside M7-3:
+  the orchestration service's broker account is granted `"configure":"^$"`, so an active
+  declaration is refused by the broker and the service never finishes starting. It shipped that
+  way — `apps/ai` declared actively and crash-looped under its own account until
+  `declare=False` plus `consumers.wait_for_topology` replaced it. Both halves are now tested:
+  `apps/api/internal/events/aiuser_provisioning_test.go` asserts the account cannot declare,
+  and the Python broker-contract suite asserts the consumers create nothing.
+- **M1-1b**: A passive declare is not permission-exempt — RabbitMQ still requires the user to
+  hold configure, write or read on the resource. The orchestration account holds none of the
+  three on `jobfinder.work`, so anything it asserts MUST be a resource its own regexes cover:
+  its work queues (read) or `jobfinder.results` (write). This is why the readiness probe in
+  `consumers.wait_for_topology` asserts a work QUEUE rather than the work exchange — probing
+  the exchange is refused permanently, which a retry loop cannot distinguish from a backend
+  that has not started.
 - **M1-2**: Every queue MUST be `durable` and of type `quorum`. A classic or transient queue is
   a defect — FR-033 requires survival of a broker restart.
 - **M1-3**: Startup MUST fail loudly if a declaration conflicts with an existing object
@@ -38,7 +54,7 @@
   does not hoard messages a peer could serve.
 - **M3-4**: A consumer MUST reconnect automatically with bounded exponential backoff and MUST
   resume consuming without operator action (FR-035). Reconnection MUST re-declare topology
-  (M1-1) and re-establish prefetch.
+  (M1-1) — passively, for a consumer under M1-1a — and re-establish prefetch.
 - **M3-5**: On shutdown a consumer MUST stop accepting deliveries, finish in-flight work within
   a bounded grace period, and `nack` with `requeue=true` anything it cannot finish.
 - **M3-6**: `consumer_timeout` on the broker MUST exceed the longest work type's `MaxDuration`

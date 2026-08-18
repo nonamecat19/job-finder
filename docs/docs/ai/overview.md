@@ -137,8 +137,27 @@ LLM task key (`match`, `generation`, `default` for salary, `ghost`) —
 `rephrase` runs on synchronous request paths, not on a queue
 (`internal/queue/policy.go:40-95`).
 
+## Where a capability's model call actually runs
+
+This table describes the Go-side `Router` path above. Since 047, each capability's model
+call can instead be made by a separate Python orchestration service
+(`apps/ai`, [The Python orchestration service](/ai/orchestration)) reached only through the
+same LiteLLM gateway — never a second, competing path to a provider. `AI_CAPABILITY_ROUTING`
+(a comma-separated `capability=go|python` list, e.g. `salary=python`) is a per-capability
+switch, resolved once at startup (`internal/config/config.go` `CapabilityRouting`); a
+capability absent from it defaults to `go`, i.e. the `Router` described above. `apps/ai`
+covers fourteen task keys, a superset of the five in the table above — it owns compound
+capabilities (resume + cover letter generation, ghost detection, recruiter extraction,
+outreach drafting, embeddings) that used to be internal steps of a single Go task key.
+
+`AI_SERVICE_URL`/`AI_SERVICE_TOKEN` are required as soon as any capability is routed to
+`python`. Flipping a capability from `go` to `python` is a config change and a restart, not
+a deploy — the same "model choice is configuration" principle applied one level up, to
+*which process* makes the call.
+
 ## Reading order
 
+- [The Python orchestration service](/ai/orchestration) — `apps/ai`, prompt iteration, tracing
 - [LLM abstraction](/ai/llm-abstraction) — providers, router, errors, breaker
 - [AI settings](/ai/llm-settings) — per-feature toggles, resume shape, and why model choice is not a setting
 - [Matching](/ai/matching) — the two-phase scoring pipeline

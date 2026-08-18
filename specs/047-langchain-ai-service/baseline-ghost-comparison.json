@@ -7,7 +7,7 @@
   "outcome_changes": 0,
   "outcome_changes_pct": 0.0,
   "verdict": "BORDERLINE \u2014 mean deviation lands exactly at the 5% boundary on only 6 single-run samples; real LLM non-determinism, not an obvious prompt/logic bug. Outcome-category parity is clean (0/6 changed). NOT sufficient evidence to delete the Go path (T079) on this sample size.",
-  "known_fidelity_gap": "Python-path JobSignal.signals.repostCount/daysOpen/crossBoardCount/alwaysHiringCount persist as 0/null even though the snapshot carried real values and the model's explanation correctly used them \u2014 NewResultHandler doesn't carry the snapshot breakdown into the stored signals blob. Score/confidence/explanation/topSignals are correct; only the structured breakdown fields are lost. Needs a fix before this could be called full parity (FR-022: stored field sets should match).",
+  "known_fidelity_gap": "STALE as of 2026-08-18 (T128): apps/api/internal/ghostjob/application/result.go now re-derives the signal breakdown via MeasureSignals and builds the same dto.GhostSignalBreakdownDto{} literal service.go's Go path builds \u2014 repostCount/daysOpen/crossBoardCount/alwaysHiringCount are populated on the python path too. This entry is left in place for history; see tasks.md T128 for the current field-set verification.",
   "comparisons": [
     {
       "jobId": "bd76687b-34fc-4a2b-ad92-1cdec7f60980",

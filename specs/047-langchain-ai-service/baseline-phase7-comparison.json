@@ -1,0 +1,33 @@
+{
+  "captured_at": "2026-08-18T12:23Z",
+  "match": {
+    "status": "BLOCKED",
+    "reason": "MatchJob computes a live job-posting embedding before it ever reaches the LLM fit-analysis step. The real LiteLLM gateway's `embed` model group (openai/text-embedding-3-small, gateway/config.yaml) has no API key configured in this environment's .env (no OPENAI_API_KEY at all) — a pre-existing gap, not caused by this migration. Every attempt failed identically on BOTH the Go and Python path with the same upstream 401, so no comparison was possible either way.",
+    "action_needed": "A real OpenAI API key (or a working alternate embed provider) needs to be configured in the LiteLLM gateway before match or embed can be baselined."
+  },
+  "embed": {
+    "status": "BLOCKED",
+    "reason": "Same root cause as match — the embed model group itself has no credential.",
+    "action_needed": "Same as match."
+  },
+  "recruiter": {
+    "status": "VERIFIED_LIVE_END_TO_END",
+    "go_path": "real call via internal/platform/llm, real openrouter/deepseek response, correctly extracted {name, title, email} from a synthetic posting mentioning a named recruiter",
+    "python_path_direct": "real call to apps/ai's /v1/capabilities/recruiter/invoke, same input, structurally identical output shape (name/title/email/phone/linkedin_url)",
+    "python_path_via_go": "verified the full Go -> aiclient -> apps/ai -> real LLM -> Go persistence chain succeeds (aiclient log: capability=recruiter status=succeeded), reverting AI_CAPABILITY_ROUTING back to go afterward and confirming the Go path still works unaffected",
+    "verdict": "Functionally correct on all three paths. Single sample only (LLM cost discipline) — not enough runs to make a numeric parity claim, but no structural or correctness gap found. Reasonable cutover candidate once more samples are taken; not deleted here."
+  },
+  "outreach": {
+    "status": "VERIFIED_CAPABILITY_LEVEL_ONLY",
+    "python_path_direct": "real call to apps/ai's /v1/capabilities/outreach/invoke with synthetic facts, produced a genuinely grounded message referencing the exact facts supplied",
+    "go_path_and_full_chain": "NOT exercised — outreach's Go-side fact-gathering (GroundClaims prerequisite) found no real Application/fact data for the synthetic job, so it took its existing no-LLM generic-opener fallback on both the go and python routing runs; the aiclient was never actually called in either case",
+    "verdict": "Python capability itself proven correct and grounded. The Go call-site wiring's happy path (real facts -> real AI call) was not exercised live — would need a fuller synthetic Application/facts dataset to test."
+  },
+  "rephrase": {
+    "status": "VERIFIED_CAPABILITY_LEVEL_ONLY",
+    "python_path_direct": "real call to apps/ai's /v1/capabilities/rephrase/invoke, 'Led the migration...' correctly rephrased term 'led' -> 'Directed', grounded and correct",
+    "go_path_and_full_chain": "NOT exercised — rephrase's only Go caller repointed so far is coach (T107), and coach/assess requires a keyword-diff to exist first, which itself requires match to have run — inherits match's embed-credential blocker",
+    "verdict": "Python capability proven correct. The coach->aiclient->rephrase chain specifically could not be exercised due to the transitive match/embed blocker, unrelated to rephrase itself."
+  },
+  "overall_recommendation": "Do not delete any of these five Go paths yet (T113 held back for match/rephrase/recruiter/outreach/embed). The blocker for match/embed is a real, fixable infra gap (add an embed provider API key) unrelated to code correctness. recruiter/outreach/rephrase's Python capabilities are proven correct; a second live-testing pass after the embed credential is fixed would let match/embed be tested for the first time and let rephrase's coach chain be exercised, at which point a normal multi-sample parity check (like ghost's and salary's) becomes possible for all five."
+}
