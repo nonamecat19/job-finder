@@ -24,3 +24,17 @@ def test_resolve_workflow_version_falls_back_to_unknown(monkeypatch: pytest.Monk
 def test_gateway_call_metadata_carries_trace_id() -> None:
     metadata = tracing.gateway_call_metadata("trace_abc")
     assert metadata == {"metadata": {"trace_id": "trace_abc", "existing_trace_id": "trace_abc"}}
+
+
+# --- T084 (US2 scenario 2): a definition change is distinguishable in traces ---
+
+
+def test_resolve_workflow_version_distinguishes_a_redeploy() -> None:
+    """Two runs either side of a prompt/step change record different
+    workflow_version values, since prompts live in-repo (FR-015a) and a
+    revision identifies exact prompt text (FR-015)."""
+    before = tracing.resolve_workflow_version(env={"WORKFLOW_VERSION": "rev-before-edit"})
+    after = tracing.resolve_workflow_version(env={"WORKFLOW_VERSION": "rev-after-edit"})
+    assert before == "rev-before-edit"
+    assert after == "rev-after-edit"
+    assert before != after

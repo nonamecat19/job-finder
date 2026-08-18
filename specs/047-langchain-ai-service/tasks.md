@@ -220,12 +220,12 @@ service, with the change visible in subsequent traces.
 the AI service, confirm the new behaviour takes effect and appears in traces with no backend
 rebuild.
 
-- [ ] T080 [US2] Enforce in-repo-only definitions in `apps/ai/src/jobfinder_ai/capabilities/registry.py` — no runtime fetch from a registry, database or remote source (FR-015a, C6-2)
-- [ ] T081 [US2] Fail startup naming the invalid definition when a workflow or prompt module is malformed, missing or has non-positive bounds (FR-007, US2 scenario 3)
-- [ ] T082 [US2] Resolve `workflow_version` from the committed revision at build time in `apps/ai/src/jobfinder_ai/tracing.py`, so before/after runs are distinguishable (FR-015, US2 scenario 2)
-- [ ] T083 [P] [US2] Test in `apps/ai/tests/unit/test_registry.py`: an invalid definition fails startup rather than failing at request time (US2 scenario 3)
-- [ ] T084 [P] [US2] Test: two runs across a definition change record different `workflow_version` values (US2 scenario 2)
-- [ ] T085 [P] [US2] Document the prompt-change workflow — edit, `docker compose restart ai`, verify in trace — in `docs/docs/ai/orchestration.md` (SC-003)
+- [X] T080 [US2] Enforce in-repo-only definitions in `apps/ai/src/jobfinder_ai/capabilities/registry.py` — no runtime fetch from a registry, database or remote source (FR-015a, C6-2)
+- [X] T081 [US2] Fail startup naming the invalid definition when a workflow or prompt module is malformed, missing or has non-positive bounds (FR-007, US2 scenario 3)
+- [X] T082 [US2] Resolve `workflow_version` from the committed revision at build time in `apps/ai/src/jobfinder_ai/tracing.py`, so before/after runs are distinguishable (FR-015, US2 scenario 2)
+- [X] T083 [P] [US2] Test in `apps/ai/tests/unit/test_registry.py`: an invalid definition fails startup rather than failing at request time (US2 scenario 3)
+- [X] T084 [P] [US2] Test: two runs across a definition change record different `workflow_version` values (US2 scenario 2)
+- [X] T085 [P] [US2] Document the prompt-change workflow — edit, `docker compose restart ai`, verify in trace — in `docs/docs/ai/orchestration.md` (SC-003)
 
 **Checkpoint**: SC-003 measurable. Prompt iteration no longer requires a backend release.
 

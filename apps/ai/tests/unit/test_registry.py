@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
+from jobfinder_ai.capabilities import registry as registry_module
 from jobfinder_ai.capabilities.registry import (
     Capability,
     CapabilityBounds,
@@ -104,3 +107,32 @@ def test_resolve_for_invoke_returns_the_capability_for_http_transport() -> None:
 def test_resolve_for_invoke_returns_none_for_unknown_name() -> None:
     registry = CapabilityRegistry()
     assert registry.resolve_for_invoke("does-not-exist") is None
+
+
+# --- T080: definitions are in-repo only, never fetched at runtime (FR-015a, C6-2) ---
+
+
+def test_registry_module_has_no_network_or_database_imports() -> None:
+    """register()'s only I/O is importlib against already-installed local
+    modules — no HTTP client, no DB driver, nothing that could reach a
+    remote registry or database for a capability's definition."""
+    source = inspect.getsource(registry_module)
+    forbidden = (
+        "httpx",
+        "requests",
+        "aiohttp",
+        "urllib",
+        "socket",
+        "psycopg",
+        "asyncpg",
+        "sqlalchemy",
+        "boto3",
+    )
+    for name in forbidden:
+        assert name not in source, f"registry.py must not import {name!r} — in-repo only"
+
+
+# --- T081/T083 (US2 scenario 3): an invalid definition fails at registration
+# (startup), never at request time — every test_register_rejects_* test above
+# already proves this: each calls register() directly and asserts it raises
+# before any capability could ever be looked up or invoked. ---
