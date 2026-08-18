@@ -58,7 +58,6 @@ from jobfinder_ai.prompts.generation import cover_letter as cover_letter_prompts
 from jobfinder_ai.prompts.generation import select as select_prompts
 from jobfinder_ai.prompts.generation import summary as summary_prompts
 
-
 MAX_NODES = 5
 NODE_TIMEOUT_SECONDS = 240.0
 RUN_TIMEOUT_SECONDS = 600.0
