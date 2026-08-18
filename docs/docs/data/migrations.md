@@ -122,6 +122,13 @@ stateDiagram-v2
 make test-integration     # starts a Postgres container, migrates it, runs the DB-backed tests
 ```
 
+`internal/db/down_migration_integration_test.go` additionally runs every `Down` block: it
+migrates up, rolls back to zero, and asserts the schema is empty, then migrates up again and
+asserts the schema that comes back is identical. Until it existed no `Down` had ever run —
+which is how `00001_init.sql` came to drop `"Job"` before the three tables that reference it,
+and how `00027`'s non-idempotent `CREATE TABLE` came to block any roll-forward after a
+rollback. Both are fixed; the test is what keeps them fixed.
+
 Each git worktree gets its own compose project and Postgres host port (derived in the
 `Makefile` from a checksum of the directory name), so a branch's migration state cannot
 leak into another branch's test run.

@@ -115,11 +115,15 @@ CREATE INDEX "MatchResult_score_idx" ON "MatchResult" USING btree ("score");
 CREATE INDEX "SourceRun_startedAt_idx" ON "SourceRun" USING btree ("startedAt");
 
 -- +goose Down
+-- Referencing tables first, referenced tables after: "Application",
+-- "GeneratedDocument" and "MatchResult" all carry a foreign key to "Job",
+-- and "SourceRun" carries one to "JobSource", so dropping the parents first
+-- fails with "cannot drop table because other objects depend on it".
+DROP TABLE IF EXISTS "Application";
+DROP TABLE IF EXISTS "GeneratedDocument";
+DROP TABLE IF EXISTS "MatchResult";
 DROP TABLE IF EXISTS "SourceRun";
 DROP TABLE IF EXISTS "SavedSearch";
 DROP TABLE IF EXISTS "Profile";
-DROP TABLE IF EXISTS "MatchResult";
-DROP TABLE IF EXISTS "JobSource";
 DROP TABLE IF EXISTS "Job";
-DROP TABLE IF EXISTS "GeneratedDocument";
-DROP TABLE IF EXISTS "Application";
+DROP TABLE IF EXISTS "JobSource";

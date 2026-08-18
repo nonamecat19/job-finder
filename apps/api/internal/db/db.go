@@ -82,6 +82,28 @@ func (d *DB) WithinTx(ctx context.Context, fn func(*sqlcgen.Queries) error) erro
 	return nil
 }
 
+// MigrateDownTo rolls the schema back to a version, 0 meaning "before the
+// first migration". It exists for the rollback test
+// (down_migration_integration_test.go): every migration in this package
+// declares a `-- +goose Down` block, and nothing else ever runs one, so
+// without a test a Down that drops the wrong object is discovered during an
+// incident rather than in CI.
+func MigrateDownTo(databaseURL string, version int64) error {
+	goose.SetBaseFS(migrationsFS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	sqlDB, err := stdsql.Open("pgx", databaseURL)
+	if err != nil {
+		return fmt.Errorf("db: migrate open: %w", err)
+	}
+	defer sqlDB.Close()
+	if err := goose.DownTo(sqlDB, "migrations", version); err != nil {
+		return fmt.Errorf("db: migrate down to %d: %w", version, err)
+	}
+	return nil
+}
+
 func Migrate(databaseURL string) error {
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("postgres"); err != nil {
