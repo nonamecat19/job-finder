@@ -55,7 +55,7 @@ def test_invoke_event_transport_capability_is_404() -> None:
     """H1-2/T131: a queued capability is unreachable through /invoke."""
     capability = Capability(
         name="test-only-event-capability",
-        task_key="match",
+        task_key="generation-analyze",
         layer="chain",
         input_model="jobfinder_ai.main:InvokeContext",
         output_model="jobfinder_ai.main:InvokeContext",
@@ -73,4 +73,4 @@ def test_invoke_event_transport_capability_is_404() -> None:
         assert exc_info.value.status_code == 404
     finally:
         del main.registry._capabilities["test-only-event-capability"]
-        del main.registry._task_keys_used["match"]
+        del main.registry._task_keys_used["generation-analyze"]
