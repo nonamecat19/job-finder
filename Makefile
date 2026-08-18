@@ -1,9 +1,10 @@
 .PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean run-all \
-	test test-go test-react test-integration test-e2e test-lint test-db-setup \
-	seed seed-clean truncate-db sqlc-generate sqlc-check sqlc-install \
+	test test-go test-react test-py test-integration test-e2e test-ai-optional test-lint test-db-setup \
+	truncate-db sqlc-generate sqlc-check sqlc-install \
 	tygo-generate tygo-check tygo-install \
-	lint lint-go lint-web golangci-install \
-	audit vuln-go vuln-web secrets images
+	contracts-generate contracts-check \
+	lint lint-go lint-web lint-py golangci-install \
+	audit vuln-go vuln-web vuln-py check-ai-no-provider-sdk check-ai-env secrets images
 
 ifneq (,$(wildcard .env))
 include .env
@@ -73,6 +74,9 @@ test-go:
 test-react:
 	cd apps/dashboard && pnpm exec vitest run
 
+test-py:
+	cd apps/ai && uv run pytest
+
 test-integration: test-db-setup
 	@echo "Waiting for postgres to be healthy..."
 	@docker compose up -d postgres
@@ -80,6 +84,9 @@ test-integration: test-db-setup
 	cd apps/api && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:${POSTGRES_HOST_PORT}/jobfinder_test \
 		REDIS_URL=redis://localhost:6379/1 \
 		go test -tags integration ./...
+
+test-ai-optional:
+	./scripts/test-ai-optional.sh
 
 test-e2e: test-db-setup
 	@echo "Waiting for services to be ready..."
@@ -99,9 +106,12 @@ lint-go:
 lint-web:
 	pnpm exec eslint apps/dashboard packages/shared
 
-lint: lint-go lint-web
+lint-py:
+	cd apps/ai && uv run ruff check . && uv run ruff format --check . && uv run mypy src
 
-test-lint: lint-go lint-web test-go test-react
+lint: lint-go lint-web lint-py
+
+test-lint: lint-go lint-web lint-py test-go test-react test-py
 
 # --- supply-chain gates (039, specs/domains/platform-operations.md) ---
 # Deliberately NOT part of `test-lint`, and that is an exemption from the
@@ -121,6 +131,19 @@ vuln-go:
 
 vuln-web:
 	pnpm audit --audit-level=high --prod=false
+
+vuln-py:
+	cd apps/ai && uv run pip-audit
+
+# Architectural invariants for the AI service, not vulnerability scans, but
+# gated alongside them: both are "the AI service must not be able to reach a
+# provider directly" checks, just at different layers (dependency tree vs.
+# runtime environment) (C7-3, K2-2, K2-3, FR-008, FR-011).
+check-ai-no-provider-sdk:
+	./scripts/check-ai-no-provider-sdk.sh
+
+check-ai-env:
+	./scripts/check-ai-service-env.sh
 
 secrets:
 	@command -v gitleaks >/dev/null 2>&1 || { \
@@ -144,7 +167,7 @@ images:
 
 # The audit-class gates as one entry point, first non-zero wins — the same
 # shape as `make lint`. `images` stays out: it is the slow one.
-audit: vuln-go vuln-web secrets
+audit: vuln-go vuln-web vuln-py check-ai-no-provider-sdk check-ai-env secrets
 
 # --- run all (infra + backend + frontend) ---
 run-all: up
@@ -188,12 +211,15 @@ tygo-generate:
 tygo-check:
 	./scripts/tygo-check.sh
 
-# --- go seed data ---
-seed:
-	cd apps/api && go run ./cmd/seed
+# --- contracts code generation (Go event structs -> JSON Schema -> apps/ai Pydantic models) ---
+contracts-generate:
+	cd apps/api && go run ./cmd/contractsgen
+	./scripts/contracts-generate-ai.sh
 
-seed-clean:
-	cd apps/api && go run ./cmd/seed -clean
+# Fails if apps/api/internal/events/schema or apps/ai/src/jobfinder_ai/contracts
+# is stale. Mirrors sqlc-check/tygo-check.
+contracts-check:
+	./scripts/contracts-check.sh
 
 truncate-db:
 	docker compose exec -T postgres psql -U jobfinder -d jobfinder -c \

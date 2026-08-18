@@ -38,6 +38,69 @@ services:
       timeout: 3s
       retries: 10
 
+  # Message broker (047-langchain-ai-service). No port is published at all
+  # here (contracts/messaging.md M7-2, configuration.md K4-4) — every
+  # consumer/publisher in this stack reaches it as `rabbitmq:5672`, and the
+  # management UI is reachable only from inside the compose network.
+  rabbitmq:
+    image: rabbitmq:4.3.4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-jobfinder}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS in .env}
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+      # consumer_timeout above the longest work type's MaxDuration (M3-6) —
+      # the RabbitMQ default would kill a multi-minute generation run.
+      - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/10-consumer-timeout.conf:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # One-shot init that creates the AI service's restricted broker account
+  # (contracts/messaging.md M7-3) — see docker-compose.yml for the full
+  # rationale, identical here.
+  rabbitmq-init:
+    image: curlimages/curl:8.11.1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-jobfinder}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS in .env}
+      RABBITMQ_AI_USER: ${RABBITMQ_AI_USER:-ai_service}
+      RABBITMQ_AI_PASS: ${RABBITMQ_AI_PASS:?set RABBITMQ_AI_PASS in .env}
+    volumes:
+      - ./docker/rabbitmq/init-ai-user.sh:/init-ai-user.sh:ro
+    entrypoint: ["/bin/sh", "/init-ai-user.sh"]
+
+  # AI orchestration service (047-langchain-ai-service). Depends on rabbitmq
+  # (healthy) and litellm (started) only — never langfuse-web
+  # (contracts/configuration.md K4-2). `api` below MUST NOT depend on this
+  # service (K4-5, FR-024): every non-AI path must start and serve whether
+  # or not `ai` is up.
+  ai:
+    build:
+      context: .
+      dockerfile: apps/ai/Dockerfile
+    environment:
+      GATEWAY_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      RABBITMQ_URL: amqp://${RABBITMQ_AI_USER:-ai_service}:${RABBITMQ_AI_PASS}@rabbitmq:5672/
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      rabbitmq-init:
+        condition: service_completed_successfully
+      litellm:
+        condition: service_started
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -99,6 +162,14 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       EMBED_DIMS: ${EMBED_DIMS:-}
       LLM_MAX_IDLE_CONNS_PER_HOST: ${LLM_MAX_IDLE_CONNS_PER_HOST:-}
+
+      # --- message broker (047-langchain-ai-service) ---
+      # Backend credentials, distinct from the AI service's own restricted
+      # account (contracts/messaging.md M7-3, docker/rabbitmq/init-ai-user.sh).
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-jobfinder}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+      AI_CAPABILITY_ROUTING: ${AI_CAPABILITY_ROUTING:-}
 
       # --- job sources (their own credentials, not inference credentials) ---
       ADZUNA_APP_ID: ${ADZUNA_APP_ID:-}
@@ -168,6 +239,10 @@ services:
         condition: service_started
       minio:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      # Deliberately no dependency on `ai` (K4-5, FR-024) — see the `ai`
+      # service comment above.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health/ready"]
       interval: 5s
@@ -235,3 +310,4 @@ volumes:
   pgdata: {}
   documents: {}
   miniodata: {}
+  rabbitmqdata: {}

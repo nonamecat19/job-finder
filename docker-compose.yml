@@ -20,21 +20,85 @@ services:
     ports:
       - "6379:6379"
 
-  # Dev-only queue monitoring dashboard for the six asynq queues (ingest,
-  # match, generate, enrich, salary, ghost). Deliberately absent from
-  # docker-compose.prod.yml — no auth in front of it, so it must never ship
-  # to production.
-  # No healthcheck: the image is distroless (no shell/wget/curl to probe
-  # with), so readiness is verified externally (see quickstart.md).
-  asynqmon:
-    image: hibiken/asynqmon:0.7.2
-    # host port 8090, not 8080: 8080 is the dashboard's port in
-    # docker-compose.prod.yml / README.md, avoid colliding with it.
-    command: ["--redis-addr=redis:6379", "--port=8090"]
-    depends_on:
-      - redis
+  # Message broker (047-langchain-ai-service) — RabbitMQ replaces asynq/Redis
+  # as the one asynchronous mechanism (Constitution 2.1.0). Every queue is
+  # quorum + durable so work survives a broker restart (FR-033,
+  # contracts/messaging.md M1-2). The default `guest` account never exists:
+  # setting RABBITMQ_DEFAULT_USER/PASS replaces it outright (M7-1) — there is
+  # no separate guest login to remove.
+  rabbitmq:
+    image: rabbitmq:4.3.4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-jobfinder}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS in .env}
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+      # consumer_timeout above the longest work type's MaxDuration (M3-6) —
+      # the RabbitMQ default would kill a multi-minute generation run.
+      - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/10-consumer-timeout.conf:ro
     ports:
-      - "8090:8090"
+      # Management UI and AMQP, both loopback only (contracts/configuration.md
+      # K4-1, K4-4) — the same host-side-only trap GATEWAY_URL documents
+      # below. AMQP is published here because dev's `apps/api` runs on the
+      # host (`make run-backend`), same as Postgres/Redis above, not as a
+      # compose service — unlike `docker-compose.prod.yml`, where `api`/`ai`
+      # run as containers and reach the broker as `rabbitmq:5672`, so no
+      # host publish exists there (M7-2, FR-038).
+      - "127.0.0.1:15672:15672"
+      - "127.0.0.1:5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # One-shot init that creates the AI service's restricted broker account
+  # once RabbitMQ is healthy (contracts/messaging.md M7-3): it may consume
+  # the AI work queues and publish results, nothing else — no ingest/enrich
+  # access, no topology administration. Mirrors the `createbuckets` pattern
+  # below.
+  rabbitmq-init:
+    image: curlimages/curl:8.11.1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-jobfinder}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS in .env}
+      RABBITMQ_AI_USER: ${RABBITMQ_AI_USER:-ai_service}
+      RABBITMQ_AI_PASS: ${RABBITMQ_AI_PASS:?set RABBITMQ_AI_PASS in .env}
+    volumes:
+      - ./docker/rabbitmq/init-ai-user.sh:/init-ai-user.sh:ro
+    entrypoint: ["/bin/sh", "/init-ai-user.sh"]
+
+  # AI orchestration service (047-langchain-ai-service) — LangChain/LangGraph
+  # capabilities behind RabbitMQ work queues and an interactive HTTP surface.
+  # Depends on rabbitmq (healthy) and litellm (started) only; tracing is
+  # never a startup dependency (contracts/configuration.md K4-2) and this
+  # service never receives DATABASE_URL or a provider credential (K2-2,
+  # K2-3) — only its own restricted broker account and the gateway.
+  ai:
+    build:
+      context: .
+      dockerfile: apps/ai/Dockerfile
+    environment:
+      GATEWAY_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      RABBITMQ_URL: amqp://${RABBITMQ_AI_USER:-ai_service}:${RABBITMQ_AI_PASS}@rabbitmq:5672/
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      rabbitmq-init:
+        condition: service_completed_successfully
+      litellm:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8000:8000"
 
   # LiteLLM proxy gateway — the application's only inference path
   # (044-litellm-only-routing, Constitution Principle V 2.0.0). The Go backend
@@ -276,3 +340,4 @@ volumes:
   # (036 contracts C3-6).
   clickhousedata: {}
   clickhouselogs: {}
+  rabbitmqdata: {}

@@ -27,6 +27,7 @@ jobs:
       sqlc: ${{ github.event_name != 'pull_request' || steps.filter.outputs.sqlc == 'true' }}
       tygo: ${{ github.event_name != 'pull_request' || steps.filter.outputs.tygo == 'true' }}
       web: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web == 'true' }}
+      python: ${{ github.event_name != 'pull_request' || steps.filter.outputs.python == 'true' }}
       any: ${{ github.event_name != 'pull_request' || steps.filter.outputs.any == 'true' }}
     steps:
       - uses: actions/checkout@v7
@@ -86,6 +87,8 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
+            python:
+              - 'apps/ai/**'
             # The one deliberately tree-wide filter, in a file whose entire
             # design is about narrowing. `secret scan` is the only gate whose
             # verdict ANY file can change: a provider key pasted into a specs/
@@ -336,6 +339,36 @@ jobs:
       - name: make lint-web
         run: make lint-web
 
+  lint-py:
+    name: lint (python)
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          working-directory: apps/ai
+
+      - name: make lint-py
+        run: make lint-py
+
+  test-py:
+    name: test (python)
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          working-directory: apps/ai
+
+      - name: make test-py
+        run: make test-py
+
   # ---------------------------------------------------------------------------
   # Supply-chain and build-integrity gates (039)
   #
@@ -463,6 +496,50 @@ jobs:
       # pnpm.auditConfig.ignoreCves with a reason recorded in the domain doc.
       - name: pnpm audit
         run: pnpm audit --audit-level=high --prod=false
+
+  vulnerability-scan-python:
+    name: vulnerability scan (python)
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          working-directory: apps/ai
+
+      - name: make vuln-py
+        run: make vuln-py
+
+  # C7-3/FR-011: the AI service reaches every model through the LiteLLM
+  # gateway's OpenAI-compatible endpoint, never a provider SDK directly.
+  # Reads apps/ai/uv.lock, so it needs no Python setup.
+  check-ai-no-provider-sdk:
+    name: no provider SDK in apps/ai
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: make check-ai-no-provider-sdk
+        run: make check-ai-no-provider-sdk
+
+  # K2-2/K2-3/FR-008: the ai service's environment must carry no database
+  # credential and no provider credential in either compose file. Not gated
+  # on the `python` filter alone — a change confined to docker-compose.yml
+  # or docker-compose.prod.yml must still run this.
+  check-ai-service-env:
+    name: ai service env has no DB or provider credential
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: make check-ai-env
+        run: make check-ai-env
 
   build-image-api:
     name: build image (api)

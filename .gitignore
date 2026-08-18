@@ -8,6 +8,9 @@ packages/shared/dist/
 __pycache__/
 *.pyc
 .venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 /data/
 .idea/
 apps/api/src/generated/
