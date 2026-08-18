@@ -264,6 +264,8 @@ services:
       CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-}
       CLICKHOUSE_DB: default
+    ports:
+      - "127.0.0.1:9000:9000"
     volumes:
       - clickhousedata:/var/lib/clickhouse
       - clickhouselogs:/var/log/clickhouse-server
