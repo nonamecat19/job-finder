@@ -167,18 +167,7 @@ export interface GeneratedDocumentDto {
   title?: string;
   vacancy?: string;
   createdAt: string;
-  /**
-   * Which model wrote the summary, and whether it was the configured one.
-   * SummarySubstituted is what the review surface shows the user: a summary
-   * written by a fallback is still a summary, but they should know (035
-   * FR-012).
-   */
   summaryModel?: string;
-  /**
-   * Which catalogue option the user picked (034). Distinct from SummaryModel:
-   * two options can land on the same upstream after a fallback, so the served
-   * model cannot say which option was chosen.
-   */
   summaryOptionId?: string;
   summarySubstituted: boolean;
   selectionEscalated: boolean;
@@ -244,39 +233,18 @@ export type DocumentType = typeof DocumentTypeResume | typeof DocumentTypeCoverL
 //////////
 // source: generation_workspace.go
 
-/**
- * PreviewDocumentDto is `GET /v1/generations/{runId}/preview-document`
- * (046-real-resume-preview): the RenderCV YAML for the run's current
- * selection, assembled the same way an export would but without rendering.
- * The dashboard's in-browser WASM pipeline turns Yaml into a PDF preview.
- */
 export interface PreviewDocumentDto {
   yaml: string;
-  /**
-   * SectionsHash lets the client skip a redundant WASM re-render when two
-   * edits resolve to the same effective document.
-   */
   sectionsHash: string;
 }
-/**
- * GenerationRunDto is the whole workspace: run, sections, items
- * (`GET /v1/generations/{runId}`, resume-generation.md § 4.1).
- */
 export interface GenerationRunDto {
   id: string;
-  state: string; // running | ready | partial | failed
+  state: string;
   vacancy: GenerationVacancyDto;
   jobId?: string;
   groundingLevel: string;
   summaryOptionId?: string;
-  /**
-   * SummarySubstituted is the 035 provenance flag, surfaced unchanged.
-   */
   summarySubstituted: boolean;
-  /**
-   * MasterChanged is FR-022: the run's snapshot hash no longer matches the
-   * profile's current master content hash.
-   */
   masterChanged: boolean;
   shapeConfig: ResumeShapeConfigDto;
   export: GenerationExportDto;
@@ -284,185 +252,83 @@ export interface GenerationRunDto {
   createdAt: string;
   updatedAt: string;
 }
-/**
- * AdhocVacancyDto is a pasted, ad-hoc vacancy (no `Job` row) — moved here
- * from the now-deleted dto/tailoring.go (T083): 020's tailoring surface
- * never had a reader, but StartGenerationRequestDto's `vacancy` field does.
- */
 export interface AdhocVacancyDto {
   company: string;
   title: string;
   text: string;
 }
-/**
- * GenerationVacancyDto is the vacancy a run was made against. Text is
- * intentionally omitted from the list/get response summary fields where the
- * full run body isn't needed; the run detail response embeds this struct
- * as-is (company/title only — vacancy_text isn't re-served, matching
- * rest-api.md's example body).
- */
 export interface GenerationVacancyDto {
   company?: string;
   title?: string;
 }
-/**
- * GenerationSectionDto is one `generation_sections` row plus its items, in
- * `position` order.
- */
 export interface GenerationSectionDto {
   id: string;
-  kind: string; // summary | experience | skills | projects | certifications | education
+  kind: string;
   entryKey?: string;
   entryLabel?: string;
   position: number /* int */;
   targetCount: number /* int */;
-  state: string; // running | ready | failed
+  state: string;
   error?: string;
   fallbackUsed: boolean;
-  /**
-   * Enabled excludes the whole section from export/preview when false,
-   * independent of any item's own selection — the per-run "disable this
-   * section" switch. Seeded from the account's resume-shape settings when
-   * the run is created, changed afterward only via
-   * `PATCH /v1/generations/{runId}/sections/{sectionId}`.
-   */
   enabled: boolean;
   items: GenerationItemDto[];
 }
-/**
- * GenerationItemDto is one ranked candidate for inclusion — profile-sourced
- * (origin="profile", text byte-identical to the master bullet at
- * SourceIndex, per SC-001) or AI-suggested (origin="ai", unselected by
- * default, editable, never presented as the user's material).
- */
 export interface GenerationItemDto {
   id: string;
-  origin: string; // profile | ai
-  kind: string; // achievement | skill_group | summary | project | certification | education
-  text: string; // effective text: editedText ?? sourceText
+  origin: string;
+  kind: string;
+  text: string;
   sourceIndex?: number /* int */;
   rank: number /* int */;
   position: number /* int */;
   selected: boolean;
   edited: boolean;
   unavailable: boolean;
-  /**
-   * SkillEntries is present only for a profile-origin item in a skills
-   * section: the group's individual skills, each with its own inclusion
-   * state, so the client can switch one skill off without dropping the
-   * whole group. Absent everywhere else — an AI-suggested skill is a single
-   * entry whose text may itself contain commas.
-   */
   skillEntries?: GenerationSkillEntryDto[];
 }
-/**
- * GenerationSkillEntryDto is one skill inside a group, and whether it is
- * included in the exported resume.
- */
 export interface GenerationSkillEntryDto {
   text: string;
   selected: boolean;
 }
-/**
- * GenerationExportDto is the run's export status, embedded in the run
- * response and returned as-is by `GET /v1/generations/{runId}/export`.
- */
 export interface GenerationExportDto {
-  status: string; // rendering | exported | blocked | error
+  status: string;
   documentId?: string;
   report?: OverflowReportDto;
 }
-/**
- * OverflowReportDto is FR-019's over-budget report: pages rendered vs
- * target, and the lowest-ranked selected items as named drop candidates.
- * The server never acts on these.
- */
 export interface OverflowReportDto {
   pagesRendered: number /* int */;
   pagesTarget: number /* int */;
   candidates: OverflowCandidateDto[];
 }
-/**
- * OverflowCandidateDto is one named drop candidate, worst-ranked first.
- */
 export interface OverflowCandidateDto {
   itemId: string;
   sectionId: string;
   label: string;
   rank: number /* int */;
 }
-/**
- * GenerationRewriteResponseDto is the body of
- * `POST /v1/generations/{runId}/items/{itemId}/rewrite` — grounded alternate
- * phrasings of the item's current text. Empty when the model's proposals
- * didn't survive the grounding check; never an error for that case (the
- * same "report, never fail" idiom the page-fit loop uses).
- */
 export interface GenerationRewriteResponseDto {
   variants: string[];
 }
-/**
- * StartGenerationRequestDto is the body of `POST /v1/generations`. Exactly
- * one of JobID / Vacancy is expected; the handler validates that, not this
- * struct (rest-api.md's 400 conditions).
- */
 export interface StartGenerationRequestDto {
   profileId: string;
   jobId?: string;
   vacancy?: AdhocVacancyDto;
-  /**
-   * GroundingLevel governs the summary only on this route (research.md
-   * R1). Optional: absent means the stored default.
-   */
   groundingLevel?: string;
-  /**
-   * SummaryOptionID is the 034 summary-model choice for this run.
-   * Optional: absent means "use my stored default".
-   */
   summaryOptionId?: string;
 }
-/**
- * PatchGenerationItemRequestDto is the body of
- * `PATCH /v1/generations/{runId}/items/{itemId}` — any subset of the three
- * fields. Text is rejected with 403 for an origin="profile" item (FR-009 at
- * the API boundary).
- */
 export interface PatchGenerationItemRequestDto {
   selected?: boolean;
   position?: number /* int */;
   text?: string;
-  /**
-   * DroppedEntries replaces the set of individual skills switched off
-   * inside a skill group — the whole set every time, so the write is
-   * idempotent and order-free. An empty (non-nil) array restores the whole
-   * group. Rejected with 403 for anything but a profile-origin item in a
-   * skills section, and with 400 for an entry that group does not contain.
-   */
   droppedEntries?: string[];
 }
-/**
- * PatchGenerationSectionRequestDto is the body of
- * `PATCH /v1/generations/{runId}/sections/{sectionId}` — currently just the
- * per-run enable/disable switch, kept as its own endpoint separate from
- * `.../order` since the two have unrelated validation.
- */
 export interface PatchGenerationSectionRequestDto {
   enabled?: boolean;
 }
-/**
- * RerunGenerationRequestDto is the body of
- * `POST /v1/generations/{runId}/rerun`. Omitting Sections reruns the whole
- * run.
- */
 export interface RerunGenerationRequestDto {
   sections?: string[];
 }
-/**
- * ReorderSectionItemsRequestDto is the body of
- * `PATCH /v1/generations/{runId}/sections/{sectionId}/order` — the section's
- * item ids in the caller's desired display order. The handler assigns
- * `position` from each id's index in this array (T026).
- */
 export interface ReorderSectionItemsRequestDto {
   itemIds: string[];
 }
@@ -584,29 +450,17 @@ export interface SubscriptionDto {
   enabled: boolean;
   cron: string;
   lastRunAt?: string;
-  /**
-   * Kind is "crawl" or "manual". Manual rows have no URL, are never
-   * scheduled, and carry the two counters below.
-   */
   kind: string;
   manualCount?: number /* int */;
   lastAddedAt?: string;
 }
-/**
- * ManualAddResultDto is the envelope every non-5xx manual-add response uses,
- * discriminated by Outcome.
- */
 export interface ManualAddResultDto {
-  outcome: string; // created | duplicate | needs_fill_in | failed
+  outcome: string;
   job?: JobDto;
   reason?: string;
   kind?: string;
   draft?: ManualVacancyDraftDto;
 }
-/**
- * ManualVacancyDraftDto carries whatever was extracted before the attempt
- * stalled, so the operator completes the vacancy rather than retyping it.
- */
 export interface ManualVacancyDraftDto {
   url: string;
   sourceKey?: string;
@@ -825,13 +679,6 @@ export interface ExtLink {
 
 export interface QueueBacklogDto {
   queue: string;
-  /**
-   * ProviderClass is permanently "hosted" for any LLM-backed queue since 044
-   * removed the second (local/Ollama) inference path. The field is kept
-   * rather than removed — dropping it would be a breaking change to a
-   * shared DTO for a value that is now constant (plan.md Complexity
-   * Tracking, contracts/configuration.md).
-   */
   providerClass?: string;
   concurrency: number /* int */;
   pending: number /* int */;
@@ -883,21 +730,7 @@ export interface Entry {
   url?: string;
   label?: string;
   details?: string;
-  /**
-   * SkillLevel is the density of a skill group's details list on generated
-   * resumes: unset (auto — a count derived from how many skills the group
-   * holds), "relevant" (only what the vacancy asks for), "top5" (5),
-   * "top10" (~10), "top15" (~15), "top20" (~20) or "all" (everything). Only
-   * meaningful for entries in the skills section.
-   */
   skillLevel?: string;
-  /**
-   * ProjectLevel is the density of a project's bullet list on generated
-   * resumes: unset (auto — a count derived from how many bullets the project
-   * has), "relevant" (only the bullets the vacancy asks about), "top3" (3),
-   * "top5" (5) or "all" (everything). Only meaningful for entries in the
-   * projects section.
-   */
   projectLevel?: string;
   bullet?: string;
   number?: string;
@@ -960,12 +793,6 @@ export interface ResumeShapeConfigDto {
   educationEnabled: boolean;
   fontSize: number /* int */;
 }
-/**
- * SummaryModelOptionDto is one entry on the 034 summary-model menu. Cost is a
- * relative indicator, not a price: a figure here would be wrong within a month
- * and could not be reproduced by the reader. Real per-run cost lives in the 038
- * comparison artifact.
- */
 export interface SummaryModelOptionDto {
   id: string;
   label: string;
@@ -973,11 +800,6 @@ export interface SummaryModelOptionDto {
   cost: string;
   current: boolean;
 }
-/**
- * SummaryModelSettingDto is the whole menu plus which entry is selected, so the
- * dashboard renders the selector from one response rather than joining a
- * catalogue against a setting.
- */
 export interface SummaryModelSettingDto {
   options: SummaryModelOptionDto[];
   optionId: string;
