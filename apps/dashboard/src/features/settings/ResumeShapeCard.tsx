@@ -17,7 +17,12 @@ import { useResetResumeShape, useResumeShape, useUpdateResumeShape } from './hoo
 
 type NumericKey = Exclude<
   keyof ResumeShapeConfigDto & string,
-  'skillsEnabled' | 'projectsEnabled' | 'certificationsEnabled'
+  | 'summaryEnabled'
+  | 'skillsEnabled'
+  | 'experienceEnabled'
+  | 'projectsEnabled'
+  | 'certificationsEnabled'
+  | 'educationEnabled'
 >;
 
 const STEPPER_FIELDS: { key: NumericKey; label: string; min: number; max: number; description: string }[] = [
@@ -111,9 +116,12 @@ function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
   }, [config]);
 
   const dirty = ALL_NUMERIC_KEYS.some((key) => draft[key] !== config[key])
+    || draft.summaryEnabled !== config.summaryEnabled
     || draft.skillsEnabled !== config.skillsEnabled
+    || draft.experienceEnabled !== config.experienceEnabled
     || draft.projectsEnabled !== config.projectsEnabled
-    || draft.certificationsEnabled !== config.certificationsEnabled;
+    || draft.certificationsEnabled !== config.certificationsEnabled
+    || draft.educationEnabled !== config.educationEnabled;
 
   const pending = update.isPending || reset.isPending;
 
@@ -125,6 +133,20 @@ function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
       </p>
 
       <div className="flex flex-wrap gap-4">
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Checkbox
+            checked={draft.summaryEnabled}
+            onChange={(e) => setDraft({ ...draft, summaryEnabled: e.target.checked })}
+          />
+          Include summary section
+        </label>
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Checkbox
+            checked={draft.experienceEnabled}
+            onChange={(e) => setDraft({ ...draft, experienceEnabled: e.target.checked })}
+          />
+          Include experience section
+        </label>
         <label className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox
             checked={draft.skillsEnabled}
@@ -145,6 +167,13 @@ function ResumeShapeForm({ config }: { config: ResumeShapeConfigDto }) {
             onChange={(e) => setDraft({ ...draft, certificationsEnabled: e.target.checked })}
           />
           Include certifications section
+        </label>
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Checkbox
+            checked={draft.educationEnabled}
+            onChange={(e) => setDraft({ ...draft, educationEnabled: e.target.checked })}
+          />
+          Include education section
         </label>
       </div>
 
