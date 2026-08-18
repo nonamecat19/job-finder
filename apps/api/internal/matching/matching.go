@@ -15,11 +15,17 @@ type (
 	Handler          = worker.Handler
 	AutoGenerateGate = worker.AutoGenerateGate
 	Generator        = worker.Generator
+
+	Publisher     = application.Publisher
+	MatchSnapshot = application.MatchSnapshot
 )
+
+const Kind = application.Kind
 
 var (
 	ErrNoProfileConfig = application.ErrNoProfileConfig
 
-	NewService = application.NewService
-	NewHandler = worker.NewHandler
+	NewService       = application.NewService
+	NewHandler       = worker.NewHandler
+	NewResultHandler = application.NewResultHandler
 )

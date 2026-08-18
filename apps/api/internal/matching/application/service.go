@@ -60,10 +60,25 @@ type Service struct {
 	llmc       llm.Provider
 	threshold  float64
 	matchModel string
+
+	aiPub    *Publisher
+	aiRoutes func(capability string) string
 }
 
 func NewService(q domain.Repository, profiles *profile.Service, llmc llm.Provider, threshold float64, matchModel string) *Service {
 	return &Service{q: q, profiles: profiles, llmc: llmc, threshold: threshold, matchModel: matchModel}
+}
+
+// SetAIRouting wires MatchJob's LLM fit-analysis step to publish
+// match.requested instead of calling llmc directly, once AI_CAPABILITY_ROUTING
+// routes "match" to python (C8-3: reversible by configuration alone — a nil
+// or "go"-returning routes leaves MatchJob's behaviour unchanged).
+func (s *Service) SetAIRouting(pub *Publisher, routes func(capability string) string) {
+	s.aiPub, s.aiRoutes = pub, routes
+}
+
+func (s *Service) routedToPython() bool {
+	return s.aiPub != nil && s.aiRoutes != nil && s.aiRoutes(Kind) == "python"
 }
 
 func (s *Service) Store() activity.Store {
@@ -83,9 +98,11 @@ func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Reco
 	// stamps it on every call it makes — so this is the only half the call
 	// site has to supply. An absent recorder leaves the call uncorrelated,
 	// which is the pre-036 behaviour and valid.
+	var activityID *string
 	if rec != nil {
 		if runID := dbutil.UUIDString(rec.ID()); runID != "" {
 			ctx = llm.WithTraceID(ctx, runID)
+			activityID = &runID
 		}
 	}
 
@@ -180,6 +197,30 @@ func (s *Service) MatchJob(ctx context.Context, jobID string, rec *activity.Reco
 	location := "n/a"
 	if job.Location != nil && *job.Location != "" {
 		location = *job.Location
+	}
+
+	if s.routedToPython() {
+		snapshot := MatchSnapshot{
+			ProfileText: profileText,
+			Title:       job.Title,
+			Company:     job.Company,
+			Location:    location,
+			Remote:      job.Remote,
+			Description: description,
+		}
+		if err := s.aiPub.PublishRequested(ctx, jobID, activityID, snapshot); err != nil {
+			return dto.MatchResultDto{}, err
+		}
+		// The fit score lands later, off match.completed (result.go) — this
+		// leaves score unset, the same shape a below-threshold result has,
+		// which is exactly right: no score yet is indistinguishable from no
+		// score, and result.go's UpsertMatchResult fills it in once the
+		// python run completes.
+		res, err := s.saveResult(ctx, uid, similarity, nil, nil, nil, nil, nil, "")
+		if err == nil && rec != nil {
+			rec.Ok(ctx, "", map[string]any{"similarity": similarity, "delegated": true})
+		}
+		return res, err
 	}
 
 	prompt := fmt.Sprintf(
