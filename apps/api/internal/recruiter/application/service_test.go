@@ -13,44 +13,26 @@ import (
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/platform/llm"
 )
 
-type multiSourceFakeLLM struct {
-	postingJSON string
-	pageJSON    string
-	pageErr     error
+// multiSourceFakeExtractor stands in for a ContactExtractor whose result
+// depends on which of the three sources (posting/company_page/linkedin) is
+// asking — recruiter's Go LLM path is deleted (T113), so this only needs to
+// mimic AIContactExtractor's per-source shape, not any prompt text.
+type multiSourceFakeExtractor struct {
+	posting []ExtractedContact
+	page    []ExtractedContact
+	pageErr error
 }
 
-func (m *multiSourceFakeLLM) ModelName() string { return "test-model" }
-func (m *multiSourceFakeLLM) Complete(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
-	return "", nil
-}
-func (m *multiSourceFakeLLM) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
-	if strings.Contains(prompt, "PAGE TEXT") {
-		if m.pageErr != nil {
-			return "", m.pageErr
-		}
-		return m.pageJSON, nil
+func (m *multiSourceFakeExtractor) Extract(ctx context.Context, source, text string) ([]ExtractedContact, error) {
+	if source == SourcePosting {
+		return m.posting, nil
 	}
-	return m.postingJSON, nil
-}
-
-// CompleteChat satisfies the 037 Provider interface. The fake's behaviour lives
-// in CompleteJSON, so this delegates to it with the final turn as the prompt —
-// which is what the real adapters do in reverse. Tool calls are never
-// fabricated here: a fake that invented one would make a tool-loop test pass
-// for the wrong reason.
-func (m *multiSourceFakeLLM) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
-	prompt := ""
-	if len(msgs) > 0 {
-		prompt = msgs[len(msgs)-1].Content
+	if m.pageErr != nil {
+		return nil, m.pageErr
 	}
-	text, err := m.CompleteJSON(ctx, prompt, opts)
-	return llm.ChatResult{Content: text}, err
-}
-func (m *multiSourceFakeLLM) Embed(ctx context.Context, text string) ([]float32, error) {
-	return nil, nil
+	return m.page, nil
 }
 
 type fakeRepository struct {
@@ -159,9 +141,9 @@ func TestLinkedInSkippedWhenDisabled(t *testing.T) {
 	scraping := &fakeScraping{
 		responses: map[string]string{"acme.example.com": `<html><body>About Acme</body></html>`},
 	}
-	llmc := &fakeLLM{json: `{"name":"Jane Doe","title":"Recruiter","email":"jane@acme.com","phone":"","linkedInUrl":""}`}
+	extractor := &fakeExtractor{contacts: []ExtractedContact{{Name: "Jane Doe", Title: "Recruiter", Email: "jane@acme.com"}}}
 
-	svc := NewService(repo, llmc, "", scraping, false)
+	svc := NewService(repo, extractor, scraping, false)
 	contacts, err := svc.Resolve(context.Background(), dbutil.UUIDString(job.ID))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -183,9 +165,9 @@ func TestLinkedInRunsWhenEnabled(t *testing.T) {
 	scraping := &fakeScraping{
 		responses: map[string]string{"linkedin.com": `<html><body>People at Acme Corp</body></html>`},
 	}
-	llmc := &fakeLLM{json: `{"contacts":[]}`}
+	extractor := &fakeExtractor{}
 
-	svc := NewService(repo, llmc, "", scraping, true)
+	svc := NewService(repo, extractor, scraping, true)
 	if _, err := svc.Resolve(context.Background(), dbutil.UUIDString(job.ID)); err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -211,12 +193,12 @@ func TestResolveOneSourceFails(t *testing.T) {
 	scraping := &fakeScraping{
 		responses: map[string]string{"acme.example.com": `<html><body>Team page</body></html>`},
 	}
-	llmc := &multiSourceFakeLLM{
-		postingJSON: `{"name":"Jane Doe","title":"Recruiter","email":"jane@acme.com","phone":"","linkedInUrl":""}`,
-		pageErr:     fmt.Errorf("model unavailable"),
+	extractor := &multiSourceFakeExtractor{
+		posting: []ExtractedContact{{Name: "Jane Doe", Title: "Recruiter", Email: "jane@acme.com"}},
+		pageErr: fmt.Errorf("model unavailable"),
 	}
 
-	svc := NewService(repo, llmc, "", scraping, false)
+	svc := NewService(repo, extractor, scraping, false)
 	contacts, err := svc.Resolve(context.Background(), dbutil.UUIDString(job.ID))
 	if err != nil {
 		t.Fatalf("Resolve should not fail when only one source errors: %v", err)
@@ -236,9 +218,9 @@ func TestResolveIdempotent(t *testing.T) {
 	job := testJob("Contact: Jane Doe, Recruiter <jane@acme.com>")
 	repo := newFakeRepository(job)
 	scraping := &fakeScraping{}
-	llmc := &fakeLLM{json: `{"name":"Jane Doe","title":"Recruiter","email":"jane@acme.com","phone":"","linkedInUrl":""}`}
+	extractor := &fakeExtractor{contacts: []ExtractedContact{{Name: "Jane Doe", Title: "Recruiter", Email: "jane@acme.com"}}}
 
-	svc := NewService(repo, llmc, "", scraping, false)
+	svc := NewService(repo, extractor, scraping, false)
 
 	first, err := svc.Resolve(context.Background(), dbutil.UUIDString(job.ID))
 	if err != nil {
@@ -277,7 +259,7 @@ func TestListOrderingDeterministic(t *testing.T) {
 		}
 	}
 
-	svc := NewService(repo, &fakeLLM{json: `{}`}, "", &fakeScraping{}, false)
+	svc := NewService(repo, &fakeExtractor{}, &fakeScraping{}, false)
 
 	want := []string{"C Person", "A Person", "D Person", "B Person"}
 	for read := 0; read < 3; read++ {

@@ -2,10 +2,16 @@ package application
 
 import (
 	"context"
-	"github.com/job-finder/api/internal/recruiter/domain"
 	"os"
 	"testing"
+
+	"github.com/job-finder/api/internal/recruiter/domain"
 )
+
+func extractCompanyPageContacts(contacts []ExtractedContact, text string) ([]domain.ResolvedContact, error) {
+	s := &Service{extractor: &fakeExtractor{contacts: contacts}}
+	return s.extractCompanyPageContacts(context.Background(), text)
+}
 
 func TestCompanyPageParse(t *testing.T) {
 	html, err := os.ReadFile("testdata/company_team.html")
@@ -17,12 +23,12 @@ func TestCompanyPageParse(t *testing.T) {
 		t.Fatal("expected non-empty flattened text from the fixture")
 	}
 
-	llmc := &fakeLLM{json: `{"contacts":[
-		{"name":"Jane Doe","title":"Senior Recruiter","email":"jane@acme.com","phone":"","linkedInUrl":""},
-		{"name":"Tom Baker","title":"Head of Talent Acquisition","email":"","phone":"","linkedInUrl":""}
-	]}`}
+	extracted := []ExtractedContact{
+		{Name: "Jane Doe", Title: "Senior Recruiter", Email: "jane@acme.com"},
+		{Name: "Tom Baker", Title: "Head of Talent Acquisition"},
+	}
 
-	contacts, err := ExtractCompanyPageContacts(context.Background(), llmc, "", text)
+	contacts, err := extractCompanyPageContacts(extracted, text)
 	if err != nil {
 		t.Fatalf("ExtractCompanyPageContacts: %v", err)
 	}
@@ -50,9 +56,7 @@ func TestCompanyPageParseNoTeamSection(t *testing.T) {
 	}
 	text := extractPageText(string(html))
 
-	llmc := &fakeLLM{json: `{"contacts":[]}`}
-
-	contacts, err := ExtractCompanyPageContacts(context.Background(), llmc, "", text)
+	contacts, err := extractCompanyPageContacts(nil, text)
 	if err != nil {
 		t.Fatalf("ExtractCompanyPageContacts: %v", err)
 	}
@@ -62,9 +66,9 @@ func TestCompanyPageParseNoTeamSection(t *testing.T) {
 }
 
 func TestCompanyPageParseUngroundedContactDropped(t *testing.T) {
-	llmc := &fakeLLM{json: `{"contacts":[{"name":"Fabricated Person","title":"","email":"","phone":"","linkedInUrl":""}]}`}
+	extracted := []ExtractedContact{{Name: "Fabricated Person"}}
 
-	contacts, err := ExtractCompanyPageContacts(context.Background(), llmc, "", "About Acme Corp. We build software.")
+	contacts, err := extractCompanyPageContacts(extracted, "About Acme Corp. We build software.")
 	if err != nil {
 		t.Fatalf("ExtractCompanyPageContacts: %v", err)
 	}

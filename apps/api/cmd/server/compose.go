@@ -35,11 +35,13 @@ import (
 	"github.com/nonamecat19/job-scraper/ports"
 	jsretrieval "github.com/nonamecat19/job-scraper/retrieval"
 
+	"github.com/job-finder/api/internal/aiclient"
 	"github.com/job-finder/api/internal/aifeature"
 	aifeaturehttp "github.com/job-finder/api/internal/aifeature/interfaces/http"
 	"github.com/job-finder/api/internal/applications"
 	applicationshttp "github.com/job-finder/api/internal/applications/interfaces/http"
 	"github.com/job-finder/api/internal/coach"
+	coachrephraseadapter "github.com/job-finder/api/internal/coach/infrastructure/rephraseadapter"
 	coachhttp "github.com/job-finder/api/internal/coach/interfaces/http"
 	"github.com/job-finder/api/internal/companyintel"
 	companyintelhttp "github.com/job-finder/api/internal/companyintel/interfaces/http"
@@ -47,6 +49,7 @@ import (
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/enrichment"
+	"github.com/job-finder/api/internal/events"
 	"github.com/job-finder/api/internal/generation"
 	generationhttp "github.com/job-finder/api/internal/generation/interfaces/http"
 	"github.com/job-finder/api/internal/ghostjob"
@@ -70,13 +73,13 @@ import (
 	"github.com/job-finder/api/internal/outreach"
 	outreachhttp "github.com/job-finder/api/internal/outreach/interfaces/http"
 	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/platform/langfuseretention"
 	"github.com/job-finder/api/internal/platform/observability"
 	"github.com/job-finder/api/internal/platform/storage"
 	"github.com/job-finder/api/internal/postage"
 	postagehttp "github.com/job-finder/api/internal/postage/interfaces/http"
 	"github.com/job-finder/api/internal/profile"
 	profilehttp "github.com/job-finder/api/internal/profile/interfaces/http"
-	"github.com/job-finder/api/internal/events"
 	"github.com/job-finder/api/internal/queue"
 	"github.com/job-finder/api/internal/recruiter"
 	recruiterhttp "github.com/job-finder/api/internal/recruiter/interfaces/http"
@@ -121,8 +124,22 @@ type App struct {
 	Matching   *matching.Handler
 	Generation *generation.Handler
 	Enrichment *enrichment.Handler
-	Salary     *salary.Handler
 	Ghost      *ghostjob.Handler
+
+	// GenerationHtmlRenderer/GenerationRendercvRenderer are generation's PDF
+	// renderers, exposed here so servers.go's generate.completed result
+	// handler can render a python-produced document the same way the Go
+	// legacy path does.
+	GenerationHtmlRenderer     *generation.HtmlPdfRenderer
+	GenerationRendercvRenderer *generation.RenderCvRenderer
+
+	// MatchNotifier/MatchAutoGenerate/MatchGenerator are match's post-score
+	// side effects, exposed here so servers.go's match.completed result
+	// handler can run them the same way worker.Handler.ProcessTask does for
+	// a go-routed MatchJob.
+	MatchNotifier     *notifier.Service
+	MatchAutoGenerate matching.AutoGenerateGate
+	MatchGenerator    matching.Generator
 
 	MatchRouter      *llm.Router
 	GenerationRouter *llm.Router
@@ -244,7 +261,16 @@ func composeIngestion(p *Platform, sources *sourcesHandles) *ingestionHandles {
 		SecretKey:     p.Config.EvalPruneSecretKey,
 		RetentionDays: p.Config.EvalPruneRetentionDay,
 	}, nil)
-	scheduler := worker.NewScheduler(p.DB.Queries, ingestionSvc, pruner)
+	// The Langfuse trace payload retention job (047 FR-018/FR-018a, K5) rides
+	// on the same tick. It no-ops when no ClickHouse URL is configured, which
+	// is the default (Langfuse itself is dev-only self-hosted).
+	payloadPruner := langfuseretention.New(langfuseretention.Config{
+		URL:           p.Config.RetentionClickhouseURL,
+		User:          p.Config.RetentionClickhouseUser,
+		Password:      p.Config.RetentionClickhousePassword,
+		RetentionDays: p.Config.LangfusePayloadRetentionDays,
+	})
+	scheduler := worker.NewScheduler(p.DB.Queries, ingestionSvc, pruner, payloadPruner)
 	return &ingestionHandles{
 		Ingestion: ingestionSvc,
 		Handler:   ingestionHandler,
@@ -270,13 +296,13 @@ type llmHandles struct {
 	SummaryOptionRouters map[string]llm.Provider
 	RephraseRouter       *llm.Router
 	GhostRouter          *llm.Router
-	// SalaryRouter, OutreachRouter and RecruiterRouter replace the former
-	// single DefaultRouter (044 data-model.md §4). Each resolves through its
-	// own scenario key; the "default" catch-all is gone from the gateway, so
-	// an unknown key fails loudly rather than falling through.
-	SalaryRouter    *llm.Router
-	OutreachRouter  *llm.Router
-	RecruiterRouter *llm.Router
+	// SalaryRouter is queueClassResolvers' last reader of this group — 044
+	// data-model.md §4's OutreachRouter/RecruiterRouter siblings are gone:
+	// both capabilities had their Go LLM path deleted (T113) and never fed
+	// queueClassResolvers (neither is a queue-consuming capability), so
+	// nothing was left reading them once composeOutreach/composeRecruiter
+	// stopped taking a Router.
+	SalaryRouter *llm.Router
 	// EmbedRouter is handed to any consumer whose only use of a Router is
 	// Embed (contracts/embeddings.md E5: Router.Embed always routes to the
 	// gateway under the "embed" key regardless of the router it is called
@@ -291,6 +317,14 @@ func composeLLM(p *Platform) (*llmHandles, error) {
 		return nil, err
 	}
 	var gatewayIface llm.Provider = gatewayProvider
+	// Wrapping here, before any Router is built, means every Router's
+	// Embed() call — not just EmbedRouter's — is diverted to the AI
+	// service's `embed` capability once AI_CAPABILITY_ROUTING routes it to
+	// python (matching's llmc, for instance, calls both Complete and Embed
+	// through MatchRouter).
+	if p.AIClient != nil {
+		gatewayIface = &aiclient.EmbedRoutedProvider{Provider: gatewayIface, Client: p.AIClient, Routing: p.Config.CapabilityRouting}
+	}
 	return &llmHandles{
 		MatchRouter:             llm.NewRouter("match", gatewayIface),
 		GenerationRouter:        llm.NewRouter("generation", gatewayIface),
@@ -302,8 +336,6 @@ func composeLLM(p *Platform) (*llmHandles, error) {
 		RephraseRouter:          llm.NewRouter("rephrase", gatewayIface),
 		GhostRouter:             llm.NewRouter("ghost", gatewayIface),
 		SalaryRouter:            llm.NewRouter("salary", gatewayIface),
-		OutreachRouter:          llm.NewRouter("outreach", gatewayIface),
-		RecruiterRouter:         llm.NewRouter("recruiter", gatewayIface),
 		EmbedRouter:             llm.NewRouter("embed", gatewayIface),
 	}, nil
 }
@@ -327,6 +359,12 @@ type matchingHandles struct {
 	AiFeatures       *aifeature.Service
 	AiFeatureHandler *aifeaturehttp.AiFeatureHandler
 	Handler          *matching.Handler
+
+	// AutoGenerate/Generator are exposed so servers.go's match.completed
+	// result handler can run the same post-match auto-generate decision
+	// worker.Handler.ProcessTask runs after a go-routed MatchJob returns.
+	AutoGenerate matching.AutoGenerateGate
+	Generator    matching.Generator
 }
 
 type resumeAutoGenerateGate struct{ svc *aifeature.Service }
@@ -337,6 +375,7 @@ func (g resumeAutoGenerateGate) ShouldGenerate(score int) bool {
 
 func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Service, matchRouter *llm.Router) (*matchingHandles, error) {
 	matchingSvc := matching.NewService(p.DB.Queries, profileSvc, matchRouter, p.Config.MatchSimilarityThreshold, "")
+	matchingSvc.SetAIRouting(&matching.Publisher{Pub: p.Publisher}, p.Config.CapabilityRouting)
 	notifierSvc := notifier.NewService(p.DB.Queries,
 		notifier.WithMatchThreshold(p.Config.MatchNotifyScoreThreshold),
 		notifier.WithRateLimitCap(p.Config.MatchNotifyRateLimit),
@@ -352,6 +391,8 @@ func composeMatching(ctx context.Context, p *Platform, profileSvc *profile.Servi
 		AiFeatures:       aiFeatureSvc,
 		AiFeatureHandler: &aifeaturehttp.AiFeatureHandler{Settings: aiFeatureSvc},
 		Handler:          matching.NewHandler(matchingSvc, notifierSvc, resumeAutoGenerateGate{aiFeatureSvc}, jobsSvc),
+		AutoGenerate:     resumeAutoGenerateGate{aiFeatureSvc},
+		Generator:        jobsSvc,
 	}, nil
 }
 
@@ -369,12 +410,14 @@ func composeGhostJob(p *Platform, ghostRouter *llm.Router) *ghostHandles {
 }
 
 type generationHandles struct {
-	Generation   *generation.Service
-	Handler      *generation.Handler
-	Documents    *generationhttp.DocumentsHandler
-	Generations  *generationhttp.GenerationsHandler
-	ResumeShape  *resumeshapehttp.ResumeShapeHandler
-	SummaryModel *summarymodelhttp.SummaryModelHandler
+	Generation       *generation.Service
+	Handler          *generation.Handler
+	Documents        *generationhttp.DocumentsHandler
+	Generations      *generationhttp.GenerationsHandler
+	ResumeShape      *resumeshapehttp.ResumeShapeHandler
+	SummaryModel     *summarymodelhttp.SummaryModelHandler
+	HtmlRenderer     *generation.HtmlPdfRenderer
+	RendercvRenderer *generation.RenderCvRenderer
 }
 
 func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Service, routers generation.Routers) (*generationHandles, error) {
@@ -416,6 +459,10 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	}
 	generationSvc := generation.NewService(p.DB.Queries, profileSvc, htmlRenderer, rendercvRenderer, routers, "", cfg.ResumeMasterPath, cfg.ResumeGroundingLvl, shapeSvc)
 	generationSvc.SetSummaryModelProvider(summarySvc)
+	// generation.SnapshotEnqueuer (platform.go's lateGenerationSnapshot) needs
+	// the same profile/shape/summary services legacy Generate() reads from —
+	// not ready until here, so binding happens as soon as they exist.
+	p.GenLate.Bind(profileSvc, shapeSvc, summarySvc)
 	// 042: the workspace run's background half (StartRun) is dispatched the
 	// same way every other async pipeline in this codebase is — enqueued on
 	// the existing `generate` queue and picked up by generation.Handler.
@@ -425,12 +472,14 @@ func composeGeneration(ctx context.Context, p *Platform, profileSvc *profile.Ser
 	// the TxRunner.
 	generationSvc.SetTxRunner(p.DB)
 	return &generationHandles{
-		Generation:   generationSvc,
-		Handler:      generation.NewHandler(generationSvc, p.DB.Queries),
-		Documents:    &generationhttp.DocumentsHandler{Generation: generationSvc, SummaryModel: summarySvc},
-		Generations:  &generationhttp.GenerationsHandler{Workspace: generationSvc},
-		ResumeShape:  &resumeshapehttp.ResumeShapeHandler{Settings: shapeSvc},
-		SummaryModel: &summarymodelhttp.SummaryModelHandler{Settings: summarySvc},
+		Generation:       generationSvc,
+		Handler:          generation.NewHandler(generationSvc, p.DB.Queries),
+		Documents:        &generationhttp.DocumentsHandler{Generation: generationSvc, SummaryModel: summarySvc},
+		Generations:      &generationhttp.GenerationsHandler{Workspace: generationSvc},
+		ResumeShape:      &resumeshapehttp.ResumeShapeHandler{Settings: shapeSvc},
+		SummaryModel:     &summarymodelhttp.SummaryModelHandler{Settings: summarySvc},
+		HtmlRenderer:     htmlRenderer,
+		RendercvRenderer: rendercvRenderer,
 	}, nil
 }
 
@@ -476,15 +525,14 @@ func composeEnrichment(p *Platform, sources *sourcesHandles, retrievalSvc ports.
 		p.Enqueuer, enrichDelay, enrichDelays)
 }
 
-type salaryHandles struct {
-	Worker       *salary.Handler
-	LevelsLoader *salary.LevelsFyiLoader
-}
-
-func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) *salaryHandles {
+// composeSalary no longer takes a Router or returns a worker handle: salary's
+// Go LLM path was cut over and deleted (T113) once live parity evidence
+// confirmed the python path (AI_CAPABILITY_ROUTING=salary=python, the only
+// mode left) matches it, and with it the last consumer of the levels.fyi
+// loader beyond the CSV warm at startup — it stays only for that side effect.
+func composeSalary(ctx context.Context, p *Platform) {
 	cfg := p.Config
 	levelsFyiLoader := salary.NewLevelsFyiLoader(p.DB.Queries)
-	salaryService := salary.NewService(p.DB.Queries, defaultRouter, levelsFyiLoader, "")
 
 	if cfg.LevelsFyiCSV != "" {
 		if _, err := levelsFyiLoader.LoadCSV(ctx, cfg.LevelsFyiCSV); err != nil {
@@ -492,11 +540,6 @@ func composeSalary(ctx context.Context, p *Platform, defaultRouter *llm.Router) 
 		}
 	} else {
 		slog.Warn("salary: LEVELS_FYI_CSV not set — levels.fyi source disabled")
-	}
-
-	return &salaryHandles{
-		Worker:       salary.NewHandler(salaryService, p.DB.Queries),
-		LevelsLoader: levelsFyiLoader,
 	}
 }
 
@@ -518,7 +561,13 @@ func composeKeyword(p *Platform, rephraseRouter *llm.Router, profileSvc *profile
 	}
 }
 
-func composeCoach(p *Platform, rephraseModel *keyword.ProviderRephraseModel, profileSvc *profile.Service) *coachhttp.CoachHandler {
+func composeCoach(p *Platform, rephraseRouter *llm.Router, profileSvc *profile.Service) *coachhttp.CoachHandler {
+	var rephraseModel coach.RephraseModel
+	if p.AIClient != nil && p.Config.CapabilityRouting("rephrase") == "python" {
+		rephraseModel = &coachrephraseadapter.AIClientRephraseModel{Client: p.AIClient}
+	} else {
+		rephraseModel = coachrephraseadapter.NewProviderRephraseModel(rephraseRouter, "")
+	}
 	coachSvc := coach.NewService(rephraseModel)
 	coachAssessSvc := coach.NewAssessmentService(coachSvc, p.DB.Queries, func(ctx context.Context) ([]coach.ProfileEntry, error) {
 		entries, err := profileSvc.ProfileEntries(ctx)
@@ -569,16 +618,18 @@ type recruiterHandles struct {
 	Handler *recruiterhttp.ContactsHandler
 }
 
-func composeRecruiter(p *Platform, defaultRouter *llm.Router) *recruiterHandles {
-	recruiterSvc := recruiter.NewService(p.DB.Queries, defaultRouter, "", p.Scraping, p.Config.LinkedInScrapeEnabled)
+func composeRecruiter(p *Platform) *recruiterHandles {
+	recruiterSvc := recruiter.NewService(
+		p.DB.Queries, &recruiter.AIContactExtractor{Client: p.AIClient}, p.Scraping, p.Config.LinkedInScrapeEnabled,
+	)
 	return &recruiterHandles{
 		Service: recruiterSvc,
 		Handler: &recruiterhttp.ContactsHandler{Recruiter: recruiterSvc},
 	}
 }
 
-func composeOutreach(p *Platform, recruiterSvc *recruiter.Service, companyIntelSvc *companyintel.Service, defaultRouter *llm.Router) *outreachhttp.OutreachHandler {
-	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, defaultRouter, "")
+func composeOutreach(p *Platform, recruiterSvc *recruiter.Service, companyIntelSvc *companyintel.Service) *outreachhttp.OutreachHandler {
+	outreachSvc := outreach.NewService(recruiterSvc, companyIntelSvc, &outreach.AIDrafter{Client: p.AIClient})
 	return &outreachhttp.OutreachHandler{Outreach: outreachSvc}
 }
 
@@ -791,11 +842,11 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 
 	jobsHandler := &jobshttp.JobsHandler{Jobs: matchingH.Jobs, Generation: generationH.Generation, Enrichment: enrichHandler}
 
-	salaryH := composeSalary(ctx, p, llmH.SalaryRouter)
+	composeSalary(ctx, p)
 
 	keywordH := composeKeyword(p, llmH.RephraseRouter, profileH.Profile)
 	companyIntelH := composeCompanyIntel(p)
-	recruiterH := composeRecruiter(p, llmH.RecruiterRouter)
+	recruiterH := composeRecruiter(p)
 	interviewPrepH := composeInterviewPrep(p, profileH.Profile, companyIntelH.Service)
 	hostsH := composeHosts(retrievalSvc)
 
@@ -816,9 +867,9 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Notification:  composeNotifications(p),
 		Companies:     companyIntelH.Handler,
 		GhostJob:      ghostH.HTTPHandler,
-		Coach:         composeCoach(p, keywordH.RephraseModel, profileH.Profile),
+		Coach:         composeCoach(p, llmH.RephraseRouter, profileH.Profile),
 		Contacts:      recruiterH.Handler,
-		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service, llmH.OutreachRouter),
+		Outreach:      composeOutreach(p, recruiterH.Service, companyIntelH.Service),
 		AiFeatures:    matchingH.AiFeatureHandler,
 		ResumeShape:   generationH.ResumeShape,
 		SummaryModel:  generationH.SummaryModel,
@@ -830,8 +881,14 @@ func buildContexts(ctx context.Context, p *Platform) (*App, error) {
 		Matching:   matchingH.Handler,
 		Generation: generationH.Handler,
 		Enrichment: enrichHandler,
-		Salary:     salaryH.Worker,
 		Ghost:      ghostH.Worker,
+
+		GenerationHtmlRenderer:     generationH.HtmlRenderer,
+		GenerationRendercvRenderer: generationH.RendercvRenderer,
+
+		MatchNotifier:     matchingH.Notifier,
+		MatchAutoGenerate: matchingH.AutoGenerate,
+		MatchGenerator:    matchingH.Generator,
 
 		MatchRouter:      llmH.MatchRouter,
 		GenerationRouter: llmH.GenerationRouter,

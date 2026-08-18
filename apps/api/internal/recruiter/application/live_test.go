@@ -7,20 +7,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/job-finder/api/internal/aiclient"
 	"github.com/job-finder/api/internal/config"
-	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/scraping"
 )
+
+// liveExtractor builds the same AIContactExtractor compose.go wires up now
+// that recruiter's Go LLM path is deleted (T113) — these tests hit the real
+// AI service over HTTP instead of the gateway directly.
+func liveExtractor(t *testing.T, cfg *config.Config) *AIContactExtractor {
+	t.Helper()
+	if cfg.AIServiceURL == "" {
+		t.Skip("AI_SERVICE_URL not set")
+	}
+	return &AIContactExtractor{Client: aiclient.New(cfg.AIServiceURL, cfg.AIServiceToken, nil, 0, nil)}
+}
 
 func TestLive_CompanyPage(t *testing.T) {
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
-	}
-
-	gw, err := llm.NewProviders(cfg)
-	if err != nil {
-		t.Fatalf("llm new: %v", err)
 	}
 
 	scrapingSvc := scraping.New()
@@ -40,8 +46,8 @@ func TestLive_CompanyPage(t *testing.T) {
 		t.Fatal("expected non-empty flattened page text")
 	}
 
-	router := llm.NewRouter("recruiter", gw)
-	contacts, err := ExtractCompanyPageContacts(ctx, router, "", text)
+	svc := &Service{extractor: liveExtractor(t, cfg)}
+	contacts, err := svc.extractCompanyPageContacts(ctx, text)
 	if err != nil {
 		t.Fatalf("ExtractCompanyPageContacts: %v", err)
 	}
@@ -58,11 +64,6 @@ func TestLive_LinkedIn(t *testing.T) {
 	}
 	if !cfg.LinkedInScrapeEnabled {
 		t.Skip("LINKEDIN_SCRAPE_ENABLED is not set to true — LinkedIn is opt-in (FR-004)")
-	}
-
-	gw, err := llm.NewProviders(cfg)
-	if err != nil {
-		t.Fatalf("llm new: %v", err)
 	}
 
 	scrapingSvc := scraping.New()
@@ -82,8 +83,8 @@ func TestLive_LinkedIn(t *testing.T) {
 		t.Skip("empty page text — likely an auth wall or markup change")
 	}
 
-	router := llm.NewRouter("recruiter", gw)
-	contacts, err := ExtractLinkedInContacts(ctx, router, "", text)
+	svc := &Service{extractor: liveExtractor(t, cfg)}
+	contacts, err := svc.extractLinkedInContacts(ctx, text)
 	if err != nil {
 		t.Fatalf("ExtractLinkedInContacts: %v", err)
 	}

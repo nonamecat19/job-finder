@@ -112,6 +112,19 @@ type Config struct {
 	EvalPruneSecretKey    string `mapstructure:"EVAL_PRUNE_SECRET_KEY"`
 	EvalPruneRetentionDay int    `mapstructure:"EVAL_PRUNE_RETENTION_DAYS"`
 
+	// Langfuse trace payload retention (047 FR-018/FR-018a, contracts K5).
+	// RetentionClickhouse{URL,User,Password} reach Langfuse's own ClickHouse
+	// store directly to blank input/output payload columns — see
+	// internal/platform/langfuseretention for why. Named RETENTION_CLICKHOUSE_*
+	// rather than LANGFUSE_CLICKHOUSE_* for the same reason EVAL_PRUNE_* above
+	// is not named LANGFUSE_*: 036 contracts C2-2 forbids granting this
+	// container a LANGFUSE_*-named variable, and this credential reaches
+	// ClickHouse only, not Langfuse's own API.
+	RetentionClickhouseURL       string `mapstructure:"RETENTION_CLICKHOUSE_URL"`
+	RetentionClickhouseUser      string `mapstructure:"RETENTION_CLICKHOUSE_USER"`
+	RetentionClickhousePassword  string `mapstructure:"RETENTION_CLICKHOUSE_PASSWORD"`
+	LangfusePayloadRetentionDays int    `mapstructure:"LANGFUSE_PAYLOAD_RETENTION_DAYS"`
+
 	DBMaxConns           int           `mapstructure:"DB_MAX_CONNS"`
 	DBMinConns           int           `mapstructure:"DB_MIN_CONNS"`
 	DBMaxConnLifetime    time.Duration `mapstructure:"DB_MAX_CONN_LIFETIME"`
@@ -213,17 +226,6 @@ func (c *Config) CapabilityRouting(capability string) string {
 	return "go"
 }
 
-// hasPythonRouting reports whether any capability is routed to python,
-// governing K3-5's second clause.
-func (c *Config) hasPythonRouting() bool {
-	for _, mode := range c.aiCapabilityRouting {
-		if mode == "python" {
-			return true
-		}
-	}
-	return false
-}
-
 // validateAISurface enforces K1: the gateway must be configured before any
 // AI-doing binary boots. This checks presence only, never reachability — an
 // unreachable gateway fails tasks, not boots (K1-2, K1-3).
@@ -237,13 +239,17 @@ func validateAISurface(cfg *Config) error {
 	if cfg.RabbitMQURL == "" {
 		return fmt.Errorf("config: RABBITMQ_URL is required")
 	}
-	if cfg.hasPythonRouting() {
-		if cfg.AIServiceURL == "" {
-			return fmt.Errorf("config: AI_SERVICE_URL is required once a capability is routed to python (AI_CAPABILITY_ROUTING)")
-		}
-		if cfg.AIServiceToken == "" {
-			return fmt.Errorf("config: AI_SERVICE_TOKEN is required once a capability is routed to python (AI_CAPABILITY_ROUTING)")
-		}
+	// recruiter/outreach/rephrase/salary had their Go LLM path deleted once
+	// cutover was confirmed (T113): they no longer read AI_CAPABILITY_ROUTING
+	// at all, so AI_SERVICE_URL/TOKEN are required unconditionally now, not
+	// only when hasPythonRouting() finds an explicit "python" entry for one
+	// of the capabilities that still has a "go" fallback (match, embed,
+	// generation, ghost).
+	if cfg.AIServiceURL == "" {
+		return fmt.Errorf("config: AI_SERVICE_URL is required")
+	}
+	if cfg.AIServiceToken == "" {
+		return fmt.Errorf("config: AI_SERVICE_TOKEN is required")
 	}
 	return nil
 }

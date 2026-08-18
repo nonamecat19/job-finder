@@ -47,6 +47,8 @@ func TestLoadGatewayOverride(t *testing.T) {
 	t.Setenv("GATEWAY_URL", "http://litellm:4000")
 	t.Setenv("LITELLM_MASTER_KEY", "sk-test")
 	t.Setenv("RABBITMQ_URL", "amqp://jobfinder:test@localhost:5672/")
+	t.Setenv("AI_SERVICE_URL", "http://ai:8000")
+	t.Setenv("AI_SERVICE_TOKEN", "shared-secret")
 
 	cfg, err := Load()
 	if err != nil {
@@ -160,8 +162,10 @@ func TestLoadEnvOverride(t *testing.T) {
 }
 
 // TestCapabilityRoutingDefaultsToGo guards FR-020: an unlisted capability
-// routes to "go", and AI_SERVICE_URL/AI_SERVICE_TOKEN stay optional when no
-// capability is routed to python (K3-5).
+// (among match/embed/generation, the ones that still have a "go" fallback)
+// routes to "go". AI_SERVICE_URL/AI_SERVICE_TOKEN are still required
+// unconditionally (T113: recruiter/outreach/rephrase/salary no longer have
+// a "go" fallback to read AI_CAPABILITY_ROUTING for at all).
 func TestCapabilityRoutingDefaultsToGo(t *testing.T) {
 	if err := unsetForTest(t); err != nil {
 		t.Fatal(err)
@@ -169,6 +173,8 @@ func TestCapabilityRoutingDefaultsToGo(t *testing.T) {
 	t.Setenv("GATEWAY_URL", "http://litellm:4000")
 	t.Setenv("LITELLM_MASTER_KEY", "sk-test")
 	t.Setenv("RABBITMQ_URL", "amqp://jobfinder:test@localhost:5672/")
+	t.Setenv("AI_SERVICE_URL", "http://ai:8000")
+	t.Setenv("AI_SERVICE_TOKEN", "shared-secret")
 
 	cfg, err := Load()
 	if err != nil {
@@ -228,18 +234,22 @@ func TestCapabilityRoutingRejectsMalformedEntry(t *testing.T) {
 	}
 }
 
-// TestPythonRoutingRequiresAIServiceCredentials guards K3-5: once any
-// capability is routed to python, AI_SERVICE_URL and AI_SERVICE_TOKEN
-// become required.
-func TestPythonRoutingRequiresAIServiceCredentials(t *testing.T) {
+// TestAIServiceCredentialsRequired guards T113: recruiter/outreach/rephrase/
+// salary had their Go LLM path deleted and no longer have a "go" fallback,
+// so AI_SERVICE_URL and AI_SERVICE_TOKEN are required unconditionally now —
+// not only once AI_CAPABILITY_ROUTING names an explicit "python" entry for
+// one of the capabilities that still can (match, embed, generation).
+func TestAIServiceCredentialsRequired(t *testing.T) {
 	cases := []struct {
 		name    string
+		routing string
 		url     string
 		token   string
 		wantKey string
 	}{
-		{name: "both unset", url: "", token: "", wantKey: "AI_SERVICE_URL"},
-		{name: "token unset", url: "http://ai:8000", token: "", wantKey: "AI_SERVICE_TOKEN"},
+		{name: "no routing entry at all, both unset", routing: "", url: "", token: "", wantKey: "AI_SERVICE_URL"},
+		{name: "explicit python routing, both unset", routing: "ghost=python", url: "", token: "", wantKey: "AI_SERVICE_URL"},
+		{name: "explicit python routing, token unset", routing: "ghost=python", url: "http://ai:8000", token: "", wantKey: "AI_SERVICE_TOKEN"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -249,7 +259,7 @@ func TestPythonRoutingRequiresAIServiceCredentials(t *testing.T) {
 			t.Setenv("GATEWAY_URL", "http://litellm:4000")
 			t.Setenv("LITELLM_MASTER_KEY", "sk-test")
 			t.Setenv("RABBITMQ_URL", "amqp://jobfinder:test@localhost:5672/")
-			t.Setenv("AI_CAPABILITY_ROUTING", "ghost=python")
+			t.Setenv("AI_CAPABILITY_ROUTING", tc.routing)
 			t.Setenv("AI_SERVICE_URL", tc.url)
 			t.Setenv("AI_SERVICE_TOKEN", tc.token)
 

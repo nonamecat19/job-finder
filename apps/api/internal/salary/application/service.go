@@ -6,16 +6,17 @@ import (
 	"log/slog"
 	"math"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
-	"github.com/job-finder/api/internal/platform/llm"
-	"github.com/job-finder/api/internal/platform/llm/application/toolloop"
 	"github.com/job-finder/api/internal/salary/domain"
 )
+
+// Kind is salary's work-type/capability name, matching queue.TypeSalaryInfer
+// and the capability name AI_CAPABILITY_ROUTING keys on.
+const Kind = "salary"
 
 type Repository interface {
 	GetJobByID(ctx context.Context, id pgtype.UUID) (sqlcgen.Job, error)
@@ -26,13 +27,12 @@ type Repository interface {
 
 type Service struct {
 	q           Repository
-	llmc        llm.Provider
 	levelsFyi   *LevelsFyiLoader
 	salaryModel string
 }
 
-func NewService(q Repository, llmc llm.Provider, levelsFyi *LevelsFyiLoader, salaryModel string) *Service {
-	return &Service{q: q, llmc: llmc, levelsFyi: levelsFyi, salaryModel: salaryModel}
+func NewService(q Repository, levelsFyi *LevelsFyiLoader, salaryModel string) *Service {
+	return &Service{q: q, levelsFyi: levelsFyi, salaryModel: salaryModel}
 }
 
 func (s *Service) Infer(ctx context.Context, jobID string) error {
@@ -77,12 +77,13 @@ func (s *Service) Infer(ctx context.Context, jobID string) error {
 		return s.persistJobSalary(ctx, uid, levelsBand)
 	}
 
-	band, err := s.llmInfer(ctx, job)
-	if err != nil {
-		return fmt.Errorf("salary: LLM inference failed: %w", err)
-	}
-	slog.Info("salary: LLM inferred", "job", jobID, "min", band.Min, "max", band.Max, "currency", band.Currency, "confidence", band.Confidence)
-	return s.persistJobSalary(ctx, uid, band)
+	// The tool-loop LLM path is deleted (FR-023, C8-4, T103): once neither
+	// the raw-salary parse nor either cache lookup produces a band, salary
+	// estimation is apps/ai's job now. AI_CAPABILITY_ROUTING has no "go"
+	// fallback left for salary to revert to — the reversibility FR-020
+	// promised ended the moment this path was removed, which is the whole
+	// point of only removing it after cutover was confirmed.
+	return fmt.Errorf("salary: no cache or levels.fyi band for job %s; route `salary` to the AI service (AI_CAPABILITY_ROUTING) to estimate one", jobID)
 }
 
 func (s *Service) lookupCache(ctx context.Context, bucket string, source domain.SalarySource) (domain.SalaryBand, bool) {
@@ -103,83 +104,6 @@ func (s *Service) lookupCache(ctx context.Context, bucket string, source domain.
 	}
 	return domain.SalaryBand{}, false
 }
-
-func (s *Service) llmInfer(ctx context.Context, job sqlcgen.Job) (domain.SalaryBand, error) {
-	location := "n/a"
-	if job.Location != nil && *job.Location != "" {
-		location = *job.Location
-	}
-	description := job.Description
-	if len(description) > 4000 {
-		description = description[:4000]
-	}
-
-	prompt := fmt.Sprintf(
-		"Estimate the annual salary range for this job in the local currency.\n\n"+
-			"JOB:\nTitle: %s\nCompany: %s\nLocation: %s (remote: %v)\nDescription:\n%s\n\n"+
-			"Return a single SalaryBand JSON object. Use the most likely currency for the location. "+
-			"Set confidence based on how certain you are (0.3-0.9). "+
-			"If you cannot make a reasonable estimate, set min=0, max=0, confidence=0.",
-		job.Title, job.Company, location, job.Remote, description,
-	)
-
-	model := s.salaryModel
-	if model == "" {
-		model = s.llmc.ModelName()
-	}
-
-	opts := &llm.CompleteOptions{
-		System: "You are a compensation analyst. Estimate realistic salary ranges based on job title, company, and location. " +
-			"Look up comparable bands and read the full posting before answering — an estimate made without checking is a guess.",
-		Model:        model,
-		ResponseMode: llm.ResponseModeStrict,
-	}
-
-	tools, err := s.newSalaryToolset()
-	if err != nil {
-		return domain.SalaryBand{}, err
-	}
-	ts, err := toolloop.NewToolset(tools...)
-	if err != nil {
-		return domain.SalaryBand{}, err
-	}
-
-	// The loop requires a deadline, and this is the call site that has to supply
-	// one: the worker's own AI_TASK_TIMEOUT_SALARY governs the whole task, but a
-	// context that arrives here without a deadline would let a four-round
-	// exchange run for as long as the proxy's worst case allows. A local bound
-	// makes that impossible rather than unlikely.
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, salaryExchangeTimeout)
-		defer cancel()
-	}
-
-	// Passing the job id explicitly rather than letting the model guess one:
-	// get_posting_details reads by id, and an id it invented would either fail
-	// to parse or read a different posting.
-	msgs := llm.PromptMessages("", prompt+"\n\nThe id of this posting is "+dbutil.UUIDString(job.ID)+".")
-
-	res, err := toolloop.Run[domain.SalaryBand](ctx, s.llmc, ts, msgs, opts, toolloop.Bounds{})
-	if err != nil {
-		// FR-022 / C7-3: every non-answered stop is an error, and Infer's
-		// caller persists nothing on an error. A conversion that fell back to a
-		// low-confidence band here would write a fabrication to the database
-		// and mark it as an estimate.
-		return domain.SalaryBand{}, fmt.Errorf("salary exchange stopped as %s: %w", res.StopReason, err)
-	}
-
-	band := res.Value
-	band.Source = domain.SourceLLM
-	if band.Confidence == 0 {
-		band.Confidence = 0.3
-	}
-	return band, nil
-}
-
-// salaryExchangeTimeout bounds one salary exchange when the caller supplied no
-// deadline of its own.
-const salaryExchangeTimeout = 4 * time.Minute
 
 func (s *Service) persistJobSalary(ctx context.Context, uid pgtype.UUID, band domain.SalaryBand) error {
 	return s.q.UpdateJobSalary(ctx, sqlcgen.UpdateJobSalaryParams{

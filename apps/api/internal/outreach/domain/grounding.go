@@ -5,51 +5,7 @@ import (
 	"strings"
 )
 
-type DraftOutput struct {
-	Text           string   `json:"text" jsonschema:"description=The outreach message body, addressed to the named contact, written in the requested tone. Must contain ONLY facts explicitly listed in ALLOWED FACTS below — never invent a technology, funding round, headcount figure, or any other specific detail."`
-	SpecificClaims []string `json:"specificClaims" jsonschema:"description=Every specific factual claim the message text makes about the team, company, technology, funding, or size, copied VERBATIM from the ALLOWED FACTS list. Empty array if the message makes no specific claim."`
-}
-
 const MaxDraftChars = 500
-
-var toneInstruction = map[Tone]string{
-	ToneWarm:   "warm, friendly, and enthusiastic, while staying professional",
-	ToneDirect: "direct and concise — get to the point in as few words as possible, minimal pleasantries",
-	ToneFormal: "formal and polished, traditional business register",
-}
-
-func BuildPrompt(tone Tone, contactName, companyName string, facts []Fact, lastViolation string) string {
-	var b strings.Builder
-	b.WriteString("Write a single short outreach message to a hiring contact after the sender has just applied " +
-		"to a job at their company.\n\n")
-
-	if contactName != "" {
-		fmt.Fprintf(&b, "Address it to: %s\n", contactName)
-	} else {
-		b.WriteString("No named contact is known — use a neutral salutation such as \"Hi there\" and never invent a name.\n")
-	}
-	if companyName != "" {
-		fmt.Fprintf(&b, "Company: %s\n", companyName)
-	}
-	fmt.Fprintf(&b, "Tone: %s\n\n", toneInstruction[tone])
-
-	b.WriteString("ALLOWED FACTS (the ONLY specific things you may state about the team, company, or role — " +
-		"copy any you use into specificClaims VERBATIM, unaltered):\n")
-	for _, f := range facts {
-		fmt.Fprintf(&b, "- %s: %s\n", f.Kind, f.Value)
-	}
-	fmt.Fprintf(&b, "\nUse at most one or two of these facts, only if they fit naturally. Keep the whole message "+
-		"under %d characters. Never state a specific technology, funding figure, headcount, rating, or any other "+
-		"detail that is not one of the ALLOWED FACTS above — if you are not sure something is allowed, leave it "+
-		"out. This is a draft the user will read and send themselves, so it must contain no send/apply action, "+
-		"just the message body.\n", MaxDraftChars)
-
-	if lastViolation != "" {
-		fmt.Fprintf(&b, "\nYour previous attempt was rejected: %s. Fix this and answer again.\n", lastViolation)
-	}
-
-	return b.String()
-}
 
 func GroundClaims(claims []string, text string, facts []Fact) ([]GroundingTrace, bool) {
 	lowerText := strings.ToLower(text)

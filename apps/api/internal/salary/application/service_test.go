@@ -2,15 +2,12 @@ package application_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/job-finder/api/internal/db/sqlcgen"
-	"github.com/job-finder/api/internal/platform/llm"
 	"github.com/job-finder/api/internal/salary"
 )
 
@@ -45,71 +42,6 @@ func (f *fakeRepo) GetSalaryCacheByBucket(ctx context.Context, bucket string) ([
 	return f.cacheRows, f.cacheErr
 }
 
-// fakeLLM plays the shape of a real tool exchange (037): the first round is
-// sent with tool_choice "required" and answers with the two declared lookups,
-// the second round asks for nothing more, and the terminal step — recognisable
-// because it carries no tools — returns the band.
-//
-// It is written this way rather than as an always-answers stub because the loop
-// treats prose on the required first round as proof that the serving tier
-// cannot call tools. A stub that answered immediately would fail for that
-// reason and look like a broken conversion.
-type fakeLLM struct {
-	err error
-	// calls counts CompleteChat invocations, so a test can assert the exchange
-	// took the shape it expected rather than only that it produced a band.
-	calls int
-	// toolCalls records the lookups the loop actually dispatched.
-	toolCalls []string
-	// noTools makes the fake answer prose on the required first round, which is
-	// how a non-tool-capable tier behaves.
-	noTools bool
-}
-
-func (f *fakeLLM) ModelName() string { return "test-model" }
-func (f *fakeLLM) Complete(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
-	return "", nil
-}
-func (f *fakeLLM) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
-	if f.err != nil {
-		return "", f.err
-	}
-	return `{"min":80000,"max":120000,"currency":"USD","confidence":0.4,"source":"llm"}`, nil
-}
-
-func (f *fakeLLM) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
-	f.calls++
-	if f.err != nil {
-		return llm.ChatResult{}, f.err
-	}
-	if opts != nil && opts.ToolChoice == "required" {
-		if f.noTools {
-			return llm.ChatResult{Content: "Probably around 100k."}, nil
-		}
-		jobID := ""
-		for _, m := range msgs {
-			if idx := strings.Index(m.Content, "The id of this posting is "); idx >= 0 {
-				jobID = strings.TrimSuffix(m.Content[idx+len("The id of this posting is "):], ".")
-			}
-		}
-		f.toolCalls = append(f.toolCalls, "lookup_comparable_bands", "get_posting_details")
-		return llm.ChatResult{ToolCalls: []llm.ToolCall{
-			{ID: "c1", Name: "lookup_comparable_bands", Arguments: json.RawMessage(`{"title":"Backend Engineer","location":"US"}`)},
-			{ID: "c2", Name: "get_posting_details", Arguments: json.RawMessage(`{"job_id":"` + jobID + `"}`)},
-		}}, nil
-	}
-	if opts != nil && len(opts.Tools) > 0 {
-		// A later round, still tool-capable, but nothing more to look up.
-		return llm.ChatResult{Content: "I have enough to answer."}, nil
-	}
-	// The terminal step: no tools declared.
-	return llm.ChatResult{Content: `{"min":80000,"max":120000,"currency":"USD","confidence":0.4,"source":"llm"}`}, nil
-}
-
-func (f *fakeLLM) Embed(ctx context.Context, text string) ([]float32, error) {
-	return nil, nil
-}
-
 func makeJob(title, company, location, salaryRaw string) sqlcgen.Job {
 	var sr *string
 	if salaryRaw != "" {
@@ -133,7 +65,7 @@ func TestInfer_SalaryRawParses(t *testing.T) {
 	repo := &fakeRepo{
 		job: makeJob("Backend Engineer", "Acme", "US", "$120k-$150k"),
 	}
-	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
@@ -163,7 +95,7 @@ func TestInfer_CacheHit(t *testing.T) {
 			},
 		},
 	}
-	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
@@ -187,7 +119,7 @@ func TestInfer_LevelsFyiHit(t *testing.T) {
 			},
 		},
 	}
-	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
@@ -218,7 +150,7 @@ func TestInfer_BlendCacheAndLevels(t *testing.T) {
 			},
 		},
 	}
-	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err != nil {
@@ -229,19 +161,23 @@ func TestInfer_BlendCacheAndLevels(t *testing.T) {
 	}
 }
 
-func TestInfer_LLMFallback(t *testing.T) {
+// TestInfer_NoLLMFallback guards T103: once neither salaryRaw, cache, nor
+// levels.fyi produces a band, Infer errors and persists nothing rather than
+// falling back to a Go tool loop — that loop is deleted, and estimating from
+// scratch is apps/ai's job now (AI_CAPABILITY_ROUTING).
+func TestInfer_NoLLMFallback(t *testing.T) {
 	repo := &fakeRepo{
 		job:       makeJob("Backend Engineer", "Acme", "US", ""),
 		cacheRows: nil,
 	}
-	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("Infer: want an error with no cache/levels.fyi band and no Go LLM path left, got nil")
 	}
-	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(salary.SourceLLM) {
-		t.Errorf("expected source llm, got %v", repo.updatedBand.SalarySource)
+	if repo.updatedBand.SalarySource != nil {
+		t.Errorf("a band was persisted despite no source producing one: %+v", repo.updatedBand)
 	}
 }
 
@@ -249,7 +185,7 @@ func TestInfer_JobNotFound(t *testing.T) {
 	repo := &fakeRepo{
 		jobErr: errors.New("not found"),
 	}
-	svc := salary.NewService(repo, &fakeLLM{}, nil, "")
+	svc := salary.NewService(repo, nil, "")
 
 	err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
 	if err == nil {
@@ -265,122 +201,3 @@ func strPtr(v string) *string { return &v }
 //nolint:unused
 func float64Ptr(v float64) *float64 { return &v }
 
-// 037 FR-021 / SC-008: a posting with no parseable salaryRaw and no cached
-// bucket reaches the loop, performs **both** lookups, and returns a band that
-// passes Validate().
-func TestInfer_LLMPathPerformsBothLookupsAndProducesAValidBand(t *testing.T) {
-	repo := &fakeRepo{job: makeJob("Backend Engineer", "Acme", "US", "")}
-	llmc := &fakeLLM{}
-	svc := salary.NewService(repo, llmc, nil, "")
-
-	if err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001"); err != nil {
-		t.Fatalf("Infer: %v", err)
-	}
-
-	if len(llmc.toolCalls) != 2 {
-		t.Fatalf("the exchange dispatched %v, want both declared lookups", llmc.toolCalls)
-	}
-	// One round of lookups, one round that asks for nothing more, one terminal
-	// step: three provider calls. Asserted so a conversion that quietly skips
-	// the loop and calls the model once cannot pass.
-	if llmc.calls != 3 {
-		t.Errorf("provider called %d times, want 3 (lookup round, wrap-up round, terminal step)", llmc.calls)
-	}
-
-	band := salary.SalaryBand{
-		Min:      int(*repo.updatedBand.SalaryMin),
-		Max:      int(*repo.updatedBand.SalaryMax),
-		Currency: *repo.updatedBand.SalaryCurrency,
-	}
-	if err := band.Validate(); err != nil {
-		t.Errorf("persisted band does not validate: %v", err)
-	}
-	if repo.updatedBand.SalarySource == nil || *repo.updatedBand.SalarySource != string(salary.SourceLLM) {
-		t.Errorf("source = %v, want llm", repo.updatedBand.SalarySource)
-	}
-}
-
-// 044 T042: salary asks the gateway for the `salary` task key.
-//
-// Salary, outreach and recruiter all used to share the `default` group, so a
-// change made for one of them silently moved the other two and reporting could
-// not tell their spend apart. compose.go now hands each its own router; this
-// asserts the key survives the trip through the service to the gateway, and is
-// paired with the same assertion in internal/outreach/application and
-// internal/recruiter/application — the three keys together are what "distinct"
-// means, and each package can only speak for its own.
-func TestSalaryRequestsItsOwnTaskKey(t *testing.T) {
-	repo := &fakeRepo{job: makeJob("Backend Engineer", "Acme", "US", "")}
-	gw := &taskKeyRecorder{}
-	svc := salary.NewService(repo, llm.NewRouter("salary", gw), nil, "")
-
-	if err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001"); err != nil {
-		t.Fatalf("Infer: %v", err)
-	}
-
-	gw.assertOnly(t, "salary")
-}
-
-// taskKeyRecorder is the fake gateway a Router talks to, so a test can see the
-// task key the router stamped rather than the one it was handed.
-type taskKeyRecorder struct {
-	fakeLLM
-	keys []string
-}
-
-func (r *taskKeyRecorder) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
-	r.record(opts)
-	return r.fakeLLM.CompleteChat(ctx, msgs, opts)
-}
-
-func (r *taskKeyRecorder) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
-	r.record(opts)
-	return r.fakeLLM.CompleteJSON(ctx, prompt, opts)
-}
-
-func (r *taskKeyRecorder) record(opts *llm.CompleteOptions) {
-	if opts == nil {
-		r.keys = append(r.keys, "")
-		return
-	}
-	r.keys = append(r.keys, opts.TaskKey)
-}
-
-func (r *taskKeyRecorder) assertOnly(t *testing.T, want string) {
-	t.Helper()
-	if len(r.keys) == 0 {
-		t.Fatal("the gateway was never called, so no task key was requested")
-	}
-	for _, got := range r.keys {
-		if got != want {
-			t.Errorf("gateway asked for task key %q, want %q", got, want)
-		}
-	}
-}
-
-// FR-022 / C7-3: when the exchange stops for any reason other than answered,
-// Infer returns an error and persists **nothing**. A fallback to a
-// low-confidence band here would write a fabrication to the database and label
-// it an estimate.
-func TestInfer_PersistsNothingWhenTheExchangeDoesNotAnswer(t *testing.T) {
-	for name, llmc := range map[string]*fakeLLM{
-		"provider failure": {err: errors.New("provider unavailable")},
-		"not tool capable": {noTools: true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			repo := &fakeRepo{job: makeJob("Backend Engineer", "Acme", "US", "")}
-			svc := salary.NewService(repo, llmc, nil, "")
-
-			err := svc.Infer(context.Background(), "00000001-0000-0000-0000-000000000001")
-			if err == nil {
-				t.Fatal("Infer returned nil on an exchange that never answered")
-			}
-			if repo.updatedBand.SalaryMin != nil || repo.updatedBand.SalarySource != nil {
-				t.Errorf("a band was persisted despite the failure: %+v", repo.updatedBand)
-			}
-			if repo.upserted.Bucket != "" {
-				t.Errorf("the cache was written despite the failure: %+v", repo.upserted)
-			}
-		})
-	}
-}

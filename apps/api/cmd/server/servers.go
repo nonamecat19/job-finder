@@ -12,10 +12,13 @@ import (
 
 	"github.com/job-finder/api/internal/db"
 	"github.com/job-finder/api/internal/events"
+	"github.com/job-finder/api/internal/generation"
 	"github.com/job-finder/api/internal/ghostjob"
 	"github.com/job-finder/api/internal/httpapi"
 	"github.com/job-finder/api/internal/jobsources/interfaces/worker"
+	"github.com/job-finder/api/internal/matching"
 	"github.com/job-finder/api/internal/queue"
+	"github.com/job-finder/api/internal/salary"
 )
 
 type Servers struct {
@@ -151,21 +154,49 @@ func buildServers(p *Platform, app *App) *Servers {
 	consumers := []namedConsumer{
 		p.consumer("ingest", p.policyFor(queue.TypeIngest), app.Ingestion.ProcessTask),
 		p.consumer("match", p.policyFor(queue.TypeMatch), app.Matching.ProcessTask),
+		// generation's Go consumer stays registered unconditionally, even when
+		// AI_CAPABILITY_ROUTING routes "generation" to python: the 042
+		// workspace protocol (GenerationRunID set) has no python counterpart
+		// and always dispatches here (generation.SnapshotEnqueuer, publish.go).
+		// Only the legacy merged-resume/cover-letter path is diverted.
 		p.consumer("generate", p.policyFor(queue.TypeGenerate), app.Generation.ProcessTask),
 		p.consumer("enrich", p.policyFor(queue.TypeEnrich), app.Enrichment.ProcessTask),
-		p.consumer("salary", p.policyFor(queue.TypeSalaryInfer), app.Salary.ProcessTask),
 	}
 
-	// ghost's Go consumer only runs while ghost is routed to go (C8-3):
-	// once AI_CAPABILITY_ROUTING routes it to python, the AI service is the
-	// sole consumer of work.ghost, and this process instead consumes its
-	// result off results.backend (registered below).
 	resultRegistry := events.ResultRegistry{}
+
+	// match's Go consumer stays registered unconditionally, even when
+	// AI_CAPABILITY_ROUTING routes "match" to python: embedding and
+	// similarity prefiltering always run in Go (matching.Service.MatchJob),
+	// and MatchJob itself decides whether to call the LLM directly or
+	// publish match.requested and defer to this result handler.
+	if p.Config.CapabilityRouting(matching.Kind) == "python" {
+		resultRegistry[events.EventMatchCompleted] = matching.NewResultHandler(
+			p.DB, app.MatchNotifier, app.MatchAutoGenerate, app.MatchGenerator, "jobfinder-ai",
+		)
+	}
+
+	// ghost's and salary's Go consumers only run while routed to go (C8-3):
+	// once AI_CAPABILITY_ROUTING routes a capability to python, the AI
+	// service is the sole consumer of its work queue, and this process
+	// instead consumes the result off results.backend (registered below).
 	if p.Config.CapabilityRouting(ghostjob.Kind) == "python" {
 		resultRegistry[events.EventGhostCompleted] = ghostjob.NewResultHandler(p.DB, "jobfinder-ai")
 	} else {
 		consumers = append(consumers, p.consumer("ghost", p.policyFor(queue.TypeGhostScore), app.Ghost.ProcessTask))
 	}
+
+	// salary's Go consumer is gone: its LLM path was deleted once cutover was
+	// confirmed (T113), so python is the only mode left and this registration
+	// is unconditional now — unlike ghost's, which still has a "go" fallback.
+	resultRegistry[events.EventSalaryCompleted] = salary.NewResultHandler(p.DB)
+
+	if p.Config.CapabilityRouting(generation.Kind) == "python" {
+		resultRegistry[events.EventGenerateCompleted] = generation.NewResultHandler(
+			p.DB, p.GenLate, p.GenLate, app.GenerationRendercvRenderer, app.GenerationHtmlRenderer, "jobfinder-ai",
+		)
+	}
+
 	consumers = append(consumers, p.resultConsumer(resultRegistry))
 
 	return &Servers{HTTP: srv, Consumers: consumers}

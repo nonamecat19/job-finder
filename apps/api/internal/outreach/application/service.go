@@ -8,7 +8,6 @@ import (
 
 	"github.com/job-finder/api/internal/dto"
 	"github.com/job-finder/api/internal/outreach/domain"
-	"github.com/job-finder/api/internal/platform/llm"
 )
 
 type (
@@ -59,12 +58,15 @@ type IntelProvider interface {
 type Service struct {
 	contacts ContactsProvider
 	intel    IntelProvider
-	llmc     llm.Provider
-	model    string
+	drafter  Drafter
 }
 
-func NewService(contacts ContactsProvider, intel IntelProvider, llmc llm.Provider, model string) *Service {
-	return &Service{contacts: contacts, intel: intel, llmc: llmc, model: model}
+// NewService's drafter is always AIDrafter now: outreach's Go LLM path was
+// deleted (T113) once live parity evidence confirmed the python path
+// (AI_CAPABILITY_ROUTING=outreach=python, the only mode left) matches it
+// (t113-parity-samples.md).
+func NewService(contacts ContactsProvider, intel IntelProvider, drafter Drafter) *Service {
+	return &Service{contacts: contacts, intel: intel, drafter: drafter}
 }
 
 func (s *Service) Tones() []dto.OutreachToneOptionDto {
@@ -117,11 +119,8 @@ func (s *Service) GenerateDraft(ctx context.Context, jobID, contactID, rawTone s
 	if len(facts) == 0 {
 		text = genericOpener(t, contactName, companyName)
 		traces = []GroundingTrace{}
-	} else if s.llmc != nil {
-		text, traces = s.generateGrounded(ctx, t, contactName, companyName, facts)
 	} else {
-		text = genericOpener(t, contactName, companyName)
-		traces = []GroundingTrace{}
+		text, traces = s.generateGrounded(ctx, t, contactName, companyName, facts)
 	}
 
 	text, traces = enforceLength(text, traces, maxDraftChars)

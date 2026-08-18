@@ -10,7 +10,6 @@ import (
 	"github.com/job-finder/api/internal/db/sqlcgen"
 	"github.com/job-finder/api/internal/dbutil"
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/platform/llm"
 
 	"github.com/job-finder/api/internal/recruiter/domain"
 )
@@ -24,18 +23,21 @@ type Repository interface {
 
 type Service struct {
 	q               Repository
-	llmc            llm.Provider
-	postingModel    string
 	scraping        ScrapingService
 	linkedInEnabled bool
+	extractor       ContactExtractor
 }
 
 type ScrapingService interface {
 	FetchHTML(ctx context.Context, url string, headers map[string]string) (string, error)
 }
 
-func NewService(q Repository, llmc llm.Provider, postingModel string, scraping ScrapingService, linkedInEnabled bool) *Service {
-	return &Service{q: q, llmc: llmc, postingModel: postingModel, scraping: scraping, linkedInEnabled: linkedInEnabled}
+// NewService's extractor is always AIContactExtractor now: recruiter's Go
+// LLM path was deleted (T113) once live parity evidence confirmed the
+// python path (AI_CAPABILITY_ROUTING=recruiter=python, the only mode left)
+// matches it (5/5 identical samples, t113-parity-samples.md).
+func NewService(q Repository, extractor ContactExtractor, scraping ScrapingService, linkedInEnabled bool) *Service {
+	return &Service{q: q, scraping: scraping, linkedInEnabled: linkedInEnabled, extractor: extractor}
 }
 
 func (s *Service) ListContacts(ctx context.Context, jobID string) ([]dto.JobContactDto, error) {
@@ -90,7 +92,7 @@ func (s *Service) sources(ctx context.Context, job sqlcgen.Job) []resolutionSour
 		{
 			name: domain.SourcePosting,
 			run: func(ctx context.Context) ([]domain.ResolvedContact, error) {
-				contact, err := ExtractPostingContact(ctx, s.llmc, s.postingModel, job.Description)
+				contact, err := s.extractPostingContact(ctx, job.Description)
 				if err != nil {
 					return nil, err
 				}

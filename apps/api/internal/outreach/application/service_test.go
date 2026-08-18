@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/job-finder/api/internal/dto"
-	"github.com/job-finder/api/internal/platform/llm"
+	"github.com/job-finder/api/internal/outreach/domain"
 )
 
 type fakeContacts struct {
@@ -33,41 +33,33 @@ func (f *fakeIntel) GetIntel(ctx context.Context, jobID string) (*dto.CompanyInt
 	return f.intel, nil
 }
 
+// fakeLLM stands in for a Drafter — outreach's Go LLM path is deleted
+// (T113: AIDrafter is the only implementation left, verified live in
+// t113-parity-samples.md), so what these tests exercise is generateGrounded/
+// GroundClaims and the rest of Service's Go-owned grounding logic, fed
+// scripted draft attempts exactly as AIDrafter would return one.
 type fakeLLM struct {
-	responses []string
+	responses []DraftAttempt
+	errs      []error
 	calls     int
 }
 
-func (f *fakeLLM) ModelName() string { return "test-model" }
-func (f *fakeLLM) Complete(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
-	return "", nil
-}
-func (f *fakeLLM) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
+func (f *fakeLLM) Draft(ctx context.Context, tone domain.Tone, contactName, companyName string, facts []domain.Fact, lastViolation string) (DraftAttempt, error) {
 	idx := f.calls
+	f.calls++
+	if idx < len(f.errs) && f.errs[idx] != nil {
+		return DraftAttempt{}, f.errs[idx]
+	}
 	if idx >= len(f.responses) {
 		idx = len(f.responses) - 1
 	}
-	f.calls++
 	if idx < 0 {
-		return "", nil
+		return DraftAttempt{}, nil
 	}
 	return f.responses[idx], nil
 }
 
-// CompleteChat satisfies the 037 Provider interface. The fake's behaviour lives
-// in CompleteJSON, so this delegates to it with the final turn as the prompt —
-// which is what the real adapters do in reverse. Tool calls are never
-// fabricated here: a fake that invented one would make a tool-loop test pass
-// for the wrong reason.
-func (f *fakeLLM) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
-	prompt := ""
-	if len(msgs) > 0 {
-		prompt = msgs[len(msgs)-1].Content
-	}
-	text, err := f.CompleteJSON(ctx, prompt, opts)
-	return llm.ChatResult{Content: text}, err
-}
-func (f *fakeLLM) Embed(ctx context.Context, text string) ([]float32, error) { return nil, nil }
+var _ Drafter = (*fakeLLM)(nil)
 
 func strPtr(s string) *string { return &s }
 
@@ -84,10 +76,10 @@ func TestGenerateDraft_AddressesRealContact(t *testing.T) {
 		{ID: "c1", Name: "Jane Doe", Source: "posting", Confidence: 0.9},
 	}}
 	intel := &fakeIntel{intel: sampleIntel()}
-	llmc := &fakeLLM{responses: []string{
-		`{"text":"Hi Jane, I noticed you use Go, React, Postgres — would love to connect.","specificClaims":["Go, React, Postgres"]}`,
+	llmc := &fakeLLM{responses: []DraftAttempt{
+		{Text: "Hi Jane, I noticed you use Go, React, Postgres — would love to connect.", SpecificClaims: []string{"Go, React, Postgres"}},
 	}}
-	svc := NewService(contacts, intel, llmc, "")
+	svc := NewService(contacts, intel, llmc)
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "", "warm")
 	if err != nil {
@@ -104,68 +96,13 @@ func TestGenerateDraft_AddressesRealContact(t *testing.T) {
 	}
 }
 
-// 044 T042: outreach asks the gateway for the `outreach` task key.
-//
-// Salary, outreach and recruiter all used to share the `default` group, so a
-// change made for one of them silently moved the other two and reporting could
-// not tell their spend apart. compose.go now hands each its own router; this
-// asserts the key survives the trip through the service to the gateway, and is
-// paired with the same assertion in internal/salary/application and
-// internal/recruiter/application — the three keys together are what "distinct"
-// means, and each package can only speak for its own.
-func TestOutreachRequestsItsOwnTaskKey(t *testing.T) {
-	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
-	gw := &taskKeyRecorder{fakeLLM: fakeLLM{responses: []string{
-		`{"text":"Hi Jane, saw you're using Go, React, Postgres.","specificClaims":["Go, React, Postgres"]}`,
-	}}}
-	svc := NewService(contacts, &fakeIntel{intel: sampleIntel()}, llm.NewRouter("outreach", gw), "")
-
-	if _, err := svc.GenerateDraft(context.Background(), "job-1", "c1", "warm"); err != nil {
-		t.Fatalf("GenerateDraft: %v", err)
-	}
-
-	if len(gw.keys) == 0 {
-		t.Fatal("the gateway was never called, so no task key was requested")
-	}
-	for _, got := range gw.keys {
-		if got != "outreach" {
-			t.Errorf("gateway asked for task key %q, want %q", got, "outreach")
-		}
-	}
-}
-
-// taskKeyRecorder is the fake gateway a Router talks to, so a test can see the
-// task key the router stamped rather than the one it was handed.
-type taskKeyRecorder struct {
-	fakeLLM
-	keys []string
-}
-
-func (r *taskKeyRecorder) CompleteJSON(ctx context.Context, prompt string, opts *llm.CompleteOptions) (string, error) {
-	key := ""
-	if opts != nil {
-		key = opts.TaskKey
-	}
-	r.keys = append(r.keys, key)
-	return r.fakeLLM.CompleteJSON(ctx, prompt, opts)
-}
-
-func (r *taskKeyRecorder) CompleteChat(ctx context.Context, msgs []llm.Message, opts *llm.CompleteOptions) (llm.ChatResult, error) {
-	prompt := ""
-	if len(msgs) > 0 {
-		prompt = msgs[len(msgs)-1].Content
-	}
-	text, err := r.CompleteJSON(ctx, prompt, opts)
-	return llm.ChatResult{Content: text}, err
-}
-
 func TestGenerateDraft_ClaimsTraceToSignals(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
-	llmc := &fakeLLM{responses: []string{
-		`{"text":"Hi Jane, saw you're using Go, React, Postgres — impressive stack.","specificClaims":["Go, React, Postgres"]}`,
+	llmc := &fakeLLM{responses: []DraftAttempt{
+		{Text: "Hi Jane, saw you're using Go, React, Postgres — impressive stack.", SpecificClaims: []string{"Go, React, Postgres"}},
 	}}
-	svc := NewService(contacts, intel, llmc, "")
+	svc := NewService(contacts, intel, llmc)
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "c1", "warm")
 	if err != nil {
@@ -186,8 +123,8 @@ func TestGenerateDraft_ClaimsTraceToSignals(t *testing.T) {
 func TestGenerateDraft_NoSignals_GenericOpener(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: nil}
-	llmc := &fakeLLM{responses: []string{`not valid json at all`}}
-	svc := NewService(contacts, intel, llmc, "")
+	llmc := &fakeLLM{}
+	svc := NewService(contacts, intel, llmc)
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "c1", "warm")
 	if err != nil {
@@ -208,18 +145,18 @@ func TestGenerateDraft_ToneChangesWordingNotFacts(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
 
-	warmLLM := &fakeLLM{responses: []string{
-		`{"text":"Hi Jane! Loved seeing Go, React, Postgres in the stack — would love to chat!","specificClaims":["Go, React, Postgres"]}`,
+	warmLLM := &fakeLLM{responses: []DraftAttempt{
+		{Text: "Hi Jane! Loved seeing Go, React, Postgres in the stack — would love to chat!", SpecificClaims: []string{"Go, React, Postgres"}},
 	}}
-	formalLLM := &fakeLLM{responses: []string{
-		`{"text":"Dear Jane Doe, I understand your team relies on Go, React, Postgres. I would welcome a discussion.","specificClaims":["Go, React, Postgres"]}`,
+	formalLLM := &fakeLLM{responses: []DraftAttempt{
+		{Text: "Dear Jane Doe, I understand your team relies on Go, React, Postgres. I would welcome a discussion.", SpecificClaims: []string{"Go, React, Postgres"}},
 	}}
 
-	warmOut, err := NewService(contacts, intel, warmLLM, "").GenerateDraft(context.Background(), "job-1", "c1", "warm")
+	warmOut, err := NewService(contacts, intel, warmLLM).GenerateDraft(context.Background(), "job-1", "c1", "warm")
 	if err != nil {
 		t.Fatalf("warm GenerateDraft: %v", err)
 	}
-	formalOut, err := NewService(contacts, intel, formalLLM, "").GenerateDraft(context.Background(), "job-1", "c1", "formal")
+	formalOut, err := NewService(contacts, intel, formalLLM).GenerateDraft(context.Background(), "job-1", "c1", "formal")
 	if err != nil {
 		t.Fatalf("formal GenerateDraft: %v", err)
 	}
@@ -240,7 +177,7 @@ func TestGenerateDraft_ToneChangesWordingNotFacts(t *testing.T) {
 func TestGenerateDraft_DefaultTone(t *testing.T) {
 	contacts := &fakeContacts{}
 	intel := &fakeIntel{}
-	svc := NewService(contacts, intel, &fakeLLM{}, "")
+	svc := NewService(contacts, intel, &fakeLLM{})
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "", "")
 	if err != nil {
@@ -263,11 +200,11 @@ func TestGenerateDraft_OverLengthRetriesThenFits(t *testing.T) {
 	tooLong := strings.Repeat("word ", 200)
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
-	llmc := &fakeLLM{responses: []string{
-		`{"text":"` + tooLong + `","specificClaims":[]}`,
-		`{"text":"Hi Jane, short and grounded in Go, React, Postgres.","specificClaims":["Go, React, Postgres"]}`,
+	llmc := &fakeLLM{responses: []DraftAttempt{
+		{Text: tooLong},
+		{Text: "Hi Jane, short and grounded in Go, React, Postgres.", SpecificClaims: []string{"Go, React, Postgres"}},
 	}}
-	svc := NewService(contacts, intel, llmc, "")
+	svc := NewService(contacts, intel, llmc)
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "c1", "direct")
 	if err != nil {
@@ -285,8 +222,8 @@ func TestGenerateDraft_AllAttemptsOverLength_FallsBackGeneric(t *testing.T) {
 	tooLong := strings.Repeat("word ", 200)
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
-	llmc := &fakeLLM{responses: []string{`{"text":"` + tooLong + `","specificClaims":[]}`}}
-	svc := NewService(contacts, intel, llmc, "")
+	llmc := &fakeLLM{responses: []DraftAttempt{{Text: tooLong}}}
+	svc := NewService(contacts, intel, llmc)
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "c1", "warm")
 	if err != nil {
@@ -303,11 +240,11 @@ func TestGenerateDraft_AllAttemptsOverLength_FallsBackGeneric(t *testing.T) {
 func TestGenerateDraft_FabricatedClaimRetriedThenFixed(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
-	llmc := &fakeLLM{responses: []string{
-		`{"text":"Hi Jane, congrats on the Series C round!","specificClaims":["Series C round"]}`,
-		`{"text":"Hi Jane, saw your Go, React, Postgres stack — nice.","specificClaims":["Go, React, Postgres"]}`,
+	llmc := &fakeLLM{responses: []DraftAttempt{
+		{Text: "Hi Jane, congrats on the Series C round!", SpecificClaims: []string{"Series C round"}},
+		{Text: "Hi Jane, saw your Go, React, Postgres stack — nice.", SpecificClaims: []string{"Go, React, Postgres"}},
 	}}
-	svc := NewService(contacts, intel, llmc, "")
+	svc := NewService(contacts, intel, llmc)
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "c1", "warm")
 	if err != nil {
@@ -329,10 +266,10 @@ func TestGenerateDraft_FabricatedClaimRetriedThenFixed(t *testing.T) {
 func TestGenerateDraft_AllAttemptsFabricate_FallsBackGeneric(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
 	intel := &fakeIntel{intel: sampleIntel()}
-	llmc := &fakeLLM{responses: []string{
-		`{"text":"Hi Jane, congrats on your Series C!","specificClaims":["Series C"]}`,
+	llmc := &fakeLLM{responses: []DraftAttempt{
+		{Text: "Hi Jane, congrats on your Series C!", SpecificClaims: []string{"Series C"}},
 	}}
-	svc := NewService(contacts, intel, llmc, "")
+	svc := NewService(contacts, intel, llmc)
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "c1", "warm")
 	if err != nil {
@@ -354,7 +291,7 @@ func TestGenerateDraft_MultipleContacts_RequiresChoice(t *testing.T) {
 		{ID: "c1", Name: "Jane Doe"},
 		{ID: "c2", Name: "Bob Recruiter"},
 	}}
-	svc := NewService(contacts, &fakeIntel{}, &fakeLLM{}, "")
+	svc := NewService(contacts, &fakeIntel{}, &fakeLLM{})
 
 	_, err := svc.GenerateDraft(context.Background(), "job-1", "", "warm")
 	if err != ErrContactRequired {
@@ -364,7 +301,7 @@ func TestGenerateDraft_MultipleContacts_RequiresChoice(t *testing.T) {
 
 func TestGenerateDraft_UnknownContactID(t *testing.T) {
 	contacts := &fakeContacts{contacts: []dto.JobContactDto{{ID: "c1", Name: "Jane Doe"}}}
-	svc := NewService(contacts, &fakeIntel{}, &fakeLLM{}, "")
+	svc := NewService(contacts, &fakeIntel{}, &fakeLLM{})
 
 	_, err := svc.GenerateDraft(context.Background(), "job-1", "does-not-exist", "warm")
 	if err != ErrContactNotFound {
@@ -373,7 +310,7 @@ func TestGenerateDraft_UnknownContactID(t *testing.T) {
 }
 
 func TestGenerateDraft_NoContact_NeutralSalutation(t *testing.T) {
-	svc := NewService(&fakeContacts{}, &fakeIntel{}, &fakeLLM{}, "")
+	svc := NewService(&fakeContacts{}, &fakeIntel{}, &fakeLLM{})
 
 	out, err := svc.GenerateDraft(context.Background(), "job-1", "", "warm")
 	if err != nil {
@@ -388,7 +325,7 @@ func TestGenerateDraft_NoContact_NeutralSalutation(t *testing.T) {
 }
 
 func TestTones(t *testing.T) {
-	svc := NewService(&fakeContacts{}, &fakeIntel{}, &fakeLLM{}, "")
+	svc := NewService(&fakeContacts{}, &fakeIntel{}, &fakeLLM{})
 	tones := svc.Tones()
 	if len(tones) != 3 {
 		t.Fatalf("expected 3 tones, got %d", len(tones))
