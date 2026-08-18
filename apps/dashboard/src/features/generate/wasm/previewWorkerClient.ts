@@ -1,15 +1,7 @@
-// previewWorkerClient.ts — the main thread's side of previewWorker.ts.
-//
-// One worker per page, started on first use and kept alive: both WASM modules
-// (and the ~90 MB of fonts behind them) are loaded per-worker, so recycling it
-// per render would throw away everything that makes the second render fast.
-//
-// Where Worker isn't available — jsdom under test, and any browser that
-// somehow lacks it — the same work runs inline instead. The preview is the
-// point; running it on the main thread is only a performance regression.
+
+
 import type { PreviewWorkerRequest, PreviewWorkerResponse } from './previewWorker';
 
-/** Omit over a union, applied per member — a plain Omit collapses the variants. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 interface Pending {
@@ -36,9 +28,7 @@ function ensureWorker(): Worker {
     if (response.ok) entry.resolve(response);
     else entry.reject(new Error(response.message));
   };
-  // A worker that dies (an OOM on the font tree, a module that failed to
-  // parse) never answers anything again — fail everything waiting on it and
-  // start a fresh one on the next call rather than hanging the preview.
+
   worker.onerror = (event) => {
     const message = event.message || 'resume preview: the preview worker stopped unexpectedly';
     for (const entry of pending.values()) entry.reject(new Error(message));
@@ -58,11 +48,9 @@ function send(request: DistributiveOmit<PreviewWorkerRequest, 'id'>): Promise<Ex
   });
 }
 
-/** RenderCV YAML -> PDF bytes, in the worker when there is one. */
 export async function renderPdfBytes(yaml: string): Promise<Uint8Array> {
   if (!workerSupported()) {
-    // Imported only on the fallback path, so the WASM plumbing (memfs, the
-    // WASI shim) rides in the worker's chunk rather than the app's.
+
     const [{ buildTypst }, { compilePdf }] = await Promise.all([import('./rendercvWasm'), import('./typstWasi')]);
     return compilePdf(await buildTypst(yaml));
   }
@@ -71,7 +59,6 @@ export async function renderPdfBytes(yaml: string): Promise<Uint8Array> {
   return response.pdfBytes;
 }
 
-/** Loads both WASM modules and their assets ahead of the first real render. */
 export async function warmUp(): Promise<void> {
   if (!workerSupported()) {
     const [{ ensureRendercvWasmLoaded }, { ensureTypstWasiLoaded }] = await Promise.all([

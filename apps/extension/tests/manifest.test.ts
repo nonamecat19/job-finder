@@ -5,10 +5,6 @@ import { describe, expect, it } from 'vitest';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/manifest.json'), 'utf8'));
 
-/**
- * The build is hand-rolled rather than generated from the manifest, so the two
- * can drift silently. These assertions are the seam.
- */
 describe('manifest', () => {
   it('names files the vite builds actually emit', () => {
     const mainConfig = fs.readFileSync(path.join(ROOT, 'vite.config.ts'), 'utf8');
@@ -31,11 +27,6 @@ describe('manifest', () => {
     }
   });
 
-  /**
-   * The vacancy pages must never be granted to the extension's fetch: all API
-   * access lives in the worker, and a host permission for a job board would let
-   * a compromised content script talk to the local API.
-   */
   it('grants host permissions to the API only, never to a job board', () => {
     expect(manifest.host_permissions).toEqual(['http://localhost:3000/*', 'http://127.0.0.1:3000/*']);
     for (const origin of manifest.host_permissions as string[]) {

@@ -11,33 +11,16 @@ import OriginBadge from './OriginBadge';
 export interface ItemRowProps {
   item: GenerationItemDto;
   onToggle: (selected: boolean) => void;
-  /** Present only for an origin="ai" item once included (FR-015). */
+
   onEditText?: (text: string) => void;
-  /**
-   * Per-skill toggle inside a skill group: the entries the user wants left
-   * out, sent as the whole set. Present only where item.skillEntries is.
-   */
+
   onDropEntries?: (droppedEntries: string[]) => void;
-  /**
-   * Rewrite: 2-3 grounded alternate phrasings of this bullet. Present only
-   * for a selected, origin="ai" achievement item — the server rejects the
-   * request for anything else (only an AI-origin item's text can ever be
-   * saved, per FR-009).
-   */
+
   onRewrite?: () => Promise<string[]>;
-  /**
-   * Whether a PDF-sourced hover on this item scrolls the row into view here.
-   * Off inside an experience entry (WorkEntryBlock owns that scroll itself,
-   * to the entry's top rather than the single achievement) — on everywhere
-   * else, where the item has no enclosing block of its own to scroll to.
-   */
+
   scrollOnHover?: boolean;
 }
 
-// T028: checkbox, effective text, origin badge, a dnd-kit drag handle, and an
-// `unavailable` presentation (FR-022 — the source item's master bullet no
-// longer resolves, but the row still renders rather than silently
-// disappearing).
 export default function ItemRow({
   item,
   onToggle,
@@ -53,15 +36,10 @@ export default function ItemRow({
   const [rewriting, setRewriting] = useState(false);
   const [variants, setVariants] = useState<string[] | null>(null);
   const entries = item.skillEntries ?? [];
-  // Per-skill chips replace the flat "Label: a, b, c" line for a skill group.
-  // Only while the group itself is in: a switched-off group is not a place to
-  // fine-tune which skills it would have shown.
+
   const perSkill = entries.length > 0 && !!onDropEntries && item.selected && !item.unavailable;
   const label = item.text.split(':')[0];
 
-  // Cross-pane highlighting (preview/highlight.tsx): hovering this row lights
-  // up the block it produced in the PDF, and a hover that started over the PDF
-  // scrolls this row into view.
   const { hover, setHover } = usePreviewHighlight();
   const highlighted = hover?.itemId === item.id;
   const rowRef = useRef<HTMLLIElement | null>(null);

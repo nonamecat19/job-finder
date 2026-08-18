@@ -6,24 +6,19 @@ import { usePreviewHighlight } from '../preview/highlight';
 import OriginBadge from './OriginBadge';
 
 export interface SummaryBlockProps {
-  section: GenerationSectionDto; // kind === 'summary'
+  section: GenerationSectionDto;
   onToggle: (itemId: string, selected: boolean) => void;
   onEditText: (itemId: string, text: string) => void;
-  /** Re-runs generation for just this section, producing a fresh summary. */
+
   onRegenerate: () => void;
   onToggleEnabled: (sectionId: string, enabled: boolean) => void;
 }
 
-// T030: the single summary item as accept / edit / regenerate — not a
-// checklist like the achievements, because there is exactly one summary and
-// its state is binary (in the export or not).
 export default function SummaryBlock({ section, onToggle, onEditText, onRegenerate, onToggleEnabled }: SummaryBlockProps) {
   const item = section.items[0];
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item?.text ?? '');
 
-  // Cross-pane highlighting, the same contract ItemRow implements for every
-  // other row: this block is a row too, it just doesn't look like one.
   const { hover, setHover } = usePreviewHighlight();
   const highlighted = !!item && hover?.itemId === item.id;
   const ref = useRef<HTMLDivElement>(null);

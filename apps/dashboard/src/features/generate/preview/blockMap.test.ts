@@ -11,7 +11,6 @@ function page(pageIndex: number, lines: { str: string; y: number; x?: number; w?
   };
 }
 
-/** An item in a block of its own — the default for these geometry cases. */
 function item(id: string, text: string, blockKey = id): MatchableItem {
   return { id, text, blockKey };
 }
@@ -52,7 +51,7 @@ describe('mapItemsToBlocks', () => {
   it('matches across pieces split mid-word by the text layer', () => {
     const pages = [page(0, [{ str: 'Shipped the th', y: 0.2 }, { str: 'ing', y: 0.2, x: 0.5, w: 0.1 }])];
     const blocks = mapItemsToBlocks(pages, [item('item-1', 'Shipped the thing')]);
-    // Same visual line, so both pieces collapse into one rectangle.
+
     expect(blocks[0].rects).toHaveLength(1);
     expect(blocks[0].rects[0].w).toBeCloseTo(0.8, 5);
   });
@@ -132,11 +131,9 @@ describe('mapItemsToBlocks', () => {
       item('item-3', 'Decomposed the monolith', 'entry-2'),
     ]);
 
-    // Each entry reaches up over its own header line…
     expect(blocks[0].rects.map((r) => r.y)).toEqual([0.18, 0.2, 0.22]);
     expect(blocks[1].rects.map((r) => r.y)).toEqual([0.3, 0.32]);
-    // …and the line above entry-2's header is entry-1's last bullet, which
-    // stays where it is.
+
     expect(blocks[1].rects.some((r) => r.y === 0.22)).toBe(false);
   });
 
@@ -149,14 +146,11 @@ describe('mapItemsToBlocks', () => {
     ];
     const [block] = mapItemsToBlocks(pages, [item('item-1', 'Shipped the thing', 'entry-1')]);
 
-    // The title is a page landmark, not this entry's header — it sits on no
-    // block's left margin.
     expect(block.rects.map((r) => r.y)).toEqual([0.2]);
   });
 
   it('takes the bullets hanging under a project, and stops at the next one', () => {
-    // What the template lays out under a project's name is not carried by any
-    // item of the run — the item is the project line itself.
+
     const pages = [
       page(0, [
         { str: 'job-finder — Self-hosted AI job-search platform', y: 0.2, x: 0.06, w: 0.85 },
@@ -172,8 +166,7 @@ describe('mapItemsToBlocks', () => {
     ]);
 
     expect(blocks[0].rects.map((r) => r.y)).toEqual([0.2, 0.22, 0.24]);
-    // The second project reaches down over its own bullet and never up over
-    // the first project's last one.
+
     expect(blocks[1].rects.map((r) => r.y)).toEqual([0.27, 0.29]);
   });
 
@@ -186,8 +179,6 @@ describe('mapItemsToBlocks', () => {
     ];
     const [block] = mapItemsToBlocks(pages, [item('item-1', 'Shipped the thing')]);
 
-    // The bullet glyph is not part of any item's text, but it is part of the
-    // line the reader sees.
     expect(block.rects[0].x).toBeCloseTo(0.05, 5);
     expect(block.rects[0].w).toBeCloseTo(0.45, 5);
   });
@@ -302,9 +293,6 @@ describe('matchableItems', () => {
       },
     ]);
 
-    // TypeScript was dropped by the user, so it is not on the page either —
-    // and the kept two come out in the template's order, not this one, so they
-    // are matched as parts rather than as one string.
     expect(skills).toMatchObject({ text: 'Languages', parts: ['Go', 'Rust'] });
   });
 
@@ -314,7 +302,6 @@ describe('matchableItems', () => {
       { id: 's1', blockKey: 's1', text: 'Languages', parts: ['Go', 'TypeScript', 'Rust'] },
     ]);
 
-    // The whole line, not just the label it started from.
     expect(block.rects).toHaveLength(1);
     expect(block.rects[0].w).toBeCloseTo(0.8, 5);
   });
@@ -336,7 +323,7 @@ describe('nested item rectangles', () => {
     expect(block.items.map((i) => i.itemId)).toEqual(['item-1', 'item-2']);
     expect(block.items[0].rects.map((r) => r.y)).toEqual([0.2]);
     expect(block.items[1].rects.map((r) => r.y)).toEqual([0.25]);
-    // The block still covers both of them.
+
     expect(block.rects.map((r) => r.y)).toEqual([0.2, 0.25]);
   });
 });

@@ -15,8 +15,7 @@ vi.mock('../../../lib/api', () => ({
 }));
 vi.mock('../wasm/rendercvWasm', () => ({ buildTypst: vi.fn() }));
 vi.mock('../wasm/typstWasi', () => ({ compilePdf: vi.fn() }));
-// pdf.js itself never loads under jsdom (worker + canvas), so the viewer is
-// given a document of a known page count — the only thing this file is about.
+
 vi.mock('../preview/pdfjs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../preview/pdfjs')>()),
   loadPdfjs: vi.fn(),

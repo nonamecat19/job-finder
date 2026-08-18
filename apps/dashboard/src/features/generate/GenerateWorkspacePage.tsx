@@ -28,13 +28,6 @@ import {
   useToggleGenerationItem,
 } from './hooks';
 
-// T020/T032: the two-pane shell — generated items on the left, assembled as
-// Summary / Work Experience / Skills blocks (US1), a read-only vacancy card
-// and its pre-run controls above. Every run is job-backed now — there is no
-// ad-hoc vacancy entry point on this page; `jobId` always comes from picking
-// a job in Feed / Job Detail. `/generate` is a 'fit' route (routes.tsx), so
-// this owns the viewport and its panes scroll independently rather than the
-// page.
 export default function GenerateWorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const jobId = searchParams.get('jobId') ?? undefined;
@@ -53,8 +46,7 @@ export default function GenerateWorkspacePage() {
 
   const [groundingLevel, setGroundingLevel] = useState<(typeof GROUNDING_LEVELS)[number]>('moderate');
   const [summaryOptionId, setSummaryOptionId] = useState<string | undefined>(undefined);
-  // The preview is the thing being judged, so it gets the room: two thirds of
-  // the workspace by default, and the whole viewport on demand.
+
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [leftTab, setLeftTab] = useState<'resume' | 'job' | 'settings'>('resume');
 
@@ -84,9 +76,6 @@ export default function GenerateWorkspacePage() {
 
   const tileState = !run ? 'empty' : isLoading ? 'loading' : error ? 'error' : 'ready';
 
-  // The preview block is the sheet: A4 proportions, driven by the height it
-  // has. It takes only the width that shape needs — the item list on the left
-  // gets everything else.
   const previewTile = (
     <Tile
       title="PDF preview"
@@ -119,9 +108,6 @@ export default function GenerateWorkspacePage() {
     </Tile>
   );
 
-  // The vacancy, the pre-run controls and the item list are all one column:
-  // everything the user manipulates on the left, the document they are judging
-  // on the right, and no page chrome above either of them.
   const leftColumn = (
     <div className="flex min-h-0 w-full min-w-0 flex-col gap-4 lg:min-w-[26rem] lg:flex-1">
       {startRun.isError ? <p className="text-sm text-danger">{(startRun.error as Error).message}</p> : null}
@@ -194,8 +180,7 @@ export default function GenerateWorkspacePage() {
         <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
           {leftColumn}
 
-          {/* Width comes from the sheet's aspect ratio against the height it
-              has, so this column never claims more than the page needs. */}
+          {}
           <div className="flex min-h-0 w-full shrink-0 flex-col lg:w-auto">
             {previewFullscreen ? (
               <div className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-dashed border-border text-sm text-faint">
@@ -217,15 +202,9 @@ export default function GenerateWorkspacePage() {
   );
 }
 
-// exportWarnings is T073: what the user should know before they export, said
-// before the export rather than after it. Two kinds — a section the user has
-// emptied (the server exports it happily; it is their resume, and FR-019 only
-// refuses a wholly empty document), and AI-written content they have included,
-// which no grounding check ever verified (FR-016).
 function exportWarnings(run: GenerationRunDto): string[] {
   const warnings: string[] = [];
-  // A section the user switched off entirely is intentionally excluded, not
-  // accidentally emptied — it gets no "you emptied this" nag below.
+
   const enabledSections = run.sections.filter((s) => s.enabled !== false);
   const selected = (section: GenerationSectionDto | undefined) =>
     section?.items.filter((i) => i.selected && !i.unavailable) ?? [];
@@ -236,9 +215,7 @@ function exportWarnings(run: GenerationRunDto): string[] {
   if (selected(enabledSections.find((s) => s.kind === 'skills')).length === 0) {
     warnings.push('This resume has no skills — every skill group is switched off.');
   }
-  // Only warned about when the profile *has* projects/certifications: a
-  // resume without one of these sections is a normal resume, not an emptied
-  // one.
+
   for (const [kind, label] of [
     ['projects', 'projects'],
     ['certifications', 'certifications'],
@@ -250,10 +227,6 @@ function exportWarnings(run: GenerationRunDto): string[] {
     }
   }
 
-  // The summary section is excluded: it is written by the run itself and
-  // grounded by its own stage, and warning about it on every single export
-  // would train the user to ignore the warning that matters — an unverified
-  // *suggestion* they chose to include (FR-016).
   const aiIncluded = enabledSections
     .filter((s) => s.kind !== 'summary')
     .flatMap((s) => selected(s))
@@ -268,9 +241,6 @@ function exportWarnings(run: GenerationRunDto): string[] {
   return warnings;
 }
 
-// failedSections is T078's per-section-retry input: every `failed` section,
-// labelled for the control ("Acme Inc." for an experience block, "Summary" /
-// "Skills" for the singleton ones).
 const SECTION_KIND_LABELS: Record<string, string> = {
   summary: 'Summary',
   skills: 'Skills',

@@ -19,7 +19,6 @@ export async function setSettings(settings: Settings): Promise<Settings> {
   return next;
 }
 
-/** Trailing slashes would double up against the "/api/..." paths we append. */
 export function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, '');
 }

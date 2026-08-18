@@ -34,7 +34,9 @@ export default function RosterPanel() {
         try {
           const parsed = JSON.parse(m[0]);
           return `Unsupported board vendor. Supported: ${parsed.supportedVendors?.join(', ')}`;
-        } catch { /* ignore */ }
+        } catch {
+          ;
+        }
       }
       return 'Unsupported board vendor.';
     }

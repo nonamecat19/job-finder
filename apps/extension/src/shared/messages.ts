@@ -12,7 +12,7 @@ export type DocumentSummary = {
   createdAt: string;
   company: string | null;
   title: string | null;
-  /** True when the document carries plain text we can paste into a letter field. */
+
   hasText: boolean;
 };
 
@@ -35,11 +35,11 @@ export type Capabilities = {
   host: string;
   adapter: 'djinni' | 'dou' | 'workua' | null;
   formOpen: boolean;
-  /** An apply trigger exists on the page, so the form can be opened for the user. */
+
   canOpenForm: boolean;
   hasFileInput: boolean;
   hasLetterField: boolean;
-  /** The adapter saw a login wall where the apply form should be. */
+
   requiresLogin: boolean;
   hints: PageHints;
 };
@@ -52,7 +52,6 @@ export type FillReport = {
 
 export type AddOutcome = 'created' | 'duplicate' | 'needs_fill_in' | 'failed';
 
-/** popup -> background */
 export type BgRequest =
   | { kind: 'bg/getSettings' }
   | { kind: 'bg/setSettings'; settings: Settings }
@@ -70,14 +69,6 @@ export type BgResponse =
   | { kind: 'bg/addResult'; outcome: AddOutcome; job?: JobSummary; reason?: string }
   | { kind: 'bg/filled'; report: FillReport };
 
-/**
- * background -> content script.
- *
- * Deliberately narrow: the content script never learns the API base URL, a
- * document id, a job id or a document list. It only ever receives the resolved
- * bytes and text for the one document the user picked, so a vacancy page can
- * never reach the local API through us.
- */
 export type CsRequest =
   | { kind: 'cs/probe' }
   | { kind: 'cs/openApplyForm' }

@@ -2,11 +2,6 @@ import { vi } from 'vitest';
 
 type Listener = (msg: unknown, sender: unknown, sendResponse: (r: unknown) => void) => boolean | void;
 
-/**
- * Minimal in-memory chrome.* stand-in. Hand-rolled rather than pulled from a
- * dependency: the surface we use is small, and the fake doubles as the
- * documentation of what the extension is allowed to touch.
- */
 export function installFakeChrome() {
   const sync = new Map<string, unknown>();
   const local = new Map<string, unknown>();
@@ -18,7 +13,7 @@ export function installFakeChrome() {
       if (keys === undefined) return Object.fromEntries(map);
       if (typeof keys === 'string') return { [keys]: map.get(keys) };
       if (Array.isArray(keys)) return Object.fromEntries(keys.map((k) => [k, map.get(k)]));
-      // Object form: the keys are defaults, applied when nothing is stored.
+
       return Object.fromEntries(Object.entries(keys).map(([k, d]) => [k, map.has(k) ? map.get(k) : d]));
     }),
     set: vi.fn(async (items: Record<string, unknown>) => {

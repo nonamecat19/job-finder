@@ -3,14 +3,12 @@ import { vi, type Mock } from 'vitest';
 export type FetchArgs = [input: RequestInfo | URL, init?: RequestInit];
 export type FetchMock = Mock<(...args: FetchArgs) => Promise<Response>>;
 
-/** Installs a typed fetch stub so tests can assert on the URL and method used. */
 export function stubFetch(impl: (...args: FetchArgs) => Promise<Response>): FetchMock {
   const mock = vi.fn(impl) as FetchMock;
   vi.stubGlobal('fetch', mock);
   return mock;
 }
 
-/** A fetch stub that returns each response in turn. */
 export function stubFetchSequence(...responses: Response[]): FetchMock {
   let i = 0;
   return stubFetch(async () => responses[Math.min(i++, responses.length - 1)]);

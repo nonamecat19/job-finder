@@ -5,12 +5,6 @@ import { useSummaryModel } from '../hooks';
 
 export const GROUNDING_LEVELS = ['strict', 'moderate', 'aggressive'] as const;
 
-// T-settings-tab: the global "Resume shape" section toggles (Settings page),
-// scoped to this one run — a section switched off/on here only affects this
-// generation, the account default is untouched. Rows whose state has drifted
-// from that default are called out, since nothing else on this tab tells the
-// user their per-run choice is quietly diverging from what every other run
-// will start with.
 const SECTION_KIND_LABELS: Record<string, string> = {
   summary: 'Summary',
   skills: 'Skills',

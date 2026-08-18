@@ -12,8 +12,7 @@ describe('setFieldText', () => {
 
     try {
       expect(setFieldText(el, 'Dear team')).toBe(true);
-      // A plain el.value = text assignment would leave React's value tracker stale
-      // and the site would submit an empty letter.
+
       expect(spy).toHaveBeenCalledWith('Dear team');
       expect(el.value).toBe('Dear team');
     } finally {

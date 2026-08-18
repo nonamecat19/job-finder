@@ -6,8 +6,6 @@ import { Button, Field, Input } from '../../components/ui';
 import { ManualFillInDialog } from './ManualFillInDialog';
 import { useAddVacancyByUrl } from './hooks';
 
-// Recovery hints per FR-018. The reason comes from the server verbatim; this
-// only adds what the operator can do about it.
 const RECOVERY: Record<string, string> = {
   invalid_url: 'Check the address and try again.',
   not_a_posting: 'That is a search page — add it as a subscription on the Sources page instead.',
@@ -26,8 +24,7 @@ export function AddVacancyForm({
   onCreated?: (jobId: string) => void;
 }) {
   const [url, setUrl] = useState('');
-  // The unreadable posting the operator is completing by hand, carrying
-  // whatever was extracted so they complete rather than retype (FR-019).
+
   const [fillIn, setFillIn] = useState<ManualAddResultDto | null>(null);
   const add = useAddVacancyByUrl();
   const navigate = useNavigate();
@@ -36,8 +33,7 @@ export function AddVacancyForm({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = url.trim();
-    // The disabled button already blocks a double-click; this blocks the
-    // keyboard path to the same double-submit.
+
     if (!trimmed || add.isPending) return;
     add.mutate(trimmed, {
       onSuccess: (r) => {
@@ -94,7 +90,7 @@ export function AddVacancyForm({
       {!add.isPending && result && !fillIn ? <Outcome result={result} /> : null}
       </form>
 
-      {/* Outside the form above: a form must not nest inside another form. */}
+      {}
       {fillIn?.draft ? (
         <ManualFillInDialog
           draft={fillIn.draft}

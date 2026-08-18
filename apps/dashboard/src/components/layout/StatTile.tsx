@@ -20,7 +20,6 @@ export type StatTileProps = {
   className?: string;
 };
 
-/** A Tile presenting one caption + figure, with an optional delta and IconTile. */
 export function StatTile({ caption, value, delta, icon: Icon, tint = 'blue', span, tone, className }: StatTileProps) {
   return (
     <Tile span={span} tone={tone} className={className}>

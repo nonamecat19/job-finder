@@ -61,10 +61,7 @@ export type CustomConnection = Gen.CustomConnection;
 export type EmployerBoardDto = Nullable<Gen.EmployerBoardDto, 'lastSuccessAt'>;
 export type GenerateRequestDto = Gen.GenerateRequestDto;
 export type GroundingTraceDto = Gen.GroundingTraceDto;
-// 042: the resume generation workspace's wire shapes. Every pointer field on
-// these DTOs already carries `omitempty` (dto/generation_workspace.go), so
-// none needs a Nullable<> narrowing here — adding a field there requires zero
-// edits here, per 024-FR-003 rule 3.
+
 export type GenerationRunDto = Gen.GenerationRunDto;
 export type GenerationVacancyDto = Gen.GenerationVacancyDto;
 export type GenerationSectionDto = Gen.GenerationSectionDto;
@@ -76,8 +73,7 @@ export type StartGenerationRequestDto = Gen.StartGenerationRequestDto;
 export type PatchGenerationItemRequestDto = Gen.PatchGenerationItemRequestDto;
 export type RerunGenerationRequestDto = Gen.RerunGenerationRequestDto;
 export type GenerationRewriteResponseDto = Gen.GenerationRewriteResponseDto;
-// 046: the real-preview YAML source, no Nullable<> needed for the same
-// reason as the workspace DTOs above (both fields are plain, non-pointer strings).
+
 export type PreviewDocumentDto = Gen.PreviewDocumentDto;
 export type HostPacingDto = Gen.HostPacingDto;
 export type JobListResponse = Omit<Gen.JobListResponse, 'items'> & { items: JobDto[] };
@@ -173,11 +169,6 @@ export type PostAgeResponseDto = Nullable<Omit<Gen.PostAgeResponseDto, 'buckets'
 
 export type ProfileDto = Nullable<Gen.ProfileDto, 'extraNotes'>;
 
-// providerClass is permanently 'hosted' for any LLM-backed queue since
-// 044-litellm-only-routing removed the second (local/Ollama) inference path.
-// The field is kept and its shape unchanged rather than removed — dropping it
-// would be a breaking change to a shared type for a value that is now
-// constant.
 export type QueueBacklogDto = Nullable<Gen.QueueBacklogDto, 'etaSeconds' | 'providerClass'> & {
     providerClass: 'local' | 'hosted' | null;
   };

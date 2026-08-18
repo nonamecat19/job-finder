@@ -113,8 +113,7 @@ describe('ResumePreviewPane', () => {
     renderWithProviders(<ResumePreviewPane run={baseRun()} profile={undefined} />);
 
     await vi.advanceTimersByTimeAsync(500);
-    // The preview is drawn in-page (PdfPreviewCanvas) rather than handed to an
-    // <iframe>, so what a ready render puts on screen is the canvas surface.
+
     await screen.findByTestId('resume-preview');
     expect(api.generations.previewDocument).toHaveBeenCalledWith('run-1');
   });
@@ -151,7 +150,6 @@ describe('ResumePreviewPane', () => {
     await mockHappyPath();
     const { rerender } = renderWithProviders(<ResumePreviewPane run={baseRun()} profile={undefined} />);
 
-    // Three edits in quick succession, each well inside the debounce window.
     for (let i = 0; i < 3; i++) {
       rerender(
         <ResumePreviewPane
@@ -202,9 +200,6 @@ describe('ResumePreviewPane', () => {
     await screen.findByTestId('resume-preview');
     expect(buildTypst).toHaveBeenCalledTimes(1);
 
-    // A real content change (so the effect actually re-schedules) that the
-    // server nonetheless assembles to the same effective document — e.g. a
-    // toggle flipped off then back on — reported via the same sectionsHash.
     rerender(
       <ResumePreviewPane
         run={baseRun({
@@ -242,7 +237,7 @@ describe('ResumePreviewPane', () => {
     await vi.advanceTimersByTimeAsync(500);
 
     expect(api.generations.previewDocument).toHaveBeenCalledTimes(2);
-    expect(buildTypst).toHaveBeenCalledTimes(1); // not called again — sectionsHash matched
+    expect(buildTypst).toHaveBeenCalledTimes(1);
   });
 
   it('shows the overflow report once export is blocked', async () => {

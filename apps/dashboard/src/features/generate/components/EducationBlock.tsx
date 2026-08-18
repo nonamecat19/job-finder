@@ -6,15 +6,12 @@ import { cn } from '../../../lib/utils';
 import ItemRow from './ItemRow';
 
 export interface EducationBlockProps {
-  section: GenerationSectionDto; // kind === 'education'
+  section: GenerationSectionDto;
   onToggle: (itemId: string, selected: boolean) => void;
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
   onToggleEnabled: (sectionId: string, enabled: boolean) => void;
 }
 
-// Education reads exactly like projects/certifications: one row per degree,
-// nothing model-written, so nothing to suggest or edit in place — an entry's
-// institution, degree and dates come from the profile verbatim.
 export default function EducationBlock({ section, onToggle, onReorder, onToggleEnabled }: EducationBlockProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 

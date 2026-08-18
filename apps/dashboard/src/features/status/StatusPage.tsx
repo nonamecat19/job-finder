@@ -79,7 +79,6 @@ const OP_TONES: Record<ActivityOp, 'green' | 'red' | 'slate'> = {
   salary_infer: 'slate',
 };
 
-// One glyph and one tint per op, kept consistent across the screen.
 const OP_ICONS: Record<ActivityOp, LucideIcon> = {
   ingest: Inbox,
   match: GitCompare,
@@ -396,7 +395,6 @@ function useLiveElapsed(startedAt: string | null) {
   return formatDuration(now - new Date(startedAt).getTime());
 }
 
-/** "Xs ago" / "Xm ago" for the last successful poll, ticking every second. */
 function useLiveAgo(since: number | undefined) {
   const [now, setNow] = useState(() => Date.now());
 

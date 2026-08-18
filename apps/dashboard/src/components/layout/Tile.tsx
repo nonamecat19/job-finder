@@ -6,8 +6,6 @@ import { TileSkeleton, TileEmpty, TileError } from './TileStates';
 export type SpanRule = 'compact' | 'standard' | 'wide' | 'tall' | 'feature' | 'full';
 export type TileTone = 'default' | 'quiet' | 'inverse';
 
-// DashboardGrid tops out at 1 / 2 / 3 / 4 columns (base / sm / lg / 3xl), so
-// every span rule is expressed against that same 4-column ceiling.
 const SPAN_CLASSES: Record<SpanRule, string> = {
   compact: '',
   standard: '',
@@ -17,10 +15,6 @@ const SPAN_CLASSES: Record<SpanRule, string> = {
   full: 'sm:col-span-2 lg:col-span-3 3xl:col-span-4',
 };
 
-// `default` is a plain white tile lifted off the canvas on --shadow-tile.
-// `quiet` drops the shadow and sits flush on --surface-secondary, for tiles
-// nested inside other tiles or dense side rails.
-// `inverse` flips to the ink surface for a single emphasised tile per screen.
 const TONE_CLASSES: Record<TileTone, string> = {
   default: 'bg-surface text-foreground shadow-tile',
   quiet: 'bg-surface-secondary text-foreground',
@@ -33,7 +27,7 @@ export type TileProps = {
   footer?: ReactNode;
   span?: SpanRule;
   tone?: TileTone;
-  /** Tile navigates somewhere — lifts −2px onto --shadow-raise on hover. */
+
   interactive?: boolean;
   scroll?: boolean;
   scrollLabel?: string;
@@ -43,7 +37,7 @@ export type TileProps = {
   onRetry?: () => void;
   children?: ReactNode;
   className?: string;
-  /** Classes for the (non-scrolling) body wrapper — for a tile whose content fills its height. */
+
   contentClassName?: string;
 };
 

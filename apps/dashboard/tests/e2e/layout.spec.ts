@@ -6,8 +6,7 @@ const COLUMN_MATRIX: Array<{ width: number; height: number; columns: number }> =
   { width: 768, height: 1024, columns: 2 },
   { width: 1280, height: 900, columns: 3 },
   { width: 1920, height: 1080, columns: 4 },
-  // 022-FR-001 lowered the ceiling from 5 columns to 4 — the tiles direction wants a wider
-  // tile, not a denser row.
+
   { width: 2560, height: 1440, columns: 4 },
 ];
 
@@ -37,7 +36,6 @@ test.describe('Dashboard grid layout', () => {
     }
   }
 
-  // SC-004 / FR-010: no horizontal scroll at any matrix width, plus the 320px floor.
   for (const route of ROUTES) {
     for (const width of [320, 375, 768, 1280, 1920, 2560, 3840]) {
       test(`${route} has no horizontal overflow at ${width}px`, async ({ page }) => {
@@ -49,12 +47,11 @@ test.describe('Dashboard grid layout', () => {
           return el.scrollWidth - el.clientWidth;
         });
 
-        expect(overflow).toBeLessThanOrEqual(1); // 1px tolerance for scrollbar rounding
+        expect(overflow).toBeLessThanOrEqual(1);
       });
     }
   }
 
-  // FR-011 / Edge Cases: ultra-wide caps at 5 columns and stays centred within --container-dashboard.
   for (const route of ROUTES) {
     test(`${route} caps at 5 columns and stays centred at 3840px`, async ({ page }) => {
       await page.setViewportSize({ width: 3840, height: 1440 });
@@ -78,7 +75,6 @@ test.describe('Dashboard grid layout', () => {
     });
   }
 
-  // T046 / SC-010: fit-mode pages fill the viewport with no page-level scroll at desktop sizes.
   for (const route of FIT_ROUTES) {
     for (const width of [1920, 2560]) {
       test(`${route} has no page-level scroll in fit mode at ${width}px`, async ({ page }) => {
@@ -96,8 +92,6 @@ test.describe('Dashboard grid layout', () => {
     }
   }
 
-  // Edge Cases / FR-020: short viewports revert fit pages to normal document scroll rather
-  // than clipping content below the 45rem (720px) height threshold.
   for (const route of FIT_ROUTES) {
     test(`${route} falls back to flow scrolling below the 45rem height threshold`, async ({ page }) => {
       await page.setViewportSize({ width: 1920, height: 600 });

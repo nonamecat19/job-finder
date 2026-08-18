@@ -6,18 +6,12 @@ import { cn } from '../../../lib/utils';
 import ItemRow from './ItemRow';
 
 export interface ProjectsBlockProps {
-  section: GenerationSectionDto; // kind === 'projects'
+  section: GenerationSectionDto;
   onToggle: (itemId: string, selected: boolean) => void;
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
   onToggleEnabled: (sectionId: string, enabled: boolean) => void;
 }
 
-// Projects read like skill groups: one row per project, ordered by vacancy
-// relevance, with the ones past `projectsMax` shown unselected rather than
-// removed so the user can promote them. There is no AI-suggestion group —
-// nothing in this section is model-written, so there is nothing to suggest or
-// edit in place: a project's name, dates and bullets come from the profile
-// verbatim, and the density of its bullets is a profile setting.
 export default function ProjectsBlock({ section, onToggle, onReorder, onToggleEnabled }: ProjectsBlockProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 

@@ -6,11 +6,6 @@ import { queryKeys } from '../../../lib/queryKeys';
 
 const FILTERS = { sort: 'score' as const };
 
-// A compact, click-to-pick substitute for the ad-hoc vacancy field this page
-// used to have: since every run is job-backed now, picking a job is the
-// first thing to do here, not a detour through Feed. Same source Feed uses
-// (api.jobs.list), rendered as tight ListRows rather than Feed's full row
-// (no shortlist/hide/open actions — this list only picks).
 export default function JobPickerList({ onPick }: { onPick: (jobId: string) => void }) {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.jobs.picker(FILTERS),

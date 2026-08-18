@@ -33,8 +33,7 @@ function section(items: GenerationItemDto[]): GenerationSectionDto {
 }
 
 describe('ProjectsBlock', () => {
-  // The cap is a selection boundary: a project past projectsMax is shown
-  // unselected under a divider, not hidden.
+
   it('separates included projects from the ranked-but-excluded ones', () => {
     renderWithProviders(
       <ProjectsBlock

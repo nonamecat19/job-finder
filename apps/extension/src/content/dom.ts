@@ -1,4 +1,4 @@
-/** Returns the first element any selector in the list matches. */
+
 export function queryFirst<T extends Element>(root: ParentNode, selectors: string[]): T | null {
   for (const selector of selectors) {
     const el = root.querySelector<T>(selector);
@@ -7,7 +7,6 @@ export function queryFirst<T extends Element>(root: ParentNode, selectors: strin
   return null;
 }
 
-/** Every element matched by any selector in the list, in selector order. */
 export function queryAll<T extends Element>(root: ParentNode, selectors: string[]): T[] {
   const out: T[] = [];
   for (const selector of selectors) {
@@ -18,13 +17,6 @@ export function queryAll<T extends Element>(root: ParentNode, selectors: string[
   return out;
 }
 
-/**
- * Visibility check for interactive fields.
- *
- * Never apply this to input[type=file]: those are routinely display:none behind
- * a styled label, and filtering them out is exactly how a working adapter
- * appears broken.
- */
 export function isVisible(el: Element): boolean {
   const html = el as HTMLElement;
   if (html.hidden) return false;
@@ -58,7 +50,6 @@ export function waitForElement<T extends Element>(
   });
 }
 
-/** Text content of the first matching element, trimmed, or null. */
 export function textOf(root: ParentNode, selectors: string[]): string | null {
   const el = queryFirst<HTMLElement>(root, selectors);
   const text = el?.textContent?.trim();

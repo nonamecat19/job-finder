@@ -13,7 +13,7 @@ import { TextEntryForm } from './TextEntryForm';
 export interface EntryFormProps {
   entry: Entry;
   onChange: (entry: Entry) => void;
-  /** The section this entry lives in, so a form can special-case e.g. "skills". */
+
   sectionName?: string;
 }
 

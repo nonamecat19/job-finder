@@ -1,8 +1,4 @@
-/**
- * Nothing throws across an extension message port: a rejected promise inside a
- * chrome.runtime listener disappears, leaving the caller hanging on a dead
- * port. Every handler returns this envelope instead.
- */
+
 export type Result<T> = { ok: true; value: T } | { ok: false; error: AppError };
 
 export type ErrorCode =
@@ -18,9 +14,9 @@ export type ErrorCode =
 
 export type AppError = {
   code: ErrorCode;
-  /** Shown to the user as-is. */
+
   message: string;
-  /** Raw body or stack; surfaced only when the debug setting is on. */
+
   detail?: string;
 };
 
@@ -32,7 +28,6 @@ export function err<T = never>(code: ErrorCode, message: string, detail?: string
   return { ok: false, error: { code, message, detail } };
 }
 
-/** Turns a thrown error into an `unknown` Result so a handler can never reject. */
 export async function attempt<T>(fn: () => Promise<Result<T>>): Promise<Result<T>> {
   try {
     return await fn();

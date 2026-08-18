@@ -6,15 +6,12 @@ import { cn } from '../../../lib/utils';
 import ItemRow from './ItemRow';
 
 export interface CertificationsBlockProps {
-  section: GenerationSectionDto; // kind === 'certifications'
+  section: GenerationSectionDto;
   onToggle: (itemId: string, selected: boolean) => void;
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
   onToggleEnabled: (sectionId: string, enabled: boolean) => void;
 }
 
-// Certifications read exactly like projects: one row per certification,
-// nothing model-written, so nothing to suggest or edit in place — a
-// certification's name and issuer come from the profile verbatim.
 export default function CertificationsBlock({ section, onToggle, onReorder, onToggleEnabled }: CertificationsBlockProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 

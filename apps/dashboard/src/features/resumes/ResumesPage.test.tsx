@@ -95,7 +95,7 @@ describe('ResumesPage', () => {
     expect(screen.getAllByText('Senior Engineer — Acme').length).toBeGreaterThan(0);
     expect(screen.getByText('Fast writer')).toBeInTheDocument();
     expect(screen.getByText('moderate')).toBeInTheDocument();
-    // targetPages from the run's own shape config
+
     expect(screen.getByText('Target pages')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /open pdf/i })).toHaveAttribute(
       'href',

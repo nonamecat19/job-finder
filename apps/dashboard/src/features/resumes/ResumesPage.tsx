@@ -10,17 +10,10 @@ import { postAgeLabel } from '../../lib/time';
 import { useSummaryModel } from '../generate/hooks';
 import { useDeleteGenerationRun, useGenerationRuns } from './hooks';
 
-// The library of what the generator has already produced: every recent run,
-// newest first, with the config it was made under and its exported PDF. The
-// runs come from `GET /v1/generations` — the same list endpoint the workspace
-// uses, which returns whole runs, so the config panel needs no extra fetch.
 export default function ResumesPage() {
   const { data: runs, isLoading, error, refetch } = useGenerationRuns();
   const [pickedId, setPickedId] = useState<string | undefined>(undefined);
 
-  // The selection is derived, not stored: a picked run that no longer exists
-  // (deleted, or not yet fetched) falls back to the newest one, so there is no
-  // effect resyncing state against the list.
   const selected = runs?.find((r) => r.id === pickedId) ?? runs?.[0];
   const selectedId = selected?.id;
   const listState = isLoading ? 'loading' : error ? 'error' : runs?.length ? 'ready' : 'empty';

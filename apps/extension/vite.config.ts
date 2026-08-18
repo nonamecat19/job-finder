@@ -5,9 +5,6 @@ import path from 'node:path';
 
 const OUT_DIR = path.resolve(import.meta.dirname, 'dist');
 
-// Rollup keeps HTML entries at their source-relative path (dist/src/popup/popup.html).
-// The manifest references them at the root, so flatten them after the bundle closes.
-// tests/manifest.test.ts asserts the two stay in agreement.
 function flattenHtmlEntries(): Plugin {
   return {
     name: 'jobfinder-flatten-html-entries',
@@ -15,8 +12,7 @@ function flattenHtmlEntries(): Plugin {
       for (const entry of ['popup', 'options']) {
         const from = path.join(OUT_DIR, 'src', entry, `${entry}.html`);
         if (!fs.existsSync(from)) continue;
-        // Asset hrefs are root-absolute ("/popup.js"), and inside an extension the
-        // root is the extension itself, so moving the file changes nothing about them.
+
         fs.renameSync(from, path.join(OUT_DIR, `${entry}.html`));
       }
       fs.rmSync(path.join(OUT_DIR, 'src'), { recursive: true, force: true });

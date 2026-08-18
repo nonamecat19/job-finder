@@ -83,9 +83,6 @@ export interface JobFilters {
   onlyManual?: boolean;
 }
 
-// A manual add answers with its outcome in the body even when the status is a
-// 4xx: `failed` and `needs_fill_in` are results the operator acts on, not
-// transport errors. Only a 5xx or an unparseable body is thrown.
 async function requestManualAdd(path: string, body: unknown): Promise<ManualAddResultDto> {
   const res = await fetch(`/api${path}`, {
     method: 'POST',
@@ -265,8 +262,7 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
-    // Resume shape: PUT replaces the whole config (validation is
-    // all-or-nothing), DELETE means "drop my overrides" and returns defaults.
+
     getResumeShape: () => request<ResumeShapeConfigDto>('/v1/settings/resume-shape'),
     putResumeShape: (body: ResumeShapeConfigDto) =>
       request<ResumeShapeConfigDto>('/v1/settings/resume-shape', {
@@ -275,9 +271,7 @@ export const api = {
       }),
     resetResumeShape: () =>
       request<ResumeShapeConfigDto>('/v1/settings/resume-shape', { method: 'DELETE' }),
-    // Summary model (034). GET returns the whole menu with the current entry
-    // marked, so the selector renders from one response and the menu and the
-    // selection can never disagree about which options exist.
+
     getSummaryModel: () => request<SummaryModelSettingDto>('/v1/settings/summary-model'),
     putSummaryModel: (optionId: string) =>
       request<SummaryModelSettingDto>('/v1/settings/summary-model', {
@@ -285,10 +279,7 @@ export const api = {
         body: JSON.stringify({ optionId }),
       }),
   },
-  // 042: the resume generation workspace. `start`/`get`/`list`/`remove` are
-  // live from Phase 2 (Foundational); `patchItem`/`reorder`/`rerun`/`export`/
-  // `exportStatus` are defined now per the contract and 404 until the phase
-  // that implements each one lands — that is expected, not a bug.
+
   generations: {
     start: (body: {
       profileId: string;
@@ -337,8 +328,7 @@ export const api = {
     export: (runId: string) =>
       request<GenerationExportDto>(`/v1/generations/${runId}/export`, { method: 'POST' }),
     exportStatus: (runId: string) => request<GenerationExportDto>(`/v1/generations/${runId}/export`),
-    // 046: the live preview's YAML source — a pure read, no export-status
-    // side effect. See specs/046-real-resume-preview/contracts/preview-document.md.
+
     previewDocument: (runId: string) =>
       request<PreviewDocumentDto>(`/v1/generations/${runId}/preview-document`),
     remove: (runId: string) => request<void>(`/v1/generations/${runId}`, { method: 'DELETE' }),

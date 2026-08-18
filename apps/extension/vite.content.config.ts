@@ -1,8 +1,6 @@
 import { defineConfig } from 'vite';
 import path from 'node:path';
 
-// Content scripts cannot be ES modules, so they get their own IIFE build that
-// appends to the dist/ the main config already produced (emptyOutDir: false).
 export default defineConfig({
   publicDir: false,
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },

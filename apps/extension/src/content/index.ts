@@ -25,7 +25,7 @@ async function handle(req: CsRequest): Promise<Result<CsResponse>> {
       const trigger = adapter.applyTrigger();
       if (!trigger) return err('form_not_open', 'No apply button found on this page.');
       trigger.click();
-      // The form usually mounts asynchronously; give it a moment before reporting back.
+
       await waitForElement(['textarea', 'input[type="file"]'], 3000);
       return ok({ kind: 'cs/opened', caps: capabilitiesOf(adapter, host) });
     }

@@ -9,23 +9,18 @@ export interface BlockMenuAction {
 }
 
 export interface BlockContextMenuProps {
-  /** Viewport coordinates of the click that opened it. */
+
   x: number;
   y: number;
   actions: BlockMenuAction[];
   onClose: () => void;
 }
 
-// A context menu for one block of the rendered page. Fixed to the viewport
-// rather than to the page element: the preview is a scrolling, zooming surface
-// and a menu anchored inside it would slide away from the pointer the moment
-// either changes — which is also why any scroll simply closes it.
 export default function BlockContextMenu({ x, y, actions, onClose }: BlockContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Nudge back inside the viewport once the real size is known, instead of
-    // guessing at a width the menu's own labels decide.
+
     const el = ref.current;
     if (!el) return;
     const box = el.getBoundingClientRect();
@@ -41,8 +36,7 @@ export default function BlockContextMenu({ x, y, actions, onClose }: BlockContex
       if (!ref.current?.contains(e.target as Node)) onClose();
     };
     window.addEventListener('keydown', onKey);
-    // Capture: the surface underneath stops propagation of its own pointer
-    // handling in places, and a click anywhere should still dismiss this.
+
     window.addEventListener('pointerdown', onPointer, true);
     window.addEventListener('scroll', onClose, true);
     window.addEventListener('resize', onClose);

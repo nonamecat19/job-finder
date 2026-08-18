@@ -25,14 +25,13 @@ const GLYPH_SIZE: Record<IconTileSize, number> = {
 };
 
 export type IconTileProps = {
-  /** Any lucide-react glyph component, e.g. `icon={Briefcase}`. */
+
   icon: LucideIcon;
   tint?: IconTileTint;
   size?: IconTileSize;
   className?: string;
 };
 
-/** A tinted rounded square holding one lucide glyph. Purely presentational. */
 export function IconTile({ icon: Icon, tint = 'blue', size = 'md', className }: IconTileProps) {
   return (
     <div

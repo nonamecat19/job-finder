@@ -1,23 +1,11 @@
 import { cn } from '../../../lib/utils';
 
 export interface OriginBadgeProps {
-  origin: string; // profile | ai
-  kind: string; // achievement | skill_group | summary
+  origin: string;
+  kind: string;
   className?: string;
 }
 
-// T027: three semantically different states, each with its own visual —
-// deliberately not sharing a badge, since conflating them is exactly what
-// FR-009/FR-013's grounding guarantees would erode:
-//
-// - "from your profile": origin="profile" — byte-identical to the master,
-//   never model-written.
-// - "AI · unverified": origin="ai" achievements/skills — a suggestion the
-//   user has not yet vetted, off by default (FR-013).
-// - the summary's own grounded-prose state: origin="ai" but kind="summary" —
-//   the model *did* write this text, but it is subject to the existing
-//   summary grounding checks, which is a different guarantee than an
-//   unverified suggestion and must not be badged the same way.
 export default function OriginBadge({ origin, kind, className }: OriginBadgeProps) {
   if (origin === 'profile') {
     return (

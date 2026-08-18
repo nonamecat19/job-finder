@@ -28,8 +28,6 @@ test.describe('Colour contrast (T6, SC-006)', () => {
   }
 });
 
-// SC-009: every nav destination and primary control is tabbable with a visible focus ring
-// (T047, User Story 4). Checked against the shell nav, which is present on every route.
 test.describe('Keyboard reachability (SC-009)', () => {
   test.beforeEach(async ({ page }) => {
     await mockAllRoutes(page);

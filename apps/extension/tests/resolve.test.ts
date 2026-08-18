@@ -49,7 +49,7 @@ describe('resolveJob', () => {
 
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe('not_found');
-    // POST /jobs/manual scrapes and writes; resolution must never trigger it.
+
     for (const call of fetchMock.mock.calls) {
       expect(call[1]?.method ?? 'GET').toBe('GET');
     }

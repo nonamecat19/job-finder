@@ -63,7 +63,7 @@ export function summarizeExpLevels(values: string[]): string {
   const years: number[] = []
   for (const v of deduped) {
     if (!v.endsWith('y')) {
-      // Non-parseable token — fall back to sorted list rendering.
+
       const list = [...new Set(values)].sort()
       return list.join(', ')
     }

@@ -1,7 +1,5 @@
-// pdfjs.ts — the pdf.js plumbing behind PdfPreviewCanvas: a lazily loaded
-// module (its worker and DOM assumptions only load on a page that actually
-// shows a preview) and the one piece of geometry work worth keeping out of
-// the component — turning a page's text layer into normalized rectangles.
+
+
 import type { PdfTextPiece } from './blockMap';
 
 export interface PdfViewportLike {
@@ -21,11 +19,6 @@ export interface PdfDocumentLike {
   getPage(pageNumber: number): Promise<PdfPageLike>;
 }
 
-/**
- * Tearing a document down is the loading task's job, not the document's:
- * pdf.js 6 dropped `PDFDocumentProxy.destroy()`, so the task returned by
- * getDocument is what has to be kept around to release the worker.
- */
 export interface PdfLoadingTaskLike {
   promise: Promise<PdfDocumentLike>;
   destroy(): Promise<void>;
@@ -50,12 +43,6 @@ export async function loadPdfjs(): Promise<PdfjsLike> {
   return pdfjsPromise;
 }
 
-/**
- * The text layer in normalized page coordinates. pdf.js reports a text item's
- * origin on its baseline in PDF space (y up); composing it with the viewport
- * transform puts it in top-left screen space, which is where the rectangles
- * the overlay draws live.
- */
 export function buildPieces(pdfjs: PdfjsLike, items: unknown[], viewport: PdfViewportLike): PdfTextPiece[] {
   const pieces: PdfTextPiece[] = [];
   for (const raw of items) {

@@ -12,9 +12,9 @@ import OverflowReport from './OverflowReport';
 export interface ResumePreviewPaneProps {
   run: GenerationRunDto | undefined;
   profile: ProfileDto | undefined;
-  /** Drops an item from the selection — the preview's block context menu. */
+
   onRemoveItem?: (itemId: string) => void;
-  /** Reorders a section's items from a drag dropped on the preview itself. */
+
   onReorder?: (sectionId: string, itemIds: string[]) => void;
   onExport?: () => void;
   exportPending?: boolean;
@@ -24,16 +24,9 @@ export interface ResumePreviewPaneProps {
   warnings?: string[];
 }
 
-// ResumePreviewPane renders the run's current selection through the same
-// rendering engine the export/download PDF comes from (rendercv-go's Typst
-// pipeline), running client-side via WebAssembly — not an approximated
-// re-styling of the section text (046-real-resume-preview, replacing the
-// prior styled-div preview).
 export default function ResumePreviewPane({
   run,
-  // profile stays part of the public prop contract (GenerateWorkspacePage.tsx
-  // passes it) but the real PDF render carries its own header/contact info —
-  // there is nothing left for this component to derive from it directly.
+
   profile: _profile,
   onRemoveItem,
   onReorder,
@@ -45,11 +38,7 @@ export default function ResumePreviewPane({
   warnings,
 }: ResumePreviewPaneProps) {
   const preview = useResumePreview(run);
-  // How many pages the current selection actually renders as, reported by the
-  // viewer. Kept next to the export control so the page budget is visible
-  // while editing, not only once an export comes back blocked.
-  // Tagged with the run it was measured on so switching runs clears it during
-  // render rather than through a reset effect.
+
   const [rendered, setRendered] = useState<{ runId: string; count: number } | null>(null);
   const pageCount = rendered && rendered.runId === run?.id ? rendered.count : null;
   const reportPageCount = useCallback(
@@ -58,8 +47,7 @@ export default function ResumePreviewPane({
     },
     [run],
   );
-  // What the preview's text is matched against to build its hoverable blocks
-  // (preview/blockMap.ts) — recomputed only when the selection itself changes.
+
   const items = useMemo(() => (run ? matchableItems(run.sections) : []), [run]);
 
   if (!run) {
@@ -71,8 +59,7 @@ export default function ResumePreviewPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      {/* The surface takes whatever the tile gives it; the sheet inside is
-          scaled to that width by the viewer (PdfPreviewCanvas). */}
+      {}
       <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface-secondary">
         <PreviewSurface
           state={preview}
@@ -126,10 +113,6 @@ export default function ResumePreviewPane({
   );
 }
 
-// PageBudget is the live counterpart to OverflowReport: the rendered page
-// count against the shape's target, shown on every render rather than only
-// when an export is refused. Warning-toned once it is over — the export will
-// be blocked, and knowing that before pressing the button is the point.
 function PageBudget({ pages, target }: { pages: number | null; target: number }) {
   if (pages === null) return null;
   const over = pages > target;
@@ -175,9 +158,7 @@ function PreviewSurface({
         </div>
       );
     case 'ready':
-      // Deliberately not keyed on the render: the viewer keeps its zoom and
-      // scroll position across edits, which is the whole point of a live
-      // preview — a re-render swaps the bytes underneath it, not the pane.
+
       return (
         <PdfPreviewCanvas
           pdfBytes={state.pdfBytes}
@@ -190,23 +171,10 @@ function PreviewSurface({
   }
 }
 
-/**
- * Drives the WASM preview pipeline off the run's id and current selection
- * content, debounced and coalesced (PreviewScheduler, spec FR-010) so rapid
- * edits settle on one render of the latest state instead of one per edit.
- * A fresh scheduler (and its blob: URL) is torn down whenever the run
- * changes or the component unmounts.
- */
 function useResumePreview(run: GenerationRunDto | undefined): PreviewState {
   const [state, setState] = useState<PreviewState>({ status: 'idle' });
   const schedulerRef = useRef<PreviewScheduler | null>(null);
 
-  // The signature that should trigger a re-render: the run's selection
-  // content, not just its id — TanStack Query's optimistic toggle/edit
-  // mutations (hooks.ts) update `run.sections` in the cache immediately,
-  // well before the server round trip that would otherwise bump
-  // `run.updatedAt`, and FR-003 wants the preview to follow that immediately
-  // too (subject to the scheduler's own debounce).
   const contentSignature = useMemo(() => (run ? JSON.stringify(run.sections) : ''), [run]);
 
   useEffect(() => {
@@ -220,14 +188,10 @@ function useResumePreview(run: GenerationRunDto | undefined): PreviewState {
   }, [run?.id]);
 
   useEffect(() => {
-    // Nothing to render: the component itself returns an EmptyState /
-    // "rendering…" message before PreviewSurface is ever mounted for these
-    // two cases, so there is no state for this effect to synchronize.
+
     if (!run || run.state === 'running') return;
     schedulerRef.current?.schedule(run.id);
-    // contentSignature (derived from run.sections) is the real trigger;
-    // run.id/run.state are read above but a run.id change already remounts
-    // the scheduler in the effect above.
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run?.id, run?.state, contentSignature]);
 

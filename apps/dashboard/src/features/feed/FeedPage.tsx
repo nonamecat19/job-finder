@@ -101,8 +101,6 @@ export default function FeedPage() {
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  // The vacancy a manual add just created, so its row is findable in a feed
-  // that may already be long.
   const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
 
   const [searchInput, setSearchInput] = useState(filters.q ?? '');
@@ -328,9 +326,6 @@ function formatSalaryBand(job: JobDto): string | null {
   return `${job.salaryMin.toLocaleString()}–${job.salaryMax.toLocaleString()} ${job.salaryCurrency}`;
 }
 
-// SalaryInfo renders the inferred band where salaryRaw used to render alone,
-// keeping salaryRaw displayed alongside it per FR-024. Band-less jobs fall
-// back to the salaryRaw-only display unchanged.
 function SalaryInfo({ job }: { job: JobDto }) {
   const band = formatSalaryBand(job);
   const lowConfidence = job.salaryConfidence != null && job.salaryConfidence < LOW_CONFIDENCE_THRESHOLD;

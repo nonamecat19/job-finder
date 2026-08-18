@@ -46,8 +46,6 @@ describe('SkillsBlock per-skill toggles', () => {
     expect(screen.getAllByTestId('skill-entry').map((el) => el.textContent)).toEqual(['Go', 'NestJS', 'Redis']);
   });
 
-  // The PATCH carries the whole drop set, not the one skill that changed, so
-  // the write is idempotent and order-free.
   it('sends the full drop set when a skill is switched off', async () => {
     const user = userEvent.setup();
     const onDropEntries = vi.fn();
@@ -100,8 +98,6 @@ describe('SkillsBlock per-skill toggles', () => {
     expect(onDropEntries).toHaveBeenCalledWith('item-1', ['Redis']);
   });
 
-  // A switched-off group is not a place to fine-tune which skills it would
-  // have shown: the row falls back to its plain "Label: a, b, c" line.
   it('offers no per-skill chips for an excluded group', () => {
     renderWithProviders(
       <SkillsBlock

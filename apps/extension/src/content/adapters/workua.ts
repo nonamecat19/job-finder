@@ -4,13 +4,6 @@ import { isVisible, queryFirst, textOf } from '../dom';
 import { findByText, guessApplyForm, guessFileInput, guessLetterField } from './generic';
 import type { SiteAdapter } from './types';
 
-/**
- * work.ua.
- *
- * Applying usually means picking a resume already hosted on work.ua, and such
- * vacancies expose no file input at all — the capability flags report that
- * honestly so the popup can offer only the cover letter.
- */
 const FORM = ['#apply-form', 'form[action*="apply"]', 'form#form-apply', 'form[id*="apply"]'];
 const FILE = ['input[type="file"][accept*="pdf"]', '#apply-form input[type="file"]', 'input[type="file"]'];
 const LETTER = [

@@ -15,9 +15,7 @@ export function TileSkeleton({ lines = 3, className }: { lines?: number; classNa
 
 export function TileEmpty({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
   return (
-    // No wrapper element around `children`: an empty state is often more than
-    // a sentence (a paragraph plus an action), and a <p> around that is
-    // invalid markup. A bare string still picks up the text styling here.
+
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-5 text-center text-sm text-muted">
       {icon}
       {children}

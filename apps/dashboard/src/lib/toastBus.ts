@@ -22,7 +22,6 @@ function nextId(): string {
   return `toast-${counter}-${Date.now()}`;
 }
 
-/** Emit a toast to every subscribed viewport. Safe to call outside React. */
 export function emitToast(input: ToastInput): string {
   const record: ToastRecord = {
     id: nextId(),
@@ -40,7 +39,6 @@ export function subscribeToast(listener: Listener): () => void {
   };
 }
 
-/** Normalise an unknown thrown value into a human-readable message. */
 export function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;

@@ -14,8 +14,7 @@ import { resolveJob } from './resolve';
 import { getSettings, setSettings } from './settings';
 
 chrome.runtime.onMessage.addListener((req: BgRequest, _sender, sendResponse) => {
-  // The listener must return true synchronously to keep the port open for the
-  // async reply; attempt() guarantees the promise resolves rather than rejects.
+
   attempt(() => handle(req)).then(sendResponse);
   return true;
 });
@@ -41,7 +40,7 @@ async function handle(req: BgRequest): Promise<Result<BgResponse>> {
     case 'bg/resolveJob': {
       const job = await resolveJob(base, req.url, req.hints);
       if (!job.ok) return job;
-      // The list endpoint omits documents; /jobs/{id} embeds them.
+
       const full = await api.getJob(base, job.value.id);
       if (!full.ok) return full;
       return ok({

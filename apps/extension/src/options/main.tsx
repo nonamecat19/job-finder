@@ -24,8 +24,7 @@ function Options() {
   async function save() {
     setStatus(null);
     setError(null);
-    // A non-default origin is not covered by the manifest's host permissions, so
-    // ask for it before saving — otherwise every request would fail silently.
+
     const origin = originOf(apiBaseUrl);
     if (origin && !(await chrome.permissions.contains({ origins: [origin] }))) {
       const granted = await chrome.permissions.request({ origins: [origin] });

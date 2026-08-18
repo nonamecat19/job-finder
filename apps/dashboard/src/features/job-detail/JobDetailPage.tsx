@@ -49,9 +49,7 @@ export default function JobDetailPage() {
 
   const qc = useQueryClient();
   const { data: job, isLoading } = useJobDetail(id);
-  // Resume the most recent run for this job rather than always starting a
-  // fresh one over the top of it — a run already carries the user's
-  // selections, edits and drag order, none of which a brand-new run has.
+
   const { data: latestRun } = useLatestGenerationRunForJob(id);
   const handleTailorForJob = () => {
     if (!id) return;
@@ -261,10 +259,7 @@ export default function JobDetailPage() {
                   </button>
                 </div>
               </div>
-              {/* The browser's own PDF viewer owns this document's chrome, so
-                  dark mode here is the same luminance flip the canvas preview
-                  uses — screened over the sheet colour so the page reads as the
-                  design system's dark surface rather than pure black. */}
+              {}
               <div className={cn('flex min-h-0 flex-1', resumeDark ? 'bg-paper-dark' : 'bg-paper')}>
                 <iframe
                   title="Resume preview"

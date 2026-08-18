@@ -4,13 +4,6 @@ import { isVisible, queryFirst, textOf } from '../dom';
 import { findByText, guessApplyForm, guessFileInput, guessLetterField } from './generic';
 import type { SiteAdapter } from './types';
 
-/**
- * jobs.dou.ua.
- *
- * Some vacancies apply through an on-site form, others only publish a contact
- * email. When there is no form and no trigger the popup says so rather than
- * failing generically — that is why applyTrigger() is allowed to return null.
- */
 const FORM = ['#reply-form', 'form.reply', 'form[action*="vacancy"]', 'form[id*="reply"]'];
 const FILE = ['#reply-form input[type="file"]', 'input[type="file"][name*="cv"]', 'input[type="file"]'];
 const LETTER = ['#reply-form textarea', 'textarea[name="text"]', 'textarea[name*="comment"]', 'textarea'];

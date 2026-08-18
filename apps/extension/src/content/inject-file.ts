@@ -1,18 +1,8 @@
 import { base64ToBytes } from '@/shared/base64';
 
-/**
- * Puts a File into an <input type=file> the way a real file picker does.
- *
- * `input.files` is only assignable from a real FileList, so the file goes in
- * through a DataTransfer. The two dispatched events are what every upload
- * widget listens for — without them the site's own state never learns a file
- * arrived.
- */
 export function injectFile(input: HTMLInputElement, file: File): void {
   if (!assignThroughDataTransfer(input, file)) {
-    // No usable DataTransfer (jsdom, and anything that rejects a synthesised
-    // FileList): define the property instead. Every consumer we care about
-    // reads input.files[0] and never checks the prototype.
+
     Object.defineProperty(input, 'files', { value: fileListOf(file), configurable: true });
   }
   input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));

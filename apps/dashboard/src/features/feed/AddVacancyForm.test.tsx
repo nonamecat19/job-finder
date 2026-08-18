@@ -19,8 +19,6 @@ import { useAddVacancyByUrl, useSaveManualVacancy } from './hooks';
 
 const POSTING_URL = 'https://djinni.co/jobs/123456-senior-go-engineer/';
 
-// mockAdd stands in for the mutation: `result` is what the server answered, and
-// the mutate spy records what the form submitted.
 function mockAdd({
   result,
   isPending = false,

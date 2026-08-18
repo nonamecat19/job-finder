@@ -6,9 +6,7 @@ import { ListRow } from '../../components/layout';
 import { Button, Chip } from '../../components/ui';
 
 export function SubscriptionRow({ sub, onRun, onDelete, running }: { sub: SubscriptionDto; onRun: () => void; onDelete: () => void; running: boolean }) {
-  // A manual subscription has nothing to crawl and nothing to schedule, so it
-  // renders read-only: no cron, no run control, and delete disabled while its
-  // hand-added vacancies still reference it (FR-014, FR-016).
+
   const isManual = sub.kind === 'manual';
   const basicSearchLabel = !isManual && sub.sourceKey === 'djinni' ? summarizeDjinniBasicSearch(sub.url) : null
   const djinniModeMarker =

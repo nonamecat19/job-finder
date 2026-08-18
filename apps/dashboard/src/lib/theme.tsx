@@ -25,12 +25,7 @@ function systemTheme(): Theme {
 interface ThemeContextValue {
   theme: Theme;
   setTheme: (theme: Theme) => void;
-  /**
-   * Whether rendered resume documents are shown inverted — a dark sheet with
-   * light text. It rides along with the dashboard theme but is a separate
-   * preference: the document itself is still printed on white paper, so a
-   * dark dashboard doesn't imply the reader wants a dark page.
-   */
+
   resumeDark: boolean;
   setResumeDark: (resumeDark: boolean) => void;
 }
@@ -64,13 +59,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * How a rendered document is shown on a dark sheet: its luminance flipped,
- * hues kept. Pair it with `bg-paper-dark` and `mix-blend-screen` on the
- * flipped element — the flip alone turns white stock pure black, and screening
- * it over the token colour lands the page on the design system's dark surface
- * while leaving the (now light) text alone.
- */
 export const RESUME_DARK_FILTER = 'invert(1) hue-rotate(180deg)';
 
 export function useTheme() {

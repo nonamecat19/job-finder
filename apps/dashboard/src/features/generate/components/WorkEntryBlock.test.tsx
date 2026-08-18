@@ -20,8 +20,7 @@ function section(overrides: Partial<GenerationSectionDto> = {}): GenerationSecti
 }
 
 describe('WorkEntryBlock', () => {
-  // T035: a work entry with zero master bullets must render the explicit
-  // empty state — never a fabricated bullet standing in for one.
+
   it('renders the explicit empty state for an entry with zero bullets', () => {
     renderWithProviders(<WorkEntryBlock section={section()} onToggle={vi.fn()} onReorder={vi.fn()} onToggleEnabled={vi.fn()} />);
 

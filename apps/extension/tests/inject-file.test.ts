@@ -50,7 +50,7 @@ describe('injectFile', () => {
 
 describe('fileFromBase64', () => {
   it('rebuilds the exact bytes the worker sent', async () => {
-    const bytes = new Uint8Array([37, 80, 68, 70]); // "%PDF"
+    const bytes = new Uint8Array([37, 80, 68, 70]);
     const file = fileFromBase64(bytesToBase64(bytes), 'cv.pdf');
 
     expect(file.name).toBe('cv.pdf');
@@ -71,7 +71,7 @@ describe('DataTransfer path', () => {
       }
     }
     const original = globalThis.DataTransfer;
-    // jsdom ships no DataTransfer at all, so the primary branch needs one installed.
+
     (globalThis as { DataTransfer?: unknown }).DataTransfer = FakeDataTransfer;
     try {
       injectFile(input, file);

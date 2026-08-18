@@ -1,11 +1,5 @@
 import type { GenerationExportDto } from '@job-finder/shared';
 
-// OverflowReport is FR-019: the export is over the page budget, so it is
-// reported with named candidates the user acts on. There is deliberately no
-// "apply" control — nothing here deselects anything, because resolving the
-// overflow silently is exactly what the rule forbids. Shared by VacancyPane
-// (the export control itself) and ResumePreviewPane (the live preview),
-// rather than duplicated between them.
 export default function OverflowReport({ report }: { report: NonNullable<GenerationExportDto['report']> }) {
   return (
     <div className="mt-2 rounded-lg bg-warning-soft p-2.5" data-testid="overflow-report">

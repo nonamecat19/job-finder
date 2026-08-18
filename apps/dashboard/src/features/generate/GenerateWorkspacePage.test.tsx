@@ -124,9 +124,6 @@ function baseRun(overrides: Partial<GenerationRunDto> = {}): GenerationRunDto {
   };
 }
 
-// runWithSuggestion is a ready run carrying every section kind plus one
-// AI-origin suggestion, unselected — the state a user is in the moment a run
-// finishes, before they have touched anything.
 function runWithSuggestion(): GenerationRunDto {
   const run = baseRun();
   run.sections[0].items.push({
@@ -260,16 +257,12 @@ describe('GenerateWorkspacePage', () => {
     const user = userEvent.setup();
     renderWithProviders(<GenerateWorkspacePage />);
 
-    // Left pane: the generated-resume surface, empty state with a CTA — the
-    // default tab.
     expect(screen.getByRole('tab', { name: /generated resume/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /generate resume/i })).toBeInTheDocument();
 
-    // Grounding / summary writer live under the Settings tab.
     await user.click(screen.getByRole('tab', { name: /settings/i }));
     expect(screen.getByLabelText(/grounding level/i)).toBeInTheDocument();
 
-    // Vacancy card (read-only job display) lives under the other tab.
     await user.click(screen.getByRole('tab', { name: /job description/i }));
     expect(await screen.findByText('Senior Engineer')).toBeInTheDocument();
   });
@@ -296,14 +289,9 @@ describe('GenerateWorkspacePage', () => {
 
     renderWithProviders(<GenerateWorkspacePage />);
 
-    // Appears twice: once in the editable workspace list, once in the
-    // read-only PDF preview pane, which mirrors the same selected items.
     expect(screen.getAllByText('Shipped the thing').length).toBeGreaterThan(0);
   });
 
-  // T036 / SC-006: toggling an item previews the change through a PATCH
-  // mutation, never through the start-a-run mutation — toggling must not
-  // cost a model call.
   it('toggling an item mutates the item, not a new generation run', async () => {
     setup();
     const toggleMutate = vi.fn();
@@ -323,10 +311,6 @@ describe('GenerateWorkspacePage', () => {
     expect(startMutate).not.toHaveBeenCalled();
   });
 
-  // T057: a run with suggestions produces zero selected AI items until the
-  // user acts (FR-013/SC-004) — the checkbox for an "ai" item starts
-  // unchecked, and including it keeps the "AI · unverified" badge rather
-  // than swapping it for the profile badge.
   it('renders AI suggestions unselected by default and keeps their badge once included', async () => {
     setup();
     const toggleMutate = vi.fn();
@@ -358,12 +342,10 @@ describe('GenerateWorkspacePage', () => {
     await user.click(checkbox);
 
     expect(toggleMutate).toHaveBeenCalledWith({ itemId: 'item-ai-1', selected: true });
-    // The badge is a property of origin, not of selection — it survives
-    // inclusion (FR-014).
+
     expect(suggestionRow.querySelector('[data-badge="origin-ai-unverified"]')).not.toBeNull();
   });
-  // T075 / SC-004: the user generates and exports without touching a single
-  // suggestion. Nothing AI-written is included, so nothing AI-written ships.
+
   it('exports zero AI-origin items when the user acts on no suggestion', async () => {
     setup();
     const exportMutate = vi.fn();
@@ -380,21 +362,16 @@ describe('GenerateWorkspacePage', () => {
     const user = userEvent.setup();
     renderWithProviders(<GenerateWorkspacePage />);
 
-    // Untouched: the suggestion is present and not included.
     const suggestionRow = screen.getByText('Led the migration to a service mesh').closest('li')!;
     expect((suggestionRow.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(false);
 
     await user.click(screen.getByRole('button', { name: /export pdf/i }));
 
     expect(exportMutate).toHaveBeenCalledTimes(1);
-    // What the export ships is what is selected, and no selected item is
-    // AI-origin — the same fact the pre-export unverified-content warning
-    // reports, so its absence is the assertion.
+
     expect(screen.queryByText(/AI-written item/i)).not.toBeInTheDocument();
   });
 
-  // T073: the warnings a user sees before exporting — an emptied section, and
-  // AI-written content they chose to include.
   it('warns before export about empty sections and included AI content', () => {
     setup();
     window.history.pushState({}, '', '/generate?jobId=job-1&runId=run-1');
@@ -411,8 +388,6 @@ describe('GenerateWorkspacePage', () => {
     expect(screen.getByText(/AI-written item/i)).toBeInTheDocument();
   });
 
-  // T072: an over-budget export is reported with named candidates, and the
-  // report offers no way to apply them (FR-019).
   it('reports an overflow with named candidates and no apply control', () => {
     setup();
     mockedUseExportGenerationRun.mockReturnValue({
@@ -439,8 +414,6 @@ describe('GenerateWorkspacePage', () => {
     expect(report.querySelector('button')).toBeNull();
   });
 
-  // Failed sections get an inline retry control now that the standalone
-  // right-rail "Run controls" tile is gone.
   it('offers a per-section retry for a failed section', async () => {
     setup();
     const rerunMutate = vi.fn();

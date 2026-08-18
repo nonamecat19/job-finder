@@ -1,11 +1,4 @@
-// assetCache.ts — a Cache-API-backed fetch so the ~29 MB typstwasm binary and
-// its ~59 MB of fonts download once per browser, not once per preview
-// (specs/046-real-resume-preview/research.md, Decision 2 / Open risk).
-//
-// Every asset lives under /wasm/, which is never part of the dashboard's own
-// build output (see apps/dashboard/public/wasm/README.md) — a dedicated cache
-// name keyed to that prefix means clearing it can never touch anything the
-// app itself needs to keep working offline.
+
 
 const CACHE_NAME = "resume-preview-wasm-v1";
 
@@ -14,13 +7,11 @@ async function openCache(): Promise<Cache | null> {
   try {
     return await caches.open(CACHE_NAME);
   } catch {
-    // Cache API can throw in some private-browsing modes; fall back to an
-    // uncached fetch rather than failing the whole preview pipeline over it.
+
     return null;
   }
 }
 
-/** Fetches `url`, serving from the Cache API on a hit and populating it on a miss. */
 export async function cachedFetch(url: string): Promise<Response> {
   const cache = await openCache();
   if (cache) {

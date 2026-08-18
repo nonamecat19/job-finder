@@ -17,34 +17,15 @@ import BlockContextMenu, { type BlockMenuAction } from './BlockContextMenu';
 
 export interface PdfPreviewCanvasProps {
   pdfBytes: Uint8Array;
-  /** The run's included items, in document order — what the PDF's text is matched against. */
+
   items: MatchableItem[];
-  /**
-   * Drops an item from the run's selection — the same toggle the list's
-   * checkbox drives, offered on the block itself. Absent means the preview is
-   * read-only and the menu offers no such action.
-   */
+
   onRemoveItem?: (itemId: string) => void;
-  /**
-   * Reorders a block's items from a drag dropped on the preview itself —
-   * dragging one achievement of an experience entry onto another. Absent
-   * means the preview is read-only and items aren't draggable. Only
-   * multi-item blocks (an experience entry) have anything to reorder; a
-   * project, skill group, certification or education entry is already a
-   * block of one.
-   */
+
   onReorder?: (sectionId: string, itemIds: string[]) => void;
-  /**
-   * The rendered page's width/height, reported once it is known, so the pane
-   * around this viewer can take the sheet's own proportions (A4, Letter —
-   * whatever the template actually produced).
-   */
+
   onPageAspect?: (aspect: number) => void;
-  /**
-   * How many pages this render came out to, reported once the document is
-   * parsed, so the pane can show it against the shape's page target while the
-   * user edits — not only after an export is blocked.
-   */
+
   onPageCount?: (count: number) => void;
 }
 
@@ -54,12 +35,6 @@ interface RenderedPage {
   height: number;
 }
 
-// PdfPreviewCanvas draws the preview PDF itself, page by page, instead of
-// handing it to the browser's PDF plugin in an <iframe>. That costs a little
-// machinery (pdf.js, a worker, a render pass per zoom change) and buys the
-// thing an iframe can never give: the document's text layer, and with it the
-// ability to say which item on the left produced which block of the page —
-// so hovering either side lights up and scrolls to the other.
 export default function PdfPreviewCanvas({
   pdfBytes,
   items,
@@ -84,26 +59,18 @@ export default function PdfPreviewCanvas({
   const [menu, setMenu] = useState<{
     key: string;
     itemIds: string[];
-    /** Set when the menu was opened on one item rather than on the block. */
+
     itemId?: string;
     x: number;
     y: number;
   } | null>(null);
 
   const blocks = useMemo(() => mapItemsToBlocks(pageText, items), [pageText, items]);
-  // Which block a hovered item belongs to, taken from the run's own structure
-  // rather than from what matched: a bullet whose text the template reworded
-  // beyond recognition still belongs to its entry, and hovering it should
-  // still light that entry up.
+
   const blockKeyByItem = useMemo(() => new Map(items.map((i) => [i.id, i.blockKey])), [items]);
-  // The PDF side names the block it is on directly; the list side names only
-  // an item, and the block it belongs to is looked up.
+
   const hoveredKey = hover?.blockKey ?? (hover?.itemId ? blockKeyByItem.get(hover.itemId) : undefined);
 
-  // Fit-the-whole-page is the baseline — a resume is judged as a page, and the
-  // pane around this viewer is already cut to the sheet's shape, so one sheet
-  // lands in it end to end. `zoom` multiplies that; the fit control toggles up
-  // to fit-width, which is a ratio of the same baseline.
   const first = pages[0];
   const fitWidth = first && container.width > 0 ? (container.width - PAGE_GUTTER * 2) / first.width : 0;
   const fitPage =
@@ -121,9 +88,6 @@ export default function PdfPreviewCanvas({
     return () => observer.disconnect();
   }, []);
 
-  // Load the document and read its geometry + text layer once per render of
-  // the pipeline. Cancelled by `stale` rather than by destroying eagerly: the
-  // load is async and a newer PDF may well arrive mid-flight.
   useEffect(() => {
     let stale = false;
 
@@ -132,8 +96,7 @@ export default function PdfPreviewCanvas({
       setLoadError(null);
       try {
         const pdfjs = await loadPdfjs();
-        // getDocument transfers the buffer to the worker; hand it a copy so
-        // the scheduler's cached bytes stay usable for the next render.
+
         const task = pdfjs.getDocument({ data: pdfBytes.slice() });
         const doc = await task.promise;
         if (stale) {
@@ -171,8 +134,7 @@ export default function PdfPreviewCanvas({
     return () => {
       stale = true;
     };
-    // onPageAspect/onPageCount are reports, not inputs: re-running this load because a
-    // callback identity changed would re-parse the document for nothing.
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfBytes]);
 
@@ -184,8 +146,6 @@ export default function PdfPreviewCanvas({
     };
   }, []);
 
-  // Paint every page at the current scale. Render tasks are cancelled on
-  // re-entry so a zoom drag doesn't queue a backlog of stale paints.
   useEffect(() => {
     const doc = docRef.current;
     if (!doc || scale <= 0 || pages.length === 0) return;
@@ -209,8 +169,7 @@ export default function PdfPreviewCanvas({
         try {
           await task.promise;
         } catch {
-          // A cancelled render is the expected outcome of a zoom/resize
-          // landing mid-paint, not an error worth surfacing.
+          ;
         }
         if (stale) return;
       }
@@ -222,26 +181,18 @@ export default function PdfPreviewCanvas({
     };
   }, [pages, scale]);
 
-  // Follow the left pane: hovering an item there scrolls its block into view
-  // here. The reverse direction is ItemRow's job.
   useEffect(() => {
     if (!hover || hover.source !== 'list') return;
     const block = blocks.find((b) => b.key === hoveredKey);
     const container = scrollRef.current;
     if (!block || !container) return;
-    // Scroll to the top of the *page* the block starts on, not to the block
-    // itself: aligning the block's own top can leave the reader looking at
-    // the bottom half of the page before it and the top half of this one. A
-    // clean page boundary reads as "page 2", not as a seam between two pages.
+
     const pageIndex = block.rects[0]?.pageIndex;
     if (pageIndex === undefined) return;
     const target = container.querySelector<HTMLElement>(`[data-page-index="${pageIndex}"]`);
     target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, [hover, hoveredKey, blocks]);
 
-  // The two levels of the same gesture: the pointer over an entry's heading or
-  // the gap between its bullets means the entry; over one of its lines it
-  // means that line, and the entry stays lit underneath it.
   const onEnterBlock = useCallback(
     (block: PreviewBlock) => setHover({ blockKey: block.key, source: 'pdf' }),
     [setHover],
@@ -251,11 +202,6 @@ export default function PdfPreviewCanvas({
     [setHover],
   );
 
-  // Dragging one achievement of an experience entry onto another reorders
-  // them, same mutation the left pane's drag handle drives — this is just a
-  // second grip on the same list. Native HTML5 drag-and-drop rather than
-  // dnd-kit: the item boxes are absolutely positioned per rendered page, not
-  // DOM list children a sortable context can measure.
   const dragItemRef = useRef<{ blockKey: string; itemId: string } | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
@@ -286,14 +232,9 @@ export default function PdfPreviewCanvas({
     setDropTargetId(null);
   }, []);
 
-  // Right-clicking acts on whatever the pointer is actually on — one bullet
-  // inside an entry, or the entry as a whole. The page itself is a rendered
-  // document with nothing to offer a context menu, so anywhere outside a block
-  // the browser's own menu stands.
   const onContextMenu = useCallback((event: React.MouseEvent, block: PreviewBlock, itemId?: string) => {
     event.preventDefault();
-    // The item overlay sits inside the block's, so without this the block
-    // would open its own menu right after.
+
     event.stopPropagation();
     setMenu({ key: block.key, itemIds: block.itemIds, itemId, x: event.clientX, y: event.clientY });
   }, []);
@@ -311,8 +252,7 @@ export default function PdfPreviewCanvas({
         key: 'reveal',
         label: 'Show in list',
         icon: <ListTree className="h-3.5 w-3.5" />,
-        // The list follows a 'pdf'-sourced hover (ItemRow), which is exactly
-        // "scroll this item into view over there".
+
         onSelect: () => setHover({ itemId: targetIds[0], blockKey: menu.key, source: 'pdf' }),
       },
     ];
@@ -332,8 +272,7 @@ export default function PdfPreviewCanvas({
         danger: true,
         onSelect: () => targetIds.forEach((id) => onRemoveItem(id)),
       });
-      // Offered alongside, not instead: right-clicking a bullet is the obvious
-      // way to reach for its entry too, and the count says what that costs.
+
       if (onItem && count > 1) {
         actions.push({
           key: 'remove-block',
@@ -361,8 +300,7 @@ export default function PdfPreviewCanvas({
       <div
         ref={scrollRef}
         data-testid="resume-preview"
-        // Backstop: whatever the overlays inside did or failed to do, a pointer
-        // that has left the preview entirely is not hovering anything in it.
+
         onMouseLeave={() => {
           if (hover?.source === 'pdf') setHover(null);
         }}
@@ -388,29 +326,16 @@ export default function PdfPreviewCanvas({
                 }}
                 data-testid="resume-preview-page"
                 data-dark={resumeDark ? 'true' : undefined}
-                // A dark sheet is the page's luminance flipped — which turns
-                // its white stock pure black. Screening the flipped canvas
-                // over the sheet colour keeps the light text but lets the
-                // design system's dark surface show through underneath,
-                // instead of a black rectangle nothing else in the UI uses.
+
                 className={cn('block h-full w-full', resumeDark && 'mix-blend-screen')}
                 style={resumeDark ? { filter: RESUME_DARK_FILTER } : undefined}
               />
-              {/* Two nested levels of hover target. The outer one is the block
-                  — a whole experience entry, a project, the skills list — and
-                  inside it sits one target per item, so the pointer selects
-                  the entry from its heading or the space between its bullets,
-                  and the individual bullet from the bullet itself. Both are
-                  single boxes rather than one rectangle per line: a per-line
-                  outline reads as underlined text, and its inter-line gaps
-                  make the hover flicker as the pointer crosses them. */}
+              {}
               {blocks.map((block) => {
                 const box = unionOnPage(block.rects, page.pageIndex);
                 if (!box) return null;
                 const blockLit = hoveredKey === block.key || menu?.key === block.key;
-                // A block of one — a project, a skill group, the summary — has
-                // no inside to point at, so it is the item: one target, one
-                // ring, at item strength.
+
                 const only = block.items.length === 1 ? block.items[0].itemId : null;
                 const onlyLit = !!only && (hover?.itemId === only || menu?.itemId === only);
                 return (
@@ -424,8 +349,7 @@ export default function PdfPreviewCanvas({
                     onContextMenu={(e) => onContextMenu(e, block, only ?? undefined)}
                     className={cn(
                       'absolute rounded-[5px] transition-colors duration-[120ms]',
-                      // An open menu keeps its block lit even though the
-                      // pointer has left it for the menu itself.
+
                       only
                         ? onlyLit
                           ? 'bg-accent/25 ring-1 ring-accent/60'
@@ -436,12 +360,7 @@ export default function PdfPreviewCanvas({
                     )}
                     style={boxStyle(box, BLOCK_BLEED)}
                   >
-                    {/* The block's own coordinate system, inset back out of
-                        its bleed: item boxes are a fraction of the block's
-                        box, and must stay strictly inside the element that
-                        owns the hover — an item that stuck out past its
-                        block's edge could be left while the block was already
-                        left, and the hover would never be cleared. */}
+                    {}
                     <span className="pointer-events-none absolute" style={insetStyle(BLOCK_BLEED)}>
                     {(only ? [] : block.items).map((entry) => {
                       const itemBox = unionOnPage(entry.rects, page.pageIndex);
@@ -462,9 +381,7 @@ export default function PdfPreviewCanvas({
                             e.stopPropagation();
                             onEnterItem(block, entry.itemId);
                           }}
-                          // Back out to the block, not to nothing: the pointer
-                          // is still inside the entry. Leaving the entry too
-                          // fires the block's own handler right after.
+
                           onMouseLeave={(e) => {
                             e.stopPropagation();
                             onEnterBlock(block);
@@ -517,16 +434,8 @@ export default function PdfPreviewCanvas({
   );
 }
 
-// Enough of a margin for the sheet's shadow to read as a sheet, and no more —
-// the page is meant to fill the pane it was given.
 const PAGE_GUTTER = 8;
 
-// Dark resume previews are an inversion of the painted page rather than a
-// re-render: the PDF is a fixed document, so the only way to darken it here is
-// to flip its luminance. The hue-rotate puts colours back where they started —
-// without it, a blue heading comes out orange. Applied to the canvas alone, so
-// the highlight overlays layered above it keep their accent colour.
-/** Rectangles on one page, unioned into the single box that covers them. */
 function unionOnPage(all: BlockRect[], pageIndex: number): NormRect | null {
   const rects = all.filter((r) => r.pageIndex === pageIndex);
   if (rects.length === 0) return null;
@@ -537,7 +446,6 @@ function unionOnPage(all: BlockRect[], pageIndex: number): NormRect | null {
   return { x, y, w: right - x, h: bottom - y };
 }
 
-/** Re-expresses `box` as a fraction of `parent`, for a nested absolute layout. */
 function relativeTo(box: NormRect, parent: NormRect): NormRect {
   return {
     x: parent.w > 0 ? (box.x - parent.x) / parent.w : 0,
@@ -547,9 +455,6 @@ function relativeTo(box: NormRect, parent: NormRect): NormRect {
   };
 }
 
-// A hair of slack so a highlight covers its glyphs' ascenders and descenders
-// rather than clipping them. The block's is the larger of the two so an item's
-// box can never poke out of the block that contains it.
 const BLOCK_BLEED = 5;
 const ITEM_BLEED = 3;
 
@@ -557,7 +462,6 @@ function insetStyle(inset: number): React.CSSProperties {
   return { left: inset, top: inset, right: inset, bottom: inset };
 }
 
-/** `bleed` is the slack, in pixels, added on every side of the box. */
 function boxStyle(box: NormRect, bleed: number): React.CSSProperties {
   return {
     left: `calc(${box.x * 100}% - ${bleed}px)`,

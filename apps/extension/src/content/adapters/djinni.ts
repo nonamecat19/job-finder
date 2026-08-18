@@ -4,13 +4,6 @@ import { isVisible, queryFirst, textOf } from '../dom';
 import { findByText, guessApplyForm, guessFileInput, guessLetterField } from './generic';
 import type { SiteAdapter } from './types';
 
-/**
- * djinni.co.
- *
- * The apply form lives on the vacancy page behind an "Apply"/"Відгукнутися"
- * button and holds a message textarea plus a CV file input. Selector chains end
- * in the structural guesses because djinni ships hashed utility classes.
- */
 const FORM = ['#apply-form', 'form[action*="apply"]', 'form#job-apply', 'form[id*="apply"]'];
 const FILE = [
   'input[type="file"][name*="file"]',

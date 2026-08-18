@@ -7,9 +7,6 @@ vi.mock('../../../lib/api', () => ({
   api: { jobs: { get: vi.fn() } },
 }));
 
-// The mock's read-only top bar (Resume Generation.dc.html): the vacancy a
-// run is (or will be) started against, shown here and edited only from the
-// job itself.
 describe('VacancySummaryBar', () => {
   beforeEach(() => vi.clearAllMocks());
 

@@ -2,8 +2,7 @@ import { canonicalizeVacancyUrl } from './url';
 
 const KEY = 'urlToJob';
 const HIT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-// A miss is cached only briefly: the usual fix is "add it in the dashboard",
-// and the user expects reopening the popup to notice.
+
 const MISS_TTL_MS = 60 * 1000;
 
 type Entry = { jobId: string | null; at: number };
@@ -14,7 +13,6 @@ async function read(): Promise<Table> {
   return stored[KEY] ?? {};
 }
 
-/** undefined = nothing cached, null = cached miss. */
 export async function getCachedJobId(url: string): Promise<string | null | undefined> {
   const table = await read();
   const entry = table[canonicalizeVacancyUrl(url)];

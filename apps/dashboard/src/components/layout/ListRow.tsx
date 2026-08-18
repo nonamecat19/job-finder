@@ -11,10 +11,6 @@ export type ListRowProps = {
   className?: string;
 };
 
-/**
- * A row inside a scrolling tile. Rows sit flush with no dividers between
- * them; selection is a --surface-tertiary fill, never an accent border.
- */
 export function ListRow({ leading, title, meta, aside, selected = false, onClick, className }: ListRowProps) {
   const interactive = typeof onClick === 'function';
 

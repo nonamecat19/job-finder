@@ -56,9 +56,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    // Mount-time fetch: the popup has no props and no external store to read
-    // from, so querying the tab and the API on mount is the whole flow. The
-    // rule cannot see that every setState here happens after an await.
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);

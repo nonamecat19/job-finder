@@ -37,8 +37,6 @@ function SignalRow({ label, value, note }: SignalRowProps) {
 export default function GhostSignalPanel({ jobId, ghostSignal }: { jobId: string; ghostSignal?: JobSignalDto | null }) {
   const refresh = useRefreshGhostScore(jobId);
 
-  // Story 2, scenario 4: never-scored -> an explicit "not scored yet" state,
-  // never an empty or zero-valued panel.
   if (!ghostSignal) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-2">

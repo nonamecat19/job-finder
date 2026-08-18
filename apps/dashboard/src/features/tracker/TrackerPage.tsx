@@ -27,8 +27,6 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   rejected: 'rejected',
 };
 
-// Only the terminal outcomes get a coloured chip; everything mid-pipeline
-// stays neutral so the one accent blue keeps carrying the page.
 const STATUS_TONE: Partial<Record<ApplicationStatus, 'green' | 'red'>> = {
   offer: 'green',
   rejected: 'red',

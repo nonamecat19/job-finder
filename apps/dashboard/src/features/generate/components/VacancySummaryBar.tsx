@@ -4,10 +4,6 @@ import { IconTile } from '../../../components/layout';
 import { Chip, SkeletonBlock } from '../../../components/ui';
 import { useJobDetail } from '../../job-detail/hooks';
 
-// The mock's read-only top bar: the vacancy a run is (or will be) started
-// against, shown here and edited only from the job itself. Every run is
-// job-backed now, so this always renders from a jobId — before a run exists
-// (picked from Feed/Job Detail) and unchanged once it does.
 export default function VacancySummaryBar({ jobId, bare = false }: { jobId: string; bare?: boolean }) {
   const { data: job, isLoading } = useJobDetail(jobId);
 

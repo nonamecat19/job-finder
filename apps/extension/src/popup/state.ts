@@ -23,7 +23,6 @@ export function splitDocuments(docs: DocumentSummary[]): { resumes: DocumentSumm
   };
 }
 
-/** Attaching needs a form on screen, a file field in it, and a document to attach. */
 export function canAttachFile(caps: Capabilities, resumes: DocumentSummary[]): boolean {
   return caps.formOpen && caps.hasFileInput && resumes.length > 0;
 }
@@ -36,10 +35,6 @@ export function shouldOfferOpenForm(caps: Capabilities): boolean {
   return !caps.formOpen && caps.canOpenForm;
 }
 
-/**
- * Says which capability is missing rather than failing generically, so a broken
- * selector is reportable instead of mysterious.
- */
 export function blockedReason(caps: Capabilities, resumes: DocumentSummary[], letters: DocumentSummary[]): string | null {
   if (caps.adapter === null) return 'This site is not supported yet.';
   if (caps.requiresLogin) return 'Log in to this job board first — the apply form is behind a login.';

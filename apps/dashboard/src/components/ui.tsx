@@ -4,7 +4,6 @@ import { cn } from '../lib/utils';
 
 export { ScoreBadge, GhostBadge, HealthDot } from './badges';
 
-// Colour, border and shadow only — nothing scales or bounces.
 const TRANSITION =
   'transition-[color,background-color,border-color,box-shadow] duration-[160ms] ease-[cubic-bezier(0.2,0,0.2,1)]';
 const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent-soft';

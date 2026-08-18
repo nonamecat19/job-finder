@@ -7,33 +7,19 @@ import ItemRow from './ItemRow';
 import { usePreviewHighlight } from '../preview/highlight';
 import { cn, scrollIntoViewWithOffset } from '../../../lib/utils';
 
-/** Keeps the scrolled-to header clear of the scroll pane's own top edge. */
 const SCROLL_OFFSET = 24;
 
 export interface WorkEntryBlockProps {
-  section: GenerationSectionDto; // kind === 'experience'
+  section: GenerationSectionDto;
   onToggle: (itemId: string, selected: boolean) => void;
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
-  /** Present so an included (selected) origin="ai" item can be edited in place (T056, FR-015). */
+
   onEditText?: (itemId: string, text: string) => void;
-  /** Present so a selected origin="ai" achievement can offer alternate phrasings. */
+
   onRewrite?: (itemId: string) => Promise<string[]>;
   onToggleEnabled: (sectionId: string, enabled: boolean) => void;
 }
 
-// T029/T048: one work entry — its label, the profile's ranked achievements in
-// `position` order, and an explicit empty state when the master profile has
-// zero bullets for this role. Never a fabricated bullet standing in for one
-// — an empty section renders as empty, not as invented content.
-//
-// The ranked/unranked visual split (resume-generation.md § 2b): the ranking
-// stage selects the top min(N, A) of its K candidates, leaves the rest of the
-// K ranking unselected, and appends any bullet beyond K in master order,
-// unselected — all already delivered in `position` order by the seeding
-// (SeedRankedItems/SeedFromMaster). The client's only observable signal for
-// "included vs not" is `selected`, so that is the divider: selected items
-// first (the resume as it stands), then everything else the user can
-// promote — one continuous, draggable list, not two separate ones.
 export default function WorkEntryBlock({
   section,
   onToggle,
@@ -45,12 +31,6 @@ export default function WorkEntryBlock({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const { hover, setHover } = usePreviewHighlight();
 
-  // Cross-pane highlighting: any hover that started in the PDF over this
-  // entry — its heading, the gap between bullets, or one achievement — scrolls
-  // the entry's top into view here rather than the single achievement, so the
-  // reader always lands on the role being pointed at, not on one line of it.
-  // Skipped when the achievement is already on screen, so a hover that stays
-  // inside the visible list never jitters it.
   const containerRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -62,10 +42,6 @@ export default function WorkEntryBlock({
     if (headerRef.current) scrollIntoViewWithOffset(headerRef.current, SCROLL_OFFSET);
   }, [hover, section.id]);
 
-  // T055: the client groups items by origin. A suggestion is never
-  // interleaved with the profile's own ranked achievements — it renders in
-  // its own visually distinct group, badged "AI · unverified" by ItemRow's
-  // OriginBadge, off (unselected) by default (FR-013).
   const profileItems = section.items.filter((it) => it.origin === 'profile');
   const suggestionItems = section.items.filter((it) => it.origin === 'ai');
   const selectedItems = profileItems.filter((it) => it.selected);
@@ -146,11 +122,7 @@ export default function WorkEntryBlock({
         </DndContext>
       )}
 
-      {/* T055: the AI-suggested group — visually distinct from the profile's
-          own achievements above, each item carrying ItemRow's "AI ·
-          unverified" badge, unselected until the user acts (FR-013). A run
-          that produced none still renders this explicit empty state rather
-          than a missing or broken section. */}
+      {}
       <div className="mt-3 border-t border-border pt-2" data-testid="suggestion-group">
         <div className="mb-1.5 px-2 font-mono text-[11px] font-medium text-faint uppercase tracking-[0.06em]">
           AI suggestions
@@ -177,7 +149,6 @@ export default function WorkEntryBlock({
   );
 }
 
-/** Whether `el` is fully within the visible area of its nearest scrolling ancestor. */
 function isVisibleInScrollParent(el: HTMLElement): boolean {
   let parent = el.parentElement;
   while (parent) {

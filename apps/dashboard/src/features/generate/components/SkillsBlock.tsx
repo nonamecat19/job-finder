@@ -6,22 +6,16 @@ import { cn } from '../../../lib/utils';
 import ItemRow from './ItemRow';
 
 export interface SkillsBlockProps {
-  section: GenerationSectionDto; // kind === 'skills'
+  section: GenerationSectionDto;
   onToggle: (itemId: string, selected: boolean) => void;
   onReorder: (sectionId: string, orderedItemIds: string[]) => void;
   onToggleEnabled: (sectionId: string, enabled: boolean) => void;
-  /** Present so an included (selected) origin="ai" skill can be edited in place (T056, FR-015). */
+
   onEditText?: (itemId: string, text: string) => void;
-  /** Per-skill inclusion inside a profile skill group: the whole drop set. */
+
   onDropEntries?: (itemId: string, droppedEntries: string[]) => void;
 }
 
-// T031/T063: skill-group items with the same toggle affordance as
-// achievements, grouped exactly the way WorkEntryBlock groups its items so the
-// two surfaces read identically — the profile's own groups first (selected,
-// then the ones skillsMaxGroups left out, which are shown unselected rather
-// than removed, FR-011), then the AI-suggested skills in their own visually
-// distinct group, off by default (FR-013).
 export default function SkillsBlock({
   section,
   onToggle,

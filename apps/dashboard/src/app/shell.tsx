@@ -22,8 +22,6 @@ const TRANSITION = 'transition-[color,background-color,border-color,box-shadow] 
 
 type NavItem = { to: string; label: string; icon: LucideIcon; tint: IconTileTint };
 
-/** One tint per destination, assigned once and kept — the tints are how the nav
-    reads at a glance, so they never rotate with state. */
 const navItems: NavItem[] = [
   { to: '/', label: 'Feed', icon: Rss, tint: 'violet' },
   { to: '/tracker', label: 'Tracker', icon: ClipboardList, tint: 'blue' },
@@ -43,8 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen gap-3 p-3 md:p-3">
-        {/* One sidebar: a floating white nav panel, per the design system's own
-            shell. The canvas shows around it — that gap is the composition. */}
+        {}
         {!isMobile && (
           <aside className="sticky top-3 hidden h-[calc(100vh-1.5rem)] w-[var(--width-sidebar)] shrink-0 flex-col rounded-2xl border border-border bg-surface px-[1.125rem] py-5 shadow-tile md:flex">
             <Brand />

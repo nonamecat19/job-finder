@@ -5,8 +5,7 @@ import { render, screen } from '../../../../test/test-utils';
 import { NormalEntryForm } from './NormalEntryForm';
 
 describe('NormalEntryForm project density', () => {
-  // The knob is a projects-section decision. A "normal" entry elsewhere has no
-  // density to pick, so the control does not exist there.
+
   it('does not show the density picker outside the projects section', () => {
     render(<NormalEntryForm sectionName="talks" entry={{ name: 'A talk' }} onChange={vi.fn()} />);
 
