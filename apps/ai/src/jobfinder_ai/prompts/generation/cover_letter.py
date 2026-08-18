@@ -10,12 +10,10 @@ from __future__ import annotations
 
 SYSTEM_PROMPT = "You write concise, concrete, honest cover letters."
 
-# Verbatim port of service.go's strutil.Truncate call sites.
 PROFILE_TRUNCATE_CHARS = 8000
 EXTRA_NOTES_TRUNCATE_CHARS = 1500
 VACANCY_TRUNCATE_CHARS = 4000
 
-# Verbatim port of service.go's `coverLetterMaxTokens` (033 FR-012).
 MAX_TOKENS = 1024
 
 

@@ -16,9 +16,6 @@ from pydantic import SecretStr
 
 from jobfinder_ai.settings import Settings, get_settings
 
-# gateway/config.yaml pins `request_timeout: 60` per attempt. Ours must clear
-# that with margin (C7-4) so the client never abandons a call the gateway is
-# still serving.
 REQUEST_TIMEOUT_SECONDS: float = 90.0
 
 

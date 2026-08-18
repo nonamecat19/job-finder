@@ -87,9 +87,6 @@ def test_register_rejects_duplicate_name() -> None:
         registry.register(_capability(task_key="match"))
 
 
-# --- T131: a queued (event-transport) capability does not exist through /invoke ---
-
-
 def test_resolve_for_invoke_returns_none_for_event_transport_capability() -> None:
     registry = CapabilityRegistry()
     registry.register(_capability(transport="event"))
@@ -107,9 +104,6 @@ def test_resolve_for_invoke_returns_the_capability_for_http_transport() -> None:
 def test_resolve_for_invoke_returns_none_for_unknown_name() -> None:
     registry = CapabilityRegistry()
     assert registry.resolve_for_invoke("does-not-exist") is None
-
-
-# --- T080: definitions are in-repo only, never fetched at runtime (FR-015a, C6-2) ---
 
 
 def test_registry_module_has_no_network_or_database_imports() -> None:
@@ -130,9 +124,3 @@ def test_registry_module_has_no_network_or_database_imports() -> None:
     )
     for name in forbidden:
         assert name not in source, f"registry.py must not import {name!r} — in-repo only"
-
-
-# --- T081/T083 (US2 scenario 3): an invalid definition fails at registration
-# (startup), never at request time — every test_register_rejects_* test above
-# already proves this: each calls register() directly and asserts it raises
-# before any capability could ever be looked up or invoked. ---

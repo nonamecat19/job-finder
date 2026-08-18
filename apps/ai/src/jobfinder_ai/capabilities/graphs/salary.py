@@ -53,22 +53,12 @@ from jobfinder_ai.prompts import salary as prompts
 
 TASK_KEY = "salary"
 
-# The floor is `toolloop.DefaultMaxRounds` (bounds.go) — C4-5 requires at
-# least this many, never fewer.
 MAX_TOOL_ROUNDS = 4
-# `toolloop.DefaultPerToolTimeout`.
 PER_TOOL_TIMEOUT_SECONDS = 10.0
-# `toolloop.DefaultMaxResultBytes`.
 MAX_RESULT_BYTES = 32 * 1024
-# `service.go`'s `salaryExchangeTimeout` — the whole-run bound the Go call
-# site applies when its caller supplied no deadline of its own (C4-4).
 WHOLE_RUN_TIMEOUT_SECONDS = 4 * 60.0
-# `MAX_TOOL_ROUNDS` agent+tools round-trips plus one `finalize` step — see
-# the module docstring for why this exact number is the recursion_limit.
 MAX_NODES = 2 * MAX_TOOL_ROUNDS
-# `MAX_TOOL_ROUNDS` agent calls plus one terminal call.
 MAX_MODEL_CALLS = MAX_TOOL_ROUNDS + 1
-# `port.go`'s `structuredRetries`, same as `ghost.MAX_EXTRA_ATTEMPTS`.
 MAX_EXTRA_ATTEMPTS = 2
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
@@ -153,8 +143,6 @@ async def _agent_node(
     state: _SalaryState, *, tools: list[Any], trace_id: str | None
 ) -> dict[str, Any]:
     round_ = state["round"]
-    # Round one asks for a tool call; later rounds allow one — the whole of
-    # the not-tool-capable detection (loop.go).
     choice = "required" if round_ == 1 else "auto"
     model = gateway.chat_model(TASK_KEY)
     bind_kwargs: dict[str, Any] = {"tool_choice": choice}
@@ -164,7 +152,7 @@ async def _agent_node(
     reply = await bound.ainvoke(
         state["messages"], config={"callbacks": [tracing.callback_handler()]}
     )
-    assert isinstance(reply, AIMessage)  # ChatOpenAI always returns AIMessage
+    assert isinstance(reply, AIMessage)
 
     usage = _usage_metadata(reply)
     new_input = state["input_tokens"] + (usage.get("input_tokens") or 0)

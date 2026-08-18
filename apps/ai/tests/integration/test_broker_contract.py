@@ -54,19 +54,10 @@ from jobfinder_ai.contracts.usage import Usage
 from jobfinder_ai.failures import CapabilityError
 from jobfinder_ai.messaging import consumers
 
-# These tests need a Docker daemon. They fail — never skip — without one.
 pytestmark = pytest.mark.docker
 
 MESSAGE_TIMEOUT_SECONDS = 20.0
 
-# ---------------------------------------------------------------------------
-# The Go side's topology, mirrored from apps/api/internal/events/topology.go
-# verbatim (names, types, durability, arguments, bindings). This is the
-# fixture under test as much as the consumer is: if `topology.go` changes and
-# this copy does not, the compatibility tests below stop meaning anything —
-# but they also start failing, because the real consumer would then be
-# attaching to a topology the Go side no longer declares.
-# ---------------------------------------------------------------------------
 
 WORK_EXCHANGE = "jobfinder.work"
 DELAY_EXCHANGE = "jobfinder.delay"
@@ -83,7 +74,6 @@ RETRY_RUNGS: tuple[tuple[str, int], ...] = (
     ("10m", 600_000),
 )
 
-# The four work types this service actually subscribes to (consumers.py).
 CONSUMED_WORK_TYPES = ("ghost", "match", "generate", "salary")
 
 
@@ -126,13 +116,6 @@ async def _declare_go_topology(channel: AbstractChannel) -> None:
 
     result_queue = await channel.declare_queue(RESULT_QUEUE, durable=True, arguments=quorum)
     await result_queue.bind(RESULT_EXCHANGE, routing_key="*.completed")
-
-
-# ---------------------------------------------------------------------------
-# Stubs for the two boundaries this suite is not about: the LLM call and the
-# Langfuse collector. Both follow the pattern established in
-# tests/integration/test_tracing.py.
-# ---------------------------------------------------------------------------
 
 
 class _FakeSpan:
@@ -202,13 +185,6 @@ def _stub_ghost_classified_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ghost, "run", fake_run)
 
 
-# ---------------------------------------------------------------------------
-# Wire shapes, built the way the Go publisher builds them: the envelope's
-# fields merged flat with the payload's, never nested (E2, consumers.py's
-# module docstring).
-# ---------------------------------------------------------------------------
-
-
 def _ghost_requested_body(**overrides: Any) -> dict[str, Any]:
     body: dict[str, Any] = {
         "event_id": str(uuid4()),
@@ -236,11 +212,6 @@ def _ghost_requested_body(**overrides: Any) -> dict[str, Any]:
     }
     body.update(overrides)
     return body
-
-
-# ---------------------------------------------------------------------------
-# Broker plumbing.
-# ---------------------------------------------------------------------------
 
 
 async def _publish_work(channel: AbstractChannel, body: dict[str, Any], routing_key: str) -> None:
@@ -336,11 +307,6 @@ async def _queue_exists(connection: AbstractConnection, name: str) -> bool:
         return True
 
 
-# ---------------------------------------------------------------------------
-# M1-1: the Go side owns the topology; this side only ever asserts it.
-# ---------------------------------------------------------------------------
-
-
 def test_consumers_attach_to_the_topology_the_go_side_declared_first(broker_url: str) -> None:
     """The production order: the Go publisher declares topology at startup
     (M1-1), `wait_for_topology` sees it, and the consumers attach. Every
@@ -360,7 +326,6 @@ def test_consumers_attach_to_the_topology_the_go_side_declared_first(broker_url:
             channel = await connection.channel()
             await _declare_go_topology(channel)
 
-        # Exactly what main.py's lifespan does before the broker starts.
         await consumers.wait_for_topology(broker_url, timeout=10.0, poll_interval=0.2)
 
         broker = await _start_consumers(broker_url)
@@ -368,7 +333,6 @@ def test_consumers_attach_to_the_topology_the_go_side_declared_first(broker_url:
             verify = await aio_pika.connect_robust(broker_url)
             async with verify:
                 channel = await verify.channel()
-                # Idempotent from the Go side's point of view, still.
                 await _declare_go_topology(channel)
                 return {
                     f"work.{work_type}": await _consumer_count(channel, f"work.{work_type}")
@@ -379,7 +343,6 @@ def test_consumers_attach_to_the_topology_the_go_side_declared_first(broker_url:
 
     consumer_counts = asyncio.run(scenario())
 
-    # Attached to the Go-declared queues themselves, not to look-alikes.
     assert consumer_counts == {f"work.{work_type}": 1 for work_type in CONSUMED_WORK_TYPES}
 
 
@@ -418,11 +381,9 @@ def test_starting_the_consumers_against_an_empty_broker_creates_no_topology(
 
     failure, existence = asyncio.run(scenario())
 
-    # Loud, not silent: the service refuses to run without the topology.
     assert isinstance(failure, ChannelNotFoundEntity), f"expected NOT_FOUND, got {failure!r}"
     assert "NOT_FOUND" in str(failure)
 
-    # And nothing at all was created on the way to failing.
     assert existence == dict.fromkeys(existence, False), (
         f"the consumers created topology they must never create: "
         f"{[name for name, exists in existence.items() if exists]}"
@@ -445,7 +406,6 @@ def test_wait_for_topology_returns_once_the_go_side_has_declared_it(broker_url: 
         await consumers.wait_for_topology(broker_url, timeout=10.0, poll_interval=5.0)
         return loop.time() - started
 
-    # Well under one poll_interval: it returned on the first attempt.
     assert asyncio.run(scenario()) < 5.0
 
 
@@ -469,12 +429,8 @@ def test_wait_for_topology_times_out_when_the_backend_never_declares_anything(
 
     elapsed, message = asyncio.run(scenario())
 
-    assert elapsed >= 1.0  # it really waited out its deadline
-    assert elapsed < 10.0  # and did not run away past it
-    # The probe is a work queue, not the work exchange: a passive declare is
-    # not permission-exempt, and the AI account holds no permission at all on
-    # jobfinder.work, so probing it would be refused forever rather than
-    # resolving when the backend declares.
+    assert elapsed >= 1.0
+    assert elapsed < 10.0
     assert consumers._TOPOLOGY_PROBE_QUEUE in message
     assert "NOT_FOUND" in message
 
@@ -510,17 +466,10 @@ def test_consumer_queue_arguments_still_match_the_ones_the_go_side_created(
 
     for queue in queues:
         actual = queue_arguments(queue.name)
-        # `RabbitQueue.arguments` already carries `x-queue-type` for a
-        # `queue_type=QueueType.QUORUM` queue, alongside the DLX pair.
         expected = dict(queue.arguments or {})
         assert actual == expected, (
             f"{queue.name}: broker has {actual}, consumers.py claims {expected}"
         )
-
-
-# ---------------------------------------------------------------------------
-# M5/E2: a real work delivery in, a real result out.
-# ---------------------------------------------------------------------------
 
 
 def test_flat_work_message_is_consumed_and_a_result_reaches_the_backend_queue(
@@ -559,7 +508,6 @@ def test_flat_work_message_is_consumed_and_a_result_reaches_the_backend_queue(
 
     assert routing_key == "ghost.completed"
 
-    # Flat, not nested: no "envelope"/"payload" wrapper anywhere (E2).
     assert "envelope" not in result
     assert "payload" not in result
 
@@ -567,7 +515,6 @@ def test_flat_work_message_is_consumed_and_a_result_reaches_the_backend_queue(
     assert result["schema_version"] == 1
     assert result["status"] == "succeeded"
     assert result["snapshot_hash"] == "sha256:abc"
-    # Correlation identifiers echoed from the request (E1-3, M5-2, M5-3).
     assert result["work_id"] == body["work_id"]
     assert result["correlation_id"] == body["correlation_id"]
     assert result["idempotency_key"] == body["idempotency_key"]
@@ -582,7 +529,6 @@ def test_flat_work_message_is_consumed_and_a_result_reaches_the_backend_queue(
     assert result["usage"] == {"input_tokens": 100, "output_tokens": 20}
     assert "failure" not in result
 
-    # The work delivery was acked, not left unacknowledged or requeued.
     assert work_depth == 0
 
 
@@ -625,11 +571,6 @@ def test_classified_capability_failure_is_acked_and_reported_as_a_failed_result(
     assert dlq_depth == 0
 
 
-# ---------------------------------------------------------------------------
-# M3: a handler that raises never loses the message.
-# ---------------------------------------------------------------------------
-
-
 def test_a_raising_handler_dead_letters_the_delivery_instead_of_losing_it(
     broker_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -663,7 +604,6 @@ def test_a_raising_handler_dead_letters_the_delivery_instead_of_losing_it(
                 dead_lettered = await _await_message(channel, "dlq.ghost")
                 payload = json.loads(dead_lettered.body)
                 assert isinstance(payload, dict)
-                # Give a redelivery loop, if there were one, a chance to show.
                 await asyncio.sleep(1.0)
                 return (
                     payload,
@@ -675,6 +615,6 @@ def test_a_raising_handler_dead_letters_the_delivery_instead_of_losing_it(
 
     dead_lettered, work_depth, result_depth = asyncio.run(scenario())
 
-    assert dead_lettered == body  # byte-for-byte the message that was published
+    assert dead_lettered == body
     assert work_depth == 0
-    assert result_depth == 0  # no result was invented for a message never handled
+    assert result_depth == 0

@@ -30,8 +30,6 @@ from urllib.request import Request, urlopen
 import pytest
 from testcontainers.community.rabbitmq import RabbitMqContainer
 
-# Same image the stack runs (docker-compose.yml): a topology compatibility
-# claim is only worth anything against the broker version in production.
 RABBITMQ_IMAGE = "rabbitmq:4.3.4-management-alpine"
 MANAGEMENT_PORT = 15672
 
@@ -39,8 +37,6 @@ MANAGEMENT_PORT = 15672
 @pytest.fixture(scope="session", name="rabbitmq_container")
 def _rabbitmq_container() -> Iterator[RabbitMqContainer]:
     container = RabbitMqContainer(RABBITMQ_IMAGE)
-    # The management API is how a test reads back the arguments RabbitMQ
-    # actually recorded for a queue; AMQP itself will not report them.
     container.with_exposed_ports(MANAGEMENT_PORT)
     container.start()
     try:
@@ -56,9 +52,7 @@ def _exec(container: RabbitMqContainer, *args: str) -> None:
 
 
 @pytest.fixture(name="vhost")
-def _vhost(
-    rabbitmq_container: RabbitMqContainer, request: pytest.FixtureRequest
-) -> Iterator[str]:
+def _vhost(rabbitmq_container: RabbitMqContainer, request: pytest.FixtureRequest) -> Iterator[str]:
     """A fresh, empty vhost for this test, dropped again afterwards."""
     name = re.sub(r"[^A-Za-z0-9_]", "_", request.node.name)[:200]
     _exec(rabbitmq_container, "rabbitmqctl", "add_vhost", name)
@@ -106,8 +100,7 @@ def _queue_arguments(
 
     def read(queue_name: str) -> dict[str, Any]:
         url = (
-            f"http://{host}:{port}/api/queues/"
-            f"{quote(vhost, safe='')}/{quote(queue_name, safe='')}"
+            f"http://{host}:{port}/api/queues/{quote(vhost, safe='')}/{quote(queue_name, safe='')}"
         )
         request = Request(url, headers={"Authorization": f"Basic {authorization}"})  # noqa: S310
         with urlopen(request, timeout=10) as response:  # noqa: S310

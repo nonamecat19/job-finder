@@ -25,9 +25,6 @@ from jobfinder_ai.prompts import match as prompts
 
 TASK_KEY = "match"
 
-# Ported from port.go's `structuredRetries`: max 2 EXTRA attempts after the
-# first (three attempts total) before failing with category `internal`
-# (C3-4).
 MAX_EXTRA_ATTEMPTS = 2
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
@@ -77,9 +74,6 @@ def _usage_from_message(message: AIMessage) -> Usage:
     return Usage(
         input_tokens=meta.get("input_tokens"),
         output_tokens=meta.get("output_tokens"),
-        # Best-effort (E4-4): the gateway does not surface cost inline on
-        # the chat completion; cost is recorded via the Langfuse generation
-        # span (T068), not duplicated here.
         cost_usd=None,
     )
 
@@ -108,14 +102,8 @@ async def run(work: MatchWork, *, trace_id: str | None = None) -> tuple[MatchRes
         description=snapshot.description,
     )
 
-    # C6-4: response_format stays json_object, never strict json_schema —
-    # `drop_params: true` at the gateway silently drops json_schema mode.
-    # Matches matching.Service.MatchJob, which uses the legacy
-    # CompleteStructured path.
     bind_kwargs: dict[str, object] = {"response_format": {"type": "json_object"}}
     if trace_id is not None:
-        # T070/FR-017/research R8: correlate this run's trace with
-        # LiteLLM's own Langfuse record.
         bind_kwargs["extra_body"] = tracing.gateway_call_metadata(trace_id)
     model = gateway.chat_model(TASK_KEY).bind(**bind_kwargs)
 
@@ -129,11 +117,6 @@ async def run(work: MatchWork, *, trace_id: str | None = None) -> tuple[MatchRes
         if last_error is not None:
             turn = prompts.retry_instruction(schema, last_error)
         try:
-            # T068/T069/research R8: the Langfuse LangChain callback handler
-            # turns this call into its own generation span (input, output,
-            # duration, model, tokens, cost) nested under the current trace —
-            # one span per attempt, so a retry is visible as a repeated span
-            # rather than folded into the trace root.
             message = await model.ainvoke(
                 [
                     SystemMessage(content=prompts.SYSTEM_PROMPT),
@@ -144,7 +127,7 @@ async def run(work: MatchWork, *, trace_id: str | None = None) -> tuple[MatchRes
         except Exception as exc:  # noqa: BLE001 - reclassified below (E5)
             raise classify_provider_error(exc, failed_step=TASK_KEY) from exc
 
-        assert isinstance(message, AIMessage)  # ChatOpenAI always returns AIMessage
+        assert isinstance(message, AIMessage)
         usage = _usage_from_message(message)
         content = message.content if isinstance(message.content, str) else str(message.content)
         try:

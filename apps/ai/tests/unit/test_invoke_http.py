@@ -22,9 +22,6 @@ def _request(input_body: dict[str, Any]) -> main.InvokeRequest:
     )
 
 
-# --- H7: shared-secret auth --------------------------------------------------
-
-
 def test_require_shared_secret_accepts_the_configured_token() -> None:
     main.require_shared_secret(authorization=f"Bearer {main.settings.ai_service_token}")
 
@@ -45,9 +42,6 @@ def test_require_shared_secret_never_accepts_a_bare_token_without_bearer_scheme(
     with pytest.raises(HTTPException) as exc_info:
         main.require_shared_secret(authorization=main.settings.ai_service_token)
     assert exc_info.value.status_code == 401
-
-
-# --- H4: response mapping ----------------------------------------------------
 
 
 def test_invoke_succeeds_returns_200_with_trace_id_and_usage(
@@ -83,9 +77,7 @@ def test_invoke_succeeds_returns_200_with_trace_id_and_usage(
 def test_invoke_with_malformed_input_returns_422_and_a_trace_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    response = asyncio.run(
-        main.invoke_capability("rephrase", _request({"term": "Kafka"}))  # missing source_bullet
-    )
+    response = asyncio.run(main.invoke_capability("rephrase", _request({"term": "Kafka"})))
 
     assert response.status_code == 422
     import json

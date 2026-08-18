@@ -8,7 +8,6 @@ SETTINGS = Settings(
     ai_service_token="shared-secret",
 )
 
-# gateway/config.yaml pins request_timeout: 60 per attempt (C7-4).
 GATEWAY_REQUEST_TIMEOUT_SECONDS = 60
 
 

@@ -18,9 +18,6 @@ from typing import Literal
 Layer = Literal["chain", "graph_loop", "graph_state"]
 Transport = Literal["event", "http"]
 
-# The fourteen task keys declared in gateway/config.yaml (C1-2, C1-3). Kept as
-# a literal set here — not read from the YAML at runtime — because the
-# registry validates *against* the gateway's contract, it does not derive one.
 TASK_KEYS: frozenset[str] = frozenset(
     {
         "match",
@@ -173,6 +170,4 @@ class CapabilityRegistry:
         return len(self._capabilities)
 
 
-# Process-wide registry shared by the FastAPI app and the FastStream consumers
-# (research R9). Empty until later tasks register capabilities against it.
 registry = CapabilityRegistry()

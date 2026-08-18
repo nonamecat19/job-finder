@@ -11,7 +11,6 @@ SYSTEM_PROMPT = (
     "vacancy descriptions. Be precise and concise."
 )
 
-# Ported from rendercv_llm.go's `strutil.Truncate(vacancy, 6000)`.
 VACANCY_TRUNCATE_RUNES = 6000
 
 

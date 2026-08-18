@@ -133,7 +133,6 @@ def test_run_retries_once_on_malformed_json_then_succeeds(
     assert result.score == 82.0
     assert fake.bound is not None
     assert len(fake.bound.calls) == 2
-    # The retry turn carries the correction instruction (C3-4).
     retry_prompt = fake.bound.calls[1][1].content
     assert "Your previous answer was invalid" in retry_prompt
 

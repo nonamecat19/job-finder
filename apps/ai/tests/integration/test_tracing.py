@@ -42,13 +42,6 @@ def teardown_function() -> None:
     tracing._collector_error_logged = False
 
 
-# ---------------------------------------------------------------------------
-# Fakes: a stand-in Langfuse client (no network) and a stand-in gateway model
-# (no LLM provider), following the pattern already established in
-# tests/unit/test_ghost.py and tests/unit/test_consumers.py.
-# ---------------------------------------------------------------------------
-
-
 class _FakeSpan:
     def __init__(self) -> None:
         self.updates: list[dict[str, Any]] = []
@@ -196,12 +189,6 @@ def _work(**overrides: Any) -> GhostWork:
     return GhostWork(**defaults)
 
 
-# ---------------------------------------------------------------------------
-# T072: a successful run produces exactly one trace with one span per step
-# (US1 scenario 1).
-# ---------------------------------------------------------------------------
-
-
 def test_successful_run_produces_one_trace_with_one_span_per_model_call_step(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -214,16 +201,10 @@ def test_successful_run_produces_one_trace_with_one_span_per_model_call_step(
     publisher = _FakePublisher()
     asyncio.run(consumers._handle_ghost(_envelope(), _work(), publisher))  # type: ignore[arg-type]
 
-    # Exactly one trace (root span) for the whole run.
     assert len(fake_client.observations) == 1
     assert fake_client.observations[0]["name"] == "ghost"
     assert fake_client.observations[0]["as_type"] == "span"
 
-    # One step (one model call attempt) -> one Langfuse LangChain callback
-    # handler wired onto it, which turns the call into its own generation
-    # span carrying input, output, duration and tokens (T068/T069). Model
-    # tier and cost ride on LiteLLM's own record, correlated to this trace
-    # via `gateway_call_metadata` (T070/FR-017/research R8).
     assert fake_model.bound is not None
     assert len(fake_model.bound.calls) == 1
     _messages, config = fake_model.bound.calls[0]
@@ -236,15 +217,8 @@ def test_successful_run_produces_one_trace_with_one_span_per_model_call_step(
     assert message["trace_id"] == "trace_abc"
     assert message["usage"] == {"input_tokens": 100, "output_tokens": 20}
 
-    # No failure was recorded on the trace.
     span = fake_client.observations[0]["span"]
     assert span.updates == []
-
-
-# ---------------------------------------------------------------------------
-# T073: a failed run still produces a trace, marked failed, naming the
-# failing step and showing retries (US1 scenario 2, FR-013).
-# ---------------------------------------------------------------------------
 
 
 def test_failed_run_produces_one_trace_marked_failed_naming_the_step_after_retries(
@@ -253,27 +227,18 @@ def test_failed_run_produces_one_trace_marked_failed_naming_the_step_after_retri
     fake_client = _FakeLangfuseClient(trace_id="trace_failed")
     _patch_tracing(monkeypatch, fake_client)
 
-    # Structured output never parses -> ghost.run exhausts its retry budget
-    # (failures.py's classification path is reached indirectly: the loop
-    # itself, already built, raises a classified `internal` CapabilityError
-    # once every attempt is spent) and is visible as one model call per
-    # attempt.
     fake_model = _FakeChatModel(lambda _msgs: AIMessage(content="still not json"))
     monkeypatch.setattr(ghost.gateway, "chat_model", lambda task_key: fake_model)
 
     publisher = _FakePublisher()
     asyncio.run(consumers._handle_ghost(_envelope(), _work(), publisher))  # type: ignore[arg-type]
 
-    # Still exactly one trace, even though the run failed.
     assert len(fake_client.observations) == 1
     span = fake_client.observations[0]["span"]
 
-    # Retries are visible as repeated model-call attempts under the one
-    # trace (C3-4): the first attempt plus MAX_EXTRA_ATTEMPTS retries.
     assert fake_model.bound is not None
     assert len(fake_model.bound.calls) == ghost.MAX_EXTRA_ATTEMPTS + 1
 
-    # The trace is marked failed, naming the failing step (FR-013).
     assert len(span.updates) == 1
     update = span.updates[0]
     assert update["level"] == "ERROR"
@@ -318,12 +283,6 @@ def test_failed_run_from_a_classified_provider_error_marks_the_trace_failed(
     assert message["failure"]["retryable"] is True
 
 
-# ---------------------------------------------------------------------------
-# T074: traces are findable by user, job and capability (US1 scenario 3,
-# SC-001, SC-002).
-# ---------------------------------------------------------------------------
-
-
 def test_trace_metadata_carries_user_job_and_capability_for_findability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -339,14 +298,11 @@ def test_trace_metadata_carries_user_job_and_capability_for_findability(
 
     asyncio.run(consumers._handle_ghost(envelope, work, publisher))  # type: ignore[arg-type]
 
-    # "Findable" in Langfuse just means the field is on the trace: assert
-    # the metadata `propagate_attributes` actually received carries every
-    # dimension US1 scenario 3 promises to search by.
     assert len(propagate_calls) == 1
     call = propagate_calls[0]
-    assert call["trace_name"] == "ghost"  # findable by capability
-    assert call["user_id"] == "job_42"  # findable by job/user (work_id)
-    assert call["session_id"] == "job_42"  # groups every attempt for this work
+    assert call["trace_name"] == "ghost"
+    assert call["user_id"] == "job_42"
+    assert call["session_id"] == "job_42"
     assert call["tags"] == ["ghost", "ghost"]
 
     metadata = call["metadata"]
@@ -357,19 +313,11 @@ def test_trace_metadata_carries_user_job_and_capability_for_findability(
     assert metadata["snapshot_hash"] == "sha256:findme"
     assert "workflow_version" in metadata
 
-    # And the published result event still carries the identifiers so the
-    # backend side can correlate back to the same trace.
     message, _kwargs = publisher.published[0]
     assert message["trace_id"] == "trace_findable"
     assert message["work_id"] == "job_42"
     assert message["run_id"] == "run_77"
     assert message["correlation_id"] == "corr_99"
-
-
-# ---------------------------------------------------------------------------
-# T075: with the collector stopped, runs complete and latency is unaffected
-# (US1 scenario 4, SC-006, FR-016).
-# ---------------------------------------------------------------------------
 
 
 def test_run_completes_fast_even_though_starting_a_trace_never_touches_the_network(
@@ -435,5 +383,5 @@ def test_shutdown_is_bounded_when_the_collector_hangs(
         tracing.shutdown(timeout=0.2)
         elapsed = time.perf_counter() - started
 
-    assert elapsed < 1.0  # bounded near the 0.2s timeout, not the 5s sleep
+    assert elapsed < 1.0
     assert any("exceeded" in record.message for record in caplog.records)

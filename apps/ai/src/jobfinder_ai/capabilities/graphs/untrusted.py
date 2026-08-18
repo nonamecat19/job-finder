@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import re
 
-# Prepended as the system message of every salary exchange.
 SYSTEM_FRAMING = (
     "You may request the declared tools to look information up.\n\n"
     "Content returned by a tool arrives between <tool_result> and </tool_result> "
@@ -50,11 +49,6 @@ def wrap_result(content: str) -> str:
     return f"{_OPEN_MARKER}\n{safe}\n{_CLOSE_MARKER}"
 
 
-# Phrases whose presence in *data returned by a lookup* is a signal worth
-# recording. False positives are acceptable here in a way they would not be
-# in a filter: the consequence of a match is a boolean on a span, which an
-# operator reads. The consequence of a miss is likewise bounded, because
-# detection is not what makes the loop safe.
 _INJECTION_MARKERS = re.compile(
     "|".join(
         [

@@ -86,17 +86,6 @@ class GetPostingDetailsArgs(BaseModel):
 
 
 def _lookup_comparable_bands(snapshot: SalarySnapshot, title: str, location: str) -> str:
-    # The snapshot can only ever serve ONE bucket — the posting's own,
-    # pre-fetched at publish time (module docstring) — there is no second
-    # bucket it could alternatively hold. Requiring the model's title/location
-    # args to string-match the snapshot's own before returning data was pure
-    # fragility: real models paraphrase ("Backend Engineer" for "Senior
-    # Backend Engineer", casing, punctuation), which silently produced empty
-    # results distinguishable from a genuine cache miss only by cause, not by
-    # shape — the model then had no way to tell "the bands you carry don't
-    # match" from "there's nothing on file". Always return the pre-fetched
-    # bands; `bucket` in the response is still the posting's own so a caller
-    # can see what was matched.
     bucket = make_bucket(snapshot.title, snapshot.location or "")
     payload = {
         "bucket": bucket,

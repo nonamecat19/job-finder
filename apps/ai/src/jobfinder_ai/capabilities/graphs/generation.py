@@ -58,18 +58,11 @@ from jobfinder_ai.prompts.generation import cover_letter as cover_letter_prompts
 from jobfinder_ai.prompts.generation import select as select_prompts
 from jobfinder_ai.prompts.generation import summary as summary_prompts
 
-# ---------------------------------------------------------------------------
-# Bounds (C4-1, C4-4, T095)
-# ---------------------------------------------------------------------------
 
-# analyze, select, (select_premium on escalation), summarize, assemble.
 MAX_NODES = 5
-# Matches the largest of the Go per-stage deadlines (selectStageTimeout).
 NODE_TIMEOUT_SECONDS = 240.0
 RUN_TIMEOUT_SECONDS = 600.0
 
-# Extra attempts (beyond the first) a structured-output call retries on a
-# parse/validation failure, matching the ghost capability's ladder.
 MAX_EXTRA_ATTEMPTS = 2
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
@@ -79,11 +72,6 @@ def _strip_fences(text: str) -> str:
     stripped = text.strip()
     match = _FENCE_RE.match(stripped)
     return match.group(1) if match else stripped
-
-
-# ---------------------------------------------------------------------------
-# Input / output models (C3-1, C3-2)
-# ---------------------------------------------------------------------------
 
 
 class VacancyHintsIn(BaseModel):
@@ -122,9 +110,6 @@ class GenerationSnapshot(BaseModel):
     level: str = "moderate"
     shape: ShapeConfigIn = Field(default_factory=ShapeConfigIn)
     hints: VacancyHintsIn | None = None
-    # Which summary task key serves this run's summary stage (034):
-    # standard -> generation-summary, premium -> generation-summary-premium,
-    # fast -> generation-summary-fast.
     summaryOption: str = "standard"
 
 
@@ -213,11 +198,6 @@ class GenerationResult(BaseModel):
     summaryOption: str
 
 
-# ---------------------------------------------------------------------------
-# Graph state
-# ---------------------------------------------------------------------------
-
-
 class GenerationState(TypedDict, total=False):
     snapshot: GenerationSnapshot
     trace_id: str | None
@@ -228,11 +208,6 @@ class GenerationState(TypedDict, total=False):
     selection_tier: str
     summary: str
     result: GenerationResult
-
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 
 
 def _cv_sections(master: dict[str, Any]) -> dict[str, Any]:
@@ -515,11 +490,6 @@ def _with_usage(
     return {"node_count": node_count, "usage_by_stage": usage_by_stage, **updates}
 
 
-# ---------------------------------------------------------------------------
-# Nodes
-# ---------------------------------------------------------------------------
-
-
 async def node_analyze(state: GenerationState) -> dict[str, Any]:
     snapshot = state["snapshot"]
     hints = snapshot.hints
@@ -651,11 +621,6 @@ async def node_assemble(state: GenerationState) -> dict[str, Any]:
     return {"node_count": node_count, "result": result}
 
 
-# ---------------------------------------------------------------------------
-# Graph assembly (C1-1, layer=graph_state)
-# ---------------------------------------------------------------------------
-
-
 def _build_graph() -> Any:
     graph = StateGraph(GenerationState)
     graph.add_node("analyze", node_analyze)
@@ -681,13 +646,8 @@ def _aggregate_usage(usage_by_stage: dict[str, Usage]) -> Usage:
     return Usage(input_tokens=input_tokens, output_tokens=output_tokens, cost_usd=None)
 
 
-# Ported from dto.DocumentTypeCoverLetter (apps/api/internal/dto/dto.go):
-# the `GenerateWork.type` value routing this run to the cover-letter branch
-# instead of the resume pipeline, mirroring service.go's `docType ==
-# string(dto.DocumentTypeResume)` check (line 795).
 COVER_LETTER_DOC_TYPE = "cover_letter"
 
-# Span/failed_step name for the cover-letter branch's single call.
 _COVER_LETTER_STAGE = "generation-cover-letter"
 
 
@@ -742,10 +702,6 @@ async def _run_cover_letter(
             tracing.mark_run_failed(span, failed_step=_COVER_LETTER_STAGE, error=err.message)
             raise err from exc
         except CapabilityError as exc:
-            # `_structured_call` names its failed_step after its task_key
-            # ("generation" — shared with the resume pipeline, C1-3), not
-            # this branch's own stage name; re-stamp it so a cover-letter
-            # failure is distinguishable from a resume-pipeline one (E5-4).
             tracing.mark_run_failed(span, failed_step=_COVER_LETTER_STAGE, error=exc.message)
             raise CapabilityError(
                 exc.category, exc.message, failed_step=_COVER_LETTER_STAGE
@@ -785,11 +741,6 @@ async def run(
     }
     try:
         final_state = await asyncio.wait_for(
-            # LangGraph's recursion_limit counts super-steps including the
-            # graph's own bookkeeping, not raw node executions 1:1 — +1
-            # verified empirically to be exactly enough for MAX_NODES real
-            # stage executions (analyze, select, select_premium, summarize,
-            # assemble) without permitting a 6th.
             graph.ainvoke(initial_state, config={"recursion_limit": MAX_NODES + 1}),
             timeout=RUN_TIMEOUT_SECONDS,
         )

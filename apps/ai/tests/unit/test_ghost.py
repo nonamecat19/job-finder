@@ -81,7 +81,7 @@ def test_run_returns_parsed_result_when_every_signal_is_known(
     result, usage = asyncio.run(ghost.run(_work(FULL_SNAPSHOT)))
 
     assert result.score == 20.0
-    assert result.confidence == 0.9  # not capped — every signal was known
+    assert result.confidence == 0.9
     assert result.explanation == "Signals look normal."
     assert usage.input_tokens == 100
     assert usage.output_tokens == 20
@@ -126,7 +126,6 @@ def test_run_retries_once_on_malformed_json_then_succeeds(
     assert result.score == 20.0
     assert fake.bound is not None
     assert len(fake.bound.calls) == 2
-    # The retry turn carries the correction instruction (C3-4).
     retry_prompt = fake.bound.calls[1][1].content
     assert "Your previous answer was invalid" in retry_prompt
 

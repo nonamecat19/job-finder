@@ -94,7 +94,7 @@ async def run(data: RephraseInput, *, trace_id: str | None = None) -> tuple[Reph
     except Exception as exc:  # noqa: BLE001 - reclassified below (E5)
         raise classify_provider_error(exc, failed_step=TASK_KEY) from exc
 
-    assert isinstance(message, AIMessage)  # ChatOpenAI always returns AIMessage
+    assert isinstance(message, AIMessage)
     usage = _usage_from_message(message)
     content = message.content if isinstance(message.content, str) else str(message.content)
     return RephraseResult(rephrase=content.strip()), usage

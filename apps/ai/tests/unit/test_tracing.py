@@ -54,4 +54,4 @@ def test_run_bounded_never_blocks_past_the_bound() -> None:
 
 def test_shutdown_with_no_client_is_a_no_op() -> None:
     tracing._client = None
-    tracing.shutdown()  # must not raise
+    tracing.shutdown()

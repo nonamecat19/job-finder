@@ -17,7 +17,6 @@ SYSTEM_PROMPT = (
     "You select, reorder and rephrase existing content to match a specific vacancy."
 )
 
-# Verbatim port of `domain.LevelRules`.
 LEVEL_RULES: dict[str, str] = {
     "strict": (
         "GROUNDING = STRICT. Use ONLY skills and facts already present in the master profile. "

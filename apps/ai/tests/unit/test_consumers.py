@@ -133,9 +133,6 @@ def test_handle_ghost_publishes_a_succeeded_result(
         "topSignals": [],
     }
     assert message["snapshot_hash"] == "sha256:abc"
-    # E1-3/M5-2/M5-3: correlation_id, idempotency_key and run_id are echoed
-    # from the request so the backend's idempotency ledger dedupes on the
-    # same key and can detect a superseded run.
     assert message["correlation_id"] == "corr_1"
     assert message["idempotency_key"] == "ghost:job_1:corr_1"
     assert message["run_id"] == "run_1"

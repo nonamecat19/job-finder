@@ -26,9 +26,6 @@ def test_gateway_call_metadata_carries_trace_id() -> None:
     assert metadata == {"metadata": {"trace_id": "trace_abc", "existing_trace_id": "trace_abc"}}
 
 
-# --- T084 (US2 scenario 2): a definition change is distinguishable in traces ---
-
-
 def test_resolve_workflow_version_distinguishes_a_redeploy() -> None:
     """Two runs either side of a prompt/step change record different
     workflow_version values, since prompts live in-repo (FR-015a) and a

@@ -41,9 +41,6 @@ from jobfinder_ai.prompts import recruiter as prompts
 
 TASK_KEY = "recruiter"
 
-# Ported from port.go's `structuredRetries`: max 2 EXTRA attempts after the
-# first (three attempts total) before failing with category `internal`
-# (C3-4) — the same constant every `CompleteStructured` caller in Go shares.
 MAX_EXTRA_ATTEMPTS = 2
 
 
@@ -129,7 +126,7 @@ async def run(
         except Exception as exc:  # noqa: BLE001 - reclassified below (E5)
             raise classify_provider_error(exc, failed_step=TASK_KEY) from exc
 
-        assert isinstance(message, AIMessage)  # ChatOpenAI always returns AIMessage
+        assert isinstance(message, AIMessage)
         usage = _usage_from_message(message)
         content = message.content if isinstance(message.content, str) else str(message.content)
         try:

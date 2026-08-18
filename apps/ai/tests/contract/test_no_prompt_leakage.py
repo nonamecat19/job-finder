@@ -13,10 +13,6 @@ from __future__ import annotations
 
 import jobfinder_ai.main as main
 
-# Terms that must never appear as a field name anywhere in a request or
-# response model reachable from the HTTP surface — carrying forward the
-# principle that orchestration detail (prompts, steps, models) is a
-# service-internal concern (FR-002, FR-015a).
 FORBIDDEN_FIELD_SUBSTRINGS = (
     "prompt",
     "step",
@@ -26,9 +22,6 @@ FORBIDDEN_FIELD_SUBSTRINGS = (
     "messages",
 )
 
-# Legitimate fields that happen to contain a forbidden substring without
-# leaking anything: task_key is a routing label, not a model or provider
-# name (it is deliberately opaque about which model serves it).
 ALLOWED_FIELDS = {"task_key"}
 
 

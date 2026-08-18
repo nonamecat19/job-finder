@@ -39,9 +39,6 @@ settings = get_settings()
 
 broker_router = RabbitRouter(settings.rabbitmq_url)
 
-# Every capability registers itself at import time (C1-4): a process that is
-# running has already proven its definition valid, so /health/ready never
-# has to re-check it (H8-1).
 registry.register(ghost_capability.CAPABILITY)
 registry.register(match_capability.CAPABILITY)
 registry.register(generation_capability.CAPABILITY)
@@ -51,14 +48,8 @@ registry.register(rephrase_capability.CAPABILITY)
 registry.register(recruiter_capability.CAPABILITY)
 registry.register(outreach_capability.CAPABILITY)
 
-# Queued capabilities attach their FastStream subscriber/publisher to the
-# one shared router (research R9) — same process, same broker connection.
 consumers.register(broker_router)
 
-# The interactive HTTP surface's dispatch table (H2-1): every `transport="http"`
-# capability's module, keyed by capability name, each exposing `Input` (or an
-# equivalently named Pydantic model matching `Capability.input_model`) and
-# `run(input, *, trace_id=...) -> (output, Usage)` (H1-1).
 _HTTP_CAPABILITY_MODULES: dict[str, Any] = {
     rephrase_capability.CAPABILITY.name: rephrase_capability,
     recruiter_capability.CAPABILITY.name: recruiter_capability,
@@ -66,13 +57,8 @@ _HTTP_CAPABILITY_MODULES: dict[str, Any] = {
     embed_capability.CAPABILITY.name: embed_capability,
 }
 
-# H4-2: 429 rate_limited without a real provider-supplied backoff signal uses
-# this conservative constant (E5 does not carry one through today).
 RATE_LIMITED_RETRY_AFTER_SECONDS = 1
 
-# H4-2's status-code mapping. A category absent from H4-2's explicit list
-# (`credential_rejected`, `insufficient_credits`) falls back to `internal`'s
-# 500 — both are server-side configuration problems, not the caller's fault.
 _STATUS_FOR_CATEGORY: dict[str, int] = {
     "invalid_input": 422,
     "rate_limited": 429,
@@ -89,10 +75,6 @@ _STATUS_FOR_CATEGORY: dict[str, int] = {
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     tracing.bootstrap(settings=settings)
-    # The consumers declare nothing (M1-1) — they assert topology the backend
-    # owns — so connecting before that topology exists is a startup failure
-    # rather than something the broker fixes on its own. On a cold stack the
-    # backend may simply not have got there yet, so wait for it.
     await consumers.wait_for_topology(settings.rabbitmq_url)
     async with broker_router.lifespan_context(app):
         try:

@@ -58,13 +58,6 @@ from jobfinder_ai.failures import CapabilityError
 
 logger = logging.getLogger(__name__)
 
-# `declare=False` throughout this module, on every exchange and every queue.
-# FastStream turns that into a PASSIVE declaration: it asserts the object
-# already exists and never creates one, which is what M1-1 means by reserving
-# topology to the publisher. It is also what makes the service able to run at
-# all under the account docker/rabbitmq/init-ai-user.sh creates — that account
-# is granted `"configure":"^$"`, so an active declaration is refused by the
-# broker and the service exits during startup.
 WORK_EXCHANGE = RabbitExchange(
     "jobfinder.work", type=ExchangeType.DIRECT, durable=True, declare=False
 )
@@ -120,9 +113,6 @@ SALARY_WORK_QUEUE = RabbitQueue(
     },
 )
 
-# The queue wait_for_topology probes. Any of the four would do — the backend
-# declares them in one call — and this one is consumed by the capability that
-# is routed to this service first (ghost, 048).
 _TOPOLOGY_PROBE_QUEUE = "work.ghost"
 
 
@@ -175,8 +165,6 @@ async def wait_for_topology(
         else:
             try:
                 channel = await connection.channel()
-                # Passive: asserts the queue and creates nothing, the same
-                # shape the subscribers use once they connect.
                 await channel.declare_queue(_TOPOLOGY_PROBE_QUEUE, passive=True)
                 logger.info(
                     "messaging: topology present after %d attempt(s); starting consumers", attempt
@@ -330,10 +318,6 @@ async def _handle_ghost(envelope: Envelope, work: GhostWork, publisher: RabbitPu
                 ),
             )
 
-    # M3-2: awaited (and, via publisher confirms, acknowledged by the
-    # broker) before this handler returns — only then does FastStream's
-    # default ack-after-handler-returns behaviour ack the `ghost.requested`
-    # delivery.
     await publisher.publish(outgoing, correlation_id=envelope.correlation_id)
 
 

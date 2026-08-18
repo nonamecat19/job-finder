@@ -131,7 +131,7 @@ def test_run_assembles_result_without_escalation(monkeypatch: pytest.MonkeyPatch
     assert result.summary == SUMMARY_RESULT["summary"]
     assert result.experience[0]["highlights"] == ["Built X", "Shipped Y", "Led Z"]
     assert result.selectionEscalated is False
-    assert usage.input_tokens == 150  # three stages x 50
+    assert usage.input_tokens == 150
 
 
 def test_run_escalates_to_premium_on_bullet_shortfall(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -258,10 +258,6 @@ def test_capability_declares_graph_state_layer_and_bounds() -> None:
     assert generation.CAPABILITY.transport == "event"
     assert generation.CAPABILITY.bounds.max_nodes == generation.MAX_NODES
 
-
-# ---------------------------------------------------------------------------
-# Cover-letter branch (single call, service.go's `writeCoverLetter` ported)
-# ---------------------------------------------------------------------------
 
 COVER_LETTER_TEXT = "Hello,\n\nI'm excited about the Senior Engineer role at Acme.\n\nBest regards."
 

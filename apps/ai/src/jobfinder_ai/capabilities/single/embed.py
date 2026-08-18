@@ -21,17 +21,8 @@ from jobfinder_ai.failures import CapabilityError, classify_provider_error
 
 TASK_KEY = "embed"
 
-# Mirrors `apps/api/internal/config/defaults.go`'s `EMBED_DIMS` default (1024,
-# also the value migration 00044_embedding_dims_1024.sql fixed the pgvector
-# column at). The AI service receives no `EMBED_DIMS` env var of its own
-# (contracts/configuration.md K2-1), so this is asserted, not configured —
-# same posture as Go's `gateway.embedDims` check in `Provider.Embed`.
 EMBED_DIMS = 1024
 
-# Mirrors `gateway.go`'s `embedMaxChars` backstop truncation (E1-3): the
-# caller is expected to have already bounded the text, this is a second,
-# defensive truncation so an oversized input is shortened rather than
-# rejected or sent to the provider unbounded.
 EMBED_MAX_CHARS = 8000
 
 
@@ -82,9 +73,6 @@ async def run(work: EmbedInput, *, trace_id: str | None = None) -> tuple[EmbedRe
             failed_step=TASK_KEY,
         )
 
-    # Best-effort (E4-4): the gateway does not surface token usage on the
-    # embeddings response in a way `aembed_query` exposes; cost is recorded
-    # via the Langfuse span, not duplicated here — same posture as `ghost`.
     return EmbedResult(vector=vector), Usage()
 
 
