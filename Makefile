@@ -1,5 +1,5 @@
 .PHONY: install dev build typecheck up down logs ps prod-up prod-down prod-build clean run-all \
-	test test-go test-react test-py test-integration test-e2e test-ai-optional test-lint test-db-setup \
+	test test-go test-react test-extension test-py test-integration test-e2e test-ai-optional test-lint test-db-setup \
 	truncate-db sqlc-generate sqlc-check sqlc-install \
 	tygo-generate tygo-check tygo-install \
 	contracts-generate contracts-check \
@@ -64,7 +64,7 @@ test-db-setup: up
 	@docker compose exec -T postgres createdb -U jobfinder jobfinder_test
 
 # --- tests ---
-test: test-go test-react
+test: test-go test-react test-extension
 
 test-go:
 	cd apps/api && DATABASE_URL=postgresql://jobfinder:${DB_PASSWORD}@localhost:${POSTGRES_HOST_PORT}/jobfinder_test \
@@ -73,6 +73,9 @@ test-go:
 
 test-react:
 	cd apps/dashboard && pnpm exec vitest run
+
+test-extension:
+	cd apps/extension && pnpm exec vitest run
 
 test-py:
 	cd apps/ai && uv run pytest
@@ -106,14 +109,14 @@ lint-go:
 	./scripts/golangci-check.sh
 
 lint-web:
-	pnpm exec eslint apps/dashboard packages/shared
+	pnpm exec eslint apps/dashboard apps/extension packages/shared
 
 lint-py:
 	cd apps/ai && uv run ruff check . && uv run ruff format --check . && uv run mypy src
 
 lint: lint-go lint-web lint-py
 
-test-lint: lint-go lint-web lint-py test-go test-react test-py
+test-lint: lint-go lint-web lint-py test-go test-react test-extension test-py
 
 # --- supply-chain gates (039, specs/domains/platform-operations.md) ---
 # Deliberately NOT part of `test-lint`, and that is an exemption from the

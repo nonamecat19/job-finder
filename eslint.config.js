@@ -38,7 +38,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["apps/dashboard/**/*.{ts,tsx}", "packages/shared/**/*.{ts,tsx}"],
+    files: ["apps/dashboard/**/*.{ts,tsx}", "apps/extension/**/*.{ts,tsx}", "packages/shared/**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -56,7 +56,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/dashboard/**/*.{ts,tsx}"],
+    files: ["apps/dashboard/**/*.{ts,tsx}", "apps/extension/**/*.{ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
@@ -66,6 +66,15 @@ export default tseslint.config(
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },
+      ],
+    },
+  },
+  {
+    files: ["apps/extension/src/content/**/*.ts", "apps/extension/src/popup/**/*.{ts,tsx}", "apps/extension/src/options/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: "Call the API from src/background/api.ts, never from a content script or an extension page." },
       ],
     },
   },

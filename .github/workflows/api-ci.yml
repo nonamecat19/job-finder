@@ -81,6 +81,7 @@ jobs:
               - 'scripts/compare-shared-types.py'
             web:
               - 'apps/dashboard/**'
+              - 'apps/extension/**'
               - 'packages/shared/**'
               - 'eslint.config.js'
               - 'tsconfig.base.json'
@@ -275,6 +276,11 @@ jobs:
 
       - name: Run dashboard tests
         run: pnpm --filter @job-finder/dashboard test
+
+      # A step rather than a job on purpose: it reuses the shared-package build
+      # above, and adding a job would need a branch-protection update.
+      - name: Run extension tests
+        run: pnpm --filter @job-finder/extension test
 
   frontend-typecheck:
     name: frontend typecheck
