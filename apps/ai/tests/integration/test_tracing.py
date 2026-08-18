@@ -118,9 +118,7 @@ class _FakeBoundModel:
         self._respond = respond
         self.calls: list[tuple[list[Any], dict[str, Any] | None]] = []
 
-    async def ainvoke(
-        self, messages: list[Any], config: dict[str, Any] | None = None
-    ) -> AIMessage:
+    async def ainvoke(self, messages: list[Any], config: dict[str, Any] | None = None) -> AIMessage:
         self.calls.append((messages, config))
         return self._respond(messages)
 

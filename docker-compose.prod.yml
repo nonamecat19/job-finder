@@ -1,18 +1,3 @@
-# Production compose.
-#
-# --- The gateway is required here now (044-litellm-only-routing, Constitution
-# Principle V 2.0.0). There is no local-first path left: every AI request,
-# prod included, goes through the self-hosted `litellm` proxy to a hosted
-# provider. Prod and dev route through the same artifact — same image, same
-# read-only gateway/config.yaml mount, same healthcheck, no depends_on
-# (contracts/configuration.md K5-1).
-#
-# LLM observability (036) still has no collector here: `litellm`'s success/
-# failure callbacks would have somewhere to attach now that the gateway
-# exists in prod, but wiring the Langfuse service group here is a separate,
-# explicit trade (real credentials, another stateful service) that this
-# feature does not make. The collector service group stays dev-only in
-# docker-compose.yml.
 services:
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
@@ -25,8 +10,6 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     healthcheck:
-      # litellm main-stable image has no curl/wget; Python is the only HTTP
-      # client available.
       test:
         [
           "CMD",
@@ -38,10 +21,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # Message broker (047-langchain-ai-service). No port is published at all
-  # here (contracts/messaging.md M7-2, configuration.md K4-4) — every
-  # consumer/publisher in this stack reaches it as `rabbitmq:5672`, and the
-  # management UI is reachable only from inside the compose network.
   rabbitmq:
     image: rabbitmq:4.3.4-management-alpine
     environment:
@@ -49,8 +28,6 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS in .env}
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
-      # consumer_timeout above the longest work type's MaxDuration (M3-6) —
-      # the RabbitMQ default would kill a multi-minute generation run.
       - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/10-consumer-timeout.conf:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
@@ -59,9 +36,6 @@ services:
       retries: 10
       start_period: 20s
 
-  # One-shot init that creates the AI service's restricted broker account
-  # (contracts/messaging.md M7-3) — see docker-compose.yml for the full
-  # rationale, identical here.
   rabbitmq-init:
     image: curlimages/curl:8.11.1
     depends_on:
@@ -76,11 +50,6 @@ services:
       - ./docker/rabbitmq/init-ai-user.sh:/init-ai-user.sh:ro
     entrypoint: ["/bin/sh", "/init-ai-user.sh"]
 
-  # AI orchestration service (047-langchain-ai-service). Depends on rabbitmq
-  # (healthy) and litellm (started) only — never langfuse-web
-  # (contracts/configuration.md K4-2). `api` below MUST NOT depend on this
-  # service (K4-5, FR-024): every non-AI path must start and serve whether
-  # or not `ai` is up.
   ai:
     build:
       context: .
@@ -126,20 +95,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    # NO `env_file: .env` (036 FR-007 / Constitution Principle V).
-    #
-    # This service used to ingest the whole .env, which handed the application
-    # container every provider credential — OPENROUTER_API_KEY, OPENAI_API_KEY.
-    # The constitution requires those to stay in the gateway container and be
-    # unreadable through the application, so the wholesale import was a
-    # standing violation independent of any feature.
-    #
-    # The list below is explicit and enumerates exactly what internal/config
-    # reads. It is verbose on purpose: an allowlist that must be edited to add
-    # a variable is the only version of this that stays correct. When adding a
-    # config field, add it here too — and never add a provider API key.
     environment:
-      # --- infrastructure ---
       DATABASE_URL: postgresql://jobfinder:${DB_PASSWORD}@postgres:5432/jobfinder
       REDIS_URL: redis://redis:6379
       DOCUMENTS_DIR: /data/documents
@@ -151,27 +107,16 @@ services:
       MINIO_USE_SSL: "false"
       CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:-}
 
-      # --- LLM access ---
-      # GATEWAY_URL and LITELLM_MASTER_KEY are required (contracts/
-      # configuration.md K1) — this is the application's only inference path.
-      # LITELLM_MASTER_KEY authenticates the app TO the gateway; it is not a
-      # provider credential and is the one secret the application container
-      # is permitted. No provider API key (OPENROUTER/OPENAI) is ever granted
-      # here — those live only in the litellm service's environment above.
       GATEWAY_URL: ${GATEWAY_URL:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       EMBED_DIMS: ${EMBED_DIMS:-}
       LLM_MAX_IDLE_CONNS_PER_HOST: ${LLM_MAX_IDLE_CONNS_PER_HOST:-}
 
-      # --- message broker (047-langchain-ai-service) ---
-      # Backend credentials, distinct from the AI service's own restricted
-      # account (contracts/messaging.md M7-3, docker/rabbitmq/init-ai-user.sh).
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-jobfinder}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
       AI_SERVICE_URL: ${AI_SERVICE_URL:-}
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
       AI_CAPABILITY_ROUTING: ${AI_CAPABILITY_ROUTING:-}
 
-      # --- job sources (their own credentials, not inference credentials) ---
       ADZUNA_APP_ID: ${ADZUNA_APP_ID:-}
       ADZUNA_APP_KEY: ${ADZUNA_APP_KEY:-}
       ADZUNA_COUNTRY: ${ADZUNA_COUNTRY:-}
@@ -188,7 +133,6 @@ services:
       JOBSPY_URL: ${JOBSPY_URL:-}
       BROWSER_IDENTITY_VERSION: ${BROWSER_IDENTITY_VERSION:-}
 
-      # --- matching / generation tuning ---
       MATCH_SIMILARITY_THRESHOLD: ${MATCH_SIMILARITY_THRESHOLD:-}
       MATCH_NOTIFY_SCORE_THRESHOLD: ${MATCH_NOTIFY_SCORE_THRESHOLD:-}
       MATCH_NOTIFY_RATE_LIMIT: ${MATCH_NOTIFY_RATE_LIMIT:-}
@@ -198,7 +142,6 @@ services:
       LEVELS_FYI_CSV: ${LEVELS_FYI_CSV:-}
       SALARY_FLOOR_USD: ${SALARY_FLOOR_USD:-}
 
-      # --- concurrency, timeouts, pool ---
       AI_CONCURRENCY_CLOUD: ${AI_CONCURRENCY_CLOUD:-}
       AI_TASK_TIMEOUT_MATCH: ${AI_TASK_TIMEOUT_MATCH:-}
       AI_TASK_TIMEOUT_GENERATE: ${AI_TASK_TIMEOUT_GENERATE:-}
@@ -224,10 +167,6 @@ services:
       DB_ACQUIRE_TIMEOUT: ${DB_ACQUIRE_TIMEOUT:-}
       DB_INTERACTIVE_RESERVE: ${DB_INTERACTIVE_RESERVE:-}
 
-      # --- observability retention (036 FR-008) ---
-      # Not LANGFUSE_* — see the note on those names in .env.example. This is a
-      # collector API key so the platform can delete its own records, never a
-      # provider credential, and it is inert unless a collector is configured.
       EVAL_PRUNE_COLLECTOR_URL: ${EVAL_PRUNE_COLLECTOR_URL:-}
       EVAL_PRUNE_PUBLIC_KEY: ${EVAL_PRUNE_PUBLIC_KEY:-}
       EVAL_PRUNE_SECRET_KEY: ${EVAL_PRUNE_SECRET_KEY:-}
@@ -246,8 +185,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      # Deliberately no dependency on `ai` (K4-5, FR-024) — see the `ai`
-      # service comment above.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health/ready"]
       interval: 5s
@@ -256,7 +193,7 @@ services:
     volumes:
       - documents:/data/documents
     ports:
-      - "3000:3000" # dev convenience; dashboard nginx proxies /api in normal use
+      - "3000:3000"
 
   dashboard:
     build:
@@ -270,7 +207,6 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     profiles: [scraping-extras]
 
-  # MinIO S3-compatible object storage for generated resume/cover-letter files.
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -283,8 +219,6 @@ services:
       - "9000:9000"
       - "9001:9001"
     healthcheck:
-      # minio's image ships no curl/wget/mc; /bin/sh is bash, so probe
-      # /minio/health/live with bash's /dev/tcp pseudo-device instead.
       test:
         [
           "CMD",
@@ -296,7 +230,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # One-shot init that creates the documents bucket once MinIO is reachable.
   createbuckets:
     image: minio/mc:latest
     depends_on: [minio]

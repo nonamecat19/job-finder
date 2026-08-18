@@ -57,9 +57,7 @@ def test_generated_model_round_trips_schema(schema_path: Path) -> None:
     )
 
     required = set(schema.get("required", []))
-    model_required = {
-        name for name, field in model_cls.model_fields.items() if field.is_required()
-    }
+    model_required = {name for name, field in model_cls.model_fields.items() if field.is_required()}
     assert model_required == required, (
         f"{class_name}: required fields {model_required} != schema required {required}"
     )

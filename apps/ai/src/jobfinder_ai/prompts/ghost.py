@@ -80,8 +80,7 @@ def build_user_prompt(
         )
     else:
         parts.append(
-            "- Always-hiring count: unknown (company name unparseable) — lower "
-            "your confidence\n"
+            "- Always-hiring count: unknown (company name unparseable) — lower your confidence\n"
         )
     parts.append(
         "\nReport your confidence (0-1) in the score, lowering it for every "

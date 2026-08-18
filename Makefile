@@ -11,9 +11,6 @@ include .env
 export
 endif
 
-# --- per-worktree isolation ---
-# Each git worktree gets its own compose project and Postgres host port so
-# migration state from one branch never leaks into another's test run.
 WORKTREE_NAME := $(shell basename "$$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
 WORKTREE_HASH := $(shell echo "$(WORKTREE_NAME)" | cksum | cut -d' ' -f1)
 export COMPOSE_PROJECT_NAME := jobfinder-$(WORKTREE_NAME)
@@ -31,7 +28,6 @@ build:
 typecheck:
 	pnpm typecheck
 
-# --- dev infra (postgres/redis) ---
 up:
 	docker compose up -d
 
@@ -44,7 +40,6 @@ logs:
 ps:
 	docker compose ps
 
-# --- prod stack (full app in containers) ---
 prod-build:
 	docker compose -f docker-compose.prod.yml build
 
@@ -58,12 +53,10 @@ clean:
 	docker compose down -v
 	rm -rf node_modules apps/*/node_modules apps/*/dist packages/*/node_modules packages/*/dist
 
-# --- test database setup ---
 test-db-setup: up
 	@docker compose exec -T postgres psql -U jobfinder -d postgres -c "DROP DATABASE IF EXISTS jobfinder_test;" 2>/dev/null || true
 	@docker compose exec -T postgres createdb -U jobfinder jobfinder_test
 
-# --- tests ---
 test: test-go test-react test-extension
 
 test-go:
@@ -101,10 +94,6 @@ test-e2e: test-db-setup
 		REDIS_URL=redis://localhost:6379/1 \
 		npx playwright test
 
-# --- lint (specs/domains/platform-operations.md) ---
-# `make lint`/`test-lint` are the only sanctioned way to invoke either
-# linter — CI and the Stop hook call these same targets, never the binaries
-# directly, so local, automated and hook-triggered runs cannot drift apart.
 lint-go:
 	./scripts/golangci-check.sh
 
@@ -118,19 +107,6 @@ lint: lint-go lint-web lint-py
 
 test-lint: lint-go lint-web lint-py test-go test-react test-extension test-py
 
-# --- supply-chain gates (039, specs/domains/platform-operations.md) ---
-# Deliberately NOT part of `test-lint`, and that is an exemption from the
-# coverage invariant rather than an oversight. Two reasons:
-#
-#   1. These gates are not deterministic in time. An advisory published this
-#      afternoon turns this morning's green run red with no code change, so
-#      "local success predicts CI" — the property the invariant exists to
-#      protect — was never available here.
-#   2. They need the network, and `images` needs Docker: the same exemption
-#      `test-integration` and `test-e2e` already hold.
-#
-# `make images` additionally costs 6-8 minutes cold, which would make the
-# pre-push loop slower than CI and push people to skip it entirely.
 vuln-go:
 	./scripts/govulncheck-check.sh
 
@@ -140,10 +116,6 @@ vuln-web:
 vuln-py:
 	cd apps/ai && uv run pip-audit
 
-# Architectural invariants for the AI service, not vulnerability scans, but
-# gated alongside them: both are "the AI service must not be able to reach a
-# provider directly" checks, just at different layers (dependency tree vs.
-# runtime environment) (C7-3, K2-2, K2-3, FR-008, FR-011).
 check-ai-no-provider-sdk:
 	./scripts/check-ai-no-provider-sdk.sh
 
@@ -165,31 +137,23 @@ secrets:
 	}
 	gitleaks git . --redact --no-banner --config .gitleaks.toml
 
-# Build only — never pushes, never needs a registry credential.
 images:
 	docker build -f apps/api/Dockerfile       -t job-finder-api:local-check       .
 	docker build -f apps/dashboard/Dockerfile -t job-finder-dashboard:local-check .
 
-# The audit-class gates as one entry point, first non-zero wins — the same
-# shape as `make lint`. `images` stays out: it is the slow one.
 audit: vuln-go vuln-web vuln-py check-ai-no-provider-sdk check-ai-env secrets
 
-# --- run all (infra + backend + frontend) ---
 run-all: up
 	@echo "Starting backend and frontend..."
 	$(MAKE) run-backend &
 	$(MAKE) run-frontend
 
-# --- Go API server ---
 run-backend:
 	cd apps/api && go run ./cmd/server
 
-# Hot-reload backend via air (github.com/air-verse/air). Install: go install github.com/air-verse/air@latest
 run-backend-hot:
 	cd apps/api && air -c .air.toml
 
-# --- sqlc code generation ---
-# Version is pinned in apps/api/.sqlc-version so local and CI emit identical code.
 SQLC_VERSION := $(shell tr -d '[:space:]' < apps/api/.sqlc-version)
 
 sqlc-install:
@@ -198,12 +162,9 @@ sqlc-install:
 sqlc-generate:
 	cd apps/api && sqlc generate
 
-# Fails if apps/api/internal/db/sqlcgen is stale. Mirrors the API CI job.
 sqlc-check:
 	./scripts/sqlc-check.sh
 
-# --- tygo code generation (Go DTOs -> packages/shared/src/generated.ts) ---
-# Version is pinned in apps/api/.tygo-version so local and CI emit identical code.
 TYGO_VERSION := $(shell tr -d '[:space:]' < apps/api/.tygo-version)
 
 tygo-install:
@@ -212,17 +173,13 @@ tygo-install:
 tygo-generate:
 	cd apps/api && tygo generate
 
-# Fails if packages/shared/src/generated.ts is stale. Mirrors the API CI job.
 tygo-check:
 	./scripts/tygo-check.sh
 
-# --- contracts code generation (Go event structs -> JSON Schema -> apps/ai Pydantic models) ---
 contracts-generate:
 	cd apps/api && go run ./cmd/contractsgen
 	./scripts/contracts-generate-ai.sh
 
-# Fails if apps/api/internal/events/schema or apps/ai/src/jobfinder_ai/contracts
-# is stale. Mirrors sqlc-check/tygo-check.
 contracts-check:
 	./scripts/contracts-check.sh
 

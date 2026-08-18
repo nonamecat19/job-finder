@@ -20,12 +20,6 @@ services:
     ports:
       - "6379:6379"
 
-  # Message broker (047-langchain-ai-service) — RabbitMQ replaces asynq/Redis
-  # as the one asynchronous mechanism (Constitution 2.1.0). Every queue is
-  # quorum + durable so work survives a broker restart (FR-033,
-  # contracts/messaging.md M1-2). The default `guest` account never exists:
-  # setting RABBITMQ_DEFAULT_USER/PASS replaces it outright (M7-1) — there is
-  # no separate guest login to remove.
   rabbitmq:
     image: rabbitmq:4.3.4-management-alpine
     environment:
@@ -33,17 +27,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS in .env}
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
-      # consumer_timeout above the longest work type's MaxDuration (M3-6) —
-      # the RabbitMQ default would kill a multi-minute generation run.
       - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/10-consumer-timeout.conf:ro
     ports:
-      # Management UI and AMQP, both loopback only (contracts/configuration.md
-      # K4-1, K4-4) — the same host-side-only trap GATEWAY_URL documents
-      # below. AMQP is published here because dev's `apps/api` runs on the
-      # host (`make run-backend`), same as Postgres/Redis above, not as a
-      # compose service — unlike `docker-compose.prod.yml`, where `api`/`ai`
-      # run as containers and reach the broker as `rabbitmq:5672`, so no
-      # host publish exists there (M7-2, FR-038).
       - "127.0.0.1:15672:15672"
       - "127.0.0.1:5672:5672"
     healthcheck:
@@ -53,11 +38,6 @@ services:
       retries: 10
       start_period: 20s
 
-  # One-shot init that creates the AI service's restricted broker account
-  # once RabbitMQ is healthy (contracts/messaging.md M7-3): it may consume
-  # the AI work queues and publish results, nothing else — no ingest/enrich
-  # access, no topology administration. Mirrors the `createbuckets` pattern
-  # below.
   rabbitmq-init:
     image: curlimages/curl:8.11.1
     depends_on:
@@ -72,12 +52,6 @@ services:
       - ./docker/rabbitmq/init-ai-user.sh:/init-ai-user.sh:ro
     entrypoint: ["/bin/sh", "/init-ai-user.sh"]
 
-  # AI orchestration service (047-langchain-ai-service) — LangChain/LangGraph
-  # capabilities behind RabbitMQ work queues and an interactive HTTP surface.
-  # Depends on rabbitmq (healthy) and litellm (started) only; tracing is
-  # never a startup dependency (contracts/configuration.md K4-2) and this
-  # service never receives DATABASE_URL or a provider credential (K2-2,
-  # K2-3) — only its own restricted broker account and the gateway.
   ai:
     build:
       context: .
@@ -100,17 +74,6 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
-  # LiteLLM proxy gateway — the application's only inference path
-  # (044-litellm-only-routing, Constitution Principle V 2.0.0). The Go backend
-  # sends OpenAI-compatible requests with the scenario name as `model`; the
-  # proxy resolves it to an ordered failover chain in gateway/config.yaml
-  # (mounted read-only), per-class as contracts/gateway-config.md C2-3
-  # describes. Every chain terminates on hosted providers only — there is no
-  # local/self-hosted tier left to fall back to. No depends_on: the proxy is
-  # independent of postgres/redis. Every provider key gets an empty default so
-  # a missing credential never aborts config load (030-FR-011) — it just fails
-  # that tier's auth at request time and the chain advances. Config contract:
-  # specs/044-litellm-only-routing/contracts/gateway-config.md.
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     container_name: litellm
@@ -121,27 +84,12 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      # Observability collector (036 FR-001, contracts C2-6). These live here
-      # and nowhere else: the application container must never receive a
-      # LANGFUSE_* variable (FR-007), and the callbacks declared in
-      # gateway/config.yaml are what turn every routed call into a record with
-      # no Go change at all.
-      #
-      # LANGFUSE_HOST is a container-network address. Use the published
-      # loopback port only for host-side checks — the same trap GATEWAY_URL
-      # documents in .env.example.
-      #
-      # All three empty means the callback is inert: requests are served
-      # exactly as before and nothing is recorded. A collector that is down,
-      # or up but not answering, must likewise never slow or fail a call.
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
     ports:
       - "4000:4000"
     healthcheck:
-      # litellm main-stable image has no curl/wget; Python is the only HTTP
-      # client available.
       test:
         [
           "CMD",
@@ -153,27 +101,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # --- LLM observability collector (036-langfuse-llm-observability) ---
-  #
-  # Langfuse v4 is a service group, not one container: `langfuse-web` serves the
-  # ingestion API and the operator UI, `langfuse-worker` drains the ingestion
-  # queue, and ClickHouse holds the observation records. Postgres, Redis and
-  # MinIO are reused — the only genuinely new stateful service is ClickHouse
-  # (research R2, contracts §3).
-  #
-  # Pinned tags (contracts C3-1), resolved from the registry 2026-08-07:
-  #   langfuse/langfuse:4.6.0
-  #   langfuse/langfuse-worker:4.6.0
-  #   clickhouse/clickhouse-server:26.4.5
-  #
-  # Nothing in the platform depends on any of these. `litellm` deliberately has
-  # no depends_on for them (contracts C3-2): inference must start and serve
-  # whether or not the collector is up, and a collector that can stall
-  # inference is not shipped (FR-004).
-  #
-  # Every variable defaults to empty. Empty LANGFUSE_* in the litellm service
-  # means the callback is inert and calls proceed unrecorded; empty here means
-  # this service group fails to start, which affects nothing else.
   langfuse-web:
     image: langfuse/langfuse:4.6.0
     depends_on:
@@ -184,10 +111,6 @@ services:
       minio:
         condition: service_healthy
     environment:
-      # Its own logical database on the platform's Postgres server. Separate
-      # database, never a shared schema: Langfuse runs its own migrations and
-      # must not be entangled with goose (contracts C3-3). Create it once by
-      # hand — see specs/domains/platform-operations.md.
       DATABASE_URL: ${LANGFUSE_DB_URL:-}
       CLICKHOUSE_URL: ${LANGFUSE_CLICKHOUSE_URL:-}
       CLICKHOUSE_MIGRATION_URL: ${LANGFUSE_CLICKHOUSE_MIGRATION_URL:-}
@@ -204,16 +127,10 @@ services:
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-}
       SALT: ${SALT:-}
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-}
-      # The collector stores the user's full profile in plain text. An instance
-      # that accepts signups from anyone who can reach it is not inside any
-      # trust boundary worth the name (contracts C2-5).
       AUTH_DISABLE_SIGNUP: ${AUTH_DISABLE_SIGNUP:-true}
-      # Nothing about this deployment leaves it (FR-005, SC-006).
       TELEMETRY_ENABLED: "false"
       LANGFUSE_EE_LICENSE_KEY: ""
     ports:
-      # Loopback only, in dev as well as prod (contracts C3-4): this UI holds
-      # the user's legal name, employers and contact details in plain text.
       - "127.0.0.1:3100:3000"
     healthcheck:
       test:
@@ -252,12 +169,6 @@ services:
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-}
       TELEMETRY_ENABLED: "false"
 
-  # ClickHouse is the one new stateful service this feature costs. It gets its
-  # own volume, never a shared one (contracts C3-6): prompt bodies are unbounded
-  # by nature, and a healthy collector filling a disk the platform's own
-  # datastores live on would stop inference — a failure mode the FR-004 gate
-  # does not test for. The size cap below is the second half of that bound; the
-  # first is the pruning job (FR-008), which is what keeps the window finite.
   clickhouse:
     image: clickhouse/clickhouse-server:26.4.5
     environment:
@@ -292,8 +203,6 @@ services:
       retries: 3
       start_period: 10s
 
-  # MinIO S3-compatible object storage for generated resume/cover-letter files.
-  # API on :9000, web console on :9001.
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -306,8 +215,6 @@ services:
       - "9000:9000"
       - "9001:9001"
     healthcheck:
-      # minio's image ships no curl/wget/mc; /bin/sh is bash, so probe
-      # /minio/health/live with bash's /dev/tcp pseudo-device instead.
       test:
         [
           "CMD",
@@ -319,7 +226,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # One-shot init that creates the documents bucket once MinIO is reachable.
   createbuckets:
     image: minio/mc:latest
     depends_on: [minio]
@@ -338,8 +244,6 @@ volumes:
   pgdata: {}
   documents: {}
   miniodata: {}
-  # Collector storage, deliberately separate from every platform volume
-  # (036 contracts C3-6).
   clickhousedata: {}
   clickhouselogs: {}
   rabbitmqdata: {}
