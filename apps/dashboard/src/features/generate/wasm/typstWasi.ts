@@ -141,6 +141,11 @@ export async function compilePdf(typstSource: string): Promise<Uint8Array> {
       }),
       root,
     ],
+    // The shim's debug logging defaults to ON when the option is omitted
+    // (`debug.enable(undefined)` treats undefined as true), which puts a
+    // "wasi: <path>" line in the console for every font and package file typst
+    // opens — a hundred lines per preview render.
+    { debug: false },
   );
 
   const instance = await WebAssembly.instantiate(module, {

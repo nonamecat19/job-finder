@@ -167,6 +167,9 @@
   --color-tint-rose: var(--tint-rose);
   --color-tint-rose-fg: var(--tint-rose-fg);
 
+  --color-paper: var(--paper);
+  --color-paper-dark: var(--paper-dark);
+
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
@@ -184,6 +187,10 @@
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Paper. `aspect-a4` shapes anything that stands in for a printed page —
+     the resume preview above all — in the proportions it will be printed at. */
+  --aspect-a4: 210 / 297;
 }
 
 /* ---------------------------------------------------------------------------
@@ -296,6 +303,15 @@
   --border-card: var(--border);
   --border-control: var(--border);
   --link: var(--accent);
+
+  /* Paper. A rendered document is white stock; `--paper-dark` is what it is
+     shown on when the reader has asked for a dark sheet (Appearance →
+     "Dark resume preview"). It is the dark palette's own canvas colour — the
+     darkest ground the design system uses — and it stays that colour in either
+     dashboard theme, because the preference is about the document, not about
+     the dashboard. */
+  --paper: oklch(1 0 0);
+  --paper-dark: oklch(0.165 0.008 265);
 }
 
 /* ---------------------------------------------------------------------------

@@ -26,8 +26,10 @@ function baseRun(overrides: Partial<GenerationRunDto> = {}): GenerationRunDto {
     masterChanged: false,
     shapeConfig: {
       summaryLines: 4,
+      summaryEnabled: true,
       skillsEnabled: true,
       skillsMaxGroups: 0,
+      experienceEnabled: true,
       experienceBulletsMin: 8,
       experienceBulletsMax: 10,
       targetPages: 1,
@@ -38,6 +40,7 @@ function baseRun(overrides: Partial<GenerationRunDto> = {}): GenerationRunDto {
       certificationsEnabled: true,
       certificationsMin: 0,
       certificationsMax: 0,
+      educationEnabled: true,
       fontSize: 10,
     },
     export: { status: '' },
@@ -51,6 +54,7 @@ function baseRun(overrides: Partial<GenerationRunDto> = {}): GenerationRunDto {
         targetCount: 8,
         state: 'ready',
         fallbackUsed: false,
+        enabled: true,
         items: [
           {
             id: 'item-1',
@@ -109,8 +113,9 @@ describe('ResumePreviewPane', () => {
     renderWithProviders(<ResumePreviewPane run={baseRun()} profile={undefined} />);
 
     await vi.advanceTimersByTimeAsync(500);
-    const frame = await screen.findByTestId('resume-preview');
-    expect(frame).toHaveAttribute('src', 'blob:pdf-1');
+    // The preview is drawn in-page (PdfPreviewCanvas) rather than handed to an
+    // <iframe>, so what a ready render puts on screen is the canvas surface.
+    await screen.findByTestId('resume-preview');
     expect(api.generations.previewDocument).toHaveBeenCalledWith('run-1');
   });
 
@@ -161,6 +166,7 @@ describe('ResumePreviewPane', () => {
                 targetCount: 8,
                 state: 'ready',
                 fallbackUsed: false,
+                enabled: true,
                 items: [
                   {
                     id: 'item-1',
@@ -212,6 +218,7 @@ describe('ResumePreviewPane', () => {
               targetCount: 8,
               state: 'ready',
               fallbackUsed: false,
+              enabled: true,
               items: [
                 {
                   id: 'item-1',

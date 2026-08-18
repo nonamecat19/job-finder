@@ -9,10 +9,10 @@ import { cachedFetch } from "./assetCache";
 
 declare global {
   var fs: unknown;
-  interface Window {
-    Go: new () => GoInstance;
-    rendercvBuildTypst?: (yaml: string) => Promise<string>;
-  }
+  // On globalThis rather than Window: this module also runs inside the preview
+  // Web Worker (previewWorker.ts), where there is no window at all.
+  var Go: (new () => GoInstance) | undefined;
+  var rendercvBuildTypst: ((yaml: string) => Promise<string>) | undefined;
 }
 
 // Go's GOOS=js/wasm runtime does real file I/O for template partials and
@@ -37,8 +37,20 @@ interface GoInstance {
 
 let loadPromise: Promise<void> | null = null;
 
-function loadWasmExecScript(): Promise<void> {
-  if (typeof window.Go !== "undefined") return Promise.resolve();
+async function loadWasmExecScript(): Promise<void> {
+  if (typeof globalThis.Go !== "undefined") return;
+  // In a worker there is no document to hang a <script> on. wasm_exec.js is a
+  // classic script that only ever touches globalThis (it assigns globalThis.Go
+  // and reads globalThis.fs), so evaluating its source in worker scope has the
+  // same effect as loading the tag would in the page.
+  if (typeof document === "undefined") {
+    const source = await (await fetch("/wasm/wasm_exec.js")).text();
+    (0, eval)(source);
+    if (typeof globalThis.Go === "undefined") {
+      throw new Error("resume preview: /wasm/wasm_exec.js did not define Go");
+    }
+    return;
+  }
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = "/wasm/wasm_exec.js";
@@ -51,7 +63,7 @@ function loadWasmExecScript(): Promise<void> {
 async function load(): Promise<void> {
   installMemFs();
   await loadWasmExecScript();
-  const go = new window.Go();
+  const go = new globalThis.Go!();
   const wasmResponse = await cachedFetch("/wasm/rendercv.wasm");
   const { instance } = await WebAssembly.instantiateStreaming(wasmResponse.clone(), go.importObject).catch(async () => {
     // instantiateStreaming needs the right MIME type from the server; a dev
@@ -72,7 +84,7 @@ function waitForGlobal(timeoutMs = 10_000): Promise<void> {
   const start = Date.now();
   return new Promise((resolve, reject) => {
     const check = () => {
-      if (typeof window.rendercvBuildTypst === "function") {
+      if (typeof globalThis.rendercvBuildTypst === "function") {
         resolve();
         return;
       }
@@ -100,8 +112,8 @@ export async function ensureRendercvWasmLoaded(): Promise<void> {
 /** RenderCV YAML -> Typst source, via the loaded WASM module. */
 export async function buildTypst(yaml: string): Promise<string> {
   await ensureRendercvWasmLoaded();
-  if (!window.rendercvBuildTypst) {
+  if (!globalThis.rendercvBuildTypst) {
     throw new Error("resume preview: rendercv.wasm is not loaded");
   }
-  return window.rendercvBuildTypst(yaml);
+  return globalThis.rendercvBuildTypst(yaml);
 }

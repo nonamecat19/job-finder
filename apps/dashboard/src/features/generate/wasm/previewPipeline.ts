@@ -3,18 +3,20 @@
 // typstWasi.compilePdf -> a blob: URL for ResumePreviewPane.tsx to embed.
 // See specs/046-real-resume-preview/plan.md and research.md.
 import { api } from '../../../lib/api';
-import { buildTypst, ensureRendercvWasmLoaded } from './rendercvWasm';
-import { compilePdf, ensureTypstWasiLoaded } from './typstWasi';
+import { renderPdfBytes, warmUp } from './previewWorkerClient';
 
 export type PreviewState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'ready'; pdfUrl: string; sectionsHash: string }
+  // pdfBytes is the same document as pdfUrl, kept alongside it because the
+  // in-page canvas viewer (PdfPreviewCanvas) needs the bytes to read the
+  // text layer — a blob: URL in an <iframe> is opaque to us.
+  | { status: 'ready'; pdfUrl: string; pdfBytes: Uint8Array; sectionsHash: string }
   | { status: 'error'; message: string };
 
 /** Pre-fetches both WASM modules and their assets, ahead of the first render. */
 export async function warmUpPreviewPipeline(): Promise<void> {
-  await Promise.all([ensureRendercvWasmLoaded(), ensureTypstWasiLoaded()]);
+  await warmUp();
 }
 
 /**
@@ -33,15 +35,16 @@ export function isPreviewSupported(): boolean {
  * ResumePreviewPane.tsx) once a new render replaces it, so blob: URLs don't
  * accumulate across edits.
  */
-export async function renderPreview(runId: string): Promise<{ pdfUrl: string; sectionsHash: string }> {
+export async function renderPreview(
+  runId: string,
+): Promise<{ pdfUrl: string; pdfBytes: Uint8Array; sectionsHash: string }> {
   const { yaml, sectionsHash } = await api.generations.previewDocument(runId);
-  const typst = await buildTypst(yaml);
-  const pdfBytes = await compilePdf(typst);
+  const pdfBytes = await renderPdfBytes(yaml);
   // TS's DOM lib types Uint8Array's backing buffer as ArrayBufferLike (which
   // includes SharedArrayBuffer), stricter than BlobPart actually requires at
   // runtime — a Uint8Array is always a valid BlobPart.
   const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
-  return { pdfUrl: URL.createObjectURL(blob), sectionsHash };
+  return { pdfUrl: URL.createObjectURL(blob), pdfBytes, sectionsHash };
 }
 
 const DEFAULT_DEBOUNCE_MS = 400;
@@ -63,6 +66,7 @@ export class PreviewScheduler {
   #generation = 0;
   #lastSectionsHash: string | null = null;
   #lastPdfUrl: string | null = null;
+  #lastPdfBytes: Uint8Array | null = null;
 
   constructor(onChange: (state: PreviewState) => void, debounceMs = DEFAULT_DEBOUNCE_MS) {
     this.#onChange = onChange;
@@ -92,25 +96,29 @@ export class PreviewScheduler {
       const { yaml, sectionsHash } = await api.generations.previewDocument(runId);
       if (generation !== this.#generation) return; // superseded while awaiting the network
 
-      if (sectionsHash === this.#lastSectionsHash && this.#lastPdfUrl) {
+      if (sectionsHash === this.#lastSectionsHash && this.#lastPdfUrl && this.#lastPdfBytes) {
         // Two edits resolved to the same effective document (e.g. a toggle
         // flipped off then back on before the debounce window closed) — the
         // existing render is still correct, skip a redundant WASM pass.
-        this.#onChange({ status: 'ready', pdfUrl: this.#lastPdfUrl, sectionsHash });
+        this.#onChange({
+          status: 'ready',
+          pdfUrl: this.#lastPdfUrl,
+          pdfBytes: this.#lastPdfBytes,
+          sectionsHash,
+        });
         return;
       }
 
-      const typst = await buildTypst(yaml);
-      if (generation !== this.#generation) return;
-      const pdfBytes = await compilePdf(typst);
+      const pdfBytes = await renderPdfBytes(yaml);
       if (generation !== this.#generation) return;
 
       const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
       const pdfUrl = URL.createObjectURL(blob);
       if (this.#lastPdfUrl) URL.revokeObjectURL(this.#lastPdfUrl);
       this.#lastPdfUrl = pdfUrl;
+      this.#lastPdfBytes = pdfBytes;
       this.#lastSectionsHash = sectionsHash;
-      this.#onChange({ status: 'ready', pdfUrl, sectionsHash });
+      this.#onChange({ status: 'ready', pdfUrl, pdfBytes, sectionsHash });
     } catch (err) {
       if (generation !== this.#generation) return;
       this.#onChange({ status: 'error', message: err instanceof Error ? err.message : String(err) });
@@ -122,5 +130,6 @@ export class PreviewScheduler {
     this.#generation++; // orphan any in-flight run so its result is dropped
     if (this.#lastPdfUrl) URL.revokeObjectURL(this.#lastPdfUrl);
     this.#lastPdfUrl = null;
+    this.#lastPdfBytes = null;
   }
 }

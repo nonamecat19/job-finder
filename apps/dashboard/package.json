@@ -29,6 +29,7 @@
     "dompurify": "^3.4.12",
     "lucide-react": "^1.24.0",
     "memfs": "^4.68.1",
+    "pdfjs-dist": "^6.2.108",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",

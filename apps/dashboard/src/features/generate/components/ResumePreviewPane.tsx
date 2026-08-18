@@ -1,14 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileDown } from 'lucide-react';
 import type { GenerationExportDto, GenerationRunDto, ProfileDto } from '@job-finder/shared';
 import { Button, EmptyState, Spinner } from '../../../components/ui';
 import { api } from '../../../lib/api';
+import { cn } from '../../../lib/utils';
+import PdfPreviewCanvas from '../preview/PdfPreviewCanvas';
+import { matchableItems, type MatchableItem } from '../preview/blockMap';
 import { PreviewScheduler, type PreviewState } from '../wasm/previewPipeline';
 import OverflowReport from './OverflowReport';
 
 export interface ResumePreviewPaneProps {
   run: GenerationRunDto | undefined;
   profile: ProfileDto | undefined;
+  /** Drops an item from the selection — the preview's block context menu. */
+  onRemoveItem?: (itemId: string) => void;
+  /** Reorders a section's items from a drag dropped on the preview itself. */
+  onReorder?: (sectionId: string, itemIds: string[]) => void;
   onExport?: () => void;
   exportPending?: boolean;
   exportDisabled?: boolean;
@@ -28,6 +35,8 @@ export default function ResumePreviewPane({
   // passes it) but the real PDF render carries its own header/contact info —
   // there is nothing left for this component to derive from it directly.
   profile: _profile,
+  onRemoveItem,
+  onReorder,
   onExport,
   exportPending,
   exportDisabled,
@@ -36,6 +45,22 @@ export default function ResumePreviewPane({
   warnings,
 }: ResumePreviewPaneProps) {
   const preview = useResumePreview(run);
+  // How many pages the current selection actually renders as, reported by the
+  // viewer. Kept next to the export control so the page budget is visible
+  // while editing, not only once an export comes back blocked.
+  // Tagged with the run it was measured on so switching runs clears it during
+  // render rather than through a reset effect.
+  const [rendered, setRendered] = useState<{ runId: string; count: number } | null>(null);
+  const pageCount = rendered && rendered.runId === run?.id ? rendered.count : null;
+  const reportPageCount = useCallback(
+    (count: number) => {
+      if (run) setRendered({ runId: run.id, count });
+    },
+    [run],
+  );
+  // What the preview's text is matched against to build its hoverable blocks
+  // (preview/blockMap.ts) — recomputed only when the selection itself changes.
+  const items = useMemo(() => (run ? matchableItems(run.sections) : []), [run]);
 
   if (!run) {
     return <EmptyState>Generate a resume to preview it here.</EmptyState>;
@@ -45,10 +70,20 @@ export default function ResumePreviewPane({
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="min-h-0 flex-1 overflow-hidden rounded-sm border border-border bg-white shadow-overlay">
-        <PreviewSurface state={preview} />
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      {/* The surface takes whatever the tile gives it; the sheet inside is
+          scaled to that width by the viewer (PdfPreviewCanvas). */}
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface-secondary">
+        <PreviewSurface
+          state={preview}
+          items={items}
+          onRemoveItem={onRemoveItem}
+          onReorder={onReorder}
+          onPageCount={reportPageCount}
+        />
       </div>
+
+      <PageBudget pages={pageCount} target={run.shapeConfig.targetPages} />
 
       {warnings?.map((warning) => (
         <p key={warning} className="rounded-lg bg-warning-soft px-2.5 py-2 text-xs text-warning">
@@ -91,7 +126,37 @@ export default function ResumePreviewPane({
   );
 }
 
-function PreviewSurface({ state }: { state: PreviewState }) {
+// PageBudget is the live counterpart to OverflowReport: the rendered page
+// count against the shape's target, shown on every render rather than only
+// when an export is refused. Warning-toned once it is over — the export will
+// be blocked, and knowing that before pressing the button is the point.
+function PageBudget({ pages, target }: { pages: number | null; target: number }) {
+  if (pages === null) return null;
+  const over = pages > target;
+  return (
+    <p
+      className={cn('text-xs', over ? 'text-warning' : 'text-faint')}
+      data-testid="page-budget"
+    >
+      {pages} page{pages === 1 ? '' : 's'} of {target} target
+      {over ? ' — over budget' : null}
+    </p>
+  );
+}
+
+function PreviewSurface({
+  state,
+  items,
+  onRemoveItem,
+  onReorder,
+  onPageCount,
+}: {
+  state: PreviewState;
+  items: MatchableItem[];
+  onRemoveItem?: (itemId: string) => void;
+  onReorder?: (sectionId: string, itemIds: string[]) => void;
+  onPageCount?: (count: number) => void;
+}) {
   switch (state.status) {
     case 'idle':
       return null;
@@ -110,13 +175,16 @@ function PreviewSurface({ state }: { state: PreviewState }) {
         </div>
       );
     case 'ready':
+      // Deliberately not keyed on the render: the viewer keeps its zoom and
+      // scroll position across edits, which is the whole point of a live
+      // preview — a re-render swaps the bytes underneath it, not the pane.
       return (
-        <iframe
-          key={state.pdfUrl}
-          src={state.pdfUrl}
-          title="Resume preview"
-          data-testid="resume-preview"
-          className="h-full w-full min-h-[32rem] border-0"
+        <PdfPreviewCanvas
+          pdfBytes={state.pdfBytes}
+          items={items}
+          onRemoveItem={onRemoveItem}
+          onReorder={onReorder}
+          onPageCount={onPageCount}
         />
       );
   }
