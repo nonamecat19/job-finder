@@ -40,6 +40,14 @@ type VacancyAnalysis struct {
 	KeyResponsibilities []string `json:"keyResponsibilities" jsonschema_description:"top 3-5 responsibilities mentioned"`
 	IndustryKeywords    []string `json:"industryKeywords"    jsonschema_description:"domain/industry terms to match (e.g. fintech, SaaS, healthcare)"`
 	SeniorityKeywords   []string `json:"seniorityKeywords"   jsonschema_description:"leadership/ownership indicators found in the vacancy"`
+
+	// TargetTitle and TargetCompany are the vacancy's own header, carried
+	// alongside the analysis rather than produced by it. `json:"-"` keeps them
+	// out of the response schema, so no stage can rewrite the role it is
+	// tailoring for, and it keeps them out of the persisted analysis, so the
+	// rerun path re-reads them from the run rather than trusting a snapshot.
+	TargetTitle   string `json:"-"`
+	TargetCompany string `json:"-"`
 }
 
 type HighlightRef struct {
@@ -163,8 +171,14 @@ type SummaryBrief struct {
 	TotalYears       int
 	Highlights       []string
 	SkillGroupLabels []string
-	SentenceMin      int
-	SentenceMax      int
+	// SkillLines are the candidate's ranked skill groups as "Label: a, b, c".
+	// Group labels alone name no technology, so a summary written from them
+	// could only reach for whatever the selected highlights happened to
+	// mention — which is how a Vue vacancy produced a summary that never said
+	// Vue. These are the tailored groups, so the vacancy's own skills lead.
+	SkillLines  []string
+	SentenceMin int
+	SentenceMax int
 
 	PreviousViolations []string
 }
