@@ -4,7 +4,7 @@ Consolidates **023** enforced workflow quality gates, **007** CI test gate (supe
 023), **008** health/readiness checks, **018** queue monitoring (asynqmon, superseded by the
 RabbitMQ management UI — see § 6), **026** DB connection capacity.
 
-Implementation: `.github/workflows/`, `Makefile`, `.claude/settings.json`,
+Implementation: `.github/workflows/`, `Justfile`, `.claude/settings.json`,
 `apps/api/internal/health/`, `internal/dbutil/`, `docker-compose*.yml`. How it works:
 [`docs/operations/ci-cd.md`](../../docs/docs/operations/ci-cd.md),
 [`docs/operations/testing.md`](../../docs/docs/operations/testing.md),
@@ -19,7 +19,7 @@ they exist and what they must guarantee.
 
 The trunk is unprotected. 023-FR-001 required it to reject direct writes and was enforced in
 three places: `.githooks/pre-commit`, `.githooks/pre-push`, and a Claude Code `PreToolUse`
-hook (`scripts/hooks/guard-master.sh`). All three are deleted, the `make setup-hooks` target
+hook (`scripts/hooks/guard-master.sh`). All three are deleted, the `just setup-hooks` target
 that activated them is gone, and `core.hooksPath` is unset.
 
 The reason is a contradiction rather than a change of mind about branches. `CLAUDE.md`
@@ -70,7 +70,7 @@ Current jobs — `.github/workflows/api-ci.yml`:
 >
 > `.github/workflows/e2e.yml` ran the Playwright suite on a nightly schedule, on pull
 > requests, on pushes to master and on demand. **It was deleted.** The suite itself is
-> intact and runs locally through `make test-e2e`.
+> intact and runs locally through `just test-e2e`.
 >
 > Revoked with it: **023-FR-019** (the end-to-end suite runs at least daily and on demand),
 > **023-FR-020** (failures surfaced without polling) and **023-SC-009**. The `e2e
@@ -86,7 +86,7 @@ Current jobs — `.github/workflows/api-ci.yml`:
 **Path filtering.** Every job carries `needs: changes` and an `if:` on a
 `dorny/paths-filter` output, so a change touching only documentation or repo workflow —
 `specs/**`, `docs/**`, `.specify/**`, `scripts/hooks/**`, `AGENTS.md`,
-`README.md`, `Makefile`, `.github/workflows/**` — matches no filter and skips the entire
+`README.md`, `Justfile`, `.github/workflows/**` — matches no filter and skips the entire
 set. Two rules keep this from weakening the gate:
 
 - **Never a top-level `on: paths:`.** A workflow skipped that way reports no checks at all,
@@ -97,9 +97,9 @@ set. Two rules keep this from weakening the gate:
   `github.event_name != 'pull_request' || ...`, so pushes to master and
   `workflow_dispatch` always run everything unfiltered.
 
-`Makefile` and `.github/workflows/**` were originally in every filter, on the correct
+`Justfile` and `.github/workflows/**` were originally in every filter, on the correct
 observation that either can change any job's verdict. They were removed because the cost
-was disproportionate — a docs-only change adjusting a Makefile comment rebuilt Go and Node
+was disproportionate — a docs-only change adjusting a Justfile comment rebuilt Go and Node
 for ~20 runner-minutes. The second rule is what makes that safe: such a change is still
 fully exercised, on the merge commit rather than on the pull request.
 
@@ -183,7 +183,7 @@ Two non-obvious filter memberships:
   *unregenerated* one is exactly what `tygo generate is up to date` exists to catch.
 
 `lint (go)` reads its version from `apps/api/.golangci-version` exactly as the drift jobs read
-their pins, and uses `golangci-lint-action` rather than `make lint-go` **only** for result
+their pins, and uses `golangci-lint-action` rather than `just lint-go` **only** for result
 caching — the config and pin are identical, so the verdicts match.
 
 `integration test` declares **no `services:` block and no `DATABASE_URL`**. The suite starts
@@ -237,7 +237,7 @@ deferred — explicitly, within FR-002 itself — is the *host* refusing the mer
 
 ## 3. Local quality command (023-FR-007..015)
 
-`make test-lint` = `lint-go` + `lint-web` + `test-go` + `test-react`, failing if any of the
+`just test-lint` = `lint-go` + `lint-web` + `test-go` + `test-react`, failing if any of the
 four fails (023-FR-009).
 
 - 023-FR-010: generated files are excluded from hand-written-code rules.
@@ -252,7 +252,7 @@ four fails (023-FR-009).
   is no Python here and `test-lint` never checked any.
 - 023-SC-004: violations reported within 60 seconds locally.
 
-`make test-integration` and `make test-e2e` are separate targets — they need containers or a
+`just test-integration` and `just test-e2e` are separate targets — they need containers or a
 browser — and are deliberately **not** part of `test-lint`.
 
 **The coverage invariant**: `test-lint` must cover the union of every required CI check that
@@ -266,11 +266,11 @@ The second clause of the invariant above was added by 039 rather than quietly vi
 Four new targets exist, grouped under one alias:
 
 ```
-make vuln-go    # scripts/govulncheck-check.sh
-make vuln-web   # pnpm audit --audit-level=high --prod=false
-make secrets    # gitleaks git . --redact --config .gitleaks.toml
-make audit      # the three above, first non-zero wins (same shape as `make lint`)
-make images     # docker build of both images, standalone
+just vuln-go    # scripts/govulncheck-check.sh
+just vuln-web   # pnpm audit --audit-level=high --prod=false
+just secrets    # gitleaks git . --redact --config .gitleaks.toml
+just audit      # the three above, first non-zero wins (same shape as `just lint`)
+just images     # docker build of both images, standalone
 ```
 
 None is part of `test-lint`, and that is a decision, not an omission:
@@ -282,10 +282,10 @@ None is part of `test-lint`, and that is a decision, not an omission:
 2. **They need the network, and `images` needs Docker.** That is the same exemption
    `test-integration` and `test-e2e` already hold.
 
-`make images` additionally costs 6–8 minutes cold, which would make the pre-push loop
+`just images` additionally costs 6–8 minutes cold, which would make the pre-push loop
 slower than CI and push people to skip it entirely.
 
-`make secrets` is the closest call — it is fast, offline and deterministic, and it would
+`just secrets` is the closest call — it is fast, offline and deterministic, and it would
 fit `test-lint` on the letter of the invariant. It stays with the other three so that
 "audit-class gate" is one coherent group with one entry point, rather than one gate hiding
 inside `test-lint` and three outside it.
@@ -360,26 +360,26 @@ Its `gomod` entry points at `/apps/api`, not `/`. There is no root `go.mod`, and
 wrong path produces silence, not a failure, so the misconfiguration stays invisible until
 someone notices no Go updates have ever arrived.
 
-`make lint-go` runs `scripts/golangci-check.sh` (the version guard) then `golangci-lint run`
+`just lint-go` runs `scripts/golangci-check.sh` (the version guard) then `golangci-lint run`
 over `apps/api` with `apps/api/.golangci.yml`, reporting `file:line: message (linter-name)`.
 Its version-mismatch message mirrors `scripts/sqlc-check.sh` verbatim in structure — pinned
 version, installed version, why it matters, install line.
 
-`make lint-web` runs ESLint over `apps/dashboard` and `packages/shared` with the root flat
+`just lint-web` runs ESLint over `apps/dashboard` and `packages/shared` with the root flat
 config, ignoring `**/dist/**`, `packages/shared/src/generated.ts` and `node_modules`. **A
 missing `node_modules` fails with that instruction rather than silently passing.**
 
-`make lint` = `lint-go` then `lint-web`, first non-zero wins.
+`just lint` = `lint-go` then `lint-web`, first non-zero wins.
 
 **Nothing else may invoke a linter binary directly.** The constitution names `make` targets
 as the canonical entry point precisely so the four callers cannot drift:
 
 | Caller | Calls |
 |---|---|
-| Author, by hand | `make test-lint` before opening a PR; `make audit` when touching dependencies |
+| Author, by hand | `just test-lint` before opening a PR; `just audit` when touching dependencies |
 | `Stop` hook | `lint-go`/`test-go` and/or `lint-web`/`test-react`, scoped to changed paths |
-| `PostToolUse` hooks | `make sqlc-generate`, `make tygo-generate` |
-| CI | `make lint-go`, `make lint-web`, the two-step integration sequence |
+| `PostToolUse` hooks | `just sqlc-generate`, `just tygo-generate` |
+| CI | `just lint-go`, `just lint-web`, the two-step integration sequence |
 
 023 also removed `package.json`'s `"test:python": "make test-python"` — the target did not
 exist, so the script failed on invocation — along with the matching false claim in
@@ -419,7 +419,7 @@ with an install line if absent** (a missing tool must never read as a pass), is 
 hand-runnable, and never writes outside the repository.
 
 **Layer 1 — git hooks: removed.** `pre-commit` and `pre-push` rejected `master` as
-destination; both are deleted along with the `make setup-hooks` target that set
+destination; both are deleted along with the `just setup-hooks` target that set
 `core.hooksPath`, and § 1 records why. A future restoration wants the same shape they had —
 gate destination only, never inspect content, no-op on every other branch — because a content
 check in a git hook is a test that runs at a moment nobody chose.
@@ -433,9 +433,9 @@ carrying `tool_input.file_path`, `tool_input.command`, `cwd` and `session_id`.
 | Hook | Bound to | Behaviour |
 |---|---|---|
 | `go-postedit.sh` | `PostToolUse` on `Edit(apps/api/**/*.go)` | `gofmt -w <file>`, `go vet ./<package>`. Always exit 0; reports through `hookSpecificOutput.additionalContext`. Scoped to the file's package, never the repository |
-| `regen-sqlc.sh` | `PostToolUse` on `Edit(apps/api/internal/db/queries/*.sql)` | `make sqlc-generate`, refreshing `internal/db/sqlcgen/` in the working tree for review |
-| `regen-tygo.sh` | `PostToolUse` on `Edit(apps/api/internal/dto/*.go)` | `make tygo-generate`, refreshing `packages/shared/src/generated.ts` |
-| `session-verify.sh` | `Stop` (no matcher support — fires every time) | Scopes off `git diff --name-only`: Go paths → `make lint-go test-go`; dashboard/shared paths → `make lint-web test-react`; neither → immediate exit 0. Exit 2 **blocks the stop** |
+| `regen-sqlc.sh` | `PostToolUse` on `Edit(apps/api/internal/db/queries/*.sql)` | `just sqlc-generate`, refreshing `internal/db/sqlcgen/` in the working tree for review |
+| `regen-tygo.sh` | `PostToolUse` on `Edit(apps/api/internal/dto/*.go)` | `just tygo-generate`, refreshing `packages/shared/src/generated.ts` |
+| `session-verify.sh` | `Stop` (no matcher support — fires every time) | Scopes off `git diff --name-only`: Go paths → `just lint-go test-go`; dashboard/shared paths → `just lint-web test-react`; neither → immediate exit 0. Exit 2 **blocks the stop** |
 
 > **A restored branch guard must read the branch of the checkout the command writes to** — a
 > `git -C <dir>` or `cd <dir>` inside the command itself, else `cwd`, else

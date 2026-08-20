@@ -40,7 +40,7 @@ manifest only ships host permissions for localhost.
 
 ## Manual verification
 
-Preconditions: infra up (`make up`) and the Go API on `:3000`; a vacancy in
+Preconditions: infra up (`just up`) and the Go API on `:3000`; a vacancy in
 job-finder with a `resume` document whose PDF is rendered and a `cover_letter`.
 
 1. Build and load unpacked as above.
@@ -62,7 +62,7 @@ job-finder with a `resume` document whose PDF is rendered and a `cover_letter`.
 
 ## Tests
 
-`make test-extension` (vitest + jsdom). The adapter fixtures under
+`just test-extension` (vitest + jsdom). The adapter fixtures under
 `tests/fixtures/` are **synthetic** — see the README there — so they prove the
 adapter contract, not that the primary selectors match production markup. Replace
 them with real captures the first time this is driven against a live vacancy.

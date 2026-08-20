@@ -1,7 +1,7 @@
 ---
 title: Local development
 sidebar_position: 1
-description: Prerequisites, environment setup, every Makefile target, ports, and per-worktree isolation.
+description: Prerequisites, environment setup, every Justfile target, ports, and per-worktree isolation.
 ---
 
 # Local development
@@ -14,8 +14,8 @@ description: Prerequisites, environment setup, every Makefile target, ports, and
 | Node ≥ 20 (CI uses 22) | dashboard |
 | pnpm 11 | workspace package manager |
 | Docker + Compose | Postgres, Redis, MinIO, Ollama, asynqmon |
-| `sqlc` at the pinned version | `make sqlc-install` |
-| `tygo` at the pinned version | `make tygo-install` |
+| `sqlc` at the pinned version | `just sqlc-install` |
+| `tygo` at the pinned version | `just tygo-install` |
 
 ## First run
 
@@ -23,17 +23,17 @@ description: Prerequisites, environment setup, every Makefile target, ports, and
 cp .env.example .env
 # set DB_PASSWORD and CONFIG_ENCRYPTION_KEY (openssl rand -hex 32)
 
-make up                                        # postgres, redis, asynqmon, ollama, minio
+just up                                        # postgres, redis, asynqmon, ollama, minio
 pnpm install
 pnpm --filter @job-finder/shared build
-make run-backend                               # :3000 — migrates on startup
-make run-frontend                              # :5173
+just run-backend                               # :3000 — migrates on startup
+just run-frontend                              # :5173
 ```
 
 `db.Migrate` runs inside `main.run`, so there is no separate migration step.
 
 :::warning Long-lived processes
-`make run-backend`, `make run-frontend` and `make run-all` never return. Start them under a
+`just run-backend`, `just run-frontend` and `just run-all` never return. Start them under a
 process supervisor rather than in a blocking shell call (`AGENTS.md`).
 :::
 
@@ -76,57 +76,57 @@ Each worktree gets its own compose project and Postgres host port, *"so migratio
 from one branch never leaks into another's test run."* Two branches can run
 simultaneously.
 
-## Makefile targets
+## Justfile targets
 
 ### Infrastructure
 
 | Target | Effect |
 | --- | --- |
-| `make up` | `docker compose up -d` |
-| `make down` | stop the stack |
-| `make logs` | follow compose logs |
-| `make ps` | container status |
-| `make clean` | `down -v` plus remove `node_modules` and `dist` |
+| `just up` | `docker compose up -d` |
+| `just down` | stop the stack |
+| `just logs` | follow compose logs |
+| `just ps` | container status |
+| `just clean` | `down -v` plus remove `node_modules` and `dist` |
 
 ### Running
 
 | Target | Effect |
 | --- | --- |
-| `make run-backend` | `go run ./cmd/server` |
-| `make run-frontend` | `pnpm dev` |
-| `make run-all` | `up`, then backend and frontend |
+| `just run-backend` | `go run ./cmd/server` |
+| `just run-frontend` | `pnpm dev` |
+| `just run-all` | `up`, then backend and frontend |
 
 ### Tests
 
 | Target | Effect |
 | --- | --- |
-| `make test` | `test-go` + `test-react` |
-| `make test-go` | Go tests against `jobfinder_test` and Redis DB 1 |
-| `make test-react` | `npx vitest run` |
-| `make test-integration` | `go test -tags integration` — starts its own Postgres/RabbitMQ/ClickHouse containers (testcontainers), needs only Docker |
-| `make test-e2e` | compose up, then Playwright |
-| `make test-lint` | `test-go` + `test-react` |
-| `make test-db-setup` | drop and recreate `jobfinder_test` |
+| `just test` | `test-go` + `test-react` |
+| `just test-go` | Go tests against `jobfinder_test` and Redis DB 1 |
+| `just test-react` | `npx vitest run` |
+| `just test-integration` | `go test -tags integration` — starts its own Postgres/RabbitMQ/ClickHouse containers (testcontainers), needs only Docker |
+| `just test-e2e` | compose up, then Playwright |
+| `just test-lint` | `test-go` + `test-react` |
+| `just test-db-setup` | drop and recreate `jobfinder_test` |
 
 ### Code generation
 
 | Target | Effect |
 | --- | --- |
-| `make sqlc-install` / `make sqlc-generate` / `make sqlc-check` | sqlc at the pin in `apps/api/.sqlc-version` |
-| `make tygo-install` / `make tygo-generate` / `make tygo-check` | tygo at the pin in `apps/api/.tygo-version` |
+| `just sqlc-install` / `just sqlc-generate` / `just sqlc-check` | sqlc at the pin in `apps/api/.sqlc-version` |
+| `just tygo-install` / `just tygo-generate` / `just tygo-check` | tygo at the pin in `apps/api/.tygo-version` |
 
 ### Data
 
 | Target | Effect |
 | --- | --- |
-| `make seed` / `make seed-clean` | `go run ./cmd/seed` |
-| `make truncate-db` | truncate the ten core tables with `RESTART IDENTITY CASCADE` |
+| `just seed` / `just seed-clean` | `go run ./cmd/seed` |
+| `just truncate-db` | truncate the ten core tables with `RESTART IDENTITY CASCADE` |
 
 ### Production stack
 
 | Target | Effect |
 | --- | --- |
-| `make prod-build` / `make prod-up` / `make prod-down` | `docker-compose.prod.yml` |
+| `just prod-build` / `just prod-up` / `just prod-down` | `docker-compose.prod.yml` |
 
 ## Compose services
 
@@ -154,16 +154,16 @@ sequenceDiagram
     participant CB as createbuckets
     participant API as go run ./cmd/server
     participant V as vite
-    D->>C: make up
+    D->>C: just up
     C->>PG: start, healthcheck pg_isready
     C->>M: start, healthcheck /minio/health/live
     M->>CB: reachable
     CB->>M: mc mb documents then exit
-    D->>API: make run-backend
+    D->>API: just run-backend
     API->>PG: goose migrate to head
     API->>API: buildPlatform, buildContexts, buildServers
     API-->>D: API listening on 3000
-    D->>V: make run-frontend
+    D->>V: just run-frontend
     V-->>D: dashboard on 5173
 ```
 
@@ -171,10 +171,10 @@ sequenceDiagram
 
 | Task | Commands |
 | --- | --- |
-| Reset the database | `make clean && make up && make run-backend` |
-| Clear job data only | `make truncate-db` |
-| Add a query | edit `internal/db/queries/*.sql`, `make sqlc-generate` |
-| Add a DTO field | edit `internal/dto`, `make tygo-generate`, mirror in `packages/shared/src/index.ts`, rebuild shared |
+| Reset the database | `just clean && just up && just run-backend` |
+| Clear job data only | `just truncate-db` |
+| Add a query | edit `internal/db/queries/*.sql`, `just sqlc-generate` |
+| Add a DTO field | edit `internal/dto`, `just tygo-generate`, mirror in `packages/shared/src/index.ts`, rebuild shared |
 | Try a source | `POST /api/sources/{key}/test` then `/run` |
 | Watch the queues | asynqmon at http://localhost:8090 |
 | Use Ollama Cloud | `OLLAMA_URL=https://ollama.com`, `OLLAMA_KEY=…`, and point `EMBED_URL` at a local Ollama |

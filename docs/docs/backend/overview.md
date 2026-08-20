@@ -11,7 +11,7 @@ description: The Go backend's structure, layering rules, and package taxonomy.
 | Command | Purpose |
 | --- | --- |
 | `cmd/server` | the product: HTTP API + six workers + scheduler + sweeper |
-| `cmd/seed` | seed and clean development data (`make seed`, `make seed-clean`) |
+| `cmd/seed` | seed and clean development data (`just seed`, `just seed-clean`) |
 | `cmd/llmsmoke` | smoke-test complete/structured/embed against the configured provider |
 
 ## Layering

@@ -10,7 +10,7 @@ description: The RabbitMQ management UI in development, what to look at, and a t
 
 asynqmon is gone along with asynq and Redis. RabbitMQ's own management plugin fills the
 same "look inside the broker" role, published in development at `http://localhost:15672`
-after `make up`.
+after `just up`.
 
 :::warning Development only
 Like asynqmon before it, the management UI is not published in `docker-compose.prod.yml` —

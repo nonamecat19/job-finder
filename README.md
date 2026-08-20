@@ -57,14 +57,14 @@ scenario's whole chain is exhausted, the task fails with that reason recorded.
 ## Dev workflow (api/dashboard on host)
 
 ```bash
-make up                    # postgres, redis, litellm, minio
+just up                    # postgres, redis, litellm, minio
 pnpm install
 pnpm --filter @job-finder/shared build
-make run-backend           # api :3000 — runs embedded goose migrations on startup
-make run-frontend          # dashboard :5173 (proxies /api)
+just run-backend           # api :3000 — runs embedded goose migrations on startup
+just run-frontend          # dashboard :5173 (proxies /api)
 ```
 
-`make run-all` starts both. Migrations are embedded in the binary and applied by
+`just run-all` starts both. Migrations are embedded in the binary and applied by
 `cmd/server` at startup — there is no separate migrate command.
 
 The Generate page's live resume preview renders in-browser via two WASM modules built from a
@@ -94,7 +94,7 @@ hand. It is derived from the migrations in `apps/api/internal/db/migrations` and
 Whenever you add or change a migration or a query file, regenerate and commit the result:
 
 ```bash
-make sqlc-generate
+just sqlc-generate
 git add apps/api/internal/db/sqlcgen
 ```
 
@@ -103,11 +103,11 @@ CI enforces this. The **API CI › sqlc generate is up to date** job
 so stale generated code cannot land on master. Reproduce the check locally with:
 
 ```bash
-make sqlc-check
+just sqlc-check
 ```
 
 The sqlc version is pinned in `apps/api/.sqlc-version` so local runs and CI emit identical code.
-Install the pinned version with `make sqlc-install`; `make sqlc-check` refuses to run on a
+Install the pinned version with `just sqlc-install`; `just sqlc-check` refuses to run on a
 mismatched version rather than producing a misleading diff.
 
 ## Using it

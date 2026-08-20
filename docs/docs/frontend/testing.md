@@ -11,13 +11,13 @@ description: Vitest setup, render helpers, factories, what is unit versus e2e, a
 ```mermaid
 flowchart TD
     U["Unit / component: Vitest + Testing Library + jsdom"] --> CI["CI job: frontend-test"]
-    E["End to end: Playwright against a running stack"] --> LOC["make test-e2e — local"]
+    E["End to end: Playwright against a running stack"] --> LOC["just test-e2e — local"]
 ```
 
 | Layer | Location | Environment | Command |
 | --- | --- | --- | --- |
-| Unit / component | `src/**/*.test.ts(x)` | jsdom | `make test-react`, `pnpm --filter @job-finder/dashboard test` |
-| E2E | `tests/e2e/*.spec.ts` | real browser, full stack | `make test-e2e` |
+| Unit / component | `src/**/*.test.ts(x)` | jsdom | `just test-react`, `pnpm --filter @job-finder/dashboard test` |
+| E2E | `tests/e2e/*.spec.ts` | real browser, full stack | `just test-e2e` |
 
 ## Vitest configuration
 
@@ -140,17 +140,17 @@ Three Playwright specs in `tests/e2e`:
 | `feed.spec.ts` | the job feed |
 | `sources.spec.ts` | source configuration |
 
-`make test-e2e` brings up compose, recreates the test database, waits, then runs
+`just test-e2e` brings up compose, recreates the test database, waits, then runs
 Playwright against the live stack. These are the tests that would catch a broken dev proxy
 or a route that renders nothing — things jsdom cannot see.
 
 ## Commands
 
 ```bash
-make test-react                                  # vitest run
+just test-react                                  # vitest run
 pnpm --filter @job-finder/dashboard test:watch   # watch mode
 pnpm --filter @job-finder/dashboard test:coverage
-make test-e2e                                    # Playwright, needs the stack
+just test-e2e                                    # Playwright, needs the stack
 pnpm typecheck                                   # tsc across the workspace
 ```
 

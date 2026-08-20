@@ -67,7 +67,7 @@ harmless. Never renumber an applied migration.
 1. **Append-only.** Once a migration is on `master` it is immutable. Fix a mistake with a
    new migration.
 2. **Always write the `Down`.** Even if you never run it, it documents the inverse.
-3. **Regenerate sqlc in the same commit.** `make sqlc-generate`; CI's `sqlc-drift` job
+3. **Regenerate sqlc in the same commit.** `just sqlc-generate`; CI's `sqlc-drift` job
    fails otherwise.
 4. **Data migrations are migrations too.** `00028_backfill_job_subscription.sql` is a
    backfill; `00027_drop_djinni_dashboard_subs.sql` is a cleanup.
@@ -76,11 +76,11 @@ harmless. Never renumber an applied migration.
 
 ```mermaid
 flowchart TD
-    A["Write NNNNN_name.sql with Up and Down"] --> B["make sqlc-generate"]
+    A["Write NNNNN_name.sql with Up and Down"] --> B["just sqlc-generate"]
     B --> C{"Do queries need updating?"}
     C -->|yes| D["edit internal/db/queries/*.sql"]
     D --> B
-    C -->|no| E["make test-integration"]
+    C -->|no| E["just test-integration"]
     E --> F["commit .sql + regenerated sqlcgen together"]
     F --> G["CI sqlc-drift passes"]
 ```
@@ -119,7 +119,7 @@ stateDiagram-v2
 ## Testing a migration
 
 ```bash
-make test-integration     # starts a Postgres container, migrates it, runs the DB-backed tests
+just test-integration     # starts a Postgres container, migrates it, runs the DB-backed tests
 ```
 
 `internal/db/down_migration_integration_test.go` additionally runs every `Down` block: it
@@ -130,11 +130,11 @@ and how `00027`'s non-idempotent `CREATE TABLE` came to block any roll-forward a
 rollback. Both are fixed; the test is what keeps them fixed.
 
 Each git worktree gets its own compose project and Postgres host port (derived in the
-`Makefile` from a checksum of the directory name), so a branch's migration state cannot
+`Justfile` from a checksum of the directory name), so a branch's migration state cannot
 leak into another branch's test run.
 
 ## Rollback
 
 `goose` supports `Down`, but the deployment model is "start the new binary", which only
 runs `Up`. To roll back in development, run goose manually against the database, or
-recreate it with `make test-db-setup`. In production, prefer a forward fix.
+recreate it with `just test-db-setup`. In production, prefer a forward fix.

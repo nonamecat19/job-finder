@@ -28,13 +28,13 @@ flowchart TD
 **Checks.**
 
 ```bash
-make run-backend 2>&1 | head -20
+just run-backend 2>&1 | head -20
 ```
 
 | Message | Cause | Fix |
 | --- | --- | --- |
 | `DATABASE_URL is required` | missing env | set it in `.env` |
-| `db: connect:` / `db: ping:` | Postgres unreachable | `make up`, check `POSTGRES_HOST_PORT` |
+| `db: connect:` / `db: ping:` | Postgres unreachable | `just up`, check `POSTGRES_HOST_PORT` |
 | `db: migrate up:` | migration failed | see the migration runbook below |
 | `queue: <task>: local concurrency must be >= 1` | bad config | fix the concurrency variable |
 | `queue: ACTIVITY_STALE_AFTER ...` | liveness bounds violated | stale ≥ 2 × heartbeat; stale + sweep < 5m |
@@ -143,7 +143,7 @@ flowchart TD
     C -->|no| E{"already exists?"}
     E -->|yes| F["partially applied — check goose_db_version"]
     D --> D1["write a backfill migration first, then the constraint"]
-    F --> F1["dev: make clean and start over; prod: fix forward"]
+    F --> F1["dev: just clean and start over; prod: fix forward"]
 ```
 
 Never edit an applied migration. Add a new one.
@@ -197,10 +197,10 @@ lost — Redis holds only in-flight work.
 ## Full reset (development)
 
 ```bash
-make clean            # down -v, remove node_modules and dist
-make up
+just clean            # down -v, remove node_modules and dist
+just up
 pnpm install
 pnpm --filter @job-finder/shared build
-make run-backend      # migrates a fresh database
-make seed             # optional sample data
+just run-backend      # migrates a fresh database
+just seed             # optional sample data
 ```

@@ -88,18 +88,18 @@ flowchart TD
 
 ```bash
 cp .env.example .env        # set DB_PASSWORD, CONFIG_ENCRYPTION_KEY (openssl rand -hex 32)
-make up                     # postgres + redis (+ ollama) via docker compose
+just up                     # postgres + redis (+ ollama) via docker compose
 pnpm install
 pnpm --filter @job-finder/shared build
-make run-backend            # Go API + workers + scheduler on :3000
-make run-frontend           # Vite dev server on :5173
+just run-backend            # Go API + workers + scheduler on :3000
+just run-frontend           # Vite dev server on :5173
 ```
 
 Everything else — targets, ports, seeding, test databases — is in
 [Local development](/operations/local-development).
 
 :::warning Long-lived processes
-`make run-backend`, `make run-frontend` and `make run-all` never return. Start them
+`just run-backend`, `just run-frontend` and `just run-all` never return. Start them
 through a process supervisor, not a blocking shell call (`AGENTS.md`).
 :::
 

@@ -14,19 +14,19 @@ flowchart TD
     I --> C["Component — Vitest + Testing Library"]
     C --> U["Unit — go test, fakes, no I/O"]
     U --> N["thousands, fast, in CI"]
-    I --> M["local: make test-integration"]
-    E --> M2["local: make test-e2e"]
+    I --> M["local: just test-integration"]
+    E --> M2["local: just test-e2e"]
 ```
 
 | Layer | Command | In CI |
 | --- | --- | --- |
-| Go unit | `make test-go` | yes (`go-test`) |
+| Go unit | `just test-go` | yes (`go-test`) |
 | Go vet | `go vet ./...` | yes (`go-vet`) |
-| Go integration | `make test-integration` | yes (`integration-test`) |
-| Frontend unit | `make test-react` | yes (`frontend-test`) |
+| Go integration | `just test-integration` | yes (`integration-test`) |
+| Frontend unit | `just test-react` | yes (`frontend-test`) |
 | Typecheck | `pnpm typecheck` | yes (`frontend-typecheck`) |
-| Codegen drift | `make sqlc-check`, `make tygo-check` | yes (`sqlc-drift`, `tygo-drift`) |
-| E2E | `make test-e2e` | no |
+| Codegen drift | `just sqlc-check`, `just tygo-check` | yes (`sqlc-drift`, `tygo-drift`) |
+| E2E | `just test-e2e` | no |
 
 ## Go unit tests
 
@@ -35,7 +35,7 @@ ports they declare themselves — a fake is a struct with the handful of methods
 calls.
 
 ```bash
-make test-go
+just test-go
 # DATABASE_URL=...jobfinder_test REDIS_URL=redis://localhost:6379/1 go test ./...
 ```
 
@@ -58,7 +58,7 @@ flowchart LR
 ## Database-backed tests
 
 ```bash
-make test-integration    # go test -tags integration ./...
+just test-integration    # go test -tags integration ./...
 ```
 
 Suites are behind `//go:build integration`, and `internal/dbtest` is compiled only under
@@ -128,7 +128,7 @@ locks when the connection closes.
 ## Python tests
 
 ```bash
-make test-py             # cd apps/ai && uv run pytest
+just test-py             # cd apps/ai && uv run pytest
 ```
 
 `apps/ai/tests/integration/test_broker_contract.py` runs the service's real FastStream
@@ -149,7 +149,7 @@ Vitest with jsdom, `src/test/setup.ts`, and `renderWithProviders` giving each te
 ## E2E
 
 ```bash
-make test-e2e
+just test-e2e
 ```
 
 Recreates the test database, brings up compose, waits, then runs the three Playwright specs

@@ -122,7 +122,7 @@ ciphertext undecryptable — clear the affected rows (for example per-host cooki
 
 ## Per-worktree isolation
 
-The `Makefile` derives `COMPOSE_PROJECT_NAME` and `POSTGRES_HOST_PORT` from a checksum of
+The `Justfile` derives `COMPOSE_PROJECT_NAME` and `POSTGRES_HOST_PORT` from a checksum of
 the worktree directory name, so two branches never share a Postgres or leak migration
 state into each other's test runs.
 

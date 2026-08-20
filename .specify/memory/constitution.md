@@ -156,7 +156,7 @@ Version change: 2.0.0 → 2.1.0 (MINOR — guidance materially expanded; no
 Modified principles:
   - **Principle IV, "Test Discipline Per Language"** — `pytest` for apps/ai
     added alongside `go test` and `vitest`; the integration-test clause now
-    names "a real message broker" rather than Redis; `make audit` is stated
+    names "a real message broker" rather than Redis; `just audit` is stated
     as covering every language's dependency surface. The principle itself —
     native toolchain per app, real dependencies for cross-service paths,
     enforced at the merge gate — is unchanged. A third runtime enters the
@@ -244,11 +244,11 @@ services is the most common source of silent integration bugs in this codebase.
 Each app tests in its native toolchain — `go test` for apps/api, `vitest` for the
 dashboard, `pytest` for apps/ai — and integration/e2e paths (`test-integration`,
 `test-e2e`) MUST exercise real Postgres and a real message broker via Docker Compose, not
-mocks, for cross-service behavior. `make test-lint` (every language's suite) MUST pass
-before a change touching more than one app is considered done, and `make audit` MUST cover
+mocks, for cross-service behavior. `just test-lint` (every language's suite) MUST pass
+before a change touching more than one app is considered done, and `just audit` MUST cover
 every language's dependency surface — a runtime whose dependencies no gate inspects is a
 supply-chain hole, not a new app.
-Rationale: matches the existing Makefile-enforced workflow; per-language suites keep
+Rationale: matches the existing Justfile-enforced workflow; per-language suites keep
 feedback fast, while Docker-backed integration tests catch the cross-service bugs unit
 tests can't.
 
@@ -304,8 +304,8 @@ genuinely keep controlling: their data, their routing policy, their credentials.
   packages, since dashboard/api tooling (tygo-generated types) depend on shared being
   built first.
 - Use `make` targets as the canonical entry points for dev/test/seed operations
-  (`make up`, `make dev`, `make test`, `make test-integration`, `make test-e2e`,
-  `make seed`) rather than ad hoc docker/pnpm invocations, so CI and local runs stay
+  (`just up`, `just dev`, `just test`, `just test-integration`, `just test-e2e`,
+  `just seed`) rather than ad hoc docker/pnpm invocations, so CI and local runs stay
   aligned.
 - Design/plan docs for non-trivial features are written at
   `specs/<nnn>-<slug>/plan.md` before implementation begins; trivial fixes and
@@ -315,7 +315,7 @@ genuinely keep controlling: their data, their routing policy, their credentials.
   copy of every binding rule exists. Originals stay recoverable from git history.
   See `specs/README.md`.
 - A change is not "done" until its own language's test suite passes locally; changes
-  crossing app boundaries additionally require `make test-lint` before merge.
+  crossing app boundaries additionally require `just test-lint` before merge.
 
 ## Governance
 

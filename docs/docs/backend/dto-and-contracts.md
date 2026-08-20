@@ -56,7 +56,7 @@ dashboard parses timestamps itself (`apps/dashboard/src/lib/time.ts`).
 Regenerate with:
 
 ```bash
-cd apps/api && tygo generate     # or: make tygo-generate
+cd apps/api && tygo generate     # or: just tygo-generate
 ```
 
 ## The hand-maintained side
@@ -92,7 +92,7 @@ sequenceDiagram
     alt diff is empty
         G-->>CI: pass
     else diff is non-empty
-        G-->>CI: fail — run make tygo-generate and commit
+        G-->>CI: fail — run just tygo-generate and commit
     end
 ```
 
@@ -110,7 +110,7 @@ in the same commit.
 ```mermaid
 flowchart TD
     A["Add field to internal/dto struct with a JSON tag"] --> B["Map it in the handler"]
-    B --> C["make tygo-generate"]
+    B --> C["just tygo-generate"]
     C --> D["Mirror it in packages/shared/src/index.ts"]
     D --> E["pnpm --filter @job-finder/shared build"]
     E --> F["Use it in the dashboard"]

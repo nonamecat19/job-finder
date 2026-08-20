@@ -124,12 +124,12 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     participant D as Developer
-    participant MK as make sqlc-generate
+    participant MK as just sqlc-generate
     participant SQ as sqlc (pinned)
     participant G as git
     participant CI
     D->>D: edit a migration or a query
-    D->>MK: make sqlc-generate
+    D->>MK: just sqlc-generate
     MK->>SQ: cd apps/api && sqlc generate
     SQ-->>G: rewrite internal/db/sqlcgen
     D->>G: commit .sql and generated code together
@@ -145,6 +145,6 @@ sequenceDiagram
    would flap between machines.
 2. **Checks untracked files too**, not just modified ones — a brand-new query whose
    `.sql.go` was never `git add`ed is caught.
-3. **Prints the fix**: `make sqlc-generate && git add apps/api/internal/db/sqlcgen`.
+3. **Prints the fix**: `just sqlc-generate && git add apps/api/internal/db/sqlcgen`.
 
-Install the pinned version with `make sqlc-install`.
+Install the pinned version with `just sqlc-install`.

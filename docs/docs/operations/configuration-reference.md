@@ -11,7 +11,7 @@ Source of truth: `apps/api/internal/config/config.go` (field tags) and `.env.exa
 
 ```mermaid
 flowchart LR
-    F[".env"] --> MK["Makefile includes and exports it"]
+    F[".env"] --> MK["Justfile includes and exports it"]
     F --> DC["docker compose substitution"]
     MK --> GO["config.Load()"]
     DC --> SVC["container environment"]
@@ -176,7 +176,7 @@ and `ACTIVITY_STALE_AFTER + ACTIVITY_SWEEP_INTERVAL < 5m`.
 
 | Variable | Consumed by |
 | --- | --- |
-| `COMPOSE_PROJECT_NAME` | derived per worktree by the Makefile |
+| `COMPOSE_PROJECT_NAME` | derived per worktree by the Justfile |
 | `POSTGRES_HOST_PORT` | derived per worktree; `5432 + (hash % 100)` |
 | `DB_PASSWORD` | `${DB_PASSWORD:?set DB_PASSWORD in .env}` — compose fails without it |
 

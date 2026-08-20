@@ -75,7 +75,7 @@ flowchart LR
 
 Rules:
 
-1. Edit the `.sql` or the DTO, then run `make sqlc-generate` / `make tygo-generate`.
+1. Edit the `.sql` or the DTO, then run `just sqlc-generate` / `just tygo-generate`.
 2. Commit the regenerated output in the same commit as its source.
 3. Tool versions are pinned in `apps/api/.sqlc-version` and `apps/api/.tygo-version` so
    local and CI emit byte-identical code.

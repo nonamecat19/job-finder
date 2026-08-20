@@ -78,7 +78,7 @@ The tracker iterates `APPLICATION_STATUSES` to render its columns *and* uses
 :::warning `index.ts` re-exports and narrows — it never restates a shape
 `index.ts` does `import * as Gen from './generated'` and aliases each DTO off it, adding
 nullability narrowing where the Go pointer semantics need it. `AGENTS.md:104` states the
-rule: add the field to the Go DTO in `apps/api/internal/dto/`, run `make tygo-generate`,
+rule: add the field to the Go DTO in `apps/api/internal/dto/`, run `just tygo-generate`,
 done. Hand-written types with no backend counterpart live in `consumer-only.ts`.
 :::
 
@@ -116,7 +116,7 @@ sequenceDiagram
     participant W as Dashboard
     participant CI
     D->>G: add a field with a JSON tag
-    D->>T: make tygo-generate
+    D->>T: just tygo-generate
     T->>T: rewrite generated.ts
     D->>I: mirror the field by hand
     D->>B: pnpm --filter @job-finder/shared build
@@ -133,7 +133,7 @@ sequenceDiagram
 | --- | --- | --- |
 | `Property 'x' does not exist on type` | `dist/` is stale | rebuild the shared package |
 | Field is `undefined` at runtime but typed | added to `generated.ts`, forgotten in `index.ts` (or vice versa) | mirror it |
-| CI `tygo-drift` fails | edited a DTO without regenerating | `make tygo-generate` and commit |
+| CI `tygo-drift` fails | edited a DTO without regenerating | `just tygo-generate` and commit |
 | Type exists but the API never sends it | DTO struct field has no JSON tag, or the handler never maps it | fix the handler |
 | Dashboard compiles, API returns a different shape | `index.ts` drifted from the Go DTO — nothing checks this | manual review |
 
@@ -159,7 +159,7 @@ flowchart TD
 
 1. Add the field to the Go DTO struct with its JSON tag.
 2. Map it in the handler.
-3. `make tygo-generate`.
+3. `just tygo-generate`.
 4. Mirror it in `packages/shared/src/index.ts` if the type lives there.
 5. `pnpm --filter @job-finder/shared build`.
 6. Use it in the dashboard.

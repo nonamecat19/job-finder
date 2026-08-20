@@ -70,7 +70,7 @@ debug.
 | --- | --- |
 | Single-user, self-hosted | no multi-tenant isolation, no horizontal scaling requirement |
 | Workers need the same DB and config as the API | shared process avoids duplicating wiring |
-| Operators are the users | one `make run-backend` beats a compose topology |
+| Operators are the users | one `just run-backend` beats a compose topology |
 | But: task types have very different concurrency | six **separate** RabbitMQ queues and consumers, one per work type |
 
 The last row is the interesting one. Rather than one worker pool with weighted queues, each

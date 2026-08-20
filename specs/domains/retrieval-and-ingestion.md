@@ -396,7 +396,7 @@ confirms the index is *usable*, then re-check on a seeded table that it is *chos
 
 ### 5.2 The batched query set
 
-Six statements in `internal/db/queries/`, generated through sqlc (`make sqlc-generate`; never
+Six statements in `internal/db/queries/`, generated through sqlc (`just sqlc-generate`; never
 hand-edit `internal/db/sqlcgen/`). The per-posting originals — `GetJobByDedupeKey`,
 `RecordJobRepost`, `InsertJob`, `FindJobByCompany`, `MergeJobBoard` — are **retained**, not
 deleted; other call sites and tests still use them. Only the ingest persist path stopped

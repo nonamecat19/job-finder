@@ -108,7 +108,7 @@ sqlc output is stale: apps/api/internal/db/sqlcgen does not match the migrations
 queries in apps/api/internal/db.
 
 Regenerate and commit the result:
-  make sqlc-generate
+  just sqlc-generate
   git add apps/api/internal/db/sqlcgen
 ```
 
@@ -136,7 +136,7 @@ change fails the build.
 | Not covered | Why | Mitigation |
 | --- | --- | --- |
 | Integration tests against production data | fixtures only, by design | the suite seeds every row it asserts on |
-| E2E | needs the full stack | run `make test-e2e` locally |
+| E2E | needs the full stack | run `just test-e2e` locally |
 | Live smoke tests | hits real sites and paid APIs | run manually when diagnosing |
 | `index.ts` versus Go DTOs | `index.ts` is hand-maintained | review — see [shared types](/frontend/shared-types) |
 | Go formatting | not a job | `gofmt` locally |
@@ -146,15 +146,15 @@ change fails the build.
 
 | Failing job | Likely cause | Fix |
 | --- | --- | --- |
-| `sqlc-drift` | edited a migration or query without regenerating | `make sqlc-generate && git add apps/api/internal/db/sqlcgen` |
-| `tygo-drift` | edited a DTO without regenerating | `make tygo-generate && git add packages/shared/src/generated.ts` |
+| `sqlc-drift` | edited a migration or query without regenerating | `just sqlc-generate && git add apps/api/internal/db/sqlcgen` |
+| `tygo-drift` | edited a DTO without regenerating | `just tygo-generate && git add packages/shared/src/generated.ts` |
 | `go-vet` | shadowing, unreachable code, bad printf verb | read the message; vet is rarely wrong |
-| `go-test` | a real regression | reproduce with `make test-go` |
-| `frontend-test` | component or contract change | `make test-react` |
+| `go-test` | a real regression | reproduce with `just test-go` |
+| `frontend-test` | component or contract change | `just test-react` |
 | `frontend-typecheck` | shared types not mirrored, or a real type error | rebuild shared, then `pnpm typecheck` |
 | `secret scan` | a credential shape in your commits | **rotate the credential first** — it is already pushed — then remove it. See below |
 | `vulnerability scan (go)` | a reachable advisory | `cd apps/api && go get <module>@<fixed> && go mod tidy` |
-| `vulnerability scan (web)` | an advisory at `high`+ | bump the package; reproduce with `make vuln-web` |
+| `vulnerability scan (web)` | an advisory at `high`+ | bump the package; reproduce with `just vuln-web` |
 | `build image (api)` / `(dashboard)` | the Dockerfile broke | fix it — there is no suppression path, by design |
 
 ## Responding to a supply-chain gate
@@ -213,7 +213,7 @@ Fix the Dockerfile. There is deliberately no suppression mechanism: a vulnerabil
 secret match can be a false positive or an unfixable upstream fact, but an image that does
 not build is never either.
 
-Reproduce with `make images`.
+Reproduce with `just images`.
 
 ## Automated dependency updates
 
@@ -228,9 +228,9 @@ It does **not** read compose files, so the images in `docker-compose.yml` and
 ## Pre-push checklist
 
 ```bash
-make test-lint                     # go test + vitest + both linters
-make sqlc-check                    # drift
-make tygo-check                    # drift
+just test-lint                     # go test + vitest + both linters
+just sqlc-check                    # drift
+just tygo-check                    # drift
 pnpm typecheck
 cd apps/api && go vet ./...
 ```
@@ -240,11 +240,11 @@ That reproduces every CI job whose verdict depends only on the tree.
 The supply-chain gates are separate, because theirs does not:
 
 ```bash
-make audit                         # vuln-go + vuln-web + secrets
-make images                        # both container builds (slow: 6-8 min cold)
+just audit                         # vuln-go + vuln-web + secrets
+just images                        # both container builds (slow: 6-8 min cold)
 ```
 
-`make audit` is not part of `test-lint` on purpose. An advisory published this afternoon
+`just audit` is not part of `test-lint` on purpose. An advisory published this afternoon
 turns this morning's green run red with no commit in between, so a passing local run
 cannot promise a passing CI run — which is the whole promise `test-lint` exists to make.
 Run it when you touch dependencies.
@@ -255,14 +255,14 @@ There is no deployment workflow in this repository — it is a self-hosted produ
 means building the images and running the production compose file:
 
 ```bash
-make prod-build
-make prod-up
+just prod-build
+just prod-up
 ```
 
 ```mermaid
 flowchart LR
-    G["git pull"] --> B["make prod-build"]
-    B --> U["make prod-up"]
+    G["git pull"] --> B["just prod-build"]
+    B --> U["just prod-up"]
     U --> MIG["container starts → db.Migrate runs → schema at head"]
     MIG --> RUN["API + workers + scheduler"]
     RUN --> RDY["GET /api/health/ready"]

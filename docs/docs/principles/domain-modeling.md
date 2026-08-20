@@ -79,7 +79,7 @@ sequenceDiagram
     participant Idx as shared/index.ts
     participant CI
     Dev->>DTO: add a field
-    Dev->>Tygo: make tygo-generate
+    Dev->>Tygo: just tygo-generate
     Tygo->>Gen: rewrite generated types
     Dev->>Idx: mirror the field by hand
     Dev->>CI: push

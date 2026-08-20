@@ -55,7 +55,7 @@ locations.** A handler at `internal/jobs/handler.go` — inside its feature modu
 `interfaces/http` — violates 027-FR-011 and passes every import rule. The placement test
 closes that gap.
 
-**`depguard`** lives in the existing `apps/api/.golangci.yml`, so `make lint-go` and the
+**`depguard`** lives in the existing `apps/api/.golangci.yml`, so `just lint-go` and the
 `lint-go` CI job already run it — no new tooling, no new job. It is **not** in the `standard`
 linter set, so it must sit in an explicit `enable` list alongside the existing
 `default: standard` / `disable: [errcheck]`.
@@ -67,7 +67,7 @@ linter set, so it must sit in an explicit `enable` list alongside the existing
 | `no-cross-feature-internals` | Files under `internal/*/interfaces/**` importing another feature's `infrastructure` | An adapter reaching past another feature's boundary (027-FR-012) |
 
 **The placement test** is `apps/api/internal/arch_test.go` (package `internal_test`), running
-under `go test ./...` and therefore under `make test-lint`. It walks `internal/`, parses
+under `go test ./...` and therefore under `just test-lint`. It walks `internal/`, parses
 imports with `go/parser` in `ImportsOnly` mode, and asserts that any file importing
 `github.com/go-chi/chi/v5` lives inside an `interfaces/` package. `internal/httpapi` is exempt
 because it *is* the router; `internal/httpx` is exempt only so the two mechanisms do not report
@@ -84,7 +84,7 @@ is ~20 lines and debuggable with `go test -run`.
 > ```sh
 > printf 'package http\nimport _ "github.com/job-finder/api/internal/httpapi"\n' \
 >   > internal/jobs/interfaces/http/violation.go
-> make lint-go   # must fail, naming internal/httpapi and the depguard rule
+> just lint-go   # must fail, naming internal/httpapi and the depguard rule
 > rm internal/jobs/interfaces/http/violation.go
 > ```
 
@@ -173,7 +173,7 @@ rather than silently resolved in generation's favour. 024-FR-009 required in-fli
 uncommitted edits to be reconciled into the result, not discarded.
 
 **Workflow** (024-SC-002): adding a field is one file edit — the Go DTO in
-`apps/api/internal/dto/` — plus `make tygo-generate`. Down from two hand edits.
+`apps/api/internal/dto/` — plus `just tygo-generate`. Down from two hand edits.
 
 ### 2.1 The public surface of `@job-finder/shared`
 
@@ -262,7 +262,7 @@ restate it in their own words. Restatements are how the original contradictions 
 | Type-sharing **principle** | `constitution.md` III | `AGENTS.md` |
 | Type-sharing **procedure** (how to regenerate) | `AGENTS.md` | — |
 | Test-discipline **principle** | `constitution.md` IV | `AGENTS.md` |
-| What the quality command covers | `AGENTS.md`, matching the `Makefile` recipe | — |
+| What the quality command covers | `AGENTS.md`, matching the `Justfile` recipe | — |
 | Branch and pull-request rule | `AGENTS.md` | enforced by 023 |
 | Worktree lifecycle | `AGENTS.md` | — |
 | Migration numbering | `constitution.md` Tech Constraints | — |
@@ -409,7 +409,7 @@ thin files where a whole engine used to be —
 
 **Regression guardrails** (043-FR-013/014/015, 043-SC-003/004/005): every adapter unit test
 and the `live_smoke_test` moved with their code and passed **unmodified** — no fixture or
-assertion was adjusted to accommodate the move; `make test-lint` passes; and
+assertion was adjusted to accommodate the move; `just test-lint` passes; and
 `packages/shared/src/generated.ts` is byte-identical before and after, because the moved
 types are re-exported as aliases rather than reshaped. The dashboard never learned that the
 scraping stack left the repo.

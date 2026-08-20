@@ -67,27 +67,27 @@ is ever committed.
 
 ## Commands
 
-- `make test-lint` — the merge gate: `lint-go` (golangci-lint, pinned in
+- `just test-lint` — the merge gate: `lint-go` (golangci-lint, pinned in
   `apps/api/.golangci-version`) + `lint-web` (ESLint, `eslint.config.js`) +
   `lint-py` (ruff + mypy strict) + `test-go` (Go unit tests) + `test-react`
-  (Vitest) + `test-py` (pytest, `apps/ai`). Run it, or `make lint-go` /
-  `make lint-web` / `make lint-py` individually, before opening a pull
+  (Vitest) + `test-py` (pytest, `apps/ai`). Run it, or `just lint-go` /
+  `just lint-web` / `just lint-py` individually, before opening a pull
   request — it reports each violation with file, line and rule, and passes
-  in seconds. `make test-integration` and `make test-e2e` are separate
+  in seconds. `just test-integration` and `just test-e2e` are separate
   targets (they need containers/a browser) and are not part of
   `test-lint`.
-- `make audit` — the supply-chain gates: `vuln-go` (govulncheck, reachability
+- `just audit` — the supply-chain gates: `vuln-go` (govulncheck, reachability
   filtered, pinned in `apps/api/.govulncheck-version`) + `vuln-web` (`pnpm
   audit` at severity `high`) + `secrets` (gitleaks over history, redacted).
   **Deliberately not part of `test-lint`**: these depend on the network and on
   an advisory database that changes without any commit, so a green local run
   cannot promise a green CI run — the property `test-lint` exists to give.
-  Run it when you touch dependencies. `make images` builds both container
+  Run it when you touch dependencies. `just images` builds both container
   images and is separate again, because a cold build is 6–8 minutes.
   See `specs/domains/platform-operations.md` § 3.1–3.2 for the runbook,
   including how to record an expiring advisory exception.
-- `make sqlc-generate` — regenerate sqlc code after editing `apps/api/internal/db/queries/*.sql`
-- `make tygo-generate` — regenerate `packages/shared/src/generated.ts` from Go DTOs after editing any `apps/api/internal/dto/*.go` file
+- `just sqlc-generate` — regenerate sqlc code after editing `apps/api/internal/db/queries/*.sql`
+- `just tygo-generate` — regenerate `packages/shared/src/generated.ts` from Go DTOs after editing any `apps/api/internal/dto/*.go` file
 - `pnpm --filter @job-finder/shared build` — rebuild the shared package's `dist/` (the dashboard imports the built package, not source)
 
 While you work, the committed `.claude/settings.json` hooks do some of this
@@ -102,15 +102,15 @@ specs/domains/platform-operations.md).
 
 ## Conventions
 
-- Shared types are generated. Add the field to the Go DTO in `apps/api/internal/dto/`, run `make tygo-generate`, done. `packages/shared/src/index.ts` re-exports and narrows; it never restates a shape. Hand-written types with no backend counterpart live in `consumer-only.ts`.
+- Shared types are generated. Add the field to the Go DTO in `apps/api/internal/dto/`, run `just tygo-generate`, done. `packages/shared/src/index.ts` re-exports and narrows; it never restates a shape. Hand-written types with no backend counterpart live in `consumer-only.ts`.
 - HTTP handlers live in `apps/api/internal/<feature>/interfaces/http/` (package `http`) — one adapter package per feature, alongside that feature's `application`/`domain`/`infrastructure` layers. Do not add handlers to `internal/httpapi`; it holds the router and its middleware only. Shared JSON helpers (`WriteJSON`, `WriteError`, `WriteAppError`, `DecodeJSON`) are in `internal/httpx`. Enforced by the `depguard` rules in `apps/api/.golangci.yml` and by `apps/api/internal/arch_test.go` (see specs/domains/codebase-structure.md).
 - New HTTP handlers are still wired in `apps/api/cmd/server/` via `httpapi.NewRouter(...)`'s variadic mounts, not by editing `router.go` directly.
 - sqlc queries live in `apps/api/internal/db/queries/*.sql`; regenerate after changes.
 
 ## Running the app
 
-Infra/backend/frontend are all long-lived (`make run-backend`,
-`make run-frontend`) — start them via `process-hive`, never directly in a
+Infra/backend/frontend are all long-lived (`just run-backend`,
+`just run-frontend`) — start them via `process-hive`, never directly in a
 blocking Bash call.
 
 ## Commit guidelines

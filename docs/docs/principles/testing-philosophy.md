@@ -17,23 +17,23 @@ service actually calls.
 ```mermaid
 flowchart TD
     U["Unit tests: go test ./..."] --> CI1["CI job: go-test"]
-    D["DB-backed tests: internal/dbtest"] --> LOC["make test-integration"]
+    D["DB-backed tests: internal/dbtest"] --> LOC["just test-integration"]
     I["Integration tests: -tags integration"] --> LOC
     L["Live smoke tests: library adapters/live, internal/*/application/live_test.go"] --> MAN["Manual, opt-in"]
     F["Frontend: vitest"] --> CI2["CI job: frontend-test"]
-    E["E2E: playwright"] --> LOC2["make test-e2e"]
+    E["E2E: playwright"] --> LOC2["just test-e2e"]
 ```
 
 ## The layers
 
 | Layer | Location | Needs | Run by |
 | --- | --- | --- | --- |
-| Unit | `internal/**/ *_test.go` | nothing | `make test-go`, CI `go-test` |
-| Repository / DB | helpers in `internal/dbtest` | a Docker daemon (Postgres container) | `make test-integration` |
-| Integration | files behind `//go:build integration` | a Docker daemon — every service is a container (Postgres, RabbitMQ, ClickHouse, MinIO, Redis, Chrome, FlareSolverr, LiteLLM) | `make test-integration` |
+| Unit | `internal/**/ *_test.go` | nothing | `just test-go`, CI `go-test` |
+| Repository / DB | helpers in `internal/dbtest` | a Docker daemon (Postgres container) | `just test-integration` |
+| Integration | files behind `//go:build integration` | a Docker daemon — every service is a container (Postgres, RabbitMQ, ClickHouse, MinIO, Redis, Chrome, FlareSolverr, LiteLLM) | `just test-integration` |
 | Live smoke | `adapters/live/live_test.go` (library), `internal/*/application/live_test.go` | real network + credentials | manual |
-| Frontend unit | `apps/dashboard/**/*.test.ts(x)` | jsdom | `make test-react`, CI `frontend-test` |
-| E2E | `apps/dashboard/tests` (Playwright) | full stack up | `make test-e2e` |
+| Frontend unit | `apps/dashboard/**/*.test.ts(x)` | jsdom | `just test-react`, CI `frontend-test` |
+| E2E | `apps/dashboard/tests` (Playwright) | full stack up | `just test-e2e` |
 
 :::warning Live tests are opt-in on purpose
 The library's `adapters/live/live_test.go` hits real job boards. It exists so an adapter break is diagnosable,
@@ -100,7 +100,7 @@ flowchart LR
 
 `sqlc-drift` and `tygo-drift` re-run the generators with the pinned versions from
 `apps/api/.sqlc-version` / `.tygo-version` and diff the result. Forgetting
-`make sqlc-generate` is a red build, not a mystery at runtime.
+`just sqlc-generate` is a red build, not a mystery at runtime.
 
 ## Writing a new test — the decision
 
