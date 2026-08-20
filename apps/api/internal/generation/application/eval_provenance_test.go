@@ -27,7 +27,7 @@ func evalStages(t *testing.T, c EvalCase) (domain.TailoredSelection, *domain.Tai
 	ctx := context.Background()
 	prov := &runProvenance{}
 
-	analysis, err := analyzeVacancy(ctx, svc.llm.Analyze, svc.genModel, c.Vacancy, nil)
+	analysis, err := analyzeVacancy(ctx, svc.llm.Analyze, svc.genModel, domain.VacancyTarget{}, c.Vacancy, nil)
 	if err != nil {
 		t.Fatalf("%s: analyze stage: %v", c.Name, err)
 	}

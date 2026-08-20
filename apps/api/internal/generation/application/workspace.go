@@ -632,11 +632,25 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 	if rec != nil {
 		rec.Step(ctx, "analyzing vacancy", nil)
 	}
-	analysis, err := analyzeVacancy(ctx, s.llm.Analyze, s.genModel, run.VacancyText, nil)
+	target := runTarget(run)
+	analysis, err := analyzeVacancy(ctx, s.llm.Analyze, s.genModel, target, run.VacancyText, nil)
 	if err != nil {
 		_ = s.q.SetRunState(ctx, sqlcgen.SetRunStateParams{ID: rid, State: string(domain.RunFailed)})
 		return err
 	}
+
+	// Thinness is judged on what the model found in the posting, before the
+	// title's own skills are folded in — otherwise the title would mask exactly
+	// the case this is here to catch.
+	vacancyThin := domain.VacancyIsThin(run.VacancyText, analysis)
+	analysis = domain.MergeTitleSkills(analysis, domain.TitleRequiredSkills(master, target.Title))
+	if vacancyThin && rec != nil {
+		rec.Step(ctx, "vacancy text carries no requirements; tailoring from the job title alone", map[string]any{
+			"vacancyWords": len(strings.Fields(run.VacancyText)),
+			"titleSkills":  analysis.RequiredSkills,
+		})
+	}
+
 	if analysisJSON, mErr := json.Marshal(analysis); mErr == nil {
 		_ = s.q.SetRunAnalysis(ctx, sqlcgen.SetRunAnalysisParams{ID: rid, Analysis: analysisJSON})
 	}
@@ -684,6 +698,10 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 	if err != nil {
 		highlights = nil
 	}
+	skillLines, err := s.selectedSkillLines(ctx, rid)
+	if err != nil {
+		skillLines = nil
+	}
 
 	summaryOpt := domain.DefaultSummaryOption()
 	if run.SummaryOptionID != nil {
@@ -702,6 +720,7 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 		TotalYears:       domain.DeriveTotalExperienceYears(master),
 		Highlights:       highlights,
 		SkillGroupLabels: domain.SkillGroupLabels(master),
+		SkillLines:       skillLines,
 		SentenceMin:      minS,
 		SentenceMax:      maxS,
 	}
@@ -722,6 +741,12 @@ func (s *Service) StartRun(ctx context.Context, runID string, rec *activity.Reco
 	summarySectionID, hasSummarySection := s.summarySectionID(ctx, rid)
 	finalState := domain.RunReady
 	if anyRankingFailed {
+		finalState = domain.RunPartial
+	}
+	if vacancyThin {
+		// The document is real and every word in it is the user's own, but
+		// nothing in it was chosen against this vacancy. Reporting it ready
+		// would be reporting a tailoring that did not happen.
 		finalState = domain.RunPartial
 	}
 	if summaryErr != nil {
@@ -789,6 +814,47 @@ func (s *Service) selectedProfileHighlights(ctx context.Context, runID pgtype.UU
 		out = append(out, it.SourceText)
 	}
 	return out, nil
+}
+
+// selectedSkillLines returns the skill groups the run kept, as the workspace
+// stores them ("Frontend: Vue 3, React, ..."), already ordered against the
+// vacancy by RankSkills. The summary needs the entries, not the group names.
+func (s *Service) selectedSkillLines(ctx context.Context, runID pgtype.UUID) ([]string, error) {
+	sections, err := s.q.ListSectionsByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	skillSections := make(map[pgtype.UUID]bool, len(sections))
+	for _, sec := range sections {
+		if sec.Kind == string(domain.SectionKindSkills) {
+			skillSections[sec.ID] = true
+		}
+	}
+	items, err := s.q.ListItemsByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, it := range items {
+		if !skillSections[it.SectionID] || it.Origin != string(domain.OriginProfile) || !it.Selected {
+			continue
+		}
+		out = append(out, it.SourceText)
+	}
+	return out, nil
+}
+
+// runTarget reads the posting's header off the run. It is stored on every run,
+// job-sourced or pasted, and until now was only ever used to name the export.
+func runTarget(run sqlcgen.GenerationRun) domain.VacancyTarget {
+	var t domain.VacancyTarget
+	if run.VacancyTitle != nil {
+		t.Title = *run.VacancyTitle
+	}
+	if run.VacancyCompany != nil {
+		t.Company = *run.VacancyCompany
+	}
+	return t
 }
 
 func (s *Service) summarySectionID(ctx context.Context, runID pgtype.UUID) (pgtype.UUID, bool) {

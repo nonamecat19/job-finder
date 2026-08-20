@@ -114,7 +114,7 @@ func stageMaster() domain.RendercvMaster {
 func TestEachStageRoutesToItsOwnProvider(t *testing.T) {
 	svc, analyze, sel, premium, summary := stagedService(t)
 
-	merged, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
+	merged, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
 	if err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestEachStageRoutesToItsOwnProvider(t *testing.T) {
 func TestSummaryPromptExcludesMasterProfile(t *testing.T) {
 	svc, _, _, _, summary := stagedService(t)
 
-	if _, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{}); err != nil {
+	if _, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{}); err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestSummarySubstitutionIsRecorded(t *testing.T) {
 			}
 			prov := &runProvenance{}
 
-			if _, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, prov); err != nil {
+			if _, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, prov); err != nil {
 				t.Fatalf("tailorRendercvResume: %v", err)
 			}
 			if got := prov.summarySubstituted(); got != tc.wantSubbed {
@@ -210,7 +210,7 @@ func TestLocalOnlyRunProducesAResume(t *testing.T) {
 
 	svc := &Service{llm: GenerationRouters{Analyze: local, Select: local, Premium: local, Summary: local, Cover: local}}
 
-	merged, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
+	merged, _, err := svc.tailorRendercvResume(context.Background(), stageMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
 	if err != nil {
 		t.Fatalf("local-only run failed: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestSkillDensityTrimmedInTailoring(t *testing.T) {
 	}}}
 	svc, _, _, _, _ := stagedService(t)
 
-	merged, _, err := svc.tailorRendercvResume(context.Background(), master, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
+	merged, _, err := svc.tailorRendercvResume(context.Background(), master, domain.VacancyTarget{}, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
 	if err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
 	}

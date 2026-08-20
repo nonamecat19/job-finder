@@ -201,6 +201,7 @@ func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, p
 		TotalYears:       domain.DeriveTotalExperienceYears(master),
 		Highlights:       domain.SelectedHighlights(master, payload, level),
 		SkillGroupLabels: domain.SkillGroupLabels(master),
+		SkillLines:       domain.RankedSkillLines(master, analysis, cfg),
 		SentenceMin:      min,
 		SentenceMax:      max,
 	}
@@ -239,7 +240,7 @@ func (s *Service) summarize(ctx context.Context, master domain.RendercvMaster, p
 	return &stripped, nil
 }
 
-func (s *Service) tailorRendercvResume(ctx context.Context, master domain.RendercvMaster, vacancy string, level domain.GroundingLevel, cfg domain.ShapeConfig, hints *domain.VacancyHints, rec *activity.Recorder, prov *runProvenance) (domain.RendercvMaster, domain.VacancyAnalysis, error) {
+func (s *Service) tailorRendercvResume(ctx context.Context, master domain.RendercvMaster, target domain.VacancyTarget, vacancy string, level domain.GroundingLevel, cfg domain.ShapeConfig, hints *domain.VacancyHints, rec *activity.Recorder, prov *runProvenance) (domain.RendercvMaster, domain.VacancyAnalysis, error) {
 
 	ctx = withRunTrace(ctx, rec)
 
@@ -259,11 +260,17 @@ func (s *Service) tailorRendercvResume(ctx context.Context, master domain.Render
 		rec.Step(ctx, "analyzing vacancy", nil)
 	}
 	analysis, err := observe(ctx, prov, stageAnalyze, false, func(ctx context.Context) (domain.VacancyAnalysis, error) {
-		return analyzeVacancy(ctx, s.llm.Analyze, s.genModel, vacancy, hints)
+		return analyzeVacancy(ctx, s.llm.Analyze, s.genModel, target, vacancy, hints)
 	})
 	if err != nil {
 		return nil, domain.VacancyAnalysis{}, fmt.Errorf("vacancy analysis: %w", err)
 	}
+	if thin := domain.VacancyIsThin(vacancy, analysis); thin && rec != nil {
+		rec.Step(ctx, "vacancy text carries no requirements; tailoring from the job title alone", map[string]any{
+			"vacancyWords": len(strings.Fields(vacancy)),
+		})
+	}
+	analysis = domain.MergeTitleSkills(analysis, domain.TitleRequiredSkills(master, target.Title))
 
 	var lastViolations []string
 	for attempt := 0; attempt < groundingAttempts; attempt++ {
@@ -642,7 +649,7 @@ func (s *Service) Generate(ctx context.Context, jobID, docType string, profileID
 		if rec != nil {
 			rec.Step(ctx, "resume shape config", shapeConfigMeta(cfg))
 		}
-		tailored, analysis, err := s.tailorRendercvResume(genCtx, master, job.Description, s.defaultLevel, cfg, nil, rec, prov)
+		tailored, analysis, err := s.tailorRendercvResume(genCtx, master, domain.VacancyTarget{Title: job.Title, Company: job.Company}, job.Description, s.defaultLevel, cfg, nil, rec, prov)
 		if err != nil {
 			return dto.GeneratedDocumentDto{}, err
 		}

@@ -41,7 +41,7 @@ func summaryOptionFixture(t *testing.T) optionFixture {
 func TestNoChoiceRoutesToTheStandardProvider(t *testing.T) {
 	f := summaryOptionFixture(t)
 
-	if _, _, err := f.svc.tailorRendercvResume(context.Background(), stageMaster(), "Go role",
+	if _, _, err := f.svc.tailorRendercvResume(context.Background(), stageMaster(), domain.VacancyTarget{}, "Go role",
 		domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{}); err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestChosenOptionRoutesTheSummaryStageAndNothingElse(t *testing.T) {
 	}
 	ctx := WithSummaryOption(context.Background(), opt)
 
-	if _, _, err := f.svc.tailorRendercvResume(ctx, stageMaster(), "Go role",
+	if _, _, err := f.svc.tailorRendercvResume(ctx, stageMaster(), domain.VacancyTarget{}, "Go role",
 		domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{}); err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestAnUnwiredOptionFallsBackRatherThanFailing(t *testing.T) {
 	}
 	ctx := WithSummaryOption(context.Background(), opt)
 
-	if _, _, err := f.svc.tailorRendercvResume(ctx, stageMaster(), "Go role",
+	if _, _, err := f.svc.tailorRendercvResume(ctx, stageMaster(), domain.VacancyTarget{}, "Go role",
 		domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{}); err != nil {
 		t.Fatalf("an unwired option failed the run: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestAPersistedLocalOptionIDResolvesToTheDefault(t *testing.T) {
 	f := summaryOptionFixture(t)
 	prov := &runProvenance{}
 	if _, _, err := f.svc.tailorRendercvResume(WithSummaryOption(context.Background(), opt),
-		stageMaster(), "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, prov); err != nil {
+		stageMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, prov); err != nil {
 		t.Fatalf(`a run carrying the retired "local" option failed: %v`, err)
 	}
 	if f.standard.calls != 1 {
@@ -135,7 +135,7 @@ func TestStoredDefaultAppliesAndAPerRunChoiceOverridesIt(t *testing.T) {
 		f := summaryOptionFixture(t)
 		f.svc.SetSummaryModelProvider(stubSummaryModelProvider{opt: premiumOpt})
 
-		if _, _, err := f.svc.tailorRendercvResume(context.Background(), stageMaster(), "Go role",
+		if _, _, err := f.svc.tailorRendercvResume(context.Background(), stageMaster(), domain.VacancyTarget{}, "Go role",
 			domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{}); err != nil {
 			t.Fatal(err)
 		}
@@ -149,7 +149,7 @@ func TestStoredDefaultAppliesAndAPerRunChoiceOverridesIt(t *testing.T) {
 		f.svc.SetSummaryModelProvider(stubSummaryModelProvider{opt: premiumOpt})
 		ctx := WithSummaryOption(context.Background(), standardOpt)
 
-		if _, _, err := f.svc.tailorRendercvResume(ctx, stageMaster(), "Go role",
+		if _, _, err := f.svc.tailorRendercvResume(ctx, stageMaster(), domain.VacancyTarget{}, "Go role",
 			domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{}); err != nil {
 			t.Fatal(err)
 		}
@@ -166,7 +166,7 @@ func TestTheRunRecordsWhichOptionWroteTheSummary(t *testing.T) {
 	prov := &runProvenance{}
 
 	if _, _, err := f.svc.tailorRendercvResume(WithSummaryOption(context.Background(), opt),
-		stageMaster(), "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, prov); err != nil {
+		stageMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, prov); err != nil {
 		t.Fatal(err)
 	}
 

@@ -45,7 +45,7 @@ func TestSplitPipelineLeavesSectionSetAndOrderUnchanged(t *testing.T) {
 	summary := &stageProvider{name: "generation-summary", reply: summaryReply(t, itoaYears(years)+"+ years of experience in payments.")}
 	svc := &Service{llm: GenerationRouters{Analyze: analyze, Select: sel, Premium: sel, Summary: summary, Cover: summary}}
 
-	merged, _, err := svc.tailorRendercvResume(context.Background(), master, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
+	merged, _, err := svc.tailorRendercvResume(context.Background(), master, domain.VacancyTarget{}, "Go role", domain.GroundingModerate, domain.DefaultShapeConfig(), nil, nil, &runProvenance{})
 	if err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
 	}

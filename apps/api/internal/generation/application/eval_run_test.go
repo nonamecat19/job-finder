@@ -58,7 +58,7 @@ func runCase(t *testing.T, c EvalCase) evalRun {
 
 	run := evalRun{prov: &runProvenance{}}
 	merged, analysis, err := svc.tailorRendercvResume(
-		context.Background(), c.Master, c.Vacancy, c.Level, c.Cfg, nil, nil, run.prov)
+		context.Background(), c.Master, domain.VacancyTarget{}, c.Vacancy, c.Level, c.Cfg, nil, nil, run.prov)
 	run.merged, run.analysis, run.err = merged, analysis, err
 
 	if err == nil {

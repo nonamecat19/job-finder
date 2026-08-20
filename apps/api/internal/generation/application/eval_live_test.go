@@ -492,7 +492,7 @@ func TestBenchmarkSplitPipelineTargets(t *testing.T) {
 	for run := 0; run < runs; run++ {
 		prov := &runProvenance{}
 		started := time.Now()
-		_, _, err := svc.tailorRendercvResume(context.Background(), master, vacancy, level, cfg, nil, nil, prov)
+		_, _, err := svc.tailorRendercvResume(context.Background(), master, domain.VacancyTarget{}, vacancy, level, cfg, nil, nil, prov)
 		elapsed := time.Since(started)
 		if err != nil {
 			t.Fatalf("run %d: tailor: %v", run+1, err)

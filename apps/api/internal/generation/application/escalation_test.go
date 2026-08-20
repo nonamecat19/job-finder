@@ -80,7 +80,7 @@ func TestSelectionEscalatesAfterRepeatedShortfall(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.ExperienceBulletsMin = 2
 
-	_, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), "Go role", domain.GroundingModerate, cfg, nil, nil, prov)
+	_, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, cfg, nil, nil, prov)
 	if err != nil {
 		t.Fatalf("run should complete via escalation, got: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestHealthySelectionNeverEscalates(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.ExperienceBulletsMin = 2
 
-	if _, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), "Go role", domain.GroundingModerate, cfg, nil, nil, prov); err != nil {
+	if _, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, cfg, nil, nil, prov); err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
 	}
 
@@ -122,7 +122,7 @@ func TestPersistentShortfallFailsRatherThanRendering(t *testing.T) {
 	cfg := domain.DefaultShapeConfig()
 	cfg.ExperienceBulletsMin = 2
 
-	_, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), "Go role", domain.GroundingModerate, cfg, nil, nil, &runProvenance{})
+	_, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, cfg, nil, nil, &runProvenance{})
 	if err == nil {
 		t.Fatal("run succeeded on persistently incomplete selection; a truncated resume must never render")
 	}

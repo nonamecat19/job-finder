@@ -105,7 +105,7 @@ func runTraced(t *testing.T, runID string) ([]string, error) {
 	t.Helper()
 	svc, spies := tracedService(t)
 	rec := recorderWithID(t, runID)
-	_, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), "Go role", domain.GroundingModerate, traceTestConfig(), nil, rec, &runProvenance{})
+	_, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, traceTestConfig(), nil, rec, &runProvenance{})
 	var all []string
 	for _, s := range spies {
 		all = append(all, s.seen()...)
@@ -138,7 +138,7 @@ func TestSummaryRepromptKeepsTheRunTrace(t *testing.T) {
 	summary := spies[len(spies)-1]
 	rec := recorderWithID(t, runID)
 
-	if _, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), "Go role", domain.GroundingModerate, traceTestConfig(), nil, rec, &runProvenance{}); err != nil {
+	if _, _, err := svc.tailorRendercvResume(context.Background(), escalationMaster(), domain.VacancyTarget{}, "Go role", domain.GroundingModerate, traceTestConfig(), nil, rec, &runProvenance{}); err != nil {
 		t.Fatalf("tailorRendercvResume: %v", err)
 	}
 

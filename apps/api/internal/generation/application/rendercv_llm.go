@@ -11,11 +11,27 @@ import (
 	"github.com/job-finder/api/internal/strutil"
 )
 
-func buildAnalyzePrompt(vacancy string, hints *domain.VacancyHints) string {
+func buildAnalyzePrompt(title, company, vacancy string, hints *domain.VacancyHints) string {
 	vac := strutil.Truncate(vacancy, 6000)
 
 	var b strings.Builder
 	b.WriteString("Analyze this job vacancy and extract structured requirements.\n\n")
+	if title != "" {
+		b.WriteString("JOB TITLE: " + title + "\n")
+	}
+	if company != "" {
+		b.WriteString("COMPANY: " + company + "\n")
+	}
+	if title != "" {
+		// The body is often a company blurb, a teaser the listing truncated, or
+		// a login wall; the title is the one field that always survives and it
+		// routinely names the stack outright.
+		b.WriteString("The title is part of the posting. Any technology it names is REQUIRED, " +
+			"whether or not the body below repeats it.\n")
+	}
+	if title != "" || company != "" {
+		b.WriteString("\n")
+	}
 	b.WriteString("VACANCY TEXT:\n")
 	b.WriteString(vac)
 	b.WriteString("\n")
@@ -51,16 +67,24 @@ func buildAnalyzePrompt(vacancy string, hints *domain.VacancyHints) string {
 	return b.String()
 }
 
-func analyzeVacancy(ctx context.Context, lc llm.Provider, model, vacancy string, hints *domain.VacancyHints) (domain.VacancyAnalysis, error) {
+func analyzeVacancy(ctx context.Context, lc llm.Provider, model string, target domain.VacancyTarget, vacancy string, hints *domain.VacancyHints) (domain.VacancyAnalysis, error) {
 	ctx, cancel := context.WithTimeout(ctx, analyzeStageTimeout)
 	defer cancel()
-	prompt := buildAnalyzePrompt(vacancy, hints)
+	prompt := buildAnalyzePrompt(target.Title, target.Company, vacancy, hints)
 	maxT := analysisMaxTokens
-	return llm.CompleteStructured[domain.VacancyAnalysis](ctx, lc, prompt, &llm.CompleteOptions{
+	analysis, err := llm.CompleteStructured[domain.VacancyAnalysis](ctx, lc, prompt, &llm.CompleteOptions{
 		System:    "You are a job-market analyst who extracts structured requirements from vacancy descriptions. Be precise and concise.",
 		Model:     model,
 		MaxTokens: &maxT,
 	})
+	if err != nil {
+		return domain.VacancyAnalysis{}, err
+	}
+	// Every later stage renders the analysis and nothing else, so attaching the
+	// target here is what carries the role into selection, ranking, suggestion
+	// and the summary without threading it through six signatures.
+	analysis.TargetTitle, analysis.TargetCompany = target.Title, target.Company
+	return analysis, nil
 }
 
 func summarySelectRange(cfg domain.ShapeConfig) (int, int) {
@@ -121,6 +145,12 @@ const (
 
 func renderAnalysisLines(analysis domain.VacancyAnalysis) []string {
 	var lines []string
+	if analysis.TargetTitle != "" {
+		lines = append(lines, "TARGET ROLE: "+analysis.TargetTitle)
+	}
+	if analysis.TargetCompany != "" {
+		lines = append(lines, "TARGET COMPANY: "+analysis.TargetCompany)
+	}
 	lines = append(lines, "REQUIRED SKILLS: "+strings.Join(analysis.RequiredSkills, ", "))
 	if len(analysis.NiceToHaveSkills) > 0 {
 		lines = append(lines, "NICE-TO-HAVE: "+strings.Join(analysis.NiceToHaveSkills, ", "))
@@ -252,8 +282,23 @@ func selectContent(ctx context.Context, lc llm.Provider, model string, master do
 
 func buildSummaryPrompt(brief domain.SummaryBrief) string {
 	var b strings.Builder
-	b.WriteString("Write a professional summary about the candidate.\n\n")
-	if len(brief.SkillGroupLabels) > 0 {
+	b.WriteString("Write a professional summary about the candidate, for one specific vacancy.\n\n")
+
+	// The summary is the only part of the document that is written rather than
+	// selected, and it used to be the only part written without being told what
+	// job it was for: the brief carried the analysis and the prompt never
+	// rendered it. A summary that ignores the vacancy is the most visible thing
+	// on the page contradicting the rest of the tailoring.
+	b.WriteString("TARGET VACANCY:\n")
+	b.WriteString(strings.Join(renderAnalysisLines(brief.Analysis), "\n"))
+	b.WriteString("\n\n")
+
+	if len(brief.SkillLines) > 0 {
+		b.WriteString("CANDIDATE SKILLS (already ordered for this vacancy):\n")
+		for _, l := range brief.SkillLines {
+			b.WriteString("  - " + l + "\n")
+		}
+	} else if len(brief.SkillGroupLabels) > 0 {
 		b.WriteString("CANDIDATE SKILL AREAS: " + strings.Join(brief.SkillGroupLabels, ", ") + "\n")
 	}
 	if len(brief.Highlights) > 0 {
@@ -264,9 +309,10 @@ func buildSummaryPrompt(brief domain.SummaryBrief) string {
 	}
 	fmt.Fprintf(&b, "\nWrite %d-%d sentences that:\n", brief.SentenceMin, brief.SentenceMax)
 	fmt.Fprintf(&b, "- Open with \"%d+ years of experience\" (derived from the candidate's dates; use it verbatim) and domain expertise\n", brief.TotalYears)
-	b.WriteString("- Summarize the candidate's background and strengths, drawing from the skill areas and achievements above\n")
+	b.WriteString("- Summarize the candidate's background and strengths, drawing from the skills and achievements above\n")
+	b.WriteString("- Lead with the candidate's own material that this vacancy asks for: a required skill the candidate holds belongs in these sentences, ahead of stronger-sounding experience the vacancy did not ask about\n")
 	b.WriteString("- Never use a seniority label (e.g. 'mid-level', 'senior') in place of the years figure\n")
-	b.WriteString("- Introduce no skill, employer, credential or metric that does not appear above\n")
+	b.WriteString("- Introduce no skill, employer, credential or metric that does not appear in the CANDIDATE sections above. A skill the vacancy requires and the candidate does not list stays out of the summary — the vacancy says what to lead with, never what to claim\n")
 	if len(brief.PreviousViolations) > 0 {
 		b.WriteString("\nYour previous attempt violated these grounding rules:\n- ")
 		b.WriteString(strings.Join(brief.PreviousViolations, "\n- "))

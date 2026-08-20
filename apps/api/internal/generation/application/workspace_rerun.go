@@ -138,7 +138,7 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 	var cfg domain.ShapeConfig
 	_ = json.Unmarshal(run.ShapeConfig, &cfg)
 
-	analysis, err := s.runAnalysisOrReanalyze(ctx, rid, run)
+	analysis, err := s.runAnalysisOrReanalyze(ctx, rid, run, master)
 	if err != nil {
 		_ = s.q.SetRunState(ctx, sqlcgen.SetRunStateParams{ID: rid, State: string(domain.RunFailed)})
 		return err
@@ -263,6 +263,10 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 		if hErr != nil {
 			highlights = nil
 		}
+		skillLines, sErr := s.selectedSkillLines(ctx, rid)
+		if sErr != nil {
+			skillLines = nil
+		}
 		summaryOpt := domain.DefaultSummaryOption()
 		if run.SummaryOptionID != nil {
 			if opt, ok := domain.LookupSummaryOption(*run.SummaryOptionID); ok {
@@ -276,6 +280,7 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 			TotalYears:       domain.DeriveTotalExperienceYears(master),
 			Highlights:       highlights,
 			SkillGroupLabels: domain.SkillGroupLabels(master),
+			SkillLines:       skillLines,
 			SentenceMin:      minS,
 			SentenceMax:      maxS,
 		}
@@ -334,17 +339,22 @@ func (s *Service) RerunRun(ctx context.Context, runID string, sectionIDs []strin
 	return nil
 }
 
-func (s *Service) runAnalysisOrReanalyze(ctx context.Context, rid pgtype.UUID, run sqlcgen.GenerationRun) (domain.VacancyAnalysis, error) {
+func (s *Service) runAnalysisOrReanalyze(ctx context.Context, rid pgtype.UUID, run sqlcgen.GenerationRun, master domain.RendercvMaster) (domain.VacancyAnalysis, error) {
+	vacancy := runTarget(run)
 	var analysis domain.VacancyAnalysis
 	if len(run.Analysis) > 0 {
 		if err := json.Unmarshal(run.Analysis, &analysis); err == nil {
-			return analysis, nil
+			// The target is deliberately not persisted with the analysis, so a
+			// restored one has to be re-attached from the run itself.
+			analysis.TargetTitle, analysis.TargetCompany = vacancy.Title, vacancy.Company
+			return domain.MergeTitleSkills(analysis, domain.TitleRequiredSkills(master, vacancy.Title)), nil
 		}
 	}
-	analysis, err := analyzeVacancy(ctx, s.llm.Analyze, s.genModel, run.VacancyText, nil)
+	analysis, err := analyzeVacancy(ctx, s.llm.Analyze, s.genModel, vacancy, run.VacancyText, nil)
 	if err != nil {
 		return domain.VacancyAnalysis{}, err
 	}
+	analysis = domain.MergeTitleSkills(analysis, domain.TitleRequiredSkills(master, vacancy.Title))
 	if analysisJSON, mErr := json.Marshal(analysis); mErr == nil {
 		_ = s.q.SetRunAnalysis(ctx, sqlcgen.SetRunAnalysisParams{ID: rid, Analysis: analysisJSON})
 	}

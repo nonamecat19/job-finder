@@ -62,7 +62,7 @@ func containsAll(s string, subs ...string) bool {
 }
 
 func TestBuildAnalyzePrompt_IncludesVacancyAndHints(t *testing.T) {
-	prompt := buildAnalyzePrompt("Looking for a Go backend engineer with Docker experience.", nil)
+	prompt := buildAnalyzePrompt("", "", "Looking for a Go backend engineer with Docker experience.", nil)
 	if !containsAll(prompt, "Go backend engineer", "Analyze this job vacancy") {
 		t.Fatalf("basic prompt missing expected content:\n%s", prompt)
 	}
@@ -72,7 +72,7 @@ func TestBuildAnalyzePrompt_IncludesVacancyAndHints(t *testing.T) {
 		NiceToHave:      []string{"Kubernetes"},
 		ExperienceLevel: "senior",
 	}
-	promptWithHints := buildAnalyzePrompt("Looking for a Go backend engineer with Docker experience.", hints)
+	promptWithHints := buildAnalyzePrompt("", "", "Looking for a Go backend engineer with Docker experience.", hints)
 	if !containsAll(promptWithHints, "Required skills (provided): Go, Docker", "Nice-to-have skills (provided): Kubernetes", "Experience level (provided): senior") {
 		t.Fatalf("hint prompt missing expected content:\n%s", promptWithHints)
 	}
