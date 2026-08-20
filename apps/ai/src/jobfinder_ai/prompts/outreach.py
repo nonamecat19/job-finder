@@ -7,11 +7,26 @@ length enforcement (`EnforceLength`), and the generic-opener fallback all
 stay in Go — this capability makes the one model call `generateGrounded`
 makes per attempt; the caller decides whether to retry with a new
 `last_violation` (T107 territory, not this capability's).
+
+`facts` is the grounding allowlist: it is the *only* channel through which a
+specific claim about the company may reach the model, and the rules block
+below is what makes that allowlist binding. Facts are emitted as
+`- kind: value` bullets so the model can copy a used one back verbatim into
+`specificClaims`, which is what the Go-side `GroundClaims` check verifies.
 """
 
 from __future__ import annotations
 
 from typing import Literal
+
+from jobfinder_ai.prompts.composition import PromptBuilder
+
+__all__ = [
+    "MAX_DRAFT_CHARS",
+    "SYSTEM_PROMPT",
+    "Tone",
+    "build_user_prompt",
+]
 
 Tone = Literal["warm", "direct", "formal"]
 
@@ -31,6 +46,34 @@ _TONE_INSTRUCTION: dict[Tone, str] = {
     "formal": "formal and polished, traditional business register",
 }
 
+_TASK = (
+    "Write a single short outreach message to a hiring contact after the sender "
+    "has just applied to a job at their company."
+)
+
+_ANONYMOUS_SALUTATION = (
+    'No named contact is known — use a neutral salutation such as "Hi there" and '
+    "never invent a name."
+)
+
+_FACTS_HEADER = (
+    "ALLOWED FACTS (the ONLY specific things you may state about the team, "
+    "company, or role — copy any you use into specificClaims VERBATIM, "
+    "unaltered):"
+)
+
+_GROUNDING_RULES = (
+    "Use at most one or two of these facts, only if they fit naturally. Keep "
+    "the whole message under {max_chars} characters. Never state a "
+    "specific technology, funding figure, headcount, rating, or any other "
+    "detail that is not one of the ALLOWED FACTS above — if you are not sure "
+    "something is allowed, leave it out. This is a draft the user will read and "
+    "send themselves, so it must contain no send/apply action, just the message "
+    "body."
+)
+
+_VIOLATION_FEEDBACK = "Your previous attempt was rejected: {violation}. Fix this and answer again."
+
 
 def build_user_prompt(
     *,
@@ -40,44 +83,28 @@ def build_user_prompt(
     facts: list[tuple[str, str]],
     last_violation: str,
 ) -> str:
-    """Verbatim port of `domain.BuildPrompt` (outreach/domain/grounding.go)."""
-    parts: list[str] = []
-    parts.append(
-        "Write a single short outreach message to a hiring contact after the sender "
-        "has just applied to a job at their company.\n\n"
-    )
+    """Verbatim port of `domain.BuildPrompt` (outreach/domain/grounding.go).
+
+    An empty `contact_name` or `company_name` is not a missing field to skip
+    silently: the contact line is replaced by an explicit instruction never
+    to invent a name, and the company line is simply left out.
+    """
+    prompt = PromptBuilder()
+    prompt.paragraph(_TASK)
 
     if contact_name:
-        parts.append(f"Address it to: {contact_name}\n")
+        prompt.field("Address it to", contact_name)
     else:
-        parts.append(
-            'No named contact is known — use a neutral salutation such as "Hi '
-            'there" and never invent a name.\n'
-        )
+        prompt.line(_ANONYMOUS_SALUTATION)
     if company_name:
-        parts.append(f"Company: {company_name}\n")
-    parts.append(f"Tone: {_TONE_INSTRUCTION[tone]}\n\n")
+        prompt.field("Company", company_name)
+    prompt.field("Tone", _TONE_INSTRUCTION[tone]).blank()
 
-    parts.append(
-        "ALLOWED FACTS (the ONLY specific things you may state about the team, "
-        "company, or role — copy any you use into specificClaims VERBATIM, "
-        "unaltered):\n"
-    )
-    for kind, value in facts:
-        parts.append(f"- {kind}: {value}\n")
-    parts.append(
-        f"\nUse at most one or two of these facts, only if they fit naturally. Keep "
-        f"the whole message under {MAX_DRAFT_CHARS} characters. Never state a "
-        "specific technology, funding figure, headcount, rating, or any other "
-        "detail that is not one of the ALLOWED FACTS above — if you are not sure "
-        "something is allowed, leave it out. This is a draft the user will read and "
-        "send themselves, so it must contain no send/apply action, just the message "
-        "body.\n"
-    )
+    prompt.line(_FACTS_HEADER)
+    prompt.bullets(f"{kind}: {value}" for kind, value in facts)
+    prompt.blank().line(_GROUNDING_RULES.format(max_chars=MAX_DRAFT_CHARS))
 
     if last_violation:
-        parts.append(
-            f"\nYour previous attempt was rejected: {last_violation}. Fix this and answer again.\n"
-        )
+        prompt.blank().line(_VIOLATION_FEEDBACK.format(violation=last_violation))
 
-    return "".join(parts)
+    return prompt.render()
