@@ -13,7 +13,7 @@ claude /dev-start
 ```
 
 ## Output
-- `job-finder-infra`: Docker Compose (make up)
+- `job-finder-infra`: Docker Compose (just up)
 - `job-finder-backend`: Go API server (port 3000)
 - `job-finder-frontend`: React dev (port 5173)
 
@@ -36,7 +36,7 @@ if process-hive ps --all | grep -E "(job-finder-infra|job-finder-backend|job-fin
 fi
 
 echo "Starting infrastructure..."
-process-hive start --name=job-finder-infra --cwd="$PROJECT_DIR" --restart=on-failure -- make up
+process-hive start --name=job-finder-infra --cwd="$PROJECT_DIR" --restart=on-failure -- just up
 
 sleep 5
 

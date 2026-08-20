@@ -4,7 +4,7 @@
 # passing) if the binary is missing or the wrong version — mirrors
 # scripts/sqlc-check.sh's version-mismatch guard (FR-015, FR-027).
 #
-# Usage: ./scripts/golangci-check.sh   (called by `make lint-go`)
+# Usage: ./scripts/golangci-check.sh   (called by `just lint-go`)
 #
 set -euo pipefail
 

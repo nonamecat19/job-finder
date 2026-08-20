@@ -39,7 +39,7 @@ if ! command -v sqlc >/dev/null 2>&1; then
   fi
   # PostToolUse cannot block; still exit 0 so the tool call itself (the
   # edit that already happened) is not treated as a failure. The gap is
-  # caught later by `make sqlc-check` / the sqlc-drift CI job.
+  # caught later by `just sqlc-check` / the sqlc-drift CI job.
   exit 0
 fi
 

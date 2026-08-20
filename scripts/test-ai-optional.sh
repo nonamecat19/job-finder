@@ -5,7 +5,7 @@
 # — the only compose file that runs `api` as a container; `ai` is
 # deliberately never brought up here.
 #
-# Not wired into `make test-integration` or CI: Makefile and workflow
+# Not wired into `just test-integration` or CI: Justfile and workflow
 # changes for this feature are owned by a parallel task (T009/T010/T012).
 # Run directly once `.env` is populated:
 #   ./scripts/test-ai-optional.sh

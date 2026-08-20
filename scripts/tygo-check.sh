@@ -7,7 +7,7 @@
 # regenerating, so the checked-in TypeScript no longer matches the Go DTOs.
 #
 # Fix a failure with:
-#   make tygo-generate && git add packages/shared/src/generated.ts
+#   just tygo-generate && git add packages/shared/src/generated.ts
 #
 set -euo pipefail
 
@@ -59,7 +59,7 @@ tygo output is stale: $GEN_FILE does not match the Go DTOs in
 apps/api/internal/dto.
 
 Regenerate and commit the result:
-  make tygo-generate
+  just tygo-generate
   git add $GEN_FILE
 ------------------------------------------------------------------
 EOF

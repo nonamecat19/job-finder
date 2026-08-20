@@ -41,15 +41,15 @@ jobs:
             # Documentation and repo-workflow paths deliberately appear in NO
             # filter, so a change confined to them skips every job:
             #   specs/**, docs/**, .specify/**, scripts/hooks/**,
-            #   AGENTS.md, README.md, Makefile, .github/workflows/**
+            #   AGENTS.md, README.md, Justfile, .github/workflows/**
             #
-            # Makefile and the workflow files used to force the whole set on the
+            # Justfile and the workflow files used to force the whole set on the
             # grounds that they can change any verdict. True, but it meant a
-            # docs-only pull request that adjusted a Makefile comment spent ~20
+            # docs-only pull request that adjusted a Justfile comment spent ~20
             # runner-minutes rebuilding Go and Node. They are covered instead by
             # `on: push: branches: [master]`, which ignores these filters
             # entirely (see the outputs above) and runs the full set on the
-            # merge commit — so a Makefile or workflow edit is still exercised,
+            # merge commit — so a Justfile or workflow edit is still exercised,
             # one merge later rather than one pull request earlier.
             go: &go
               - 'apps/api/**'
@@ -331,8 +331,8 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @job-finder/shared build
 
-      - name: make lint-web
-        run: make lint-web
+      - name: eslint
+        run: pnpm exec eslint apps/dashboard apps/extension packages/shared
 
   lint-py:
     name: lint (python)
@@ -346,8 +346,9 @@ jobs:
         with:
           working-directory: apps/ai
 
-      - name: make lint-py
-        run: make lint-py
+      - name: ruff + mypy
+        working-directory: apps/ai
+        run: uv run ruff check . && uv run ruff format --check . && uv run mypy src
 
   test-py:
     name: test (python)
@@ -361,8 +362,9 @@ jobs:
         with:
           working-directory: apps/ai
 
-      - name: make test-py
-        run: make test-py
+      - name: pytest
+        working-directory: apps/ai
+        run: uv run pytest
 
   # ---------------------------------------------------------------------------
   # Supply-chain and build-integrity gates (039)
@@ -459,7 +461,7 @@ jobs:
       # The wrapper, not govulncheck directly: govulncheck has no ignore file,
       # and an advisory with no upstream fix still needs a reviewable, expiring
       # exception rather than a blanket `|| true`. The script also gives
-      # `make vuln-go` the identical verdict locally.
+      # `just vuln-go` the identical verdict locally.
       - name: scripts/govulncheck-check.sh
         run: ./scripts/govulncheck-check.sh
 
@@ -504,8 +506,9 @@ jobs:
         with:
           working-directory: apps/ai
 
-      - name: make vuln-py
-        run: make vuln-py
+      - name: pip-audit
+        working-directory: apps/ai
+        run: uv run pip-audit
 
   # C7-3/FR-011: the AI service reaches every model through the LiteLLM
   # gateway's OpenAI-compatible endpoint, never a provider SDK directly.
@@ -518,8 +521,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: make check-ai-no-provider-sdk
-        run: make check-ai-no-provider-sdk
+      - name: scripts/check-ai-no-provider-sdk.sh
+        run: ./scripts/check-ai-no-provider-sdk.sh
 
   # K2-2/K2-3/FR-008: the ai service's environment must carry no database
   # credential and no provider credential in either compose file. Not gated
@@ -533,8 +536,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: make check-ai-env
-        run: make check-ai-env
+      - name: scripts/check-ai-service-env.sh
+        run: ./scripts/check-ai-service-env.sh
 
   build-image-api:
     name: build image (api)

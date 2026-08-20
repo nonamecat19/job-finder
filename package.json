@@ -8,9 +8,9 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter @job-finder/dashboard dev",
     "typecheck": "pnpm -r typecheck",
-    "test": "make test",
-    "test:go": "make test-go",
-    "test:react": "make test-react",
+    "test": "just test",
+    "test:go": "just test-go",
+    "test:react": "just test-react",
     "doctor": "npx react-doctor@latest"
   },
   "engines": {

@@ -76,13 +76,13 @@ trap 'rm -f "$FAIL_LOG"' EXIT
 STATUS=0
 
 if [[ "$GO_TOUCHED" -eq 1 ]]; then
-  if ! make lint-go test-go >"$FAIL_LOG" 2>&1; then
+  if ! just lint-go test-go >"$FAIL_LOG" 2>&1; then
     STATUS=1
   fi
 fi
 
 if [[ "$WEB_TOUCHED" -eq 1 ]] && [[ "$STATUS" -eq 0 || -s "$FAIL_LOG" ]]; then
-  if ! make lint-web test-react >>"$FAIL_LOG" 2>&1; then
+  if ! just lint-web test-react >>"$FAIL_LOG" 2>&1; then
     STATUS=1
   fi
 fi

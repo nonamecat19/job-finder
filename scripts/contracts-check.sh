@@ -9,7 +9,7 @@
 # the generated Pydantic models in apps/ai) no longer match the Go types.
 #
 # Fix a failure with:
-#   make contracts-generate && git add apps/api/internal/events/schema
+#   just contracts-generate && git add apps/api/internal/events/schema
 #
 set -euo pipefail
 
@@ -42,7 +42,7 @@ contracts output is stale: $GEN_DIR and/or $AI_GEN_DIR do not
 match the event structs in apps/api/internal/events.
 
 Regenerate and commit the result:
-  make contracts-generate
+  just contracts-generate
   git add $GEN_DIR $AI_GEN_DIR
 ------------------------------------------------------------------
 EOF

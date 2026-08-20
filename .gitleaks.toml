@@ -9,7 +9,7 @@
 # keys that live in the litellm container's environment (Constitution Principle
 # V). Detection only — this file relocates no credential.
 #
-# Run locally with `make secrets`. See specs/domains/platform-operations.md for
+# Run locally with `just secrets`. See specs/domains/platform-operations.md for
 # what to do when it fires.
 
 [extend]

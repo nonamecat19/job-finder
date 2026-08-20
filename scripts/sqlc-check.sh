@@ -7,7 +7,7 @@
 # regenerating, so the checked-in Go code no longer matches the schema.
 #
 # Fix a failure with:
-#   make sqlc-generate && git add apps/api/internal/db/sqlcgen
+#   just sqlc-generate && git add apps/api/internal/db/sqlcgen
 #
 set -euo pipefail
 
@@ -73,7 +73,7 @@ sqlc output is stale: $GEN_DIR does not match the migrations and
 queries in apps/api/internal/db.
 
 Regenerate and commit the result:
-  make sqlc-generate
+  just sqlc-generate
   git add $GEN_DIR
 ------------------------------------------------------------------
 EOF
