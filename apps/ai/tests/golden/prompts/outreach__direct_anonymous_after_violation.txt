@@ -1,0 +1,10 @@
+Write a single short outreach message to a hiring contact after the sender has just applied to a job at their company.
+
+No named contact is known — use a neutral salutation such as "Hi there" and never invent a name.
+Tone: direct and concise — get to the point in as few words as possible, minimal pleasantries
+
+ALLOWED FACTS (the ONLY specific things you may state about the team, company, or role — copy any you use into specificClaims VERBATIM, unaltered):
+
+Use at most one or two of these facts, only if they fit naturally. Keep the whole message under 500 characters. Never state a specific technology, funding figure, headcount, rating, or any other detail that is not one of the ALLOWED FACTS above — if you are not sure something is allowed, leave it out. This is a draft the user will read and send themselves, so it must contain no send/apply action, just the message body.
+
+Your previous attempt was rejected: invented a headcount. Fix this and answer again.

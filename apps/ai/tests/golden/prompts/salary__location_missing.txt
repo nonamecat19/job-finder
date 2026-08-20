@@ -1,0 +1,12 @@
+Estimate the annual salary range for this job in the local currency.
+
+JOB:
+Title: SRE
+Company: Globex
+Location: n/a (remote: false)
+Description:
+Short description.
+
+Return a single SalaryBand JSON object. Use the most likely currency for the location. Set confidence based on how certain you are (0.3-0.9). If you cannot make a reasonable estimate, set min=0, max=0, confidence=0.
+
+The id of this posting is job-9.

@@ -1,0 +1,11 @@
+Write a single short outreach message to a hiring contact after the sender has just applied to a job at their company.
+
+Address it to: Dana Scully
+Company: Acme Corp
+Tone: warm, friendly, and enthusiastic, while staying professional
+
+ALLOWED FACTS (the ONLY specific things you may state about the team, company, or role — copy any you use into specificClaims VERBATIM, unaltered):
+- tech: Go
+- funding: Series B
+
+Use at most one or two of these facts, only if they fit naturally. Keep the whole message under 500 characters. Never state a specific technology, funding figure, headcount, rating, or any other detail that is not one of the ALLOWED FACTS above — if you are not sure something is allowed, leave it out. This is a draft the user will read and send themselves, so it must contain no send/apply action, just the message body.

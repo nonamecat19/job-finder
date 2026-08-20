@@ -1,0 +1,8 @@
+Read this company About/Team page and list every named human team member who could plausibly own hiring for a role — a recruiter, talent acquisition specialist, HR/People team member, or hiring manager.
+
+Only report a person, title, email, phone, or LinkedIn URL if it is EXPLICITLY present in the text below. Never guess or invent a name.
+
+PAGE TEXT:
+Our team page.
+
+Return a single JSON object with a "contacts" array (empty if none).

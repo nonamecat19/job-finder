@@ -1,0 +1,22 @@
+Given this vacancy analysis, tailor the candidate's resume content.
+
+VACANCY ANALYSIS:
+REQUIRED SKILLS: 
+EXPERIENCE LEVEL: 
+
+GROUNDING = AGGRESSIVE. Maximize keyword match with the vacancy: you may add any skills the vacancy requires and frame highlights toward them. Still never invent employers, dates, degrees or numeric metrics that are not in the master.
+
+HARD RULES (all levels):
+- Return experience keyed by the EXACT company name shown below; do not add companies.
+- For each experience entry, select the TOP 0-1 most relevant bullets by their [index], in the order they should appear.
+- A highlight is {sourceIndex, rephrased}. sourceIndex is the [index] of the bullet as shown. rephrased is optional: set it only to reword THAT bullet for this vacancy, and omit it to keep the master's wording.
+- A rewording never merges two bullets, never borrows from another entry, and never changes a number. A rewording that does is discarded and the original bullet is used.
+- Keep every experience entry; never set drop to true. Do not omit any job.
+- Keep experience entries in the EXACT order shown in the master; do not reorder.
+- Do NOT return skills. Skill selection and ordering are computed from the analysis above, not chosen here.
+- Keep highlights concise, one achievement each.
+- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given.
+- Do NOT write a summary. A separate step writes it.
+
+
+EXPERIENCE (master):

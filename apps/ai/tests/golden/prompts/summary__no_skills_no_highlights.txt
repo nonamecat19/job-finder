@@ -1,0 +1,8 @@
+Write a professional summary about the candidate.
+
+
+Write 1-2 sentences that:
+- Open with "0+ years of experience" (derived from the candidate's dates; use it verbatim) and domain expertise
+- Summarize the candidate's background and strengths, drawing from the skill areas and achievements above
+- Never use a seniority label (e.g. 'mid-level', 'senior') in place of the years figure
+- Introduce no skill, employer, credential or metric that does not appear above

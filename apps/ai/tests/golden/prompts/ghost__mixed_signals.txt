@@ -1,0 +1,13 @@
+Rate how likely this job posting is a "ghost job" — a posting the employer has no real intent to fill. Score 0-100, where higher means more suspicious. Base your score ONLY on the measured signals below; do not invent facts about the employer, the role, or their hiring intent.
+
+JOB:
+Title: Data Scientist
+Company: Globex
+
+MEASURED SIGNALS:
+- Repost count (times this exact posting has reappeared across ingestion runs): 7
+- Days open: 90 (a posting older than 45 days with no user progression contributes to suspicion, but age alone is never sufficient for a high score)
+- Cross-board duplicates: unknown (description too short/empty) — lower your confidence
+- Always-hiring count (other postings from this company in the last 90 days that never progressed past initial discovery, including this one): 1. IMPORTANT: a value of 1 means this is the ONLY posting seen from this company — that is the normal case, not a red flag, and MUST NOT be treated as evidence of ghosting.
+
+Report your confidence (0-1) in the score, lowering it for every signal marked unknown above. Explain, in plain English, which of the measured signals drove your score — reference only the numbers given.

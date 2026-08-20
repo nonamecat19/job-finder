@@ -1,0 +1,13 @@
+Write a short cover letter (maximum 150 words, exactly 3 paragraphs separated by blank lines) for this application.
+
+Structure: (1) hook referencing the company and role, (2) 2-3 concrete matching experiences from the candidate's real background, (3) brief close.
+STRICT RULES: mention only experience present in the profile below; no invented facts, no clichés like "I am writing to express". Plain text, no salutation placeholders like [Hiring Manager] — use "Hello," if needed.
+
+CANDIDATE PROFILE:
+Short profile.
+
+JOB:
+Title: SRE
+Company: Globex
+Description:
+Vacancy.

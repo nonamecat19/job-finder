@@ -1,0 +1,17 @@
+Write a professional summary about the candidate.
+
+CANDIDATE SKILL AREAS: Languages, Cloud
+
+CANDIDATE ACHIEVEMENTS (the only achievements you may reference):
+  - Built X
+  - Scaled Y
+
+Write 2-4 sentences that:
+- Open with "10+ years of experience" (derived from the candidate's dates; use it verbatim) and domain expertise
+- Summarize the candidate's background and strengths, drawing from the skill areas and achievements above
+- Never use a seniority label (e.g. 'mid-level', 'senior') in place of the years figure
+- Introduce no skill, employer, credential or metric that does not appear above
+
+Your previous attempt violated these grounding rules:
+- invented a degree
+Rewrite without them.

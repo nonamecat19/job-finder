@@ -1,0 +1,4 @@
+
+
+Respond with a single JSON object matching this JSON Schema:
+{"type":"object","properties":{"score":{"type":"number"}}}

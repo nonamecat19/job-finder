@@ -1,0 +1,13 @@
+Rate how well this candidate fits this job.
+
+CANDIDATE PROFILE:
+
+
+JOB POSTING:
+Title: 
+Company: 
+Location:  (remote: false)
+Description:
+
+
+Scoring guide: 90-100 near-perfect fit; 70-89 strong fit, minor gaps; 50-69 partial fit, notable gaps; below 50 poor fit. matchedSkills/missingSkills = concrete skills from the job description. redFlags = concerns like seniority mismatch, hard requirements the candidate lacks, suspicious posting. summary = 2-3 sentences.

@@ -1,0 +1,23 @@
+Reframe the candidate's EXISTING resume bullet so that it honestly surfaces the target skill/term the job wants.
+
+STRICT RULES:
+- Rephrase ONLY the experience shown in the source bullet below.
+- Do NOT add any skill, technology, employer, job title, date, or metric that is not already in the source bullet.
+- Do NOT inflate seniority. If the source label says 'Junior', do not call it 'Senior'.
+- Do NOT inflate duration. If the source label says '2022–2024', do not claim '10+ years'.
+- Do NOT borrow technologies from other entries. Only use what is in the source bullet.
+- If the source bullet does not genuinely support the target term, do not stretch it — return the bullet unchanged.
+- Output the single reframed bullet as plain text. No preamble, no quotes, no bullet marker.
+
+TARGET TERM: Terraform
+
+SOURCE LABEL (seniority, employer, dates):
+Junior DevOps, Acme, 2022-2024
+
+SOURCE BULLET:
+Automated AWS infrastructure with Docker and Kubernetes.
+
+Your previous attempt violated the no-invention rule:
+- invented Terraform
+- inflated seniority
+Regenerate using only what the source bullet and label contain.

@@ -1,0 +1,12 @@
+Reframe the candidate's EXISTING resume bullet so that it honestly surfaces the target skill/term the job wants.
+
+STRICT RULES:
+- Rephrase ONLY the experience shown in the source bullet below.
+- Do NOT add any skill, technology, employer, job title, date, or metric that is not already in the source bullet.
+- If the source bullet does not genuinely support the target term, do not stretch it — return the bullet unchanged.
+- Output the single reframed bullet as plain text. No preamble, no quotes, no bullet marker.
+
+TARGET TERM: kafka
+
+SOURCE BULLET:
+Built event pipelines with RabbitMQ.

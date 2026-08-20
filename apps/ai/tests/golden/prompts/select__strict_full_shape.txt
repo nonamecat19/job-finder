@@ -1,0 +1,49 @@
+Given this vacancy analysis, tailor the candidate's resume content.
+
+VACANCY ANALYSIS:
+REQUIRED SKILLS: Go, Kubernetes
+NICE-TO-HAVE: Terraform
+EXPERIENCE LEVEL: senior
+KEY RESPONSIBILITIES:
+  - Own services
+  - Mentor
+INDUSTRY: fintech
+SENIORITY SIGNALS: mentor
+
+GROUNDING = STRICT. Use ONLY skills and facts already present in the master profile. You may reorder, trim and rephrase, but you must NOT introduce any technology, tool or skill token that does not already appear in the master. Do not invent achievements.
+
+HARD RULES (all levels):
+- Return experience keyed by the EXACT company name shown below; do not add companies.
+- For each experience entry, select the TOP 3-6 most relevant bullets by their [index], in the order they should appear.
+- A highlight is {sourceIndex, rephrased}. sourceIndex is the [index] of the bullet as shown. rephrased is optional: set it only to reword THAT bullet for this vacancy, and omit it to keep the master's wording.
+- A rewording never merges two bullets, never borrows from another entry, and never changes a number. A rewording that does is discarded and the original bullet is used.
+- Keep every experience entry; never set drop to true. Do not omit any job.
+- Keep experience entries in the EXACT order shown in the master; do not reorder.
+- Do NOT return skills. Skill selection and ordering are computed from the analysis above, not chosen here.
+- Keep highlights concise, one achievement each.
+- Do not drop, add, rename, or reorder any resume section. Keep the master's section set and order exactly as given.
+- Do NOT write a summary. A separate step writes it.
+
+SKILL GROUPS (master, reference only):
+  [0] Languages: Go, Python
+  [1] Cloud: AWS
+
+EXPERIENCE (master):
+  - company: Acme (Senior Engineer) | Berlin
+      [0] Built X
+      [1] Scaled Y
+  - company: Globex
+
+PROJECTS (master):
+  - name: Job Finder
+      [0] Wrote the graph
+      [1] Shipped it
+  - name: Bare
+Return the 2 most vacancy-relevant projects, with each name copied EXACTLY as shown above.
+For each returned project, keep at most 3 highlights.
+Project highlights are indices into that same project's own bullet list above; an index cannot reach another project's bullets.
+
+
+Your previous attempt violated grounding rules:
+- added Rust
+Regenerate without these violations.

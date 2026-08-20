@@ -1,0 +1,12 @@
+Analyze this job vacancy and extract structured requirements.
+
+VACANCY TEXT:
+We need a backend engineer.
+
+Return a VacancyAnalysis with:
+- requiredSkills: skills explicitly listed as required/mandatory
+- niceToHaveSkills: preferred but not required
+- experienceLevel: one of junior|mid|senior|lead|staff|principal
+- keyResponsibilities: top 8-10 responsibilities
+- industryKeywords: domain terms (e.g. fintech, healthcare, SaaS, e-commerce)
+- seniorityKeywords: leadership indicators (e.g. mentor, lead team, architecture decisions)

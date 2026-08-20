@@ -1,0 +1,13 @@
+Rate how likely this job posting is a "ghost job" — a posting the employer has no real intent to fill. Score 0-100, where higher means more suspicious. Base your score ONLY on the measured signals below; do not invent facts about the employer, the role, or their hiring intent.
+
+JOB:
+Title: Role
+Company: Co
+
+MEASURED SIGNALS:
+- Repost count (times this exact posting has reappeared across ingestion runs): 0
+- Days open: unknown (no posting date available) — treat this as missing information, not as zero or infinite, and lower your confidence
+- Cross-board duplicates: unknown (description too short/empty) — lower your confidence
+- Always-hiring count: unknown (company name unparseable) — lower your confidence
+
+Report your confidence (0-1) in the score, lowering it for every signal marked unknown above. Explain, in plain English, which of the measured signals drove your score — reference only the numbers given.

@@ -1,0 +1,19 @@
+Analyze this job vacancy and extract structured requirements.
+
+VACANCY TEXT:
+Backend role, Go and Postgres.
+
+PROVIDED HINTS (validate and refine these):
+  Required skills (provided): Go, Postgres
+  Nice-to-have skills (provided): Kafka
+  Experience level (provided): senior
+
+Verify the hints against the vacancy text. Add any missing required/nice-to-have skills. Correct the experience level if the hints seem wrong.
+
+Return a VacancyAnalysis with:
+- requiredSkills: skills explicitly listed as required/mandatory
+- niceToHaveSkills: preferred but not required
+- experienceLevel: one of junior|mid|senior|lead|staff|principal
+- keyResponsibilities: top 8-10 responsibilities
+- industryKeywords: domain terms (e.g. fintech, healthcare, SaaS, e-commerce)
+- seniorityKeywords: leadership indicators (e.g. mentor, lead team, architecture decisions)

@@ -1,0 +1,6 @@
+
+
+Respond with a single JSON object matching this JSON Schema:
+{"type":"object","properties":{"score":{"type":"number"}}}
+Your previous answer was invalid: expected object, got array
+Fix it and answer again with valid JSON only.

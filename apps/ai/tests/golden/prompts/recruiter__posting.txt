@@ -1,0 +1,8 @@
+Read this job posting and identify, if named, the specific human being who owns this requisition (a recruiter, hiring manager, or similar) — someone a candidate could reach out to.
+
+Only report a person, title, email, phone, or LinkedIn URL if it is EXPLICITLY present in the text below. Never guess or invent a name. A generic mailbox like jobs@company.com or careers@company.com with no named person is NOT a contact — leave it out in that case.
+
+POSTING TEXT:
+Reach out to Jane at jane@acme.com.
+
+Return a single JSON object with a "contacts" array containing at most one entry — the named requisition owner, if any (empty array if none).

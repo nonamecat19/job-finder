@@ -1,0 +1,13 @@
+Rate how likely this job posting is a "ghost job" — a posting the employer has no real intent to fill. Score 0-100, where higher means more suspicious. Base your score ONLY on the measured signals below; do not invent facts about the employer, the role, or their hiring intent.
+
+JOB:
+Title: Senior Backend Engineer
+Company: Acme Corp
+
+MEASURED SIGNALS:
+- Repost count (times this exact posting has reappeared across ingestion runs): 2
+- Days open: 10 (a posting older than 45 days with no user progression contributes to suspicion, but age alone is never sufficient for a high score)
+- Cross-board duplicates (same description on other sources, last 60 days): 1. IMPORTANT: a legitimate recruiter or agency often cross-posts one JD to several boards — this signal alone, even if nonzero, MUST NOT push the score into the 80-100 band. It only matters when it compounds with repost count or the always-hiring count.
+- Always-hiring count (other postings from this company in the last 90 days that never progressed past initial discovery, including this one): 3. IMPORTANT: a value of 1 means this is the ONLY posting seen from this company — that is the normal case, not a red flag, and MUST NOT be treated as evidence of ghosting.
+
+Report your confidence (0-1) in the score, lowering it for every signal marked unknown above. Explain, in plain English, which of the measured signals drove your score — reference only the numbers given.
