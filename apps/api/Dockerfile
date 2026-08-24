@@ -1,6 +1,6 @@
 # Build + run the Go API. Context = repo root (apps/api is its own Go
 # module; no other workspace files are needed at build time).
-FROM golang:1.26-bookworm AS build
+FROM golang:1.27-bookworm AS build
 
 WORKDIR /src
 COPY apps/api/go.mod apps/api/go.sum ./
