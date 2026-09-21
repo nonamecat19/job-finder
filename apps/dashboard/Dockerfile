@@ -1,5 +1,5 @@
 # Build the Vite dashboard and serve via nginx (static + /api proxy).
-FROM node:22-bookworm AS build
+FROM node:25-bookworm AS build
 
 RUN corepack enable
 WORKDIR /repo
